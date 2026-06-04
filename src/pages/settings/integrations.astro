@@ -1,0 +1,51 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { formatDate, humanizeEnum } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const connections = await prisma.calendarConnection.findMany({
+  where: { organisationId: auth.organisation.id },
+  orderBy: { provider: 'asc' },
+});
+
+const existingProviders = new Set(connections.map((connection) => connection.provider));
+for (const provider of ['GOOGLE', 'OUTLOOK'] as const) {
+  if (!existingProviders.has(provider)) {
+    await prisma.calendarConnection.create({ data: { organisationId: auth.organisation.id, provider } });
+  }
+}
+
+const refreshedConnections = await prisma.calendarConnection.findMany({
+  where: { organisationId: auth.organisation.id },
+  orderBy: { provider: 'asc' },
+});
+---
+<AppShell title="Integrations" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
+    <h1 class="mt-2 text-3xl font-semibold">Integrations</h1>
+    <p class="mt-1 text-sm text-stone-500">Calendar sync placeholders. Internal deadlines remain the source of truth.</p>
+  </div>
+  <section class="grid gap-4 md:grid-cols-2">
+    {refreshedConnections.map((connection) => (
+      <article class="panel rounded-lg p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-lg font-semibold">{humanizeEnum(connection.provider)} Calendar</p>
+            <p class="mt-2 text-sm text-stone-500">Connection state is stored now; OAuth and event sync can be added later.</p>
+          </div>
+          <span class="status-chip bg-stone-100 text-stone-600">{humanizeEnum(connection.status)}</span>
+        </div>
+        <dl class="mt-5 grid gap-3 text-sm">
+          <div><dt class="text-stone-500">Account</dt><dd>{connection.accountEmail ?? 'Not connected'}</dd></div>
+          <div><dt class="text-stone-500">Last synced</dt><dd>{formatDate(connection.lastSyncedAt)}</dd></div>
+          <div><dt class="text-stone-500">Sync error</dt><dd>{connection.syncError ?? 'None'}</dd></div>
+        </dl>
+      </article>
+    ))}
+  </section>
+</AppShell>

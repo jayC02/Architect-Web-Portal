@@ -1,0 +1,84 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { formatDate, humanizeEnum } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const project = await prisma.project.findFirst({
+  where: { id: Astro.params.id, organisationId: auth.organisation.id },
+  include: {
+    client: true,
+    site: true,
+    documents: { orderBy: { createdAt: 'desc' }, take: 5 },
+    planningApplications: { orderBy: { updatedAt: 'desc' }, take: 3 },
+    warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 3 },
+    deadlines: { orderBy: { dueDate: 'asc' }, take: 5 },
+    submissionPackages: { orderBy: { updatedAt: 'desc' }, take: 5 },
+  },
+});
+if (!project) return Astro.redirect('/projects');
+---
+<AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <a href="/projects" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to projects</a>
+      <h1 class="mt-2 text-3xl font-semibold">{project.name}</h1>
+      <p class="mt-1 text-sm text-stone-500">{project.internalReference ?? 'No internal reference'} · {humanizeEnum(project.stage)}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="btn btn-secondary" href={`/projects/${project.id}/files`}>Files</a>
+      <a class="btn btn-secondary" href={`/projects/${project.id}/planning`}>Planning</a>
+      <a class="btn btn-secondary" href={`/projects/${project.id}/building-warrant`}>Building warrant</a>
+    </div>
+  </div>
+
+  <section class="grid gap-4 lg:grid-cols-3">
+    <div class="panel rounded-lg p-4">
+      <p class="label">Client</p>
+      <p class="font-semibold">{project.client?.name ?? 'Not linked'}</p>
+      <p class="mt-1 text-sm text-stone-500">{project.client?.email ?? ''}</p>
+    </div>
+    <div class="panel rounded-lg p-4">
+      <p class="label">Site</p>
+      <p class="font-semibold">{project.site?.addressLine1 ?? project.siteAddress ?? 'Not linked'}</p>
+      <p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? ''}</p>
+    </div>
+    <div class="panel rounded-lg p-4">
+      <p class="label">Status</p>
+      <p class="font-semibold">{humanizeEnum(project.status)}</p>
+      <p class="mt-1 text-sm text-stone-500">Updated {formatDate(project.updatedAt)}</p>
+    </div>
+  </section>
+
+  <section class="mt-6 grid gap-6 xl:grid-cols-2">
+    <div class="panel rounded-lg p-4">
+      <h2 class="text-lg font-semibold">Deadlines</h2>
+      <div class="mt-4 space-y-3">
+        {project.deadlines.length ? project.deadlines.map((deadline) => (
+          <div class="rounded-md border border-stone-200 p-3">
+            <div class="flex justify-between gap-3">
+              <p class="font-semibold">{deadline.title}</p>
+              <span class="text-sm text-stone-500">{formatDate(deadline.dueDate)}</span>
+            </div>
+            <p class="text-sm text-stone-500">{humanizeEnum(deadline.type)} · {humanizeEnum(deadline.priority)}</p>
+          </div>
+        )) : <p class="text-sm text-stone-500">No deadlines linked yet.</p>}
+      </div>
+    </div>
+
+    <div class="panel rounded-lg p-4">
+      <h2 class="text-lg font-semibold">Recent documents</h2>
+      <div class="mt-4 space-y-3">
+        {project.documents.length ? project.documents.map((document) => (
+          <a href={`/projects/${project.id}/files`} class="block rounded-md border border-stone-200 p-3 hover:bg-stone-50">
+            <p class="truncate font-semibold">{document.originalName}</p>
+            <p class="text-sm text-stone-500">{humanizeEnum(document.type)} · {document.revision ?? 'No revision'}</p>
+          </a>
+        )) : <p class="text-sm text-stone-500">No documents uploaded yet.</p>}
+      </div>
+    </div>
+  </section>
+</AppShell>

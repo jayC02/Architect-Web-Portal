@@ -1,0 +1,9 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import AuthForm from '@/components/auth/AuthForm';
+---
+<BaseLayout title="Register | Architect Web Portal">
+  <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
+    <AuthForm mode="register" client:load />
+  </main>
+</BaseLayout>

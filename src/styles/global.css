@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: #f7f4ed;
+  color: #20231f;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui;
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-link {
+  @apply flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-stone-100 hover:text-ink;
+}
+
+.app-link-active {
+  @apply bg-ink text-paper hover:bg-ink hover:text-paper;
+}
+
+.panel {
+  @apply border border-stone-200 bg-white shadow-line;
+}
+
+.field {
+  @apply w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-ink outline-none transition placeholder:text-stone-400 focus:border-moss focus:ring-2 focus:ring-moss/20;
+}
+
+.label {
+  @apply mb-1 block text-xs font-semibold uppercase text-stone-500;
+}
+
+.btn {
+  @apply inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-moss/30 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+.btn-primary {
+  @apply bg-ink text-paper hover:bg-stone-700;
+}
+
+.btn-secondary {
+  @apply border border-stone-300 bg-white text-ink hover:bg-stone-50;
+}
+
+.status-chip {
+  @apply inline-flex rounded px-2 py-1 text-xs font-semibold uppercase;
+}
+
+.table-head {
+  @apply border-b border-stone-200 bg-stone-50 text-left text-xs font-semibold uppercase text-stone-500;
+}
+
+.table-cell {
+  @apply border-b border-stone-100 px-4 py-3 text-sm;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

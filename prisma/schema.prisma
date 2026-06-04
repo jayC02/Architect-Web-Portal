@@ -1,0 +1,475 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrganisationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectStage {
+  LEAD
+  SURVEY
+  DESIGN
+  PLANNING
+  BUILDING_WARRANT
+  CONSTRUCTION
+  COMPLETION
+  ARCHIVED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum DocumentType {
+  LOCATION_PLAN
+  SITE_PLAN
+  BLOCK_PLAN
+  EXISTING_DRAWING
+  PROPOSED_DRAWING
+  ELEVATION
+  SECTION
+  DRAINAGE
+  STRUCTURAL
+  ENERGY
+  CERTIFICATE
+  PHOTO
+  CORRESPONDENCE
+  SUPPORTING_DOCUMENT
+  OTHER
+}
+
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SUPERSEDED
+  REJECTED
+}
+
+enum PlanningStatus {
+  NOT_STARTED
+  DRAFTING
+  SUBMITTED
+  VALIDATED
+  IN_REVIEW
+  FURTHER_INFORMATION_REQUESTED
+  APPROVED
+  REFUSED
+  WITHDRAWN
+  CLOSED
+}
+
+enum WarrantType {
+  INITIAL
+  AMENDMENT
+  STAGED
+  LATE
+  COMPLETION_CERTIFICATE
+}
+
+enum WarrantStatus {
+  NOT_STARTED
+  DRAFTING
+  SUBMITTED
+  IN_REVIEW
+  FURTHER_INFORMATION_REQUESTED
+  GRANTED
+  REJECTED
+  EXPIRED
+  COMPLETED
+  CLOSED
+}
+
+enum CompletionCertificateStatus {
+  NOT_REQUIRED
+  NOT_STARTED
+  DRAFTING
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+}
+
+enum DeadlineType {
+  PLANNING_DECISION
+  WARRANT_RESPONSE
+  WARRANT_EXPIRY
+  COMPLETION_CERTIFICATE
+  CLIENT_ACTION
+  INTERNAL_TASK
+  INSPECTION
+  CUSTOM
+}
+
+enum DeadlineStatus {
+  UPCOMING
+  DUE_SOON
+  OVERDUE
+  COMPLETED
+  CANCELLED
+}
+
+enum DeadlinePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+enum CalendarConnectionStatus {
+  NOT_CONNECTED
+  CONNECTED
+  ERROR
+  PAUSED
+}
+
+enum SubmissionPackageType {
+  PLANNING
+  BUILDING_WARRANT
+}
+
+enum SubmissionPackageStatus {
+  DRAFT
+  READY
+  EXPORTED
+  SUBMITTED
+  ARCHIVED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions          Session[]
+  organisationLinks OrganisationMember[]
+  uploadedDocuments ProjectDocument[]   @relation("DocumentUploadedBy")
+  createdPackages   SubmissionPackage[] @relation("PackageCreatedBy")
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Organisation {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members              OrganisationMember[]
+  clients              Client[]
+  sites                Site[]
+  projects             Project[]
+  documents            ProjectDocument[]
+  planningApplications PlanningApplication[]
+  warrantApplications  BuildingWarrantApplication[]
+  deadlines            Deadline[]
+  calendarConnections  CalendarConnection[]
+  syncedCalendarEvents SyncedCalendarEvent[]
+  submissionPackages   SubmissionPackage[]
+
+  @@index([slug])
+  @@index([updatedAt])
+}
+
+model OrganisationMember {
+  id             String           @id @default(cuid())
+  organisationId String
+  userId         String
+  role           OrganisationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, userId])
+  @@index([userId])
+  @@index([organisationId, role])
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projects     Project[]
+
+  @@index([organisationId, name])
+  @@index([organisationId, updatedAt])
+}
+
+model Site {
+  id             String   @id @default(cuid())
+  organisationId String
+  addressLine1   String
+  addressLine2   String?
+  townCity       String
+  postcode       String
+  localAuthority String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projects     Project[]
+
+  @@index([organisationId, postcode])
+  @@index([organisationId, updatedAt])
+}
+
+model Project {
+  id                String       @id @default(cuid())
+  organisationId    String
+  clientId          String?
+  siteId            String?
+  name              String
+  internalReference String?
+  projectType       String?
+  stage             ProjectStage @default(LEAD)
+  localAuthority    String?
+  siteAddress       String?
+  status            ProjectStatus @default(ACTIVE)
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  organisation         Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  client               Client?                      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  site                 Site?                        @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  documents            ProjectDocument[]
+  planningApplications PlanningApplication[]
+  warrantApplications  BuildingWarrantApplication[]
+  deadlines            Deadline[]
+  submissionPackages   SubmissionPackage[]
+
+  @@index([organisationId, status, updatedAt])
+  @@index([organisationId, stage])
+  @@index([organisationId, clientId])
+  @@index([organisationId, siteId])
+}
+
+model ProjectDocument {
+  id             String         @id @default(cuid())
+  organisationId String
+  projectId      String
+  uploadedById   String
+  fileName       String
+  originalName   String
+  storageUrl     String
+  storageKey     String?
+  mimeType       String
+  sizeBytes      Int
+  type           DocumentType   @default(OTHER)
+  revision       String?
+  status         DocumentStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  packages     SubmissionPackageDocument[]
+
+  @@index([organisationId, projectId, createdAt])
+  @@index([organisationId, type])
+  @@index([uploadedById])
+}
+
+model PlanningApplication {
+  id                       String         @id @default(cuid())
+  organisationId           String
+  projectId                String
+  applicationReference     String?
+  submissionDate           DateTime?
+  validDate                DateTime?
+  decisionTargetDate       DateTime?
+  decisionDate             DateTime?
+  status                   PlanningStatus @default(NOT_STARTED)
+  portalUrl                String?
+  notes                    String?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deadlines    Deadline[]
+
+  @@index([organisationId, status, decisionTargetDate])
+  @@index([organisationId, projectId])
+}
+
+model BuildingWarrantApplication {
+  id                          String                      @id @default(cuid())
+  organisationId              String
+  projectId                   String
+  warrantReference            String?
+  warrantType                 WarrantType                  @default(INITIAL)
+  submissionDate              DateTime?
+  firstResponseTargetDate     DateTime?
+  grantedDate                 DateTime?
+  expiryDate                  DateTime?
+  completionCertificateStatus CompletionCertificateStatus  @default(NOT_REQUIRED)
+  status                      WarrantStatus                @default(NOT_STARTED)
+  portalUrl                   String?
+  notes                       String?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deadlines    Deadline[]
+
+  @@index([organisationId, status, firstResponseTargetDate])
+  @@index([organisationId, expiryDate])
+  @@index([organisationId, projectId])
+}
+
+model Deadline {
+  id                           String         @id @default(cuid())
+  organisationId               String
+  projectId                    String?
+  planningApplicationId        String?
+  buildingWarrantApplicationId String?
+  title                        String
+  description                  String?
+  dueDate                      DateTime
+  type                         DeadlineType
+  status                       DeadlineStatus @default(UPCOMING)
+  priority                     DeadlinePriority @default(MEDIUM)
+  reminderDate                 DateTime?
+  completedDate                DateTime?
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @updatedAt
+
+  organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  planningApplication        PlanningApplication?        @relation(fields: [planningApplicationId], references: [id], onDelete: SetNull)
+  buildingWarrantApplication BuildingWarrantApplication? @relation(fields: [buildingWarrantApplicationId], references: [id], onDelete: SetNull)
+  calendarEvents             SyncedCalendarEvent[]
+
+  @@index([organisationId, status, dueDate])
+  @@index([organisationId, projectId])
+  @@index([planningApplicationId])
+  @@index([buildingWarrantApplicationId])
+}
+
+model CalendarConnection {
+  id             String                   @id @default(cuid())
+  organisationId String
+  provider       CalendarProvider
+  status         CalendarConnectionStatus @default(NOT_CONNECTED)
+  accountEmail   String?
+  externalId     String?
+  lastSyncedAt   DateTime?
+  syncError      String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  events       SyncedCalendarEvent[]
+
+  @@unique([organisationId, provider])
+  @@index([organisationId, status])
+}
+
+model SyncedCalendarEvent {
+  id                   String   @id @default(cuid())
+  organisationId       String
+  calendarConnectionId String?
+  deadlineId           String?
+  provider             CalendarProvider
+  providerEventId      String?
+  title                String
+  startsAt             DateTime
+  endsAt               DateTime?
+  syncStatus           String   @default("PENDING")
+  lastSyncedAt         DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organisation       Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  calendarConnection CalendarConnection? @relation(fields: [calendarConnectionId], references: [id], onDelete: SetNull)
+  deadline           Deadline?           @relation(fields: [deadlineId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, provider, syncStatus])
+  @@index([deadlineId])
+}
+
+model SubmissionPackage {
+  id             String                  @id @default(cuid())
+  organisationId String
+  projectId      String
+  createdById    String
+  name           String
+  type           SubmissionPackageType
+  status         SubmissionPackageStatus @default(DRAFT)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  organisation Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User                        @relation("PackageCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  documents    SubmissionPackageDocument[]
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, status])
+}
+
+model SubmissionPackageDocument {
+  id                  String   @id @default(cuid())
+  submissionPackageId String
+  documentId          String
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  submissionPackage SubmissionPackage @relation(fields: [submissionPackageId], references: [id], onDelete: Cascade)
+  document          ProjectDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionPackageId, documentId])
+  @@index([documentId])
+}

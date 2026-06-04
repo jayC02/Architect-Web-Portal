@@ -1,0 +1,39 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const documents = await prisma.projectDocument.findMany({
+  where: { organisationId: auth.organisation.id },
+  include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
+  orderBy: { createdAt: 'desc' },
+  take: 200,
+});
+---
+<AppShell title="Documents" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <h1 class="text-3xl font-semibold">Documents</h1>
+    <p class="mt-1 text-sm text-stone-500">Organisation-wide document index. Uploads are managed from each project.</p>
+  </div>
+  <div class="panel overflow-hidden rounded-lg">
+    <table class="w-full min-w-[820px] border-collapse">
+      <thead class="table-head"><tr><th class="px-4 py-3">Document</th><th class="px-4 py-3">Project</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Uploaded</th><th class="px-4 py-3">Size</th></tr></thead>
+      <tbody>
+        {documents.map((document) => (
+          <tr>
+            <td class="table-cell"><a href={document.storageUrl} target="_blank" rel="noreferrer" class="font-semibold hover:underline">{document.originalName}</a><p class="text-xs text-stone-500">{document.uploadedBy.name}</p></td>
+            <td class="table-cell"><a href={`/projects/${document.projectId}/files`} class="hover:underline">{document.project.name}</a></td>
+            <td class="table-cell">{humanizeEnum(document.type)}</td>
+            <td class="table-cell">{formatDate(document.createdAt)}</td>
+            <td class="table-cell">{formatBytes(document.sizeBytes)}</td>
+          </tr>
+        ))}
+        {!documents.length && <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-stone-500">No documents uploaded yet.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AppShell>

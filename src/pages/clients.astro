@@ -1,0 +1,50 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const clients = await prisma.client.findMany({
+  where: { organisationId: auth.organisation.id },
+  include: { _count: { select: { projects: true } } },
+  orderBy: { name: 'asc' },
+});
+---
+<AppShell title="Clients" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <h1 class="text-3xl font-semibold">Clients</h1>
+    <p class="mt-1 text-sm text-stone-500">Client profiles linked into project records.</p>
+  </div>
+  <section class="grid gap-6 xl:grid-cols-[420px_1fr]">
+    <form data-api-form data-action="/api/clients" data-method="POST" data-redirect="reload" class="panel rounded-lg p-4">
+      <h2 class="text-lg font-semibold">Add client</h2>
+      <div class="mt-4 space-y-4">
+        <label class="block"><span class="label">Name</span><input required name="name" class="field" /></label>
+        <label class="block"><span class="label">Email</span><input type="email" name="email" class="field" /></label>
+        <label class="block"><span class="label">Phone</span><input name="phone" class="field" /></label>
+        <label class="block"><span class="label">Address</span><textarea name="address" rows="3" class="field"></textarea></label>
+        <label class="block"><span class="label">Notes</span><textarea name="notes" rows="3" class="field"></textarea></label>
+      </div>
+      <button class="btn btn-primary mt-4 w-full">Save client</button>
+      <p data-form-status class="mt-3 text-sm text-stone-500"></p>
+    </form>
+
+    <div class="panel overflow-hidden rounded-lg">
+      <table class="w-full min-w-[680px] border-collapse">
+        <thead class="table-head"><tr><th class="px-4 py-3">Client</th><th class="px-4 py-3">Contact</th><th class="px-4 py-3">Projects</th></tr></thead>
+        <tbody>
+          {clients.map((client) => (
+            <tr>
+              <td class="table-cell"><p class="font-semibold">{client.name}</p><p class="text-xs text-stone-500">{client.address ?? ''}</p></td>
+              <td class="table-cell">{client.email ?? 'No email'}<p class="text-xs text-stone-500">{client.phone ?? ''}</p></td>
+              <td class="table-cell">{client._count.projects}</td>
+            </tr>
+          ))}
+          {!clients.length && <tr><td colspan="3" class="px-4 py-10 text-center text-sm text-stone-500">No clients yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AppShell>

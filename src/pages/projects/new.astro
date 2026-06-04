@@ -1,0 +1,78 @@
+---
+import { ProjectStage, ProjectStatus } from '@prisma/client';
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { humanizeEnum } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const [clients, sites] = await Promise.all([
+  prisma.client.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { name: 'asc' } }),
+  prisma.site.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { updatedAt: 'desc' } }),
+]);
+---
+<AppShell title="New project" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href="/projects" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to projects</a>
+    <h1 class="mt-2 text-3xl font-semibold">New project</h1>
+  </div>
+
+  <form data-api-form data-action="/api/projects" data-method="POST" data-redirect="/projects" class="panel grid gap-5 rounded-lg p-5 lg:grid-cols-2">
+    <label class="block lg:col-span-2">
+      <span class="label">Project name</span>
+      <input required name="name" class="field" />
+    </label>
+    <label class="block">
+      <span class="label">Internal reference</span>
+      <input name="internalReference" class="field" />
+    </label>
+    <label class="block">
+      <span class="label">Project type</span>
+      <input name="projectType" class="field" placeholder="Domestic extension, retrofit, new build" />
+    </label>
+    <label class="block">
+      <span class="label">Stage</span>
+      <select name="stage" class="field">
+        {Object.values(ProjectStage).map((stage) => <option value={stage}>{humanizeEnum(stage)}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Status</span>
+      <select name="status" class="field">
+        {Object.values(ProjectStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Client</span>
+      <select name="clientId" class="field">
+        <option value="">Not linked</option>
+        {clients.map((client) => <option value={client.id}>{client.name}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Site</span>
+      <select name="siteId" class="field">
+        <option value="">Not linked</option>
+        {sites.map((site) => <option value={site.id}>{site.addressLine1}, {site.postcode}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Local authority</span>
+      <input name="localAuthority" class="field" />
+    </label>
+    <label class="block">
+      <span class="label">Site address</span>
+      <input name="siteAddress" class="field" />
+    </label>
+    <label class="block lg:col-span-2">
+      <span class="label">Notes</span>
+      <textarea name="notes" rows="5" class="field"></textarea>
+    </label>
+    <div class="flex items-center gap-3 lg:col-span-2">
+      <button class="btn btn-primary">Create project</button>
+      <span data-form-status class="text-sm text-stone-500"></span>
+    </div>
+  </form>
+</AppShell>

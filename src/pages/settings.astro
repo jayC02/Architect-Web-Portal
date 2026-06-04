@@ -1,0 +1,24 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+---
+<AppShell title="Settings" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <h1 class="text-3xl font-semibold">Settings</h1>
+    <p class="mt-1 text-sm text-stone-500">Organisation configuration and integration foundations.</p>
+  </div>
+  <section class="grid gap-4 md:grid-cols-2">
+    <a href="/settings/integrations" class="panel rounded-lg p-5 hover:bg-stone-50">
+      <p class="text-lg font-semibold">Integrations</p>
+      <p class="mt-2 text-sm text-stone-500">Calendar connection placeholders and sync status.</p>
+    </a>
+    <div class="panel rounded-lg p-5">
+      <p class="text-lg font-semibold">Organisation</p>
+      <p class="mt-2 text-sm text-stone-500">{auth.organisation.name}</p>
+      <p class="mt-2 text-xs uppercase text-stone-500">Your role: {auth.membership.role}</p>
+    </div>
+  </section>
+</AppShell>
