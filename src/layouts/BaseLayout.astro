@@ -30,36 +30,67 @@ const {
         const form = event.target;
         if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-api-form')) return;
         event.preventDefault();
+        const confirmMessage = form.dataset.confirm;
+        if (confirmMessage && !window.confirm(confirmMessage)) return;
         const method = form.dataset.method || form.method || 'POST';
         const action = form.dataset.action || form.action;
         const redirect = form.dataset.redirect;
         const status = form.querySelector('[data-form-status]');
-        if (status) status.textContent = 'Saving...';
+        const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], button:not([type])'));
+        if (status) {
+          status.textContent = 'Saving...';
+          status.setAttribute('role', 'status');
+          status.classList.remove('text-red-700');
+          status.classList.add('text-stone-500');
+        }
+        submitButtons.forEach((button) => {
+          if (button instanceof HTMLButtonElement) button.disabled = true;
+        });
 
-        const formData = new FormData(form);
-        const values: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
-        for (const [key, value] of formData.entries()) {
-          if (key in values) {
-            const existing = values[key];
-            values[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
-          } else {
-            values[key] = value;
+        try {
+          const formData = new FormData(form);
+          const values: Record<string, FormDataEntryValue | FormDataEntryValue[]> = {};
+          for (const [key, value] of formData.entries()) {
+            if (key in values) {
+              const existing = values[key];
+              values[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+            } else {
+              values[key] = value;
+            }
           }
-        }
-        const body = form.enctype === 'multipart/form-data' ? formData : JSON.stringify(values);
+          const body = form.enctype === 'multipart/form-data' ? formData : JSON.stringify(values);
 
-        const headers = form.enctype === 'multipart/form-data' ? undefined : { 'content-type': 'application/json' };
-        const response = await fetch(action, { method, headers, body });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          if (status) status.textContent = payload.error || 'Request failed.';
-          return;
+          const headers = form.enctype === 'multipart/form-data' ? undefined : { 'accept': 'application/json', 'content-type': 'application/json' };
+          const response = await fetch(action, { method, headers, body });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (status) {
+              status.textContent = payload.error || 'Request failed.';
+              status.classList.remove('text-stone-500');
+              status.classList.add('text-red-700');
+            }
+            return;
+          }
+          if (redirect) {
+            window.location.href = redirect === 'reload' ? window.location.href : redirect;
+            return;
+          }
+          if (status) {
+            status.textContent = 'Saved.';
+            status.classList.remove('text-red-700');
+            status.classList.add('text-stone-500');
+          }
+        } catch (error) {
+          if (status) {
+            status.textContent = error instanceof Error ? error.message : 'Network error. Please try again.';
+            status.classList.remove('text-stone-500');
+            status.classList.add('text-red-700');
+          }
+        } finally {
+          submitButtons.forEach((button) => {
+            if (button instanceof HTMLButtonElement) button.disabled = false;
+          });
         }
-        if (redirect) {
-          window.location.href = redirect === 'reload' ? window.location.href : redirect;
-          return;
-        }
-        if (status) status.textContent = 'Saved.';
       });
 
       document.addEventListener('click', async (event) => {
@@ -67,8 +98,11 @@ const {
         if (!(target instanceof HTMLElement)) return;
         const logout = target.closest('[data-logout]');
         if (!logout) return;
-        await fetch('/api/auth/logout', { method: 'POST' });
-        window.location.href = '/login';
+        try {
+          await fetch('/api/auth/logout', { method: 'POST', headers: { accept: 'application/json' } });
+        } finally {
+          window.location.href = '/login';
+        }
       });
     </script>
   </body>

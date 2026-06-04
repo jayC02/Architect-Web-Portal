@@ -96,5 +96,8 @@ export const submissionPackageSchema = z.object({
   name: z.string().trim().min(1).max(160),
   type: z.nativeEnum(SubmissionPackageType),
   status: z.nativeEnum(SubmissionPackageStatus).default(SubmissionPackageStatus.DRAFT),
-  documentIds: z.array(z.string()).default([]),
+  documentIds: z.preprocess((value) => {
+    if (value === undefined || value === '') return [];
+    return Array.isArray(value) ? value : [value];
+  }, z.array(z.string()).default([])),
 });
