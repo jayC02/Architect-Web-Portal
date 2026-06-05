@@ -1,155 +1,317 @@
 ---
+import {
+  AlertTriangle,
+  CalendarClock,
+  FileText,
+  FolderKanban,
+  Inbox,
+  Landmark,
+  Plus,
+  ScrollText,
+} from 'lucide-react';
+import { DocumentType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import DashboardMetricCard from '@/components/dashboard/DashboardMetricCard.astro';
+import DashboardPanel from '@/components/dashboard/DashboardPanel.astro';
+import EmptyState from '@/components/dashboard/EmptyState.astro';
+import StatusChip from '@/components/dashboard/StatusChip.astro';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
-import { formatDate, humanizeEnum } from '@/lib/format';
+import { documentGroupType, documentTypeLabel } from '@/lib/document-categories';
+import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
 const orgId = auth.organisation.id;
-const dueSoon = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+const now = new Date();
+const today = new Date(now);
+today.setHours(0, 0, 0, 0);
+
+const selectedRange = Number(Astro.url.searchParams.get('deadlineRange') ?? 14);
+const deadlineRange = [7, 14, 30].includes(selectedRange) ? selectedRange : 14;
+const deadlineRangeLabel = deadlineRange === 7 ? 'This week' : deadlineRange === 14 ? 'Next 14 days' : 'Next 30 days';
+const deadlineEnd = new Date(today.getTime() + deadlineRange * 24 * 60 * 60 * 1000);
+const staleDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+const actionSoon = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+const activeProjectWhere: Prisma.ProjectWhereInput = { organisationId: orgId, status: { notIn: ['COMPLETED', 'ARCHIVED'] } };
+const deadlineWhere: Prisma.DeadlineWhereInput = {
+  organisationId: orgId,
+  status: { notIn: ['COMPLETED', 'CANCELLED'] },
+  dueDate: { lte: deadlineEnd },
+};
+const planningActionWhere: Prisma.PlanningApplicationWhereInput = {
+  organisationId: orgId,
+  OR: [
+    { status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED'] } },
+    { status: 'IN_REVIEW' },
+    {
+      AND: [
+        { status: { in: ['SUBMITTED', 'VALIDATED'] } },
+        { OR: [{ updatedAt: { lte: staleDate } }, { decisionTargetDate: { lte: actionSoon } }] },
+      ],
+    },
+  ],
+};
+const warrantActionWhere: Prisma.BuildingWarrantApplicationWhereInput = {
+  organisationId: orgId,
+  OR: [
+    { status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW'] } },
+    {
+      AND: [
+        { status: 'SUBMITTED' },
+        { OR: [{ firstResponseTargetDate: { lte: actionSoon } }, { updatedAt: { lte: staleDate } }] },
+      ],
+    },
+    {
+      AND: [
+        { status: 'GRANTED' },
+        { completionCertificateStatus: { notIn: ['ACCEPTED', 'NOT_REQUIRED'] } },
+      ],
+    },
+  ],
+};
 
 const [
   activeProjects,
+  upcomingDeadlineCount,
   upcomingDeadlines,
-  recentFiles,
+  planningActionCount,
   planningAwaitingAction,
+  warrantActionCount,
   warrantsAwaitingAction,
+  recentFiles,
   projectsForWarnings,
 ] = await Promise.all([
-  prisma.project.count({ where: { organisationId: orgId, status: 'ACTIVE' } }),
+  prisma.project.count({ where: activeProjectWhere }),
+  prisma.deadline.count({ where: deadlineWhere }),
   prisma.deadline.findMany({
-    where: { organisationId: orgId, status: { in: ['UPCOMING', 'DUE_SOON', 'OVERDUE'] }, dueDate: { lte: dueSoon } },
+    where: deadlineWhere,
     include: { project: { select: { id: true, name: true } } },
     orderBy: { dueDate: 'asc' },
+    take: 6,
+  }),
+  prisma.planningApplication.count({ where: planningActionWhere }),
+  prisma.planningApplication.findMany({
+    where: planningActionWhere,
+    include: { project: { select: { id: true, name: true } } },
+    orderBy: [{ decisionTargetDate: 'asc' }, { updatedAt: 'asc' }],
+    take: 6,
+  }),
+  prisma.buildingWarrantApplication.count({ where: warrantActionWhere }),
+  prisma.buildingWarrantApplication.findMany({
+    where: warrantActionWhere,
+    include: { project: { select: { id: true, name: true } } },
+    orderBy: [{ firstResponseTargetDate: 'asc' }, { updatedAt: 'asc' }],
     take: 6,
   }),
   prisma.projectDocument.findMany({
     where: { organisationId: orgId },
     include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
-    take: 6,
-  }),
-  prisma.planningApplication.findMany({
-    where: { organisationId: orgId, status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW'] } },
-    include: { project: { select: { id: true, name: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 6,
-  }),
-  prisma.buildingWarrantApplication.findMany({
-    where: { organisationId: orgId, status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW'] } },
-    include: { project: { select: { id: true, name: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 6,
+    take: 8,
   }),
   prisma.project.findMany({
-    where: { organisationId: orgId, status: 'ACTIVE' },
+    where: activeProjectWhere,
     include: { documents: { select: { type: true } } },
     orderBy: { updatedAt: 'desc' },
-    take: 20,
+    take: 30,
   }),
 ]);
 
-const missingWarnings = projectsForWarnings.flatMap((project) => {
+const missingDocumentWarnings = projectsForWarnings.flatMap((project) => {
   const types = new Set(project.documents.map((document) => document.type));
-  return ['LOCATION_PLAN', 'SITE_PLAN'].filter((type) => !types.has(type as never)).map((type) => ({
-    project,
-    type,
-  }));
+  return types.has(DocumentType.LOCATION_PLAN) ? [] : [{ project, missing: ['Location Plan'] }];
 }).slice(0, 6);
 
-const stats = [
-  ['Active projects', activeProjects],
-  ['Upcoming deadlines', upcomingDeadlines.length],
-  ['Planning actions', planningAwaitingAction.length],
-  ['Warrant actions', warrantsAwaitingAction.length],
-];
+const deadlineTone = (status: string, dueDate: Date) => {
+  if (status === 'OVERDUE' || dueDate < today) return 'danger';
+  if (status === 'DUE_SOON') return 'warning';
+  return 'neutral';
+};
+
+const priorityTone = (priority: string) => {
+  if (priority === 'CRITICAL') return 'danger';
+  if (priority === 'HIGH') return 'warning';
+  if (priority === 'LOW') return 'neutral';
+  return 'info';
+};
+
+const actionStatusTone = (status: string) => {
+  if (status === 'FURTHER_INFORMATION_REQUESTED') return 'danger';
+  if (status === 'DRAFTING' || status === 'SUBMITTED') return 'warning';
+  return 'info';
+};
+
+const planningDateLabel = (item: typeof planningAwaitingAction[number]) => {
+  if (item.decisionTargetDate) return `Target ${formatDate(item.decisionTargetDate)}`;
+  if (item.validDate) return `Valid ${formatDate(item.validDate)}`;
+  if (item.submissionDate) return `Submitted ${formatDate(item.submissionDate)}`;
+  return `Updated ${formatDate(item.updatedAt)}`;
+};
+
+const warrantDateLabel = (item: typeof warrantsAwaitingAction[number]) => {
+  if (item.firstResponseTargetDate) return `Response ${formatDate(item.firstResponseTargetDate)}`;
+  if (item.expiryDate) return `Expiry ${formatDate(item.expiryDate)}`;
+  if (item.grantedDate) return `Granted ${formatDate(item.grantedDate)}`;
+  if (item.submissionDate) return `Submitted ${formatDate(item.submissionDate)}`;
+  return `Updated ${formatDate(item.updatedAt)}`;
+};
 ---
 <AppShell title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+  <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <p class="font-mono text-xs font-semibold uppercase text-moss">{auth.organisation.name}</p>
-      <h1 class="mt-1 text-3xl font-semibold text-ink">Practice dashboard</h1>
+      <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">{auth.organisation.name}</p>
+      <h1 class="mt-2 text-4xl font-semibold tracking-normal text-ink">Practice dashboard</h1>
+      <p class="mt-2 text-sm text-stone-500">A snapshot of your practice activity and priorities.</p>
     </div>
-    <a href="/projects/new" class="btn btn-primary">New project</a>
+    <a href="/projects/new" class="btn btn-primary gap-2"><Plus size={17} /> New project</a>
   </div>
 
   <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    {stats.map(([label, value]) => (
-      <div class="panel rounded-lg p-4">
-        <p class="text-sm text-stone-500">{label}</p>
-        <p class="mt-3 text-3xl font-semibold">{value}</p>
-      </div>
-    ))}
+    <DashboardMetricCard href="/projects" label="Active projects" value={activeProjects} context={activeProjects ? 'Open or on-hold projects' : 'No active projects yet'} active={activeProjects > 0}>
+      <FolderKanban slot="icon" size={19} />
+    </DashboardMetricCard>
+    <DashboardMetricCard href={`/deadlines?range=${deadlineRange}`} label="Upcoming deadlines" value={upcomingDeadlineCount} context={`${deadlineRangeLabel}, not completed`} active={upcomingDeadlineCount > 0}>
+      <CalendarClock slot="icon" size={19} />
+    </DashboardMetricCard>
+    <DashboardMetricCard href="/projects" label="Planning actions" value={planningActionCount} context={planningActionCount ? 'Needs action' : 'No action needed'} active={planningActionCount > 0}>
+      <Landmark slot="icon" size={19} />
+    </DashboardMetricCard>
+    <DashboardMetricCard href="/projects" label="Warrant actions" value={warrantActionCount} context={warrantActionCount ? 'Needs action' : 'No action needed'} active={warrantActionCount > 0}>
+      <ScrollText slot="icon" size={19} />
+    </DashboardMetricCard>
   </section>
 
-  <section class="mt-6 grid gap-6 xl:grid-cols-2">
-    <div class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Upcoming deadlines</h2>
-      <div class="mt-4 space-y-3">
+  <section class="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+    <DashboardPanel title="Upcoming deadlines" href="/deadlines" subtitle={`${deadlineRangeLabel} deadline window`}>
+      <div class="mb-4 flex flex-wrap gap-2">
+        {[
+          { label: 'This week', value: 7 },
+          { label: 'Next 14 days', value: 14 },
+          { label: 'Next 30 days', value: 30 },
+        ].map((option) => (
+          <a
+            href={`/dashboard?deadlineRange=${option.value}`}
+            class:list={[
+              'rounded-full border px-3 py-1.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40',
+              deadlineRange === option.value ? 'border-ink bg-ink text-paper' : 'border-stone-200 bg-stone-50 text-stone-600 hover:bg-white hover:text-ink',
+            ]}
+          >
+            {option.label}
+          </a>
+        ))}
+      </div>
+
+      <div class="space-y-2">
         {upcomingDeadlines.length ? upcomingDeadlines.map((deadline) => (
-          <a href="/deadlines" class="block rounded-md border border-stone-200 p-3 hover:bg-stone-50">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="font-semibold">{deadline.title}</p>
-                <p class="text-sm text-stone-500">{deadline.project?.name ?? 'General'} · {humanizeEnum(deadline.type)}</p>
+          <a href="/deadlines" class="block rounded-lg border border-stone-200 bg-white px-3 py-3 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-ink">{deadline.title}</p>
+                <p class="mt-1 text-xs text-stone-500">{deadline.project?.name ?? 'General'} - {humanizeEnum(deadline.type)}</p>
               </div>
-              <span class="status-chip bg-clay/10 text-clay">{formatDate(deadline.dueDate)}</span>
+              <div class="flex flex-wrap justify-end gap-1.5">
+                <StatusChip label={formatDate(deadline.dueDate)} tone={deadlineTone(deadline.status, deadline.dueDate)} />
+                <StatusChip label={humanizeEnum(deadline.priority)} tone={priorityTone(deadline.priority)} />
+              </div>
             </div>
           </a>
-        )) : <p class="text-sm text-stone-500">No urgent deadlines in the next 14 days.</p>}
+        )) : (
+          <EmptyState title="No urgent deadlines in this range." description="Change the filter or create a deadline when a project needs a reminder." href="/deadlines" actionLabel="Create deadline">
+            <CalendarClock slot="icon" size={18} />
+          </EmptyState>
+        )}
       </div>
-    </div>
+    </DashboardPanel>
 
-    <div class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Missing document warnings</h2>
-      <div class="mt-4 space-y-3">
-        {missingWarnings.length ? missingWarnings.map((warning) => (
-          <a href={`/projects/${warning.project.id}/files`} class="block rounded-md border border-amber-200 bg-amber-50 p-3">
-            <p class="font-semibold">{humanizeEnum(warning.type)} missing</p>
-            <p class="text-sm text-stone-600">{warning.project.name}</p>
+    <DashboardPanel title="Missing document warnings" href="/documents" actionLabel="Review documents" subtitle="Active projects only">
+      <div class="space-y-2">
+        {missingDocumentWarnings.length ? missingDocumentWarnings.map((warning) => (
+          <a href={`/documents/projects/${warning.project.id}`} class="block rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3 transition hover:border-amber-300 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700"><AlertTriangle size={17} /></span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-ink">{warning.project.name}</p>
+                <p class="mt-1 text-xs text-amber-800">Missing: {warning.missing.join(', ')}</p>
+              </div>
+            </div>
           </a>
-        )) : <p class="text-sm text-stone-500">No missing location or site plan warnings found.</p>}
+        )) : (
+          <EmptyState title="No missing key document warnings found." description="Active projects have the key document checks covered." href="/documents" actionLabel="Review documents">
+            <FileText slot="icon" size={18} />
+          </EmptyState>
+        )}
       </div>
-    </div>
+    </DashboardPanel>
   </section>
 
-  <section class="mt-6 grid gap-6 xl:grid-cols-3">
-    <div class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Planning awaiting action</h2>
-      <div class="mt-4 space-y-3">
+  <section class="mt-6 grid items-start gap-6 xl:grid-cols-3">
+    <DashboardPanel title="Planning awaiting action" href="/projects" actionLabel="Go to planning">
+      <div class="space-y-2">
         {planningAwaitingAction.length ? planningAwaitingAction.map((item) => (
-          <a class="block rounded-md border border-stone-200 p-3 hover:bg-stone-50" href={`/projects/${item.projectId}/planning`}>
-            <p class="font-semibold">{item.project.name}</p>
-            <p class="text-sm text-stone-500">{humanizeEnum(item.status)}</p>
+          <a class="block rounded-lg border border-stone-200 px-3 py-3 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href={`/projects/${item.projectId}/planning`}>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-ink">{item.project.name}</p>
+                <p class="mt-1 text-xs text-stone-500">{item.applicationReference || 'No application reference'} - {planningDateLabel(item)}</p>
+              </div>
+              <StatusChip label={humanizeEnum(item.status)} tone={actionStatusTone(item.status)} />
+            </div>
           </a>
-        )) : <p class="text-sm text-stone-500">No planning applications waiting for action.</p>}
+        )) : (
+          <EmptyState title="No planning applications waiting for action." href="/projects" actionLabel="Go to planning">
+            <Landmark slot="icon" size={18} />
+          </EmptyState>
+        )}
       </div>
-    </div>
+    </DashboardPanel>
 
-    <div class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Building warrants awaiting action</h2>
-      <div class="mt-4 space-y-3">
+    <DashboardPanel title="Building warrants awaiting action" href="/projects" actionLabel="Go to warrants">
+      <div class="space-y-2">
         {warrantsAwaitingAction.length ? warrantsAwaitingAction.map((item) => (
-          <a class="block rounded-md border border-stone-200 p-3 hover:bg-stone-50" href={`/projects/${item.projectId}/building-warrant`}>
-            <p class="font-semibold">{item.project.name}</p>
-            <p class="text-sm text-stone-500">{humanizeEnum(item.status)} · {humanizeEnum(item.warrantType)}</p>
+          <a class="block rounded-lg border border-stone-200 px-3 py-3 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href={`/projects/${item.projectId}/building-warrant`}>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-sm font-semibold text-ink">{item.project.name}</p>
+                <p class="mt-1 text-xs text-stone-500">{item.warrantReference || humanizeEnum(item.warrantType)} - {warrantDateLabel(item)}</p>
+              </div>
+              <StatusChip label={humanizeEnum(item.status)} tone={actionStatusTone(item.status)} />
+            </div>
           </a>
-        )) : <p class="text-sm text-stone-500">No warrant applications waiting for action.</p>}
+        )) : (
+          <EmptyState title="No warrant applications waiting for action." href="/projects" actionLabel="Go to warrants">
+            <ScrollText slot="icon" size={18} />
+          </EmptyState>
+        )}
       </div>
-    </div>
+    </DashboardPanel>
 
-    <div class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Recent files</h2>
-      <div class="mt-4 space-y-3">
+    <DashboardPanel title="Recent files" href="/documents" actionLabel="View all">
+      <div class="space-y-2">
         {recentFiles.length ? recentFiles.map((file) => (
-          <a class="block rounded-md border border-stone-200 p-3 hover:bg-stone-50" href={`/projects/${file.projectId}/files`}>
-            <p class="truncate font-semibold">{file.originalName}</p>
-            <p class="text-sm text-stone-500">{file.project.name} · {humanizeEnum(file.type)}</p>
-          </a>
-        )) : <p class="text-sm text-stone-500">No documents uploaded yet.</p>}
+          <div class="rounded-lg border border-stone-200 px-3 py-3 transition hover:border-stone-300 hover:bg-stone-50">
+            <div class="flex items-start gap-3">
+              <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-xs font-semibold text-stone-600">{documentTypeLabel(documentGroupType(file.type)).slice(0, 2).toUpperCase()}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-ink">{file.originalName}</p>
+                <p class="mt-1 text-xs text-stone-500">{file.project.name} - {documentTypeLabel(documentGroupType(file.type))}</p>
+                <p class="mt-1 text-xs text-stone-400">{formatDate(file.createdAt)} - {formatBytes(file.sizeBytes)}</p>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2 pl-12">
+              <a href={`/projects/${file.projectId}/files`} class="text-xs font-semibold text-stone-600 hover:text-ink">Open files</a>
+              <a href={`/projects/${file.projectId}`} class="text-xs font-semibold text-stone-600 hover:text-ink">Open project</a>
+            </div>
+          </div>
+        )) : (
+          <EmptyState title="Upload documents to start seeing file activity." href="/documents" actionLabel="View documents">
+            <Inbox slot="icon" size={18} />
+          </EmptyState>
+        )}
       </div>
-    </div>
+    </DashboardPanel>
   </section>
 </AppShell>

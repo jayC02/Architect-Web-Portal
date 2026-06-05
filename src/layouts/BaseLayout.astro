@@ -71,6 +71,10 @@ const {
             }
             return;
           }
+          if (typeof payload.redirectTo === 'string' && payload.redirectTo) {
+            window.location.href = payload.redirectTo;
+            return;
+          }
           if (redirect) {
             window.location.href = redirect === 'reload' ? window.location.href : redirect;
             return;

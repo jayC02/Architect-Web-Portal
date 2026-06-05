@@ -40,6 +40,9 @@ enum DocumentType {
   PROPOSED_DRAWING
   ELEVATION
   SECTION
+  DETAILS
+  CALCULATIONS
+  SPECIFICATIONS
   DRAINAGE
   STRUCTURAL
   ENERGY
@@ -56,6 +59,20 @@ enum DocumentStatus {
   APPROVED
   SUPERSEDED
   REJECTED
+}
+
+enum DocumentSortBatchStatus {
+  UPLOADED
+  ANALYSING
+  NEEDS_REVIEW
+  ACCEPTED
+  FAILED
+}
+
+enum DocumentSortSource {
+  RULES
+  PDF_TEXT
+  MANUAL
 }
 
 enum PlanningStatus {
@@ -160,10 +177,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sessions          Session[]
-  organisationLinks OrganisationMember[]
-  uploadedDocuments ProjectDocument[]   @relation("DocumentUploadedBy")
-  createdPackages   SubmissionPackage[] @relation("PackageCreatedBy")
+  sessions            Session[]
+  organisationLinks   OrganisationMember[]
+  uploadedDocuments   ProjectDocument[]    @relation("DocumentUploadedBy")
+  documentSortBatches DocumentSortBatch[]  @relation("DocumentSortBatchCreatedBy")
+  createdPackages     SubmissionPackage[]  @relation("PackageCreatedBy")
 
   @@index([email])
   @@index([createdAt])
@@ -203,6 +221,7 @@ model Organisation {
   calendarConnections  CalendarConnection[]
   syncedCalendarEvents SyncedCalendarEvent[]
   submissionPackages   SubmissionPackage[]
+  documentSortBatches  DocumentSortBatch[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -262,14 +281,14 @@ model Site {
 }
 
 model Project {
-  id                String       @id @default(cuid())
+  id                String        @id @default(cuid())
   organisationId    String
   clientId          String?
   siteId            String?
   name              String
   internalReference String?
   projectType       String?
-  stage             ProjectStage @default(LEAD)
+  stage             ProjectStage  @default(LEAD)
   localAuthority    String?
   siteAddress       String?
   status            ProjectStatus @default(ACTIVE)
@@ -285,6 +304,7 @@ model Project {
   warrantApplications  BuildingWarrantApplication[]
   deadlines            Deadline[]
   submissionPackages   SubmissionPackage[]
+  documentSortBatches  DocumentSortBatch[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, stage])
@@ -293,7 +313,7 @@ model Project {
 }
 
 model ProjectDocument {
-  id             String         @id @default(cuid())
+  id             String              @id @default(cuid())
   organisationId String
   projectId      String
   uploadedById   String
@@ -303,37 +323,90 @@ model ProjectDocument {
   storageKey     String?
   mimeType       String
   sizeBytes      Int
-  type           DocumentType   @default(OTHER)
+  type           DocumentType        @default(OTHER)
   revision       String?
-  status         DocumentStatus @default(DRAFT)
+  status         DocumentStatus      @default(DRAFT)
+  drawingNumber  String?
+  drawingTitle   String?
+  sortSource     DocumentSortSource?
+  sortConfidence Float?
+  sortReason     String?
   notes          String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy   User         @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
-  packages     SubmissionPackageDocument[]
+  organisation   Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project        Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy     User                        @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  packages       SubmissionPackageDocument[]
+  sortBatchItems DocumentSortBatchItem[]
 
   @@index([organisationId, projectId, createdAt])
   @@index([organisationId, type])
   @@index([uploadedById])
 }
 
+model DocumentSortBatch {
+  id             String                  @id @default(cuid())
+  organisationId String
+  projectId      String
+  status         DocumentSortBatchStatus @default(UPLOADED)
+  fileCount      Int                     @default(0)
+  createdById    String
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  organisation Organisation            @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User                    @relation("DocumentSortBatchCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  items        DocumentSortBatchItem[]
+
+  @@index([organisationId, projectId, createdAt])
+  @@index([organisationId, status])
+  @@index([createdById])
+}
+
+model DocumentSortBatchItem {
+  id                         String             @id @default(cuid())
+  batchId                    String
+  documentId                 String?
+  originalFilename           String
+  suggestedDocumentType      DocumentType
+  finalDocumentType          DocumentType?
+  confidence                 Float
+  reason                     String
+  matchedRules               Json
+  revision                   String?
+  drawingNumber              String?
+  drawingTitle               String?
+  source                     DocumentSortSource
+  isLikelyCurrent            Boolean            @default(true)
+  suitableForPlanning        Boolean            @default(false)
+  suitableForBuildingWarrant Boolean            @default(false)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  batch    DocumentSortBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  document ProjectDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([batchId])
+  @@index([documentId])
+}
+
 model PlanningApplication {
-  id                       String         @id @default(cuid())
-  organisationId           String
-  projectId                String
-  applicationReference     String?
-  submissionDate           DateTime?
-  validDate                DateTime?
-  decisionTargetDate       DateTime?
-  decisionDate             DateTime?
-  status                   PlanningStatus @default(NOT_STARTED)
-  portalUrl                String?
-  notes                    String?
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
+  id                   String         @id @default(cuid())
+  organisationId       String
+  projectId            String
+  applicationReference String?
+  submissionDate       DateTime?
+  validDate            DateTime?
+  decisionTargetDate   DateTime?
+  decisionDate         DateTime?
+  status               PlanningStatus @default(NOT_STARTED)
+  portalUrl            String?
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -348,17 +421,17 @@ model BuildingWarrantApplication {
   organisationId              String
   projectId                   String
   warrantReference            String?
-  warrantType                 WarrantType                  @default(INITIAL)
+  warrantType                 WarrantType                 @default(INITIAL)
   submissionDate              DateTime?
   firstResponseTargetDate     DateTime?
   grantedDate                 DateTime?
   expiryDate                  DateTime?
-  completionCertificateStatus CompletionCertificateStatus  @default(NOT_REQUIRED)
-  status                      WarrantStatus                @default(NOT_STARTED)
+  completionCertificateStatus CompletionCertificateStatus @default(NOT_REQUIRED)
+  status                      WarrantStatus               @default(NOT_STARTED)
   portalUrl                   String?
   notes                       String?
-  createdAt                   DateTime                     @default(now())
-  updatedAt                   DateTime                     @updatedAt
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -370,7 +443,7 @@ model BuildingWarrantApplication {
 }
 
 model Deadline {
-  id                           String         @id @default(cuid())
+  id                           String           @id @default(cuid())
   organisationId               String
   projectId                    String?
   planningApplicationId        String?
@@ -379,12 +452,12 @@ model Deadline {
   description                  String?
   dueDate                      DateTime
   type                         DeadlineType
-  status                       DeadlineStatus @default(UPCOMING)
+  status                       DeadlineStatus   @default(UPCOMING)
   priority                     DeadlinePriority @default(MEDIUM)
   reminderDate                 DateTime?
   completedDate                DateTime?
-  createdAt                    DateTime       @default(now())
-  updatedAt                    DateTime       @updatedAt
+  createdAt                    DateTime         @default(now())
+  updatedAt                    DateTime         @updatedAt
 
   organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -410,7 +483,7 @@ model CalendarConnection {
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
 
-  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   events       SyncedCalendarEvent[]
 
   @@unique([organisationId, provider])
@@ -418,7 +491,7 @@ model CalendarConnection {
 }
 
 model SyncedCalendarEvent {
-  id                   String   @id @default(cuid())
+  id                   String           @id @default(cuid())
   organisationId       String
   calendarConnectionId String?
   deadlineId           String?
@@ -427,10 +500,10 @@ model SyncedCalendarEvent {
   title                String
   startsAt             DateTime
   endsAt               DateTime?
-  syncStatus           String   @default("PENDING")
+  syncStatus           String           @default("PENDING")
   lastSyncedAt         DateTime?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   organisation       Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   calendarConnection CalendarConnection? @relation(fields: [calendarConnectionId], references: [id], onDelete: SetNull)

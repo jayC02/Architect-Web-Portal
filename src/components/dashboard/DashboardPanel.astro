@@ -1,0 +1,20 @@
+---
+interface Props {
+  title: string;
+  href?: string;
+  actionLabel?: string;
+  subtitle?: string;
+}
+
+const { title, href, actionLabel = 'View all', subtitle } = Astro.props;
+---
+<section class="panel rounded-xl p-4 sm:p-5">
+  <div class="mb-4 flex items-start justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold text-ink">{title}</h2>
+      {subtitle && <p class="mt-1 text-sm text-stone-500">{subtitle}</p>}
+    </div>
+    {href && <a href={href} class="shrink-0 text-sm font-semibold text-stone-600 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40">{actionLabel}</a>}
+  </div>
+  <slot />
+</section>

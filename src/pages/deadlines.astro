@@ -47,11 +47,34 @@ const [deadlines, projects] = await Promise.all([
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="font-semibold">{deadline.title}</p>
-              <p class="text-sm text-stone-500">{deadline.project?.name ?? 'General'} · {humanizeEnum(deadline.type)}</p>
+              <p class="text-sm text-stone-500">{deadline.project?.name ?? 'General'} - {humanizeEnum(deadline.type)}</p>
             </div>
             <span class="status-chip bg-moss/10 text-moss">{formatDate(deadline.dueDate)}</span>
           </div>
-          <p class="mt-2 text-sm text-stone-600">{humanizeEnum(deadline.status)} · {humanizeEnum(deadline.priority)}</p>
+          <p class="mt-2 text-sm text-stone-600">{humanizeEnum(deadline.status)} - {humanizeEnum(deadline.priority)}</p>
+          <details class="mt-3 rounded-md border border-stone-200 p-3">
+            <summary class="cursor-pointer text-sm font-semibold">Edit deadline</summary>
+            <form data-api-form data-action={`/api/deadlines/${deadline.id}`} data-method="PATCH" class="mt-4 grid gap-4">
+              <label class="block"><span class="label">Title</span><input required name="title" value={deadline.title} class="field" /></label>
+              <label class="block"><span class="label">Linked project</span><select name="projectId" class="field"><option value="">General</option>{projects.map((project) => <option value={project.id} selected={project.id === deadline.projectId}>{project.name}</option>)}</select></label>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="block"><span class="label">Due date</span><input required type="date" name="dueDate" value={deadline.dueDate.toISOString().slice(0, 10)} class="field" /></label>
+                <label class="block"><span class="label">Reminder date</span><input type="date" name="reminderDate" value={deadline.reminderDate?.toISOString().slice(0, 10) ?? ''} class="field" /></label>
+                <label class="block"><span class="label">Type</span><select name="type" class="field">{Object.values(DeadlineType).map((type) => <option value={type} selected={type === deadline.type}>{humanizeEnum(type)}</option>)}</select></label>
+                <label class="block"><span class="label">Priority</span><select name="priority" class="field">{Object.values(DeadlinePriority).map((priority) => <option value={priority} selected={priority === deadline.priority}>{humanizeEnum(priority)}</option>)}</select></label>
+              </div>
+              <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(DeadlineStatus).map((status) => <option value={status} selected={status === deadline.status}>{humanizeEnum(status)}</option>)}</select></label>
+              <label class="block"><span class="label">Description</span><textarea name="description" rows="3" class="field">{deadline.description ?? ''}</textarea></label>
+              <div class="flex flex-wrap items-center gap-3">
+                <button class="btn btn-primary">Save deadline</button>
+                <span data-form-status class="text-sm text-stone-500"></span>
+              </div>
+            </form>
+            <form data-api-form data-action={`/api/deadlines/${deadline.id}`} data-method="DELETE" data-redirect="reload" data-confirm="Delete this deadline?" class="mt-3">
+              <button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete deadline</button>
+              <span data-form-status class="ml-3 text-sm text-stone-500"></span>
+            </form>
+          </details>
         </article>
       ))}
       {!deadlines.length && <div class="panel rounded-lg p-8 text-center text-sm text-stone-500">No deadlines yet.</div>}

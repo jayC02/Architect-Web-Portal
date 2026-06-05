@@ -4,6 +4,7 @@ import {
   DeadlineStatus,
   DeadlineType,
   DocumentStatus,
+  DocumentSortBatchStatus,
   DocumentType,
   PlanningStatus,
   ProjectStage,
@@ -51,6 +52,21 @@ export const documentMetadataSchema = z.object({
   revision: optionalText(40),
   status: z.nativeEnum(DocumentStatus).default(DocumentStatus.DRAFT),
   notes: optionalText(2000),
+});
+
+export const documentSortBatchAcceptSchema = z.object({
+  items: z.array(z.object({
+    itemId: z.string().min(1),
+    documentType: z.nativeEnum(DocumentType),
+    revision: optionalText(40),
+    status: z.nativeEnum(DocumentStatus).default(DocumentStatus.IN_REVIEW),
+    notes: optionalText(2000),
+  })).min(1, 'At least one sorted document is required.'),
+  returnTo: z.enum(['project-files', 'document-folder']).default('project-files'),
+});
+
+export const documentSortBatchStatusSchema = z.object({
+  status: z.nativeEnum(DocumentSortBatchStatus).optional(),
 });
 
 export const planningApplicationSchema = z.object({

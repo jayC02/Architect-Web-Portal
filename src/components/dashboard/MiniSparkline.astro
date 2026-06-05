@@ -1,0 +1,19 @@
+---
+interface Props {
+  active?: boolean;
+}
+
+const { active = false } = Astro.props;
+const heights = active ? [10, 16, 12, 22, 18, 26, 20] : [12, 12, 12, 12, 12, 12, 12];
+---
+<div class="flex h-8 items-end gap-1" aria-hidden="true">
+  {heights.map((height, index) => (
+    <span
+      class:list={[
+        'block w-1.5 rounded-full transition-colors',
+        active ? 'bg-moss/60' : 'bg-stone-300',
+      ]}
+      style={`height:${height}px; opacity:${0.45 + index * 0.07}`}
+    />
+  ))}
+</div>

@@ -52,7 +52,7 @@ const [clients, sites] = await Promise.all([
       </select>
     </label>
     <label class="block">
-      <span class="label">Site</span>
+      <span class="label">Linked site</span>
       <select name="siteId" class="field">
         <option value="">Not linked</option>
         {sites.map((site) => <option value={site.id}>{site.addressLine1}, {site.postcode}</option>)}
@@ -63,7 +63,7 @@ const [clients, sites] = await Promise.all([
       <input name="localAuthority" class="field" />
     </label>
     <label class="block">
-      <span class="label">Site address</span>
+      <span class="label">Manual site address</span>
       <input name="siteAddress" class="field" />
     </label>
     <label class="block lg:col-span-2">

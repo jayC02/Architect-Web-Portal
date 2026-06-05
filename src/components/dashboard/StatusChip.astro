@@ -1,0 +1,16 @@
+---
+interface Props {
+  label: string;
+  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+}
+
+const { label, tone = 'neutral' } = Astro.props;
+const tones = {
+  neutral: 'border-stone-200 bg-stone-100 text-stone-700',
+  success: 'border-moss/20 bg-moss/10 text-moss',
+  warning: 'border-amber-200 bg-amber-50 text-amber-800',
+  danger: 'border-red-200 bg-red-50 text-red-700',
+  info: 'border-steel/20 bg-steel/10 text-steel',
+};
+---
+<span class={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${tones[tone]}`}>{label}</span>

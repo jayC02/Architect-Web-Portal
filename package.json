@@ -17,7 +17,7 @@
     "predev": "prisma generate",
     "prebuild": "prisma generate",
     "start": "node ./dist/server/entry.mjs",
-    "test:security": "tsx tests/security-validation.test.ts"
+    "test:security": "tsx tests/security-validation.test.ts && tsx tests/document-sorter.test.ts && tsx tests/document-sort-batch-security.test.ts"
   },
   "dependencies": {
     "@astrojs/node": "^9.5.5",
@@ -28,6 +28,7 @@
     "astro": "^5.17.3",
     "bcryptjs": "^2.4.3",
     "lucide-react": "^0.468.0",
+    "pdf-parse": "^1.1.1",
     "postgres": "^3.4.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.2",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

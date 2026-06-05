@@ -24,3 +24,17 @@ export const PATCH: APIRoute = (context) =>
     if (!result.count) throw new HttpError(404, 'Building warrant application not found.');
     return jsonResponse(200, { ok: true });
   });
+
+export const DELETE: APIRoute = (context) =>
+  withErrorHandling(async () => {
+    assertAllowedOrigin(context.request);
+    assertRateLimit(context, rateLimitPolicies.mutation, 'warrant:delete');
+    const { organisation } = await requireOrganisation(context);
+    const id = context.params.id;
+    if (!id) throw new HttpError(400, 'Building warrant application id is required.');
+    const result = await prisma.buildingWarrantApplication.deleteMany({
+      where: { id, organisationId: organisation.id },
+    });
+    if (!result.count) throw new HttpError(404, 'Building warrant application not found.');
+    return jsonResponse(200, { ok: true });
+  });

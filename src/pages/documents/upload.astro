@@ -1,0 +1,57 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const projects = await prisma.project.findMany({
+  where: { organisationId: auth.organisation.id },
+  select: { id: true, name: true, internalReference: true },
+  orderBy: { updatedAt: 'desc' },
+});
+
+const selectedProjectId = Astro.url.searchParams.get('projectId');
+const initialProjectId = projects.some((project) => project.id === selectedProjectId) ? selectedProjectId : projects[0]?.id ?? '';
+---
+<AppShell title="Upload documents" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href="/documents" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to documents</a>
+    <h1 class="mt-2 text-3xl font-semibold">Upload documents</h1>
+    <p class="mt-1 text-sm text-stone-500">Choose a project, upload files, then review the automatic sorting suggestions.</p>
+  </div>
+
+  <section class="panel max-w-4xl rounded-lg p-5">
+    <form data-api-form data-documents-upload-form data-method="POST" enctype="multipart/form-data" data-action={initialProjectId ? `/api/projects/${initialProjectId}/document-sort-batches` : ''}>
+      <input type="hidden" name="returnTo" value="document-folder" />
+      <div class="grid gap-5 md:grid-cols-[320px_1fr]">
+        <label class="block">
+          <span class="label">Target project</span>
+          <select required name="projectId" class="field" data-documents-project-select disabled={!projects.length}>
+            {projects.map((project) => <option value={project.id} selected={project.id === initialProjectId}>{project.name}{project.internalReference ? ` - ${project.internalReference}` : ''}</option>)}
+          </select>
+        </label>
+        <label class="block rounded-lg border border-dashed border-stone-300 bg-stone-50 p-5">
+          <span class="label">Files</span>
+          <input required multiple type="file" name="files" class="mt-3 block w-full text-sm text-stone-700 file:mr-4 file:rounded-md file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-stone-700" disabled={!projects.length} />
+        </label>
+      </div>
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <button class="btn btn-primary" disabled={!projects.length}>Upload and review sorting</button>
+        <p data-form-status class="text-sm text-stone-500">{!projects.length ? 'Create a project before uploading documents.' : ''}</p>
+      </div>
+    </form>
+  </section>
+
+  <script>
+    const uploadForm = document.querySelector('[data-documents-upload-form]');
+    const projectSelect = document.querySelector('[data-documents-project-select]');
+    const syncUploadAction = () => {
+      if (!(uploadForm instanceof HTMLFormElement) || !(projectSelect instanceof HTMLSelectElement)) return;
+      uploadForm.dataset.action = projectSelect.value ? `/api/projects/${projectSelect.value}/document-sort-batches` : '';
+    };
+    projectSelect?.addEventListener('change', syncUploadAction);
+    syncUploadAction();
+  </script>
+</AppShell>

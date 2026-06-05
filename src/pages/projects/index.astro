@@ -35,7 +35,14 @@ const projects = await prisma.project.findMany({
       </thead>
       <tbody>
         {projects.map((project) => (
-          <tr>
+          <tr
+            data-project-row
+            data-href={`/projects/${project.id}`}
+            tabindex="0"
+            role="link"
+            aria-label={`Open project ${project.name}`}
+            class="cursor-pointer transition hover:bg-stone-50 focus:outline-none focus-visible:bg-stone-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/40"
+          >
             <td class="table-cell">
               <a class="font-semibold hover:underline" href={`/projects/${project.id}`}>{project.name}</a>
               <p class="text-xs text-stone-500">{project.internalReference ?? 'No reference'}</p>
@@ -52,4 +59,27 @@ const projects = await prisma.project.findMany({
       </tbody>
     </table>
   </div>
+
+  <script>
+    const openProjectRow = (row: HTMLElement) => {
+      const href = row.dataset.href;
+      if (href) window.location.href = href;
+    };
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const row = target.closest('[data-project-row]');
+      if (!(row instanceof HTMLElement)) return;
+      openProjectRow(row);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.matches('[data-project-row]')) return;
+      event.preventDefault();
+      openProjectRow(target);
+    });
+  </script>
 </AppShell>
