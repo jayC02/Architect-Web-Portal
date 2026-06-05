@@ -201,6 +201,7 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([userId, expiresAt])
 }
 
 model Organisation {
@@ -307,6 +308,7 @@ model Project {
   documentSortBatches  DocumentSortBatch[]
 
   @@index([organisationId, status, updatedAt])
+  @@index([organisationId, updatedAt])
   @@index([organisationId, stage])
   @@index([organisationId, clientId])
   @@index([organisationId, siteId])
@@ -342,6 +344,10 @@ model ProjectDocument {
   sortBatchItems DocumentSortBatchItem[]
 
   @@index([organisationId, projectId, createdAt])
+  @@index([organisationId, createdAt])
+  @@index([organisationId, projectId, type])
+  @@index([organisationId, originalName])
+  @@index([organisationId, sizeBytes])
   @@index([organisationId, type])
   @@index([uploadedById])
 }
@@ -413,6 +419,7 @@ model PlanningApplication {
   deadlines    Deadline[]
 
   @@index([organisationId, status, decisionTargetDate])
+  @@index([organisationId, updatedAt])
   @@index([organisationId, projectId])
 }
 
@@ -438,6 +445,7 @@ model BuildingWarrantApplication {
   deadlines    Deadline[]
 
   @@index([organisationId, status, firstResponseTargetDate])
+  @@index([organisationId, updatedAt])
   @@index([organisationId, expiryDate])
   @@index([organisationId, projectId])
 }

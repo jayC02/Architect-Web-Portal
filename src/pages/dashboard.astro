@@ -10,7 +10,6 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { DocumentType } from '@prisma/client';
-import type { Prisma } from '@prisma/client';
 import DashboardMetricCard from '@/components/dashboard/DashboardMetricCard.astro';
 import DashboardPanel from '@/components/dashboard/DashboardPanel.astro';
 import EmptyState from '@/components/dashboard/EmptyState.astro';
@@ -36,98 +35,214 @@ const deadlineEnd = new Date(today.getTime() + deadlineRange * 24 * 60 * 60 * 10
 const staleDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 const actionSoon = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-const activeProjectWhere: Prisma.ProjectWhereInput = { organisationId: orgId, status: { notIn: ['COMPLETED', 'ARCHIVED'] } };
-const deadlineWhere: Prisma.DeadlineWhereInput = {
-  organisationId: orgId,
-  status: { notIn: ['COMPLETED', 'CANCELLED'] },
-  dueDate: { lte: deadlineEnd },
+type ProjectRef = { id: string; name: string };
+type DashboardDeadline = {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  priority: string;
+  dueDate: string | Date;
+  project: ProjectRef | null;
 };
-const planningActionWhere: Prisma.PlanningApplicationWhereInput = {
-  organisationId: orgId,
-  OR: [
-    { status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED'] } },
-    { status: 'IN_REVIEW' },
-    {
-      AND: [
-        { status: { in: ['SUBMITTED', 'VALIDATED'] } },
-        { OR: [{ updatedAt: { lte: staleDate } }, { decisionTargetDate: { lte: actionSoon } }] },
-      ],
-    },
-  ],
+type DashboardPlanning = {
+  id: string;
+  projectId: string;
+  applicationReference: string | null;
+  status: string;
+  submissionDate: string | Date | null;
+  validDate: string | Date | null;
+  decisionTargetDate: string | Date | null;
+  updatedAt: string | Date;
+  project: ProjectRef;
 };
-const warrantActionWhere: Prisma.BuildingWarrantApplicationWhereInput = {
-  organisationId: orgId,
-  OR: [
-    { status: { in: ['DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW'] } },
-    {
-      AND: [
-        { status: 'SUBMITTED' },
-        { OR: [{ firstResponseTargetDate: { lte: actionSoon } }, { updatedAt: { lte: staleDate } }] },
-      ],
-    },
-    {
-      AND: [
-        { status: 'GRANTED' },
-        { completionCertificateStatus: { notIn: ['ACCEPTED', 'NOT_REQUIRED'] } },
-      ],
-    },
-  ],
+type DashboardWarrant = {
+  id: string;
+  projectId: string;
+  warrantReference: string | null;
+  warrantType: string;
+  status: string;
+  submissionDate: string | Date | null;
+  firstResponseTargetDate: string | Date | null;
+  grantedDate: string | Date | null;
+  expiryDate: string | Date | null;
+  updatedAt: string | Date;
+  project: ProjectRef;
+};
+type DashboardFile = {
+  id: string;
+  projectId: string;
+  originalName: string;
+  type: DocumentType;
+  createdAt: string | Date;
+  sizeBytes: number;
+  project: ProjectRef;
+};
+type MissingLocationProject = ProjectRef;
+type DashboardSummary = {
+  activeProjects: number;
+  upcomingDeadlineCount: number;
+  planningActionCount: number;
+  warrantActionCount: number;
+  upcomingDeadlines: unknown;
+  planningAwaitingAction: unknown;
+  warrantsAwaitingAction: unknown;
+  recentFiles: unknown;
+  missingLocationPlanProjects: unknown;
 };
 
-const [
-  activeProjects,
-  upcomingDeadlineCount,
-  upcomingDeadlines,
-  planningActionCount,
-  planningAwaitingAction,
-  warrantActionCount,
-  warrantsAwaitingAction,
-  recentFiles,
-  projectsForWarnings,
-] = await Promise.all([
-  prisma.project.count({ where: activeProjectWhere }),
-  prisma.deadline.count({ where: deadlineWhere }),
-  prisma.deadline.findMany({
-    where: deadlineWhere,
-    include: { project: { select: { id: true, name: true } } },
-    orderBy: { dueDate: 'asc' },
-    take: 6,
-  }),
-  prisma.planningApplication.count({ where: planningActionWhere }),
-  prisma.planningApplication.findMany({
-    where: planningActionWhere,
-    include: { project: { select: { id: true, name: true } } },
-    orderBy: [{ decisionTargetDate: 'asc' }, { updatedAt: 'asc' }],
-    take: 6,
-  }),
-  prisma.buildingWarrantApplication.count({ where: warrantActionWhere }),
-  prisma.buildingWarrantApplication.findMany({
-    where: warrantActionWhere,
-    include: { project: { select: { id: true, name: true } } },
-    orderBy: [{ firstResponseTargetDate: 'asc' }, { updatedAt: 'asc' }],
-    take: 6,
-  }),
-  prisma.projectDocument.findMany({
-    where: { organisationId: orgId },
-    include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: 8,
-  }),
-  prisma.project.findMany({
-    where: activeProjectWhere,
-    include: { documents: { select: { type: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 30,
-  }),
-]);
+const readArray = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
 
-const missingDocumentWarnings = projectsForWarnings.flatMap((project) => {
-  const types = new Set(project.documents.map((document) => document.type));
-  return types.has(DocumentType.LOCATION_PLAN) ? [] : [{ project, missing: ['Location Plan'] }];
-}).slice(0, 6);
+const dashboardRows = await prisma.$queryRaw<DashboardSummary[]>`
+    SELECT
+      (SELECT COUNT(*)::int FROM "Project"
+        WHERE "organisationId" = ${orgId}
+        AND "status" NOT IN ('COMPLETED', 'ARCHIVED')) AS "activeProjects",
+      (SELECT COUNT(*)::int FROM "Deadline"
+        WHERE "organisationId" = ${orgId}
+        AND "status" NOT IN ('COMPLETED', 'CANCELLED')
+        AND "dueDate" <= ${deadlineEnd}) AS "upcomingDeadlineCount",
+      (SELECT COUNT(*)::int FROM "PlanningApplication"
+        WHERE "organisationId" = ${orgId}
+        AND (
+          "status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW')
+          OR ("status" IN ('SUBMITTED', 'VALIDATED') AND ("updatedAt" <= ${staleDate} OR "decisionTargetDate" <= ${actionSoon}))
+        )) AS "planningActionCount",
+      (SELECT COUNT(*)::int FROM "BuildingWarrantApplication"
+        WHERE "organisationId" = ${orgId}
+        AND (
+          "status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW')
+          OR ("status" = 'SUBMITTED' AND ("firstResponseTargetDate" <= ${actionSoon} OR "updatedAt" <= ${staleDate}))
+          OR ("status" = 'GRANTED' AND "completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED'))
+        )) AS "warrantActionCount",
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(deadline_row)) FROM (
+          SELECT
+            d.id,
+            d.title,
+            d.type,
+            d.status,
+            d.priority,
+            d."dueDate",
+            CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object('id', p.id, 'name', p.name) END AS project
+          FROM "Deadline" d
+          LEFT JOIN "Project" p ON p.id = d."projectId"
+          WHERE d."organisationId" = ${orgId}
+            AND d.status NOT IN ('COMPLETED', 'CANCELLED')
+            AND d."dueDate" <= ${deadlineEnd}
+          ORDER BY d."dueDate" ASC
+          LIMIT 6
+        ) deadline_row
+      ), '[]'::jsonb) AS "upcomingDeadlines",
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(planning_row)) FROM (
+          SELECT
+            a.id,
+            a."projectId",
+            a."applicationReference",
+            a.status,
+            a."submissionDate",
+            a."validDate",
+            a."decisionTargetDate",
+            a."updatedAt",
+            jsonb_build_object('id', p.id, 'name', p.name) AS project
+          FROM "PlanningApplication" a
+          JOIN "Project" p ON p.id = a."projectId"
+          WHERE a."organisationId" = ${orgId}
+            AND (
+              a.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW')
+              OR (a.status IN ('SUBMITTED', 'VALIDATED') AND (a."updatedAt" <= ${staleDate} OR a."decisionTargetDate" <= ${actionSoon}))
+            )
+          ORDER BY a."decisionTargetDate" ASC NULLS LAST, a."updatedAt" ASC
+          LIMIT 6
+        ) planning_row
+      ), '[]'::jsonb) AS "planningAwaitingAction",
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(warrant_row)) FROM (
+          SELECT
+            w.id,
+            w."projectId",
+            w."warrantReference",
+            w."warrantType",
+            w.status,
+            w."submissionDate",
+            w."firstResponseTargetDate",
+            w."grantedDate",
+            w."expiryDate",
+            w."updatedAt",
+            jsonb_build_object('id', p.id, 'name', p.name) AS project
+          FROM "BuildingWarrantApplication" w
+          JOIN "Project" p ON p.id = w."projectId"
+          WHERE w."organisationId" = ${orgId}
+            AND (
+              w.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW')
+              OR (w.status = 'SUBMITTED' AND (w."firstResponseTargetDate" <= ${actionSoon} OR w."updatedAt" <= ${staleDate}))
+              OR (w.status = 'GRANTED' AND w."completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED'))
+            )
+          ORDER BY w."firstResponseTargetDate" ASC NULLS LAST, w."updatedAt" ASC
+          LIMIT 6
+        ) warrant_row
+      ), '[]'::jsonb) AS "warrantsAwaitingAction",
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(file_row)) FROM (
+          SELECT
+            d.id,
+            d."projectId",
+            d."originalName",
+            d.type,
+            d."createdAt",
+            d."sizeBytes",
+            jsonb_build_object('id', p.id, 'name', p.name) AS project
+          FROM "ProjectDocument" d
+          JOIN "Project" p ON p.id = d."projectId"
+          WHERE d."organisationId" = ${orgId}
+          ORDER BY d."createdAt" DESC
+          LIMIT 8
+        ) file_row
+      ), '[]'::jsonb) AS "recentFiles",
+      COALESCE((
+        SELECT jsonb_agg(to_jsonb(project_row)) FROM (
+          SELECT p.id, p.name
+          FROM "Project" p
+          WHERE p."organisationId" = ${orgId}
+            AND p.status NOT IN ('COMPLETED', 'ARCHIVED')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "ProjectDocument" d
+              WHERE d."projectId" = p.id
+                AND d."organisationId" = ${orgId}
+                AND d.type = ${DocumentType.LOCATION_PLAN}::"DocumentType"
+            )
+          ORDER BY p."updatedAt" DESC
+          LIMIT 6
+        ) project_row
+      ), '[]'::jsonb) AS "missingLocationPlanProjects"
+`;
 
-const deadlineTone = (status: string, dueDate: Date) => {
-  if (status === 'OVERDUE' || dueDate < today) return 'danger';
+const counts = dashboardRows[0] ?? {
+  activeProjects: 0,
+  upcomingDeadlineCount: 0,
+  planningActionCount: 0,
+  warrantActionCount: 0,
+  upcomingDeadlines: [],
+  planningAwaitingAction: [],
+  warrantsAwaitingAction: [],
+  recentFiles: [],
+  missingLocationPlanProjects: [],
+};
+const activeProjects = Number(counts.activeProjects);
+const upcomingDeadlineCount = Number(counts.upcomingDeadlineCount);
+const planningActionCount = Number(counts.planningActionCount);
+const warrantActionCount = Number(counts.warrantActionCount);
+const upcomingDeadlines = readArray<DashboardDeadline>(counts.upcomingDeadlines);
+const planningAwaitingAction = readArray<DashboardPlanning>(counts.planningAwaitingAction);
+const warrantsAwaitingAction = readArray<DashboardWarrant>(counts.warrantsAwaitingAction);
+const recentFiles = readArray<DashboardFile>(counts.recentFiles);
+const missingLocationPlanProjects = readArray<MissingLocationProject>(counts.missingLocationPlanProjects);
+const missingDocumentWarnings = missingLocationPlanProjects.map((project) => ({ project, missing: ['Location Plan'] }));
+
+const deadlineTone = (status: string, dueDate: string | Date) => {
+  if (status === 'OVERDUE' || new Date(dueDate) < today) return 'danger';
   if (status === 'DUE_SOON') return 'warning';
   return 'neutral';
 };

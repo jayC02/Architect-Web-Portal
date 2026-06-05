@@ -38,9 +38,6 @@ const projects = await prisma.project.findMany({
           <tr
             data-project-row
             data-href={`/projects/${project.id}`}
-            tabindex="0"
-            role="link"
-            aria-label={`Open project ${project.name}`}
             class="cursor-pointer transition hover:bg-stone-50 focus:outline-none focus-visible:bg-stone-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/40"
           >
             <td class="table-cell">

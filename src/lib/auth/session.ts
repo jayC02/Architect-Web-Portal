@@ -48,6 +48,7 @@ export const getSessionUser = async (context: APIContext) => {
     select: {
       id: true,
       expiresAt: true,
+      lastSeenAt: true,
       user: {
         select: {
           id: true,
@@ -68,12 +69,62 @@ export const getSessionUser = async (context: APIContext) => {
     return null;
   }
 
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { lastSeenAt: new Date() },
-  });
+  if (session.lastSeenAt.getTime() < Date.now() - 10 * 60 * 1000) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date() },
+    });
+  }
 
   return session.user;
+};
+
+export const getSessionAuth = async (context: APIContext) => {
+  const rawToken = context.cookies.get(SESSION_COOKIE)?.value;
+  if (!rawToken) return null;
+
+  const session = await prisma.session.findUnique({
+    where: { tokenHash: hashToken(rawToken) },
+    select: {
+      id: true,
+      expiresAt: true,
+      lastSeenAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          createdAt: true,
+          updatedAt: true,
+          organisationLinks: {
+            include: { organisation: true },
+            orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!session) return null;
+
+  if (session.expiresAt.getTime() < Date.now()) {
+    await prisma.session.delete({ where: { id: session.id } });
+    context.cookies.delete(SESSION_COOKIE, { path: '/' });
+    return null;
+  }
+
+  if (session.lastSeenAt.getTime() < Date.now() - 10 * 60 * 1000) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date() },
+    });
+  }
+
+  const [membership] = session.user.organisationLinks;
+  if (!membership) return null;
+  const { organisationLinks, ...user } = session.user;
+  return { user, membership, organisation: membership.organisation };
 };
 
 export const sessionCookieName = SESSION_COOKIE;

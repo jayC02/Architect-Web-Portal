@@ -4,9 +4,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['IBM Plex Sans', 'ui-sans-serif', 'system-ui'],
-        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular'],
-        display: ['Aptos Display', 'IBM Plex Sans', 'ui-sans-serif'],
+        sans: ['Aptos', 'Segoe UI', 'ui-sans-serif', 'system-ui'],
+        mono: ['Cascadia Mono', 'Segoe UI Mono', 'ui-monospace', 'SFMono-Regular'],
+        display: ['Aptos Display', 'Aptos', 'Segoe UI', 'ui-sans-serif'],
       },
       colors: {
         ink: '#20231f',
