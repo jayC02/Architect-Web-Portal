@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { withPerf } from '@/lib/utils/perf';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -65,45 +66,53 @@ const [
   allDocuments,
   projectsMissingLocation,
 ] = await Promise.all([
-  prisma.project.findMany({
-    where: { organisationId: auth.organisation.id },
-    select: {
-      id: true,
-      name: true,
-      internalReference: true,
-      siteAddress: true,
-      status: true,
-      client: { select: { name: true } },
-      site: { select: { addressLine1: true, postcode: true } },
-      documents: {
-        select: { createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
+  withPerf('documents.projectFolders', () =>
+    prisma.project.findMany({
+      where: { organisationId: auth.organisation.id },
+      select: {
+        id: true,
+        name: true,
+        internalReference: true,
+        siteAddress: true,
+        status: true,
+        client: { select: { name: true } },
+        site: { select: { addressLine1: true, postcode: true } },
+        documents: {
+          select: { createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        _count: { select: { documents: true } },
       },
-      _count: { select: { documents: true } },
-    },
-    orderBy: { updatedAt: 'desc' },
-  }),
-  prisma.projectDocument.count({ where: { organisationId: auth.organisation.id } }),
-  prisma.projectDocument.count({ where: documentWhere }),
-  prisma.projectDocument.findMany({
-    where: { organisationId: auth.organisation.id },
-    include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: expandedSection === 'recent' ? 50 : 12,
-  }),
+      orderBy: { updatedAt: 'desc' },
+    }),
+  ),
+  withPerf('documents.totalCount', () => prisma.projectDocument.count({ where: { organisationId: auth.organisation.id } })),
+  withPerf('documents.filteredCount', () => prisma.projectDocument.count({ where: documentWhere })),
+  withPerf('documents.recent', () =>
+    prisma.projectDocument.findMany({
+      where: { organisationId: auth.organisation.id },
+      include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: expandedSection === 'recent' ? 50 : 12,
+    }),
+  ),
   expandedSection === 'all'
-    ? prisma.projectDocument.findMany({
-        where: documentWhere,
-        include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
-        orderBy,
-        take: 200,
-      })
+    ? withPerf('documents.all', () =>
+        prisma.projectDocument.findMany({
+          where: documentWhere,
+          include: { project: { select: { id: true, name: true } }, uploadedBy: { select: { name: true } } },
+          orderBy,
+          take: 200,
+        }),
+      )
     : Promise.resolve([]),
-  prisma.project.findMany({
-    where: { ...activeProjectWhere, documents: { none: { type: DocumentType.LOCATION_PLAN } } },
-    select: { id: true },
-  }),
+  withPerf('documents.missingLocation', () =>
+    prisma.project.findMany({
+      where: { ...activeProjectWhere, documents: { none: { type: DocumentType.LOCATION_PLAN } } },
+      select: { id: true },
+    }),
+  ),
 ]);
 
 const missingLocationProjectIds = new Set(projectsMissingLocation.map((project) => project.id));

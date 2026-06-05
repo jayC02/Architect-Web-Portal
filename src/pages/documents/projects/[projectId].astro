@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { withPerf } from '@/lib/utils/perf';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -12,18 +13,36 @@ if (!auth) return Astro.redirect('/login');
 const projectId = Astro.params.projectId;
 if (!projectId) return Astro.redirect('/documents');
 
-const project = await prisma.project.findFirst({
-  where: { id: projectId, organisationId: auth.organisation.id },
-  include: {
-    client: { select: { name: true } },
-    site: { select: { addressLine1: true, townCity: true, postcode: true } },
-    documents: {
-      include: { uploadedBy: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
+const project = await withPerf('documents.projectFolder', () =>
+  prisma.project.findFirst({
+    where: { id: projectId, organisationId: auth.organisation.id },
+    include: {
+      client: { select: { name: true } },
+      site: { select: { addressLine1: true, townCity: true, postcode: true } },
+      documents: {
+        select: {
+          id: true,
+          storageUrl: true,
+          originalName: true,
+          type: true,
+          revision: true,
+          status: true,
+          notes: true,
+          drawingNumber: true,
+          drawingTitle: true,
+          createdAt: true,
+          sizeBytes: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      documentSortBatches: {
+        select: { id: true, status: true, fileCount: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      },
     },
-    documentSortBatches: { orderBy: { createdAt: 'desc' }, take: 5 },
-  },
-});
+  }),
+);
 
 if (!project) return Astro.redirect('/documents');
 

@@ -9,7 +9,15 @@ if (!auth) return Astro.redirect('/login');
 
 const projects = await prisma.project.findMany({
   where: { organisationId: auth.organisation.id },
-  include: { client: true, site: true },
+  select: {
+    id: true,
+    name: true,
+    internalReference: true,
+    stage: true,
+    status: true,
+    localAuthority: true,
+    client: { select: { name: true } },
+  },
   orderBy: { updatedAt: 'desc' },
 });
 ---

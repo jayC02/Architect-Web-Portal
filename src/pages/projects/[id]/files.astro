@@ -5,18 +5,51 @@ import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { withPerf } from '@/lib/utils/perf';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
-const project = await prisma.project.findFirst({
-  where: { id: Astro.params.id, organisationId: auth.organisation.id },
-  include: {
-    documents: { include: { uploadedBy: { select: { name: true } } }, orderBy: { createdAt: 'desc' } },
-    documentSortBatches: { orderBy: { createdAt: 'desc' }, take: 5 },
-    submissionPackages: { include: { documents: { include: { document: true } } }, orderBy: { updatedAt: 'desc' } },
-  },
-});
+const project = await withPerf('projects.files', () =>
+  prisma.project.findFirst({
+    where: { id: Astro.params.id, organisationId: auth.organisation.id },
+    include: {
+      documents: {
+        select: {
+          id: true,
+          storageUrl: true,
+          originalName: true,
+          type: true,
+          revision: true,
+          status: true,
+          notes: true,
+          drawingNumber: true,
+          drawingTitle: true,
+          sortConfidence: true,
+          createdAt: true,
+          sizeBytes: true,
+          uploadedBy: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
+      documentSortBatches: {
+        select: { id: true, status: true, fileCount: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      },
+      submissionPackages: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          status: true,
+          documents: { select: { documentId: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      },
+    },
+  }),
+);
 if (!project) return Astro.redirect('/projects');
 ---
 <AppShell title={`${project.name} files`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>

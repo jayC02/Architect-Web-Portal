@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { assertAllowedOrigin } from '../src/lib/server/origin-guard';
+import { cacheHeaders, privateApiNoStore, privateNoStore, publicPageShort } from '../src/lib/server/cache-control';
 import { saveUploadedDocument } from '../src/lib/server/uploads';
 import { clientSchema, deadlineSchema, planningApplicationSchema } from '../src/lib/validation/domain';
 import { evidenceUrlSchema } from '../src/lib/validation/security';
+import { jsonResponse } from '../src/lib/utils/http';
 
 const TEST_ORIGIN = 'http://localhost:4321';
 const EVIL_ORIGIN = 'https://evil.example';
@@ -43,6 +45,14 @@ assert.throws(() => {
     headers: { Origin: EVIL_ORIGIN },
   }));
 }, 'evil origin mutation should be blocked');
+
+assert.match(privateNoStore, /private/);
+assert.match(privateNoStore, /no-store/);
+assert.match(privateApiNoStore, /private/);
+assert.match(privateApiNoStore, /no-store/);
+assert.match(publicPageShort, /s-maxage=30/);
+assert.equal(cacheHeaders.PRIVATE_NO_STORE, privateNoStore);
+assert.equal(jsonResponse(200, { ok: true }).headers.get('Cache-Control'), privateApiNoStore);
 
 const unsafeFiles = [
   new File(['<svg><script>alert(1)</script></svg>'], 'drawing.svg', { type: 'image/svg+xml' }),

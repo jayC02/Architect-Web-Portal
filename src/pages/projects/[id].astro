@@ -11,20 +11,29 @@ if (!auth) return Astro.redirect('/login');
 const project = await prisma.project.findFirst({
   where: { id: Astro.params.id, organisationId: auth.organisation.id },
   include: {
-    client: true,
-    site: true,
-    documents: { orderBy: { createdAt: 'desc' }, take: 5 },
-    planningApplications: { orderBy: { updatedAt: 'desc' }, take: 3 },
-    warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 3 },
+    client: { select: { id: true, name: true, email: true } },
+    site: { select: { id: true, addressLine1: true, postcode: true } },
+    documents: {
+      select: { id: true, originalName: true, type: true, revision: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    },
     deadlines: { orderBy: { dueDate: 'asc' }, take: 5 },
-    submissionPackages: { orderBy: { updatedAt: 'desc' }, take: 5 },
   },
 });
 if (!project) return Astro.redirect('/projects');
 
 const [clients, sites] = await Promise.all([
-  prisma.client.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { name: 'asc' } }),
-  prisma.site.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { updatedAt: 'desc' } }),
+  prisma.client.findMany({
+    where: { organisationId: auth.organisation.id },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  }),
+  prisma.site.findMany({
+    where: { organisationId: auth.organisation.id },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, addressLine1: true, postcode: true },
+  }),
 ]);
 ---
 <AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>

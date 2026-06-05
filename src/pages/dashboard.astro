@@ -19,6 +19,7 @@ import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { withPerf } from '@/lib/utils/perf';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -93,7 +94,7 @@ type DashboardSummary = {
 
 const readArray = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
 
-const dashboardRows = await prisma.$queryRaw<DashboardSummary[]>`
+const dashboardRows = await withPerf('dashboard.summary', () => prisma.$queryRaw<DashboardSummary[]>`
     SELECT
       (SELECT COUNT(*)::int FROM "Project"
         WHERE "organisationId" = ${orgId}
@@ -217,7 +218,7 @@ const dashboardRows = await prisma.$queryRaw<DashboardSummary[]>`
           LIMIT 6
         ) project_row
       ), '[]'::jsonb) AS "missingLocationPlanProjects"
-`;
+`);
 
 const counts = dashboardRows[0] ?? {
   activeProjects: 0,
