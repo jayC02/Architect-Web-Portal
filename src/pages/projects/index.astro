@@ -1,25 +1,11 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
-import { prisma } from '@/lib/db/prisma';
-import { humanizeEnum } from '@/lib/format';
+import LiveDataPanel from '@/components/live/LiveDataPanel';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
-const projects = await prisma.project.findMany({
-  where: { organisationId: auth.organisation.id },
-  select: {
-    id: true,
-    name: true,
-    internalReference: true,
-    stage: true,
-    status: true,
-    localAuthority: true,
-    client: { select: { name: true } },
-  },
-  orderBy: { updatedAt: 'desc' },
-});
 ---
 <AppShell title="Projects" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -30,61 +16,5 @@ const projects = await prisma.project.findMany({
     <a href="/projects/new" class="btn btn-primary">New project</a>
   </div>
 
-  <div class="panel overflow-hidden rounded-lg">
-    <table class="w-full min-w-[760px] border-collapse">
-      <thead class="table-head">
-        <tr>
-          <th class="px-4 py-3">Project</th>
-          <th class="px-4 py-3">Client</th>
-          <th class="px-4 py-3">Stage</th>
-          <th class="px-4 py-3">Status</th>
-          <th class="px-4 py-3">Authority</th>
-        </tr>
-      </thead>
-      <tbody>
-        {projects.map((project) => (
-          <tr
-            data-project-row
-            data-href={`/projects/${project.id}`}
-            class="cursor-pointer transition hover:bg-stone-50 focus:outline-none focus-visible:bg-stone-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/40"
-          >
-            <td class="table-cell">
-              <a class="font-semibold hover:underline" href={`/projects/${project.id}`}>{project.name}</a>
-              <p class="text-xs text-stone-500">{project.internalReference ?? 'No reference'}</p>
-            </td>
-            <td class="table-cell">{project.client?.name ?? 'Not linked'}</td>
-            <td class="table-cell"><span class="status-chip bg-moss/10 text-moss">{humanizeEnum(project.stage)}</span></td>
-            <td class="table-cell">{humanizeEnum(project.status)}</td>
-            <td class="table-cell">{project.localAuthority ?? 'Not set'}</td>
-          </tr>
-        ))}
-        {!projects.length && (
-          <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-stone-500">No projects yet.</td></tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-
-  <script>
-    const openProjectRow = (row: HTMLElement) => {
-      const href = row.dataset.href;
-      if (href) window.location.href = href;
-    };
-
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      const row = target.closest('[data-project-row]');
-      if (!(row instanceof HTMLElement)) return;
-      openProjectRow(row);
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.matches('[data-project-row]')) return;
-      event.preventDefault();
-      openProjectRow(target);
-    });
-  </script>
+  <LiveDataPanel client:idle variant="projects" endpoint="/api/projects" />
 </AppShell>

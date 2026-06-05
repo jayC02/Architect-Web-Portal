@@ -79,6 +79,7 @@ const {
             window.location.href = redirect === 'reload' ? window.location.href : redirect;
             return;
           }
+          window.dispatchEvent(new CustomEvent('portal:mutation-success', { detail: { action, method } }));
           if (status) {
             status.textContent = 'Saved.';
             status.classList.remove('text-red-700');

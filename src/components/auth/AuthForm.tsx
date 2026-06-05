@@ -8,9 +8,11 @@ type Mode = 'login' | 'register';
 export default function AuthForm({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const action = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
 
   const onSubmit = async (event: Parameters<NonNullable<ComponentProps<'form'>['onSubmit']>>[0]) => {
     event.preventDefault();
+    event.stopPropagation();
     setError('');
     setLoading(true);
     const form = new FormData(event.currentTarget);
@@ -18,12 +20,12 @@ export default function AuthForm({ mode }: { mode: Mode }) {
 
     try {
       if (mode === 'login') {
-        await apiRequest('/api/auth/login', {
+        await apiRequest(action, {
           method: 'POST',
           json: { email: payload.email, password: payload.password },
         });
       } else {
-        await apiRequest('/api/auth/register', {
+        await apiRequest(action, {
           method: 'POST',
           json: {
             name: payload.name,
@@ -42,7 +44,16 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   };
 
   return (
-    <form onSubmit={onSubmit} className="panel mx-auto w-full max-w-md rounded-lg p-6">
+    <form
+      onSubmit={onSubmit}
+      data-api-form
+      data-action={action}
+      data-method="POST"
+      data-redirect="/dashboard"
+      method="post"
+      action={action}
+      className="panel mx-auto w-full max-w-md rounded-lg p-6"
+    >
       <div className="mb-6 flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-md bg-ink text-paper">
           {mode === 'login' ? <LogIn size={20} /> : <Building2 size={20} />}

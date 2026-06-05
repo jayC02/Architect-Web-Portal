@@ -7,6 +7,7 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { projectSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
 
 const assertRelatedRecord = async (organisationId: string, model: 'client' | 'site', id: string | undefined) => {
@@ -22,12 +23,24 @@ const assertRelatedRecord = async (organisationId: string, model: 'client' | 'si
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
     const { organisation } = await requireOrganisation(context);
-    const projects = await prisma.project.findMany({
-      where: { organisationId: organisation.id },
-      include: { client: true, site: true },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    });
+    const projects = await withPerf('api.projects.list', () =>
+      prisma.project.findMany({
+        where: { organisationId: organisation.id },
+        select: {
+          id: true,
+          name: true,
+          internalReference: true,
+          stage: true,
+          status: true,
+          localAuthority: true,
+          updatedAt: true,
+          client: { select: { name: true } },
+          site: { select: { addressLine1: true, postcode: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    );
     return jsonResponse(200, { projects });
   });
 

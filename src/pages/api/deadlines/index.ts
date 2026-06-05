@@ -7,6 +7,7 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { deadlineSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
 
 const assertScopedOptional = async (organisationId: string, model: 'project' | 'planning' | 'warrant', id?: string) => {
@@ -24,13 +25,22 @@ const assertScopedOptional = async (organisationId: string, model: 'project' | '
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
     const { organisation } = await requireOrganisation(context);
-    const deadlines = await prisma.deadline.findMany({
-      where: { organisationId: organisation.id },
-      include: { project: { select: { id: true, name: true } } },
-      orderBy: { dueDate: 'asc' },
-      take: 150,
-    });
-    return jsonResponse(200, { deadlines });
+    const [deadlines, projects] = await withPerf('api.deadlines.list', () =>
+      Promise.all([
+        prisma.deadline.findMany({
+          where: { organisationId: organisation.id },
+          include: { project: { select: { id: true, name: true } } },
+          orderBy: { dueDate: 'asc' },
+          take: 150,
+        }),
+        prisma.project.findMany({
+          where: { organisationId: organisation.id },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        }),
+      ]),
+    );
+    return jsonResponse(200, { deadlines, projects });
   });
 
 export const POST: APIRoute = (context) =>

@@ -13,6 +13,7 @@ export const apiRequest = async <T = unknown>(url: string, options: ApiRequestOp
 
   const response = await fetch(url, {
     ...options,
+    credentials: options.credentials ?? 'same-origin',
     headers,
     body,
   });

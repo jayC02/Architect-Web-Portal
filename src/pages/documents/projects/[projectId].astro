@@ -1,11 +1,9 @@
 ---
-import { DocumentStatus, DocumentType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
+import LiveDataPanel from '@/components/live/LiveDataPanel';
 import { prisma } from '@/lib/db/prisma';
-import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
-import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
+import { formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
-import { withPerf } from '@/lib/utils/perf';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -13,47 +11,20 @@ if (!auth) return Astro.redirect('/login');
 const projectId = Astro.params.projectId;
 if (!projectId) return Astro.redirect('/documents');
 
-const project = await withPerf('documents.projectFolder', () =>
-  prisma.project.findFirst({
-    where: { id: projectId, organisationId: auth.organisation.id },
-    include: {
-      client: { select: { name: true } },
-      site: { select: { addressLine1: true, townCity: true, postcode: true } },
-      documents: {
-        select: {
-          id: true,
-          storageUrl: true,
-          originalName: true,
-          type: true,
-          revision: true,
-          status: true,
-          notes: true,
-          drawingNumber: true,
-          drawingTitle: true,
-          createdAt: true,
-          sizeBytes: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      },
-      documentSortBatches: {
-        select: { id: true, status: true, fileCount: true, createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-      },
+const project = await prisma.project.findFirst({
+  where: { id: projectId, organisationId: auth.organisation.id },
+  include: {
+    client: { select: { name: true } },
+    site: { select: { addressLine1: true, townCity: true, postcode: true } },
+    documentSortBatches: {
+      select: { id: true, status: true, fileCount: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
     },
-  }),
-);
+  },
+});
 
 if (!project) return Astro.redirect('/documents');
-
-const bucketOrder = preferredDocumentTypes.map((type) => ({ type, label: documentTypeLabel(type) }));
-
-const grouped = new Map<DocumentType, typeof project.documents>();
-for (const bucket of bucketOrder) grouped.set(bucket.type, []);
-for (const document of project.documents) {
-  const groupType = documentGroupType(document.type);
-  grouped.set(groupType, [...(grouped.get(groupType) ?? []), document]);
-}
 
 const projectSummary = [
   project.internalReference,
@@ -103,53 +74,5 @@ const projectSummary = [
     </div>
   </section>
 
-  <section class="space-y-3">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="text-xl font-semibold">Document buckets</h2>
-      <span class="text-sm text-stone-500">{project.documents.length} document{project.documents.length === 1 ? '' : 's'}</span>
-    </div>
-
-    {bucketOrder.map((bucket) => {
-      const documents = grouped.get(bucket.type) ?? [];
-      return (
-        <details class="panel rounded-lg" open={documents.length > 0}>
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-            <span class="font-semibold">{bucket.label}</span>
-            <span class="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-600">{documents.length} file{documents.length === 1 ? '' : 's'}</span>
-          </summary>
-          <div class="border-t border-stone-100">
-            {documents.map((document) => (
-              <div class="border-b border-stone-100 px-4 py-3 last:border-b-0">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="min-w-0">
-                    <a class="font-semibold hover:underline" href={document.storageUrl} target="_blank" rel="noreferrer">{document.originalName}</a>
-                    <p class="mt-1 text-xs text-stone-500">
-                      {document.revision ? `Rev ${document.revision}` : 'No revision'} - {humanizeEnum(document.status)} - {formatDate(document.createdAt)} - {formatBytes(document.sizeBytes)}
-                    </p>
-                    {(document.drawingNumber || document.drawingTitle) && (
-                      <p class="mt-1 text-xs text-stone-500">{[document.drawingNumber, document.drawingTitle].filter(Boolean).join(' - ')}</p>
-                    )}
-                  </div>
-                  <details class="w-full md:w-auto">
-                    <summary class="btn btn-secondary cursor-pointer list-none">Edit classification</summary>
-                    <form data-api-form data-action={`/api/documents/${document.id}`} data-method="PATCH" class="mt-3 grid gap-3 rounded-md border border-stone-200 p-3 md:grid-cols-4">
-                      <label class="block"><span class="label">Document type</span><select name="type" class="field">{preferredDocumentTypes.map((type) => <option value={type} selected={type === documentGroupType(document.type)}>{documentTypeLabel(type)}</option>)}</select></label>
-                      <label class="block"><span class="label">Revision</span><input name="revision" value={document.revision ?? ''} class="field" /></label>
-                      <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(DocumentStatus).map((status) => <option value={status} selected={status === document.status}>{humanizeEnum(status)}</option>)}</select></label>
-                      <label class="block"><span class="label">Notes</span><input name="notes" value={document.notes ?? ''} class="field" /></label>
-                      <div class="flex items-center gap-3 md:col-span-4">
-                        <button class="btn btn-primary">Save classification</button>
-                        <span data-form-status class="text-sm text-stone-500"></span>
-                      </div>
-                    </form>
-                  </details>
-                </div>
-              </div>
-            ))}
-            {!documents.length && <div class="px-4 py-6 text-sm text-stone-500">No files in this bucket yet.</div>}
-          </div>
-        </details>
-      );
-    })}
-  </section>
+  <LiveDataPanel client:idle variant="documentFolder" endpoint={`/api/documents/projects/${project.id}`} />
 </AppShell>

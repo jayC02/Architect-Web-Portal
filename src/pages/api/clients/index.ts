@@ -7,16 +7,28 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { clientSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
+import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
     const { organisation } = await requireOrganisation(context);
-    const clients = await prisma.client.findMany({
-      where: { organisationId: organisation.id },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    });
+    const clients = await withPerf('api.clients.list', () =>
+      prisma.client.findMany({
+        where: { organisationId: organisation.id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          address: true,
+          notes: true,
+          _count: { select: { projects: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    );
     return jsonResponse(200, { clients });
   });
 

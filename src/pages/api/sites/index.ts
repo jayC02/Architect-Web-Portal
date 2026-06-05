@@ -7,16 +7,29 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { siteSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
+import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
     const { organisation } = await requireOrganisation(context);
-    const sites = await prisma.site.findMany({
-      where: { organisationId: organisation.id },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    });
+    const sites = await withPerf('api.sites.list', () =>
+      prisma.site.findMany({
+        where: { organisationId: organisation.id },
+        select: {
+          id: true,
+          addressLine1: true,
+          addressLine2: true,
+          townCity: true,
+          postcode: true,
+          localAuthority: true,
+          notes: true,
+          _count: { select: { projects: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    );
     return jsonResponse(200, { sites });
   });
 
