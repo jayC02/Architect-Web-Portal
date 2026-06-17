@@ -25,4 +25,4 @@ export const GET: APIRoute = (context) =>
 
     if (!batch) throw new HttpError(404, 'Document sort batch not found.');
     return jsonResponse(200, { batch });
-  });
+  }, context);

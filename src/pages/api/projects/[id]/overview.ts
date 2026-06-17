@@ -44,4 +44,4 @@ export const GET: APIRoute = (context) =>
     if (!project) return jsonResponse(200, { project: null });
 
     return jsonResponse(200, { project });
-  });
+  }, context);

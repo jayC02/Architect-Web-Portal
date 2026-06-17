@@ -22,7 +22,7 @@ export const GET: APIRoute = (context) =>
       orderBy: { createdAt: 'desc' },
     });
     return jsonResponse(200, { documents });
-  });
+  }, context);
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -54,4 +54,4 @@ export const POST: APIRoute = (context) =>
     });
 
     return jsonResponse(201, { document });
-  });
+  }, context);

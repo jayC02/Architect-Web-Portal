@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { APIContext } from 'astro';
 import { prisma } from '@/lib/db/prisma';
+import { withPerf } from '@/lib/utils/perf';
 
 const SESSION_COOKIE = 'architect_portal_session';
 const SESSION_TTL_DAYS = 30;
@@ -43,7 +44,7 @@ export const getSessionUser = async (context: APIContext) => {
   const rawToken = context.cookies.get(SESSION_COOKIE)?.value;
   if (!rawToken) return null;
 
-  const session = await prisma.session.findUnique({
+  const session = await withPerf('auth.session_user', () => prisma.session.findUnique({
     where: { tokenHash: hashToken(rawToken) },
     select: {
       id: true,
@@ -59,7 +60,7 @@ export const getSessionUser = async (context: APIContext) => {
         },
       },
     },
-  });
+  }));
 
   if (!session) return null;
 
@@ -70,10 +71,10 @@ export const getSessionUser = async (context: APIContext) => {
   }
 
   if (session.lastSeenAt.getTime() < Date.now() - 10 * 60 * 1000) {
-    await prisma.session.update({
+    await withPerf('auth.touch_session', () => prisma.session.update({
       where: { id: session.id },
       data: { lastSeenAt: new Date() },
-    });
+    }));
   }
 
   return session.user;
@@ -83,7 +84,7 @@ export const getSessionAuth = async (context: APIContext) => {
   const rawToken = context.cookies.get(SESSION_COOKIE)?.value;
   if (!rawToken) return null;
 
-  const session = await prisma.session.findUnique({
+  const session = await withPerf('auth.session_auth', () => prisma.session.findUnique({
     where: { tokenHash: hashToken(rawToken) },
     select: {
       id: true,
@@ -104,7 +105,7 @@ export const getSessionAuth = async (context: APIContext) => {
         },
       },
     },
-  });
+  }));
 
   if (!session) return null;
 
@@ -115,10 +116,10 @@ export const getSessionAuth = async (context: APIContext) => {
   }
 
   if (session.lastSeenAt.getTime() < Date.now() - 10 * 60 * 1000) {
-    await prisma.session.update({
+    await withPerf('auth.touch_session', () => prisma.session.update({
       where: { id: session.id },
       data: { lastSeenAt: new Date() },
-    });
+    }));
   }
 
   const [membership] = session.user.organisationLinks;

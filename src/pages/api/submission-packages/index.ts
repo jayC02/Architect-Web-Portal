@@ -48,4 +48,4 @@ export const POST: APIRoute = (context) =>
     });
 
     return jsonResponse(201, { submissionPackage });
-  });
+  }, context);

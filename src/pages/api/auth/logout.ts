@@ -11,4 +11,4 @@ export const POST: APIRoute = (context) =>
     assertAllowedOrigin(context.request);
     await destroySession(context);
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

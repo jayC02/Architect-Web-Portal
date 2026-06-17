@@ -23,4 +23,4 @@ export const PATCH: APIRoute = (context) =>
     });
     if (!result.count) throw new HttpError(404, 'Document not found.');
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

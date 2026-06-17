@@ -68,4 +68,4 @@ export const DELETE: APIRoute = (context) =>
     const result = await prisma.project.deleteMany({ where: { id, organisationId: organisation.id } });
     if (!result.count) throw new HttpError(404, 'Project not found.');
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

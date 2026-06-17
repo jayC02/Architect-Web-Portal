@@ -1,12 +1,30 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import AuthForm from '@/components/auth/AuthForm';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
 
 setAstroCache(Astro, publicPageShort);
 ---
 <BaseLayout title="Register | Architect Web Portal">
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
-    <AuthForm mode="register" client:load />
+    <form data-api-form data-action="/api/auth/register" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/register" class="panel mx-auto w-full max-w-md rounded-lg p-6">
+      <div class="mb-6 flex items-center gap-3">
+        <div class="flex h-11 w-11 items-center justify-center rounded-md bg-ink text-paper" aria-hidden="true">AP</div>
+        <div>
+          <h1 class="text-2xl font-semibold text-ink">Create practice workspace</h1>
+          <p class="text-sm text-stone-500">Start with an owner account and organisation.</p>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <label class="block"><span class="label">Your name</span><input required name="name" minlength="2" class="field" autocomplete="name" /></label>
+        <label class="block"><span class="label">Organisation</span><input required name="organisationName" minlength="2" class="field" autocomplete="organization" /></label>
+        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" /></label>
+        <label class="block"><span class="label">Password</span><input required type="password" name="password" minlength="8" class="field" autocomplete="new-password" /></label>
+      </div>
+      <button class="btn btn-primary mt-6 w-full">Create account</button>
+      <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
+      <p class="mt-4 text-center text-sm text-stone-500">Already registered? <a class="font-semibold text-ink" href="/login">Sign in</a></p>
+    </form>
   </main>
 </BaseLayout>

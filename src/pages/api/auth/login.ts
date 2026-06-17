@@ -23,4 +23,4 @@ export const POST: APIRoute = (context) =>
 
     await createSession(user.id, context);
     return jsonResponse(200, { user: { id: user.id, name: user.name, email: user.email } });
-  });
+  }, context);

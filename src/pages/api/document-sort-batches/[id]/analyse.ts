@@ -86,4 +86,4 @@ export const POST: APIRoute = (context) =>
       });
       throw error;
     }
-  });
+  }, context);

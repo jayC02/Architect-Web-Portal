@@ -60,4 +60,4 @@ export const POST: APIRoute = (context) =>
 
     await createSession(user.id, context);
     return jsonResponse(201, { user });
-  });
+  }, context);

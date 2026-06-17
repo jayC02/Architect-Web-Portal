@@ -31,7 +31,7 @@ export const GET: APIRoute = (context) =>
       }),
     );
     return jsonResponse(200, { sites });
-  });
+  }, context);
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -43,4 +43,4 @@ export const POST: APIRoute = (context) =>
       data: { ...body, organisationId: organisation.id },
     });
     return jsonResponse(201, { site });
-  });
+  }, context);

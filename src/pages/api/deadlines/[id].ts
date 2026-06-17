@@ -50,4 +50,4 @@ export const DELETE: APIRoute = (context) =>
     const result = await prisma.deadline.deleteMany({ where: { id, organisationId: organisation.id } });
     if (!result.count) throw new HttpError(404, 'Deadline not found.');
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

@@ -83,4 +83,4 @@ export const POST: APIRoute = (context) =>
       complete: allItemsAccepted,
       redirectTo: body.returnTo === 'document-folder' ? `/documents/projects/${batch.projectId}` : `/projects/${batch.projectId}/files`,
     });
-  });
+  }, context);

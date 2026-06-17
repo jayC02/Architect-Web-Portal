@@ -12,4 +12,4 @@ export const GET: APIRoute = (context) =>
       organisation: { id: organisation.id, name: organisation.name },
       role: membership.role,
     });
-  });
+  }, context);

@@ -41,7 +41,7 @@ export const GET: APIRoute = (context) =>
       ]),
     );
     return jsonResponse(200, { deadlines, projects });
-  });
+  }, context);
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -62,4 +62,4 @@ export const POST: APIRoute = (context) =>
       },
     });
     return jsonResponse(201, { deadline });
-  });
+  }, context);

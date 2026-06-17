@@ -1,6 +1,6 @@
 import type { OrganisationRole } from '@prisma/client';
 import type { APIContext } from 'astro';
-import { getSessionUser } from '@/lib/auth/session';
+import { getSessionAuth, getSessionUser } from '@/lib/auth/session';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
 
@@ -22,9 +22,9 @@ export const getActiveOrganisationMembership = async (userId: string) => {
 };
 
 export const requireOrganisation = async (context: APIContext) => {
-  const user = await requireUser(context);
-  const membership = await getActiveOrganisationMembership(user.id);
-  return { user, membership, organisation: membership.organisation };
+  const auth = await getSessionAuth(context);
+  if (!auth) throw new HttpError(401, 'Authentication required.');
+  return auth;
 };
 
 export const requireOrganisationRole = async (context: APIContext, allowed: OrganisationRole[]) => {

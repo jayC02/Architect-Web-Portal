@@ -68,4 +68,4 @@ export const GET: APIRoute = (context) =>
       })),
       recentDocuments: recentDocuments.map((document) => ({ ...document, type: documentGroupType(document.type) })),
     });
-  });
+  }, context);

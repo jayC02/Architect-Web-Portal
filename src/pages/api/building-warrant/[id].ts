@@ -37,4 +37,4 @@ export const DELETE: APIRoute = (context) =>
     });
     if (!result.count) throw new HttpError(404, 'Building warrant application not found.');
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

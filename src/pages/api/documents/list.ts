@@ -66,4 +66,4 @@ export const GET: APIRoute = (context) =>
       count: documents.length,
       limit: 100,
     });
-  });
+  }, context);

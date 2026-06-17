@@ -35,4 +35,4 @@ export const DELETE: APIRoute = (context) =>
     const result = await prisma.site.deleteMany({ where: { id, organisationId: organisation.id } });
     if (!result.count) throw new HttpError(404, 'Site not found.');
     return jsonResponse(200, { ok: true });
-  });
+  }, context);

@@ -96,4 +96,4 @@ export const POST: APIRoute = (context) =>
       batch,
       redirectTo: `/projects/${projectId}/files/sort/${batch.id}${returnTo === 'document-folder' ? '?returnTo=document-folder' : ''}`,
     });
-  });
+  }, context);

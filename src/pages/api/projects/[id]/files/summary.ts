@@ -58,4 +58,4 @@ export const GET: APIRoute = (context) =>
     );
 
     return jsonResponse(200, { project });
-  });
+  }, context);

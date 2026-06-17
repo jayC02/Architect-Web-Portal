@@ -51,4 +51,4 @@ export const GET: APIRoute = (context) =>
       project: { id: project.id, name: project.name, documentCount: project.documents.length },
       buckets,
     });
-  });
+  }, context);

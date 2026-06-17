@@ -1,11 +1,10 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import { getSessionUser } from '@/lib/auth/session';
-import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
+import { publicPageMedium, setAstroCache } from '@/lib/server/cache-control';
 
-setAstroCache(Astro, privateNoStore);
-const user = await getSessionUser(Astro as never);
-if (user) return Astro.redirect('/dashboard');
+export const prerender = true;
+
+setAstroCache(Astro, publicPageMedium);
 ---
 <BaseLayout title="Architect Web Portal">
   <main class="min-h-screen bg-paper">

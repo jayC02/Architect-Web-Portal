@@ -13,4 +13,4 @@ export const GET: APIRoute = (context) =>
       organisation: { id: organisation.id, name: organisation.name, slug: organisation.slug },
       role: membership.role,
     });
-  });
+  }, context);

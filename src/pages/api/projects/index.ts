@@ -42,7 +42,7 @@ export const GET: APIRoute = (context) =>
       }),
     );
     return jsonResponse(200, { projects });
-  });
+  }, context);
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -56,4 +56,4 @@ export const POST: APIRoute = (context) =>
       data: { ...body, clientId, siteId, organisationId: organisation.id },
     });
     return jsonResponse(201, { project });
-  });
+  }, context);
