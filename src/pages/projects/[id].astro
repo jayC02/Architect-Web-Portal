@@ -90,7 +90,7 @@ const [
 
 const latestPlanning = planningApplications[0] ?? null;
 const latestWarrant = warrantApplications[0] ?? null;
-const nextDeadline = deadlines.find((deadline) => ![DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED].includes(deadline.status)) ?? null;
+const nextDeadline = deadlines.find((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED) ?? null;
 const readyAutomationJobCount = automationJobs.filter((job) => job.status === AutomationJobStatus.READY).length;
 const nextAction = getProjectNextAction({
   projectId: project.id,
@@ -107,7 +107,7 @@ const nextAction = getProjectNextAction({
 const siteSummary = project.site
   ? [project.site.addressLine1, project.site.townCity, project.site.postcode].filter(Boolean).join(', ')
   : project.siteAddress ?? 'No site address linked';
-const activeDeadlines = deadlines.filter((deadline) => ![DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED].includes(deadline.status));
+const activeDeadlines = deadlines.filter((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED);
 const completedDeadlines = deadlines.filter((deadline) => deadline.status === DeadlineStatus.COMPLETED);
 const overdueCount = activeDeadlines.filter((deadline) => isProjectDateOverdue(deadline.dueDate)).length;
 
@@ -190,15 +190,20 @@ const jobTone = (status: AutomationJobStatus) => {
           <a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add deadline</a>
           <form data-api-form data-action="/api/automation-jobs" data-method="POST">
             <input type="hidden" name="projectId" value={project.id} />
+            <input type="hidden" name="type" value="HOUSEHOLDER_PLANNING" />
+            <button class="btn btn-secondary">Prepare householder job</button>
+          </form>
+          <form data-api-form data-action="/api/automation-jobs" data-method="POST">
+            <input type="hidden" name="projectId" value={project.id} />
             <input type="hidden" name="type" value="PLANNING_APPLICATION" />
             {latestPlanning && <input type="hidden" name="planningApplicationId" value={latestPlanning.id} />}
-            <button class="btn btn-secondary">Prepare planning automation</button>
+            <button class="btn btn-secondary">Prepare planning job</button>
           </form>
           <form data-api-form data-action="/api/automation-jobs" data-method="POST">
             <input type="hidden" name="projectId" value={project.id} />
             <input type="hidden" name="type" value="BUILDING_WARRANT" />
             {latestWarrant && <input type="hidden" name="buildingWarrantApplicationId" value={latestWarrant.id} />}
-            <button class="btn btn-secondary">Prepare warrant automation</button>
+            <button class="btn btn-secondary">Prepare warrant job</button>
           </form>
         </div>
       </div>
@@ -229,7 +234,7 @@ const jobTone = (status: AutomationJobStatus) => {
       <div class="flex items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">Planning</h2><p class="mt-1 text-sm text-stone-500">Latest planning application record</p></div><a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/projects/${project.id}/planning`}>Manage</a></div>
       {latestPlanning ? <dl class="mt-4 grid gap-3 sm:grid-cols-2"><div><dt class="label">Status</dt><dd><span class="status-chip bg-moss/10 text-moss">{humanizeEnum(latestPlanning.status)}</span></dd></div><div><dt class="label">Reference</dt><dd class="font-semibold">{latestPlanning.applicationReference ?? 'Not set'}</dd></div><div><dt class="label">Submitted</dt><dd>{formatDate(latestPlanning.submissionDate)}</dd></div><div><dt class="label">Validated</dt><dd>{formatDate(latestPlanning.validDate)}</dd></div><div><dt class="label">Decision target</dt><dd>{formatDate(latestPlanning.decisionTargetDate)}</dd></div><div><dt class="label">Decision</dt><dd>{formatDate(latestPlanning.decisionDate)}</dd></div></dl> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-5 text-center"><p class="font-semibold">No planning application has been added yet</p><a class="btn btn-secondary mt-3" href={`/projects/${project.id}/planning`}>Add planning record</a></div>}
       <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4 border-t border-stone-100 pt-4">
-        <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="type" value="PLANNING_APPLICATION" />{latestPlanning && <input type="hidden" name="planningApplicationId" value={latestPlanning.id} />}<button class="btn btn-secondary">Prepare planning automation</button>
+        <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="type" value="PLANNING_APPLICATION" />{latestPlanning && <input type="hidden" name="planningApplicationId" value={latestPlanning.id} />}<button class="btn btn-secondary">Prepare planning job</button>
       </form>
     </section>
 
@@ -237,7 +242,7 @@ const jobTone = (status: AutomationJobStatus) => {
       <div class="flex items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">Building Warrant</h2><p class="mt-1 text-sm text-stone-500">Latest building warrant record</p></div><a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/projects/${project.id}/building-warrant`}>Manage</a></div>
       {latestWarrant ? <dl class="mt-4 grid gap-3 sm:grid-cols-2"><div><dt class="label">Status</dt><dd><span class="status-chip bg-moss/10 text-moss">{humanizeEnum(latestWarrant.status)}</span></dd></div><div><dt class="label">Reference</dt><dd class="font-semibold">{latestWarrant.warrantReference ?? 'Not set'}</dd></div><div><dt class="label">Type</dt><dd>{humanizeEnum(latestWarrant.warrantType)}</dd></div><div><dt class="label">Submitted</dt><dd>{formatDate(latestWarrant.submissionDate)}</dd></div><div><dt class="label">First response</dt><dd>{formatDate(latestWarrant.firstResponseTargetDate)}</dd></div><div><dt class="label">Completion certificate</dt><dd>{humanizeEnum(latestWarrant.completionCertificateStatus)}</dd></div></dl> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-5 text-center"><p class="font-semibold">No building warrant has been added yet</p><a class="btn btn-secondary mt-3" href={`/projects/${project.id}/building-warrant`}>Add building warrant</a></div>}
       <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4 border-t border-stone-100 pt-4">
-        <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="type" value="BUILDING_WARRANT" />{latestWarrant && <input type="hidden" name="buildingWarrantApplicationId" value={latestWarrant.id} />}<button class="btn btn-secondary">Prepare warrant automation</button>
+        <input type="hidden" name="projectId" value={project.id} /><input type="hidden" name="type" value="BUILDING_WARRANT" />{latestWarrant && <input type="hidden" name="buildingWarrantApplicationId" value={latestWarrant.id} />}<button class="btn btn-secondary">Prepare warrant job</button>
       </form>
     </section>
   </div>

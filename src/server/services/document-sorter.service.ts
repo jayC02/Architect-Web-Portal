@@ -1,10 +1,5 @@
-import { createRequire } from 'node:module';
 import { DocumentSortSource, DocumentType } from '@prisma/client';
-
-type PdfParse = (dataBuffer: Buffer, options?: { max?: number }) => Promise<{ text?: string }>;
-
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse') as PdfParse;
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 type SortInput = {
   filename: string;
