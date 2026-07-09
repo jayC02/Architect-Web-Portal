@@ -5,6 +5,7 @@ const acceptRoute = fs.readFileSync('src/pages/api/document-sort-batches/[id]/ac
 const createRoute = fs.readFileSync('src/pages/api/projects/[id]/document-sort-batches.ts', 'utf8');
 const documentsHub = fs.readFileSync('src/pages/api/documents/hub.ts', 'utf8');
 const documentsList = fs.readFileSync('src/pages/api/documents/list.ts', 'utf8');
+const documentsPage = fs.readFileSync('src/pages/documents.astro', 'utf8');
 const documentsUpload = fs.readFileSync('src/pages/documents/upload.astro', 'utf8');
 const documentRoute = fs.readFileSync('src/pages/api/documents/[id].ts', 'utf8');
 const sortReviewPage = fs.readFileSync('src/pages/projects/[id]/files/sort/[batchId].astro', 'utf8');
@@ -29,6 +30,7 @@ assert.match(documentsList, /organisationId:\s*organisation\.id/s, 'documents li
 assert.match(documentsList, /documentsListQuerySchema\.parse/, 'documents list endpoint validates filters');
 assert.match(documentsUpload, /where:\s*\{\s*organisationId:\s*auth\.organisation\.id\s*\}/s, 'documents upload project dropdown is organisation scoped');
 assert.match(documentsUpload, /\/api\/projects\/\$\{projectSelect\.value\}\/document-sort-batches/, 'documents upload reuses the secured project batch upload API');
+assert.match(documentsPage, /Astro\.redirect\('\/projects'\)/, 'global Documents page redirects to projects while documents live inside project records');
 assert.match(documentsUpload, /This upload is locked to the current project/, 'project-scoped uploads do not ask the user to choose the same project again');
 assert.match(createRoute, /submittedReturnTo === 'document-folder' \|\| submittedReturnTo === 'project-detail'/, 'batch upload preserves project-detail return routing');
 assert.match(acceptRoute, /body\.returnTo === 'project-detail'/, 'accept route recognises project-detail return routing');
@@ -37,7 +39,8 @@ assert.match(documentFolder, /where:\s*\{\s*id:\s*projectId,\s*organisationId:\s
 assert.match(documentFolderApi, /requireProjectAccess\(organisation\.id,\s*projectId\)/, 'lazy project document folder endpoint checks project ownership');
 assert.match(documentFolder, /data-action=\{`\/api\/projects\/\$\{project\.id\}\/document-sort-batches`\}/, 'project document folder reuses the secured project batch upload API');
 assert.match(createRoute, /await requireProjectAccess\(organisation\.id,\s*projectId\)/, 'uploading from documents requires valid project membership through project access');
-assert.match(acceptRoute, /allItemsAccepted \? DocumentSortBatchStatus\.ACCEPTED : DocumentSortBatchStatus\.NEEDS_REVIEW/, 'unchecked review items keep the batch needing review instead of being silently accepted');
+assert.match(acceptRoute, /allItemsAccepted \? DocumentSortBatchStatus\.ACCEPTED : DocumentSortBatchStatus\.NEEDS_REVIEW/, 'batch status reflects whether all reviewed items were saved');
+assert.match(acceptRoute, /submitted\.status === DocumentStatus\.IN_REVIEW \? DocumentStatus\.APPROVED : submitted\.status/, 'reviewed documents are not left in confusing In Review status by default');
 
 console.log('document sort batch security tests passed');
 
@@ -47,3 +50,5 @@ assert.match(documentRoute, /storageKey = assertSafeStorageKey/, 'document view 
 assert.match(sortReviewPage, /href=\{documentHref\}/, 'review filenames and open links use the secure document route');
 assert.doesNotMatch(sortReviewPage, /storageUrl/, 'review page does not expose raw storage URLs');
 assert.doesNotMatch(sortReviewPage, /Accept selected|Accept all high confidence|Select all|Deselect all|Expand low confidence only/, 'review page hides noisy bulk actions from the primary flow');
+assert.match(sortReviewPage, /DocumentStatus\.APPROVED/, 'review page defaults saved reviewed documents to Approved');
+assert.doesNotMatch(sortReviewPage, /'IN_REVIEW'/, 'review page does not submit In Review as the default status');

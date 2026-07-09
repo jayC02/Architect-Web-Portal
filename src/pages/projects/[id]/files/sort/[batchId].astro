@@ -63,7 +63,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
         <div>
           <p class="text-sm font-semibold">Review each row, change anything wrong, then save once.</p>
           <p data-sort-review-status class="mt-1 text-sm text-stone-500">
-            {isAccepted ? 'This batch has already been accepted.' : 'Low confidence files are marked for review, but everything can be saved in one pass.'}
+            {isAccepted ? 'This batch has already been accepted.' : 'Saving this review will mark the documents as approved unless you choose another status.'}
           </p>
         </div>
         <button type="submit" class="btn btn-primary" disabled={isAccepted || !batch.items.length}>Save reviewed sorting</button>
@@ -107,7 +107,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
                     <label class="block">
                       <span class="label">Status</span>
                       <select data-status class="field" disabled={isAccepted}>
-                        {Object.values(DocumentStatus).map((status) => <option value={status} selected={status === (item.document?.status ?? DocumentStatus.IN_REVIEW)}>{humanizeEnum(status)}</option>)}
+                        {Object.values(DocumentStatus).filter((status) => status !== DocumentStatus.IN_REVIEW).map((status) => <option value={status} selected={status === (isAccepted ? item.document?.status ?? DocumentStatus.APPROVED : item.document?.status === DocumentStatus.IN_REVIEW ? DocumentStatus.APPROVED : item.document?.status ?? DocumentStatus.APPROVED)}>{humanizeEnum(status)}</option>)}
                       </select>
                     </label>
                     <label class="block">
@@ -184,7 +184,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
         const notesField = row.querySelector('[data-notes]');
         const documentType = documentTypeField instanceof HTMLSelectElement ? documentTypeField.value : '';
         const revision = revisionField instanceof HTMLInputElement ? revisionField.value : '';
-        const statusValue = statusField instanceof HTMLSelectElement ? statusField.value : 'IN_REVIEW';
+        const statusValue = statusField instanceof HTMLSelectElement ? statusField.value : 'APPROVED';
         const notes = notesField instanceof HTMLInputElement ? notesField.value : '';
         return { itemId: row.dataset.itemId || '', documentType, revision, status: statusValue, notes };
       });

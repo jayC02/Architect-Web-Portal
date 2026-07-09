@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { DocumentSortBatchStatus, DocumentSortSource } from '@prisma/client';
+import { DocumentSortBatchStatus, DocumentSortSource, DocumentStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import type { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
@@ -50,7 +50,7 @@ export const POST: APIRoute = (context) =>
         data: {
           type: submitted.documentType,
           revision: submitted.revision,
-          status: submitted.status,
+          status: submitted.status === DocumentStatus.IN_REVIEW ? DocumentStatus.APPROVED : submitted.status,
           notes: submitted.notes,
           drawingNumber: item.drawingNumber,
           drawingTitle: item.drawingTitle,

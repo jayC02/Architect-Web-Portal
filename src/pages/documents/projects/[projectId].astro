@@ -9,7 +9,7 @@ const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
 const projectId = Astro.params.projectId;
-if (!projectId) return Astro.redirect('/documents');
+if (!projectId) return Astro.redirect('/projects');
 
 const project = await prisma.project.findFirst({
   where: { id: projectId, organisationId: auth.organisation.id },
@@ -24,7 +24,7 @@ const project = await prisma.project.findFirst({
   },
 });
 
-if (!project) return Astro.redirect('/documents');
+if (!project) return Astro.redirect('/projects');
 
 const projectSummary = [
   project.internalReference,
@@ -35,7 +35,7 @@ const projectSummary = [
 <AppShell title={`${project.name} documents`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
     <div>
-      <a href="/documents" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to documents</a>
+      <a href={`/projects/${project.id}#documents`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project documents</a>
       <h1 class="mt-2 text-3xl font-semibold">{project.name}</h1>
       <p class="mt-1 text-sm text-stone-500">{projectSummary || 'Project document workspace'}</p>
     </div>
@@ -48,7 +48,7 @@ const projectSummary = [
         <h2 class="text-xl font-semibold">Upload and auto-sort files</h2>
         <p class="mt-1 text-sm text-stone-500">Drop drawings, reports, plans and correspondence for this project. You will review the compact sorting suggestions before saving.</p>
         <form data-api-form data-action={`/api/projects/${project.id}/document-sort-batches`} data-method="POST" enctype="multipart/form-data" class="mt-4">
-          <input type="hidden" name="returnTo" value="document-folder" />
+          <input type="hidden" name="returnTo" value="project-detail" />
           <label class="block rounded-lg border border-dashed border-stone-300 bg-stone-50 p-5">
             <span class="label">Project documents</span>
             <input required multiple type="file" name="files" class="mt-3 block w-full text-sm text-stone-700 file:mr-4 file:rounded-md file:border-0 file:bg-ink file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-stone-700" />
@@ -63,7 +63,7 @@ const projectSummary = [
         <h3 class="text-sm font-semibold uppercase tracking-wide text-stone-500">Recent sorting batches</h3>
         <div class="mt-3 space-y-2">
           {project.documentSortBatches.length ? project.documentSortBatches.map((batch) => (
-            <a href={`/projects/${project.id}/files/sort/${batch.id}?returnTo=document-folder`} class="block rounded-md border border-stone-200 p-3 hover:border-moss">
+            <a href={`/projects/${project.id}/files/sort/${batch.id}?returnTo=project-detail`} class="block rounded-md border border-stone-200 p-3 hover:border-moss">
               <span class="font-semibold">{batch.fileCount} files</span>
               <span class="ml-2 text-sm text-stone-500">{humanizeEnum(batch.status)}</span>
               <p class="mt-1 text-xs text-stone-500">{formatDate(batch.createdAt)}</p>

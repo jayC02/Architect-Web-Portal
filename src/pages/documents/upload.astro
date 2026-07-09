@@ -20,7 +20,7 @@ const returnTo = isProjectScoped ? 'project-detail' : 'document-folder';
 ---
 <AppShell title="Upload documents" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
-    <a href={isProjectScoped ? `/projects/${selectedProject!.id}#documents` : '/documents'} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {isProjectScoped ? 'project' : 'documents'}</a>
+    <a href={isProjectScoped ? `/projects/${selectedProject!.id}#documents` : '/projects'} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {isProjectScoped ? 'project' : 'projects'}</a>
     <h1 class="mt-2 text-3xl font-semibold">Upload documents</h1>
     <p class="mt-1 text-sm text-stone-500">
       {isProjectScoped ? `Upload files for ${selectedProject!.name}.` : 'Choose a project, upload files, then review the automatic sorting suggestions.'}
