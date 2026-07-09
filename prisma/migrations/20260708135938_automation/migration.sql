@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "AutomationJob_organisationId_projectId_status_type_createdAt_id" RENAME TO "AutomationJob_organisationId_projectId_status_type_createdA_idx";

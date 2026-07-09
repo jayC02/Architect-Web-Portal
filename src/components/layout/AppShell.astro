@@ -11,6 +11,7 @@ import {
   MapPinned,
   Settings,
   Users,
+  Workflow,
 } from 'lucide-react';
 
 interface Props {
@@ -28,6 +29,7 @@ const nav = [
   { label: 'Sites', href: '/sites', icon: MapPinned },
   { label: 'Deadlines', href: '/deadlines', icon: CalendarClock },
   { label: 'Documents', href: '/documents', icon: FileText },
+  { label: 'Automation Jobs', href: '/automation-jobs', icon: Workflow },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 const pathname = Astro.url.pathname;
@@ -88,3 +90,4 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
     </div>
   </div>
 </BaseLayout>
+

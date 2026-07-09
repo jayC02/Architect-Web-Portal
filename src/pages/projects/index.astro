@@ -1,20 +1,198 @@
 ---
+import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus, type Prisma } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
-import LiveDataPanel from '@/components/live/LiveDataPanel';
+import { prisma } from '@/lib/db/prisma';
+import { formatDate, humanizeEnum } from '@/lib/format';
+import { getProjectNextAction } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
+const query = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 120);
+const rawStatus = Astro.url.searchParams.get('status');
+const rawStage = Astro.url.searchParams.get('stage');
+const rawScope = Astro.url.searchParams.get('scope');
+const status = Object.values(ProjectStatus).includes(rawStatus as ProjectStatus) ? rawStatus as ProjectStatus : undefined;
+const stage = Object.values(ProjectStage).includes(rawStage as ProjectStage) ? rawStage as ProjectStage : undefined;
+const scope = rawScope === 'archived' || rawScope === 'all' ? rawScope : 'active';
+
+const where: Prisma.ProjectWhereInput = { organisationId: auth.organisation.id };
+if (status) where.status = status;
+else if (scope === 'active') where.status = { not: ProjectStatus.ARCHIVED };
+else if (scope === 'archived') where.status = ProjectStatus.ARCHIVED;
+if (stage) where.stage = stage;
+if (query) {
+  where.OR = [
+    { name: { contains: query, mode: 'insensitive' } },
+    { internalReference: { contains: query, mode: 'insensitive' } },
+    { siteAddress: { contains: query, mode: 'insensitive' } },
+    { client: { is: { name: { contains: query, mode: 'insensitive' } } } },
+    { site: { is: { addressLine1: { contains: query, mode: 'insensitive' } } } },
+    { site: { is: { postcode: { contains: query, mode: 'insensitive' } } } },
+  ];
+}
+
+const projects = await prisma.project.findMany({
+  where,
+  select: {
+    id: true,
+    name: true,
+    internalReference: true,
+    projectType: true,
+    stage: true,
+    status: true,
+    siteAddress: true,
+    updatedAt: true,
+    client: { select: { name: true } },
+    site: { select: { addressLine1: true, townCity: true, postcode: true } },
+    documents: {
+      where: { OR: [{ status: DocumentStatus.IN_REVIEW }, { type: DocumentType.LOCATION_PLAN }] },
+      select: { id: true, status: true, type: true },
+    },
+    planningApplications: {
+      orderBy: { updatedAt: 'desc' },
+      take: 1,
+      select: { status: true },
+    },
+    warrantApplications: {
+      orderBy: { updatedAt: 'desc' },
+      take: 1,
+      select: { status: true },
+    },
+    deadlines: {
+      where: { status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] } },
+      orderBy: { dueDate: 'asc' },
+      take: 1,
+      select: { id: true, title: true, dueDate: true, status: true, priority: true },
+    },
+    _count: {
+      select: {
+        documents: true,
+        automationJobs: { where: { status: AutomationJobStatus.READY } },
+      },
+    },
+  },
+  orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+  take: 200,
+});
+
+const projectRows = projects.map((project) => {
+  const documentReviewCount = project.documents.filter((document) => document.status === DocumentStatus.IN_REVIEW).length;
+  const hasLocationPlan = project.documents.some((document) => document.type === DocumentType.LOCATION_PLAN);
+  const nextDeadline = project.deadlines[0] ?? null;
+  const readyAutomationJobCount = project._count.automationJobs;
+  const nextAction = getProjectNextAction({
+    projectId: project.id,
+    stage: project.stage,
+    documentCount: project._count.documents,
+    documentReviewCount,
+    hasLocationPlan,
+    planningStatus: project.planningApplications[0]?.status,
+    warrantStatus: project.warrantApplications[0]?.status,
+    readyAutomationJobCount,
+    nextDeadline,
+  });
+  const siteSummary = project.site
+    ? [project.site.addressLine1, project.site.postcode].filter(Boolean).join(', ')
+    : project.siteAddress ?? 'No site address';
+
+  return { ...project, documentReviewCount, readyAutomationJobCount, nextDeadline, nextAction, siteSummary };
+});
+
+const actionTone = {
+  neutral: 'bg-stone-100 text-stone-700',
+  info: 'bg-emerald-50 text-emerald-800',
+  warning: 'bg-amber-50 text-amber-800',
+  danger: 'bg-red-50 text-red-800',
+};
 ---
 <AppShell title="Projects" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <h1 class="text-3xl font-semibold">Projects</h1>
-      <p class="mt-1 text-sm text-stone-500">Manage project records, statutory trackers, files and deadlines.</p>
+      <p class="mt-1 text-sm text-stone-500">Find a project and open its workspace.</p>
     </div>
     <a href="/projects/new" class="btn btn-primary">New project</a>
   </div>
 
-  <LiveDataPanel client:idle variant="projects" endpoint="/api/projects" />
+  <form method="GET" class="panel mb-5 grid gap-3 rounded-lg p-4 lg:grid-cols-[minmax(260px,1fr)_190px_190px_170px_auto]">
+    <label class="block">
+      <span class="label">Search projects</span>
+      <input name="q" value={query} class="field" placeholder="Project, reference, client or address" />
+    </label>
+    <label class="block">
+      <span class="label">Status</span>
+      <select name="status" class="field">
+        <option value="">All statuses</option>
+        {Object.values(ProjectStatus).map((value) => <option value={value} selected={status === value}>{humanizeEnum(value)}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Stage</span>
+      <select name="stage" class="field">
+        <option value="">All stages</option>
+        {Object.values(ProjectStage).map((value) => <option value={value} selected={stage === value}>{humanizeEnum(value)}</option>)}
+      </select>
+    </label>
+    <label class="block">
+      <span class="label">Project view</span>
+      <select name="scope" class="field">
+        <option value="active" selected={scope === 'active'}>Active projects</option>
+        <option value="archived" selected={scope === 'archived'}>Archived projects</option>
+        <option value="all" selected={scope === 'all'}>All projects</option>
+      </select>
+    </label>
+    <button class="btn btn-primary self-end">Apply</button>
+  </form>
+
+  <div class="mb-3 flex items-center justify-between gap-3">
+    <p class="text-sm text-stone-500">{projectRows.length} project{projectRows.length === 1 ? '' : 's'}</p>
+    {(query || status || stage || scope !== 'active') && <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/projects">Clear filters</a>}
+  </div>
+
+  {projectRows.length ? (
+    <div class="space-y-3">
+      {projectRows.map((project) => (
+        <a href={`/projects/${project.id}`} class="panel group block rounded-lg p-4 transition hover:border-stone-300 hover:bg-white hover:shadow-[0_14px_38px_rgba(32,35,31,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
+          <div class="grid gap-4 xl:grid-cols-[minmax(240px,1.35fr)_minmax(180px,1fr)_170px_minmax(220px,1.1fr)_auto] xl:items-center">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-lg font-semibold text-ink group-hover:underline">{project.name}</h2>
+                {project.internalReference && <span class="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-600">{project.internalReference}</span>}
+              </div>
+              <p class="mt-1 truncate text-sm text-stone-500">{project.siteSummary}</p>
+            </div>
+            <div>
+              <p class="text-xs font-semibold uppercase text-stone-400">Client</p>
+              <p class="mt-1 truncate text-sm font-medium">{project.client?.name ?? 'Not linked'}</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(project.status)}</span>
+              <span class="status-chip bg-moss/10 text-moss">{humanizeEnum(project.stage)}</span>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase text-stone-400">Next action</p>
+              <span class={`mt-1 inline-flex max-w-full truncate rounded-md px-2 py-1 text-sm font-semibold ${actionTone[project.nextAction.tone]}`}>{project.nextAction.label}</span>
+              <p class="mt-2 text-xs text-stone-500">{project.nextDeadline ? `${project.nextDeadline.title} - ${formatDate(project.nextDeadline.dueDate)}` : 'No upcoming deadline'}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 xl:justify-end">
+              {project.documentReviewCount > 0 && <span class="status-chip bg-amber-100 text-amber-800">{project.documentReviewCount} to review</span>}
+              {project.readyAutomationJobCount > 0 && <span class="status-chip bg-emerald-100 text-emerald-800">{project.readyAutomationJobCount} ready</span>}
+              <span class="btn btn-secondary">Open project</span>
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  ) : (
+    <section class="panel rounded-lg p-8 text-center">
+      <h2 class="text-xl font-semibold">{query || status || stage || scope !== 'active' ? 'No projects match these filters' : 'No projects yet'}</h2>
+      <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">{query || status || stage || scope !== 'active' ? 'Clear the filters or try a different search.' : 'Create your first project to start organising documents, applications and deadlines.'}</p>
+      <div class="mt-5 flex justify-center gap-2">
+        {(query || status || stage || scope !== 'active') && <a class="btn btn-secondary" href="/projects">Clear filters</a>}
+        <a class="btn btn-primary" href="/projects/new">New project</a>
+      </div>
+    </section>
+  )}
 </AppShell>

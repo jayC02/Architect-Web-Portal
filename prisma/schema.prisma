@@ -169,6 +169,30 @@ enum SubmissionPackageStatus {
   ARCHIVED
 }
 
+enum AutomationJobType {
+  HOUSEHOLDER_PLANNING
+  PLANNING_APPLICATION
+  BUILDING_WARRANT
+}
+
+enum AutomationJobStatus {
+  DRAFT
+  READY
+  CLAIMED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AutomationJobSourceType {
+  PROJECT
+  PLANNING_RECORD
+  WARRANT_RECORD
+  DOCUMENT_BATCH
+  MANUAL
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -181,7 +205,9 @@ model User {
   organisationLinks   OrganisationMember[]
   uploadedDocuments   ProjectDocument[]    @relation("DocumentUploadedBy")
   documentSortBatches DocumentSortBatch[]  @relation("DocumentSortBatchCreatedBy")
-  createdPackages     SubmissionPackage[]  @relation("PackageCreatedBy")
+  createdPackages       SubmissionPackage[] @relation("PackageCreatedBy")
+  createdAutomationJobs AutomationJob[]     @relation("AutomationJobCreatedBy")
+  claimedAutomationJobs AutomationJob[]     @relation("AutomationJobClaimedBy")
 
   @@index([email])
   @@index([createdAt])
@@ -223,6 +249,7 @@ model Organisation {
   syncedCalendarEvents SyncedCalendarEvent[]
   submissionPackages   SubmissionPackage[]
   documentSortBatches  DocumentSortBatch[]
+  automationJobs       AutomationJob[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -306,6 +333,7 @@ model Project {
   deadlines            Deadline[]
   submissionPackages   SubmissionPackage[]
   documentSortBatches  DocumentSortBatch[]
+  automationJobs       AutomationJob[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
@@ -399,6 +427,35 @@ model DocumentSortBatchItem {
   @@index([documentId])
 }
 
+model AutomationJob {
+  id               String                  @id @default(cuid())
+  organisationId   String
+  projectId        String
+  type             AutomationJobType
+  status           AutomationJobStatus     @default(DRAFT)
+  sourceType       AutomationJobSourceType @default(PROJECT)
+  title            String
+  dataSnapshot     Json
+  documentSnapshot Json
+  resultSummary    String?
+  error            String?
+  createdById      String
+  claimedByUserId  String?
+  claimedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  organisation  Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User         @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  claimedBy     User?        @relation("AutomationJobClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, projectId, status, type, createdAt])
+  @@index([organisationId, status, createdAt])
+  @@index([createdById])
+  @@index([claimedByUserId])
+}
 model PlanningApplication {
   id                   String         @id @default(cuid())
   organisationId       String
@@ -554,3 +611,4 @@ model SubmissionPackageDocument {
   @@unique([submissionPackageId, documentId])
   @@index([documentId])
 }
+

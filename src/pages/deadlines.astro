@@ -9,6 +9,7 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
+const selectedProjectId = Astro.url.searchParams.get('projectId');
 const projects = await prisma.project.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { name: 'asc' }, select: { id: true, name: true } });
 ---
 <AppShell title="Deadlines" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
@@ -21,7 +22,7 @@ const projects = await prisma.project.findMany({ where: { organisationId: auth.o
       <h2 class="text-lg font-semibold">Add deadline</h2>
       <div class="mt-4 space-y-4">
         <label class="block"><span class="label">Title</span><input required name="title" class="field" /></label>
-        <label class="block"><span class="label">Linked project</span><select name="projectId" class="field"><option value="">General</option>{projects.map((project) => <option value={project.id}>{project.name}</option>)}</select></label>
+        <label class="block"><span class="label">Linked project</span><select name="projectId" class="field"><option value="">General</option>{projects.map((project) => <option value={project.id} selected={project.id === selectedProjectId}>{project.name}</option>)}</select></label>
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block"><span class="label">Due date</span><input required type="date" name="dueDate" class="field" /></label>
           <label class="block"><span class="label">Reminder date</span><input type="date" name="reminderDate" class="field" /></label>

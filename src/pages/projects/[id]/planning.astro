@@ -41,6 +41,19 @@ if (!project) return Astro.redirect('/projects');
       <p data-form-status class="mt-3 text-sm text-stone-500"></p>
     </form>
 
+    <div class="panel rounded-lg p-4">
+      <h2 class="text-lg font-semibold">Desktop automation</h2>
+      <p class="mt-2 text-sm text-stone-500">Prepare a planning snapshot from this project and its linked documents.</p>
+      <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4">
+        <input type="hidden" name="projectId" value={project.id} />
+        <input type="hidden" name="type" value="PLANNING_APPLICATION" />
+        <button class="btn btn-primary w-full">Prepare planning job</button>
+        <p data-form-status class="mt-3 text-sm text-stone-500"></p>
+      </form>
+    </div>
+
     <LiveDataPanel client:load variant="planning" endpoint={`/api/projects/${project.id}/planning`} />
   </section>
 </AppShell>
+
+
