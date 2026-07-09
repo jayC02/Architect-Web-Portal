@@ -30,7 +30,7 @@ const dateKey = (value: Date | string) => {
     timeZone: 'Europe/London',
   }).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
-  return ${part('year')}--;
+  return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
 export const isProjectDateOverdue = (value: Date | string, now: Date = new Date()) => dateKey(value) < dateKey(now);
