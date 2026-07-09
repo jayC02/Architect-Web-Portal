@@ -13,8 +13,10 @@ const projectId = Astro.params.id;
 const batchId = Astro.params.batchId;
 if (!projectId || !batchId) return Astro.redirect('/projects');
 
-const returnTo = Astro.url.searchParams.get('returnTo') === 'document-folder' ? 'document-folder' : 'project-files';
-const backHref = returnTo === 'document-folder' ? `/documents/projects/${projectId}` : `/projects/${projectId}/files`;
+const returnParam = Astro.url.searchParams.get('returnTo');
+const returnTo = returnParam === 'document-folder' || returnParam === 'project-detail' ? returnParam : 'project-files';
+const backHref = returnTo === 'project-detail' ? `/projects/${projectId}#documents` : returnTo === 'document-folder' ? `/documents/projects/${projectId}` : `/projects/${projectId}/files`;
+const backLabel = returnTo === 'project-detail' ? 'project documents' : returnTo === 'document-folder' ? 'document folder' : 'files';
 
 const batch = await prisma.documentSortBatch.findFirst({
   where: { id: batchId, projectId, organisationId: auth.organisation.id },
@@ -34,9 +36,9 @@ for (const item of batch.items) {
 }
 
 const confidenceBand = (confidence: number) => {
-  if (confidence >= 0.8) return { label: 'High', className: 'border-moss/30 bg-moss/10 text-moss', checked: true };
-  if (confidence >= 0.55) return { label: 'Medium', className: 'border-amber-300 bg-amber-50 text-amber-800', checked: true };
-  return { label: 'Needs review', className: 'border-red-200 bg-red-50 text-red-700', checked: false };
+  if (confidence >= 0.8) return { label: 'High', className: 'border-moss/30 bg-moss/10 text-moss' };
+  if (confidence >= 0.55) return { label: 'Medium', className: 'border-amber-300 bg-amber-50 text-amber-800' };
+  return { label: 'Review', className: 'border-red-200 bg-red-50 text-red-700' };
 };
 
 const matchedRulesText = (value: unknown) => Array.isArray(value) ? value.join(', ') : '';
@@ -44,8 +46,8 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
 ---
 <AppShell title={`Review file sorting - ${batch.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <a href={backHref} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {returnTo === 'document-folder' ? 'document folder' : 'files'}</a>
+    <div class="min-w-0">
+      <a href={backHref} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {backLabel}</a>
       <h1 class="mt-2 text-3xl font-semibold">Review file sorting</h1>
       <p class="mt-1 text-sm text-stone-500">{batch.project.name} - {batch.fileCount} files - {humanizeEnum(batch.status)} - {formatDate(batch.createdAt)}</p>
     </div>
@@ -57,17 +59,15 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
 
   <form data-sort-review-form data-endpoint={`/api/document-sort-batches/${batch.id}/accept`} data-return-to={returnTo} data-redirect={backHref} class="space-y-4">
     <div class="panel sticky top-0 z-10 rounded-lg p-3">
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-sm font-semibold">Review each row, change anything wrong, then save once.</p>
+          <p data-sort-review-status class="mt-1 text-sm text-stone-500">
+            {isAccepted ? 'This batch has already been accepted.' : 'Low confidence files are marked for review, but everything can be saved in one pass.'}
+          </p>
+        </div>
         <button type="submit" class="btn btn-primary" disabled={isAccepted || !batch.items.length}>Save reviewed sorting</button>
-        <button type="submit" class="btn btn-secondary" disabled={isAccepted || !batch.items.length}>Accept selected</button>
-        <button type="button" class="btn btn-secondary" data-select-high disabled={isAccepted}>Accept all high confidence</button>
-        <button type="button" class="btn btn-secondary" data-select-all disabled={isAccepted}>Select all</button>
-        <button type="button" class="btn btn-secondary" data-deselect-all disabled={isAccepted}>Deselect all</button>
-        <button type="button" class="btn btn-secondary" data-expand-low disabled={isAccepted}>Expand low confidence only</button>
       </div>
-      <p data-sort-review-status class="mt-2 text-sm text-stone-500">
-        {isAccepted ? 'This batch has already been accepted.' : 'High and medium confidence rows are checked by default. Low confidence rows stay unchecked until you review or select them.'}
-      </p>
     </div>
 
     {[...grouped.entries()].map(([label, items]) => items.length ? (
@@ -79,31 +79,31 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
         <div>
           {items.map((item) => {
             const band = confidenceBand(item.confidence);
-            const checked = isAccepted || Boolean(item.finalDocumentType) || band.checked;
             const lowConfidence = item.confidence < 0.55;
+            const documentHref = item.document?.id ? `/api/documents/${item.document.id}` : '#';
             return (
               <div data-sort-item data-item-id={item.id} data-confidence={item.confidence} data-low-confidence={lowConfidence ? 'true' : 'false'} class="border-b border-stone-100 last:border-b-0">
-                <div class="grid gap-2 px-3 py-2 md:grid-cols-[28px_minmax(220px,1fr)_180px_92px_86px_90px_120px] md:items-center">
-                  <label class="flex items-center md:justify-center">
-                    <input data-accept-suggestion type="checkbox" class="h-4 w-4 rounded border-stone-300 text-moss focus:ring-moss" checked={checked} disabled={isAccepted} aria-label={`Accept sorting suggestion for ${item.originalFilename}`} />
-                  </label>
+                <div class="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_190px_94px_90px_88px] lg:items-center">
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold">{item.originalFilename}</p>
-                    <p class="truncate text-xs text-stone-500">{item.reason}</p>
+                    <a href={documentHref} target="_blank" rel="noreferrer" title={item.originalFilename} class="block truncate text-sm font-semibold text-ink underline-offset-2 hover:underline">{item.originalFilename}</a>
+                    <p class="mt-1 line-clamp-2 text-xs text-stone-500">{item.reason}</p>
+                    {lowConfidence && <p class="mt-1 text-xs font-semibold text-red-700">Needs review before saving.</p>}
                   </div>
-                  <select data-document-type class="field py-1.5" disabled={isAccepted}>
-                    {preferredDocumentTypes.map((type) => <option value={type} selected={type === documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType)}>{documentTypeLabel(type)}</option>)}
-                  </select>
-                  <span class={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${band.className}`}>{Math.round(item.confidence * 100)}% {band.label}</span>
-                  <input data-revision value={item.revision ?? ''} placeholder="No rev" class="field py-1.5" disabled={isAccepted} />
-                  <span class="text-xs font-semibold text-stone-500">{humanizeEnum(item.source)}</span>
-                  <div class="flex items-center gap-2">
-                    <a href={item.document?.storageUrl ?? '#'} target="_blank" rel="noreferrer" class="btn btn-secondary min-h-8 px-2 py-1 text-xs">Open</a>
+                  <label class="block min-w-0">
+                    <span class="sr-only">Document type</span>
+                    <select data-document-type class="field py-1.5 text-sm" disabled={isAccepted}>
+                      {preferredDocumentTypes.map((type) => <option value={type} selected={type === documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType)}>{documentTypeLabel(type)}</option>)}
+                    </select>
+                  </label>
+                  <span class={`inline-flex w-fit rounded-full border px-2 py-1 text-xs font-semibold ${band.className}`}>{Math.round(item.confidence * 100)}% {band.label}</span>
+                  <input data-revision value={item.revision ?? ''} placeholder="No rev" class="field py-1.5 text-sm" disabled={isAccepted} aria-label={`Revision for ${item.originalFilename}`} />
+                  <div class="flex items-center justify-start gap-2 lg:justify-end">
+                    <a href={documentHref} target="_blank" rel="noreferrer" class="btn btn-secondary min-h-8 px-2 py-1 text-xs">Open</a>
                     <button type="button" data-toggle-edit class="btn btn-secondary min-h-8 px-2 py-1 text-xs">Edit</button>
                   </div>
                 </div>
                 <div data-edit-panel class="hidden border-t border-stone-100 bg-stone-50 px-3 py-3">
-                  <div class="grid gap-3 md:grid-cols-4">
+                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <label class="block">
                       <span class="label">Status</span>
                       <select data-status class="field" disabled={isAccepted}>
@@ -152,36 +152,6 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
   <script>
     const form = document.querySelector('[data-sort-review-form]');
     const getRows = () => Array.from(document.querySelectorAll('[data-sort-item]')).filter((row): row is HTMLElement => row instanceof HTMLElement);
-    const checkboxFor = (row: HTMLElement) => row.querySelector('[data-accept-suggestion]');
-    const editPanelFor = (row: HTMLElement) => row.querySelector('[data-edit-panel]');
-
-    document.querySelector('[data-select-high]')?.addEventListener('click', () => {
-      for (const row of getRows()) {
-        const checkbox = checkboxFor(row);
-        if (checkbox instanceof HTMLInputElement) checkbox.checked = Number(row.dataset.confidence || 0) >= 0.8;
-      }
-    });
-
-    document.querySelector('[data-select-all]')?.addEventListener('click', () => {
-      for (const row of getRows()) {
-        const checkbox = checkboxFor(row);
-        if (checkbox instanceof HTMLInputElement) checkbox.checked = true;
-      }
-    });
-
-    document.querySelector('[data-deselect-all]')?.addEventListener('click', () => {
-      for (const row of getRows()) {
-        const checkbox = checkboxFor(row);
-        if (checkbox instanceof HTMLInputElement) checkbox.checked = false;
-      }
-    });
-
-    document.querySelector('[data-expand-low]')?.addEventListener('click', () => {
-      for (const row of getRows()) {
-        const panel = editPanelFor(row);
-        if (panel instanceof HTMLElement) panel.classList.toggle('hidden', row.dataset.lowConfidence !== 'true');
-      }
-    });
 
     document.addEventListener('click', (event) => {
       const target = event.target;
@@ -199,7 +169,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
       const status = form.querySelector('[data-sort-review-status]');
       const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
       if (status) {
-        status.textContent = 'Saving selected classifications...';
+        status.textContent = 'Saving reviewed classifications...';
         status.classList.remove('text-red-700');
         status.classList.add('text-stone-500');
       }
@@ -207,23 +177,21 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
         if (button instanceof HTMLButtonElement) button.disabled = true;
       });
 
-      const items = getRows().flatMap((row) => {
-        const checkbox = checkboxFor(row);
-        if (!(checkbox instanceof HTMLInputElement) || !checkbox.checked) return [];
+      const items = getRows().map((row) => {
         const documentTypeField = row.querySelector('[data-document-type]');
         const revisionField = row.querySelector('[data-revision]');
         const statusField = row.querySelector('[data-status]');
         const notesField = row.querySelector('[data-notes]');
         const documentType = documentTypeField instanceof HTMLSelectElement ? documentTypeField.value : '';
         const revision = revisionField instanceof HTMLInputElement ? revisionField.value : '';
-        const statusValue = statusField instanceof HTMLSelectElement ? statusField.value : '';
+        const statusValue = statusField instanceof HTMLSelectElement ? statusField.value : 'IN_REVIEW';
         const notes = notesField instanceof HTMLInputElement ? notesField.value : '';
-        return [{ itemId: row.dataset.itemId || '', documentType, revision, status: statusValue, notes }];
+        return { itemId: row.dataset.itemId || '', documentType, revision, status: statusValue, notes };
       });
 
       if (!items.length) {
         if (status) {
-          status.textContent = 'Select at least one file before saving reviewed sorting.';
+          status.textContent = 'There are no files to save in this sorting batch.';
           status.classList.remove('text-stone-500');
           status.classList.add('text-red-700');
         }

@@ -24,7 +24,8 @@ export const POST: APIRoute = (context) =>
 
     const form = await context.request.formData();
     const files = form.getAll('files').filter((file): file is File => file instanceof File && file.size > 0);
-    const returnTo = form.get('returnTo') === 'document-folder' ? 'document-folder' : 'project-files';
+    const submittedReturnTo = form.get('returnTo');
+    const returnTo = submittedReturnTo === 'document-folder' || submittedReturnTo === 'project-detail' ? submittedReturnTo : 'project-files';
     if (!files.length) throw new HttpError(400, 'Choose at least one document to auto-sort.');
     if (files.length > MAX_BATCH_FILES) throw new HttpError(400, `Auto-sort batches are limited to ${MAX_BATCH_FILES} files.`);
 
@@ -94,6 +95,6 @@ export const POST: APIRoute = (context) =>
 
     return jsonResponse(201, {
       batch,
-      redirectTo: `/projects/${projectId}/files/sort/${batch.id}${returnTo === 'document-folder' ? '?returnTo=document-folder' : ''}`,
+      redirectTo: `/projects/${projectId}/files/sort/${batch.id}${returnTo !== 'project-files' ? '?returnTo=' + returnTo : ''}`,
     });
   }, context);

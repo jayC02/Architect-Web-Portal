@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { PlanningStatus, WarrantStatus } from '@prisma/client';
+import { planningDateFieldsForStatus, warrantDateFieldsForStatus } from '../src/lib/application-record-fields';
 import { getProjectNextAction } from '../src/lib/projects/next-action';
 
 const base = {
@@ -26,11 +28,27 @@ assert.equal(getProjectNextAction({ ...base, nextDeadline: { title: 'Client resp
 assert.equal(getProjectNextAction({ ...base, nextDeadline: { title: 'Submit drawings', dueDate: '2026-08-09T12:00:00.000Z' } }, now).label, 'Overdue: Submit drawings');
 assert.equal(getProjectNextAction(base, now).label, 'No action needed');
 
+assert.deepEqual(planningDateFieldsForStatus(PlanningStatus.NOT_STARTED), [], 'not started planning records hide date fields');
+assert.deepEqual(planningDateFieldsForStatus(PlanningStatus.SUBMITTED), ['submissionDate'], 'submitted planning records show submission date');
+assert.deepEqual(planningDateFieldsForStatus(PlanningStatus.VALIDATED), ['submissionDate', 'validDate', 'decisionTargetDate'], 'validated planning records show validation and target dates');
+assert.deepEqual(planningDateFieldsForStatus(PlanningStatus.APPROVED), ['submissionDate', 'validDate', 'decisionDate'], 'approved planning records show decision date');
+assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.NOT_STARTED), [], 'not started warrant records hide date fields');
+assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.SUBMITTED), ['submissionDate', 'firstResponseTargetDate'], 'submitted warrant records show response dates');
+assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.GRANTED), ['submissionDate', 'grantedDate', 'expiryDate'], 'granted warrant records show granted and expiry dates');
+
 const projectsPage = fs.readFileSync('src/pages/projects/index.astro', 'utf8');
 const projectDetailPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
+const planningPage = fs.readFileSync('src/pages/projects/[id]/planning.astro', 'utf8');
+const warrantPage = fs.readFileSync('src/pages/projects/[id]/building-warrant.astro', 'utf8');
 assert.match(projectsPage, /organisationId:\s*auth\.organisation\.id/, 'projects list query is organisation scoped');
 assert.match(projectDetailPage, /organisationId:\s*auth\.organisation\.id/, 'project workspace query is organisation scoped');
 assert.match(projectsPage, /readyAutomationJobCount/, 'projects list includes ready automation job counts');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
+assert.match(planningPage, /data-planning-record-form/, 'planning page uses simplified quick-create form');
+assert.match(planningPage, /Advanced details/, 'planning page keeps advanced details available');
+assert.match(planningPage, /Prepare a planning automation job using this project's approved details and linked documents/, 'planning automation copy is secondary and specific');
+assert.match(warrantPage, /data-warrant-record-form/, 'warrant page uses simplified quick-create form');
+assert.match(warrantPage, /Advanced details/, 'warrant page keeps advanced details available');
+assert.match(warrantPage, /Prepare a building warrant automation job using this project's approved details and linked documents/, 'warrant automation copy is secondary and specific');
 
 console.log('project workspace tests passed');

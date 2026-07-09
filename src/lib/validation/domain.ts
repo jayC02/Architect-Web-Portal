@@ -62,7 +62,7 @@ export const documentSortBatchAcceptSchema = z.object({
     status: z.nativeEnum(DocumentStatus).default(DocumentStatus.IN_REVIEW),
     notes: optionalText(2000),
   })).min(1, 'At least one sorted document is required.'),
-  returnTo: z.enum(['project-files', 'document-folder']).default('project-files'),
+  returnTo: z.enum(['project-files', 'document-folder', 'project-detail']).default('project-files'),
 });
 
 export const documentSortBatchStatusSchema = z.object({

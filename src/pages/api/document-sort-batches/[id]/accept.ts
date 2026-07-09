@@ -81,6 +81,6 @@ export const POST: APIRoute = (context) =>
     return jsonResponse(200, {
       ok: true,
       complete: allItemsAccepted,
-      redirectTo: body.returnTo === 'document-folder' ? `/documents/projects/${batch.projectId}` : `/projects/${batch.projectId}/files`,
+      redirectTo: body.returnTo === 'project-detail' ? `/projects/${batch.projectId}#documents` : body.returnTo === 'document-folder' ? `/documents/projects/${batch.projectId}` : `/projects/${batch.projectId}/files`,
     });
   }, context);

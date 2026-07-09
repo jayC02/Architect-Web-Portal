@@ -2,6 +2,7 @@
 import { CompletionCertificateStatus, WarrantStatus, WarrantType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import LiveDataPanel from '@/components/live/LiveDataPanel';
+import { warrantDateFieldsForStatus } from '@/lib/application-record-fields';
 import { prisma } from '@/lib/db/prisma';
 import { humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -14,50 +15,112 @@ const project = await prisma.project.findFirst({
   select: { id: true, name: true },
 });
 if (!project) return Astro.redirect('/projects');
+
+const latestWarrant = await prisma.buildingWarrantApplication.findFirst({
+  where: { projectId: project.id, organisationId: auth.organisation.id },
+  orderBy: { updatedAt: 'desc' },
+  select: { warrantReference: true, status: true },
+});
+
+const warrantDateLabels = {
+  submissionDate: 'Submission date',
+  firstResponseTargetDate: 'First response target',
+  grantedDate: 'Granted date',
+  expiryDate: 'Expiry date',
+};
+const initialVisibleDates = warrantDateFieldsForStatus(WarrantStatus.NOT_STARTED);
+const hasKeyWarrantDetails = Boolean(latestWarrant?.warrantReference || (latestWarrant && latestWarrant.status !== WarrantStatus.NOT_STARTED));
 ---
 <AppShell title={`${project.name} building warrant`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <a href={`/projects/${project.id}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
-    <h1 class="mt-2 text-3xl font-semibold">Building warrant applications</h1>
-    <p class="mt-1 text-sm text-stone-500">{project.name}</p>
+    <h1 class="mt-2 text-3xl font-semibold">Building warrant record</h1>
+    <p class="mt-1 text-sm text-stone-500">Add the core warrant tracker details for {project.name}. Dates appear only when the status needs them.</p>
   </div>
 
-  <section class="grid gap-6 xl:grid-cols-[420px_1fr]">
-    <form data-api-form data-action={`/api/projects/${project.id}/building-warrant`} data-method="POST" class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Add warrant record</h2>
-      <div class="mt-4 space-y-4">
-        <label class="block"><span class="label">Warrant reference</span><input name="warrantReference" class="field" /></label>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block"><span class="label">Type</span><select name="warrantType" class="field">{Object.values(WarrantType).map((type) => <option value={type}>{humanizeEnum(type)}</option>)}</select></label>
-          <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(WarrantStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
+  <section class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div class="space-y-6">
+      <form data-api-form data-warrant-record-form data-action={`/api/projects/${project.id}/building-warrant`} data-method="POST" class="panel rounded-lg p-5">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">Add warrant record</h2>
+            <p class="mt-1 text-sm text-stone-500">Start with the reference, type, status and notes. Add dates as the warrant progresses.</p>
+          </div>
+          <span class="status-chip bg-stone-100 text-stone-600">Quick record</span>
         </div>
-        <label class="block"><span class="label">Completion certificate</span><select name="completionCertificateStatus" class="field">{Object.values(CompletionCertificateStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block"><span class="label">Submission date</span><input type="date" name="submissionDate" class="field" /></label>
-          <label class="block"><span class="label">First response target</span><input type="date" name="firstResponseTargetDate" class="field" /></label>
-          <label class="block"><span class="label">Granted date</span><input type="date" name="grantedDate" class="field" /></label>
-          <label class="block"><span class="label">Expiry date</span><input type="date" name="expiryDate" class="field" /></label>
-        </div>
-        <label class="block"><span class="label">Portal URL</span><input type="url" name="portalUrl" class="field" /></label>
-        <label class="block"><span class="label">Notes</span><textarea name="notes" rows="4" class="field"></textarea></label>
-      </div>
-      <button class="btn btn-primary mt-4 w-full">Save warrant record</button>
-      <p data-form-status class="mt-3 text-sm text-stone-500"></p>
-    </form>
 
-    <div class="panel rounded-lg p-4">
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <label class="block md:col-span-2"><span class="label">Warrant reference</span><input name="warrantReference" class="field" placeholder="Warrant reference, if known" /></label>
+          <label class="block"><span class="label">Type</span><select name="warrantType" class="field">{Object.values(WarrantType).map((type) => <option value={type}>{humanizeEnum(type)}</option>)}</select></label>
+          <label class="block"><span class="label">Status</span><select name="status" class="field" data-record-status>{Object.values(WarrantStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2" data-date-fields>
+          {Object.entries(warrantDateLabels).map(([field, label]) => (
+            <label class:list={['block', !initialVisibleDates.includes(field as never) && 'hidden']} data-date-field={field}>
+              <span class="label">{label}</span>
+              <input type="date" name={field} class="field" />
+            </label>
+          ))}
+        </div>
+
+        <label class="mt-4 block"><span class="label">Notes</span><textarea name="notes" rows="4" class="field" placeholder="Current position, required actions or portal notes"></textarea></label>
+
+        <details class="mt-4 rounded-lg border border-stone-200 bg-stone-50/60 p-3">
+          <summary class="cursor-pointer text-sm font-semibold text-stone-700">Advanced details</summary>
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <label class="block"><span class="label">Portal URL</span><input type="url" name="portalUrl" class="field" placeholder="https://..." /></label>
+            <label class="block"><span class="label">Completion certificate</span><select name="completionCertificateStatus" class="field">{Object.values(CompletionCertificateStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
+            <p class="text-xs text-stone-500 md:col-span-2">Date values are preserved by the backend. Expand existing records below if you need to manually edit every saved warrant date.</p>
+          </div>
+        </details>
+
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button class="btn btn-primary">Save warrant record</button>
+          <p data-form-status class="text-sm text-stone-500"></p>
+        </div>
+      </form>
+
+      <LiveDataPanel client:load variant="warrants" endpoint={`/api/projects/${project.id}/building-warrant`} />
+    </div>
+
+    <aside class="panel rounded-lg p-5">
       <h2 class="text-lg font-semibold">Desktop automation</h2>
-      <p class="mt-2 text-sm text-stone-500">Prepare a building warrant snapshot from this project and its linked documents.</p>
+      <p class="mt-2 text-sm text-stone-500">Prepare a building warrant automation job using this project's approved details and linked documents.</p>
+      {!hasKeyWarrantDetails && <p class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add the key details first for a better automation snapshot.</p>}
       <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4">
         <input type="hidden" name="projectId" value={project.id} />
         <input type="hidden" name="type" value="BUILDING_WARRANT" />
-        <button class="btn btn-primary w-full">Prepare warrant job</button>
+        <button class="btn btn-secondary w-full">Prepare warrant automation</button>
         <p data-form-status class="mt-3 text-sm text-stone-500"></p>
       </form>
-    </div>
-
-    <LiveDataPanel client:load variant="warrants" endpoint={`/api/projects/${project.id}/building-warrant`} />
+    </aside>
   </section>
+
+  <script>
+    const warrantVisibility: Record<string, string[]> = {
+      NOT_STARTED: [],
+      DRAFTING: [],
+      SUBMITTED: ['submissionDate', 'firstResponseTargetDate'],
+      IN_REVIEW: ['submissionDate', 'firstResponseTargetDate'],
+      FURTHER_INFORMATION_REQUESTED: ['submissionDate', 'firstResponseTargetDate'],
+      GRANTED: ['submissionDate', 'grantedDate', 'expiryDate'],
+      REJECTED: [],
+      EXPIRED: ['grantedDate', 'expiryDate'],
+      COMPLETED: ['grantedDate'],
+      CLOSED: [],
+    };
+    const form = document.querySelector('[data-warrant-record-form]');
+    const status = form?.querySelector('[data-record-status]');
+    const syncWarrantDates = () => {
+      if (!(status instanceof HTMLSelectElement)) return;
+      const visible = new Set(warrantVisibility[status.value] || []);
+      form?.querySelectorAll('[data-date-field]').forEach((field) => {
+        if (!(field instanceof HTMLElement)) return;
+        field.classList.toggle('hidden', !visible.has(field.dataset.dateField || ''));
+      });
+    };
+    status?.addEventListener('change', syncWarrantDates);
+    syncWarrantDates();
+  </script>
 </AppShell>
-
-

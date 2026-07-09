@@ -2,6 +2,7 @@
 import { PlanningStatus } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import LiveDataPanel from '@/components/live/LiveDataPanel';
+import { planningDateFieldsForStatus } from '@/lib/application-record-fields';
 import { prisma } from '@/lib/db/prisma';
 import { humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -14,46 +15,110 @@ const project = await prisma.project.findFirst({
   select: { id: true, name: true },
 });
 if (!project) return Astro.redirect('/projects');
+
+const latestPlanning = await prisma.planningApplication.findFirst({
+  where: { projectId: project.id, organisationId: auth.organisation.id },
+  orderBy: { updatedAt: 'desc' },
+  select: { applicationReference: true, status: true },
+});
+
+const planningDateLabels = {
+  submissionDate: 'Submission date',
+  validDate: 'Valid date',
+  decisionTargetDate: 'Decision target date',
+  decisionDate: 'Decision date',
+};
+const initialVisibleDates = planningDateFieldsForStatus(PlanningStatus.NOT_STARTED);
+const hasKeyPlanningDetails = Boolean(latestPlanning?.applicationReference || (latestPlanning && latestPlanning.status !== PlanningStatus.NOT_STARTED));
 ---
 <AppShell title={`${project.name} planning`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <a href={`/projects/${project.id}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
-    <h1 class="mt-2 text-3xl font-semibold">Planning applications</h1>
-    <p class="mt-1 text-sm text-stone-500">{project.name}</p>
+    <h1 class="mt-2 text-3xl font-semibold">Planning record</h1>
+    <p class="mt-1 text-sm text-stone-500">Add the core tracker details for {project.name}. Dates appear only when the status needs them.</p>
   </div>
 
-  <section class="grid gap-6 xl:grid-cols-[420px_1fr]">
-    <form data-api-form data-action={`/api/projects/${project.id}/planning`} data-method="POST" class="panel rounded-lg p-4">
-      <h2 class="text-lg font-semibold">Add planning record</h2>
-      <div class="mt-4 space-y-4">
-        <label class="block"><span class="label">Application reference</span><input name="applicationReference" class="field" /></label>
-        <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(PlanningStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block"><span class="label">Submission date</span><input type="date" name="submissionDate" class="field" /></label>
-          <label class="block"><span class="label">Valid date</span><input type="date" name="validDate" class="field" /></label>
-          <label class="block"><span class="label">Decision target</span><input type="date" name="decisionTargetDate" class="field" /></label>
-          <label class="block"><span class="label">Decision date</span><input type="date" name="decisionDate" class="field" /></label>
+  <section class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div class="space-y-6">
+      <form data-api-form data-planning-record-form data-action={`/api/projects/${project.id}/planning`} data-method="POST" class="panel rounded-lg p-5">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 class="text-lg font-semibold">Add planning record</h2>
+            <p class="mt-1 text-sm text-stone-500">Start with the reference, status and any useful notes. Add dates when the application moves forward.</p>
+          </div>
+          <span class="status-chip bg-stone-100 text-stone-600">Quick record</span>
         </div>
-        <label class="block"><span class="label">Portal URL</span><input type="url" name="portalUrl" class="field" /></label>
-        <label class="block"><span class="label">Notes</span><textarea name="notes" rows="4" class="field"></textarea></label>
-      </div>
-      <button class="btn btn-primary mt-4 w-full">Save planning record</button>
-      <p data-form-status class="mt-3 text-sm text-stone-500"></p>
-    </form>
 
-    <div class="panel rounded-lg p-4">
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <label class="block md:col-span-2"><span class="label">Application reference</span><input name="applicationReference" class="field" placeholder="Planning reference, if known" /></label>
+          <label class="block"><span class="label">Status</span><select name="status" class="field" data-record-status>{Object.values(PlanningStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-2" data-date-fields>
+          {Object.entries(planningDateLabels).map(([field, label]) => (
+            <label class:list={['block', !initialVisibleDates.includes(field as never) && 'hidden']} data-date-field={field}>
+              <span class="label">{label}</span>
+              <input type="date" name={field} class="field" />
+            </label>
+          ))}
+        </div>
+
+        <label class="mt-4 block"><span class="label">Notes</span><textarea name="notes" rows="4" class="field" placeholder="Current position, client actions or portal notes"></textarea></label>
+
+        <details class="mt-4 rounded-lg border border-stone-200 bg-stone-50/60 p-3">
+          <summary class="cursor-pointer text-sm font-semibold text-stone-700">Advanced details</summary>
+          <div class="mt-4 grid gap-4">
+            <label class="block"><span class="label">Portal URL</span><input type="url" name="portalUrl" class="field" placeholder="https://..." /></label>
+            <p class="text-xs text-stone-500">Date values are preserved by the backend. Expand existing records below if you need to manually edit every saved planning date.</p>
+          </div>
+        </details>
+
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button class="btn btn-primary">Save planning record</button>
+          <p data-form-status class="text-sm text-stone-500"></p>
+        </div>
+      </form>
+
+      <LiveDataPanel client:load variant="planning" endpoint={`/api/projects/${project.id}/planning`} />
+    </div>
+
+    <aside class="panel rounded-lg p-5">
       <h2 class="text-lg font-semibold">Desktop automation</h2>
-      <p class="mt-2 text-sm text-stone-500">Prepare a planning snapshot from this project and its linked documents.</p>
+      <p class="mt-2 text-sm text-stone-500">Prepare a planning automation job using this project's approved details and linked documents.</p>
+      {!hasKeyPlanningDetails && <p class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add the key details first for a better automation snapshot.</p>}
       <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4">
         <input type="hidden" name="projectId" value={project.id} />
         <input type="hidden" name="type" value="PLANNING_APPLICATION" />
-        <button class="btn btn-primary w-full">Prepare planning job</button>
+        <button class="btn btn-secondary w-full">Prepare planning automation</button>
         <p data-form-status class="mt-3 text-sm text-stone-500"></p>
       </form>
-    </div>
-
-    <LiveDataPanel client:load variant="planning" endpoint={`/api/projects/${project.id}/planning`} />
+    </aside>
   </section>
+
+  <script>
+    const planningVisibility: Record<string, string[]> = {
+      NOT_STARTED: [],
+      DRAFTING: [],
+      SUBMITTED: ['submissionDate'],
+      VALIDATED: ['submissionDate', 'validDate', 'decisionTargetDate'],
+      IN_REVIEW: ['submissionDate', 'validDate', 'decisionTargetDate'],
+      FURTHER_INFORMATION_REQUESTED: ['submissionDate', 'validDate', 'decisionTargetDate'],
+      APPROVED: ['submissionDate', 'validDate', 'decisionDate'],
+      REFUSED: ['submissionDate', 'validDate', 'decisionDate'],
+      WITHDRAWN: [],
+      CLOSED: [],
+    };
+    const form = document.querySelector('[data-planning-record-form]');
+    const status = form?.querySelector('[data-record-status]');
+    const syncPlanningDates = () => {
+      if (!(status instanceof HTMLSelectElement)) return;
+      const visible = new Set(planningVisibility[status.value] || []);
+      form?.querySelectorAll('[data-date-field]').forEach((field) => {
+        if (!(field instanceof HTMLElement)) return;
+        field.classList.toggle('hidden', !visible.has(field.dataset.dateField || ''));
+      });
+    };
+    status?.addEventListener('change', syncPlanningDates);
+    syncPlanningDates();
+  </script>
 </AppShell>
-
-
