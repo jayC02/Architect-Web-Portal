@@ -46,7 +46,14 @@ assert.match(projectDetailPage, /organisationId:\s*auth\.organisation\.id/, 'pro
 assert.match(projectsPage, /readyAutomationJobCount/, 'projects list includes ready automation job counts');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
-assert.match(projectDetailPage, /View project files/, 'project document section links into the project files page instead of the global documents hub');
+assert.doesNotMatch(projectDetailPage, />View project files</, 'project document section does not show a redundant top-level project files button');
+assert.match(projectDetailPage, /See more files/, 'project document section has a see more route for larger document lists');
+assert.match(projectDetailPage, /\/api\/documents\/\$\{document\.id\}/, 'project document names open the secure document viewer');
+assert.match(projectDetailPage, /data-method="DELETE"/, 'project document rows include a remove action');
+const projectFilesPage = fs.readFileSync('src/pages/projects/[id]/files.astro', 'utf8');
+assert.match(projectFilesPage, /Project files/, 'project files page is a simple file manager');
+assert.doesNotMatch(projectFilesPage, /Auto-sort project files/, 'project files manager no longer duplicates the upload workflow');
+assert.match(projectFilesPage, /Edit file details/, 'project files manager lets users edit document metadata');
 assert.match(planningPage, /data-planning-record-form/, 'planning page uses simplified quick-create form');
 assert.match(planningPage, /Advanced details/, 'planning page keeps advanced details available');
 assert.match(planningPage, /Prepare a planning automation job using this project's approved details and linked documents/, 'planning automation copy is secondary and specific');

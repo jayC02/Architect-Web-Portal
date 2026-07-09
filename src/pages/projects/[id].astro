@@ -214,17 +214,28 @@ const jobTone = (status: AutomationJobStatus) => {
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h2 class="text-xl font-semibold">Documents</h2>
-        <p class="mt-1 text-sm text-stone-500">{documentCount} document{documentCount === 1 ? '' : 's'} Â· {documentReviewCount} needing review</p>
+        <p class="mt-1 text-sm text-stone-500">{documentCount} document{documentCount === 1 ? '' : 's'} · {documentReviewCount} needing review</p>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <a class="btn btn-primary" href={`/documents/upload?projectId=${project.id}`}>Upload documents</a>
-        <a class="btn btn-secondary" href={`/projects/${project.id}/files`}>View project files</a>
-      </div>
+      <a class="btn btn-primary" href={`/documents/upload?projectId=${project.id}`}>Upload documents</a>
     </div>
     {locationPlanCount === 0 && <a href={`/documents/upload?projectId=${project.id}`} class="mt-4 block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100">Location plan missing</a>}
     {recentDocuments.length ? (
       <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
-        {recentDocuments.map((document) => <a href={`/projects/${project.id}/files`} class="flex flex-col gap-2 px-4 py-3 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"><div class="min-w-0"><p class="truncate font-semibold">{document.originalName}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(document.type)} Â· {document.revision ? `Rev ${document.revision}` : 'No revision'} Â· {formatBytes(document.sizeBytes)}</p></div><span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(document.status)}</span></a>)}
+        {recentDocuments.map((document) => (
+          <div class="group flex flex-col gap-3 px-4 py-3 transition hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+              <a href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer" class="block truncate font-semibold hover:underline">{document.originalName}</a>
+              <p class="mt-1 text-xs text-stone-500">{humanizeEnum(document.type)} · {document.revision ? `Rev ${document.revision}` : 'No revision'} · {formatBytes(document.sizeBytes)}</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(document.status)}</span>
+              <form data-api-form data-action={`/api/documents/${document.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Remove ${document.originalName} from this project?`}>
+                <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-lg leading-none text-stone-500 opacity-100 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Remove ${document.originalName}`}>×</button>
+              </form>
+            </div>
+          </div>
+        ))}
+        {documentCount > recentDocuments.length && <div class="px-4 py-3"><a href={`/projects/${project.id}/files`} class="btn btn-secondary w-full sm:w-auto">See more files</a></div>}
       </div>
     ) : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No documents uploaded yet</p><p class="mt-1 text-sm text-stone-500">Upload drawings, specifications or supporting files for this project.</p></div>}
   </section>

@@ -90,3 +90,16 @@ export const PATCH: APIRoute = (context) =>
     if (!result.count) throw new HttpError(404, 'Document not found.');
     return jsonResponse(200, { ok: true });
   }, context);
+export const DELETE: APIRoute = (context) =>
+  withErrorHandling(async () => {
+    assertAllowedOrigin(context.request);
+    assertRateLimit(context, rateLimitPolicies.mutation, 'documents:delete');
+    const { organisation } = await requireOrganisation(context);
+    const id = context.params.id;
+    if (!id) throw new HttpError(400, 'Document id is required.');
+    const result = await prisma.projectDocument.deleteMany({
+      where: { id, organisationId: organisation.id },
+    });
+    if (!result.count) throw new HttpError(404, 'Document not found.');
+    return jsonResponse(200, { ok: true });
+  }, context);
