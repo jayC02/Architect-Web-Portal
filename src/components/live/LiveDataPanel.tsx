@@ -1,5 +1,6 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
+import { AlertTriangle, ArrowRight, Bot, CalendarClock, FileText, FolderKanban, Landmark, Workflow } from 'lucide-react';
 
 type Variant =
   | 'dashboard'
@@ -79,49 +80,244 @@ const dateInput = (value?: string | null) => value ? new Date(value).toISOString
 
 function Dashboard({ data }: { data: AnyRecord }) {
   const metrics = [
-    ['Active projects', data.activeProjects, 'Open or on-hold projects', '/projects'],
-    ['Upcoming deadlines', data.upcomingDeadlineCount, 'Current deadline window', '/deadlines'],
-    ['Planning actions', data.planningActionCount, data.planningActionCount ? 'Needs action' : 'No action needed', '/projects'],
-    ['Warrant actions', data.warrantActionCount, data.warrantActionCount ? 'Needs action' : 'No action needed', '/projects'],
+    { label: 'Active projects', value: data.activeProjects ?? 0, context: 'Open practice workload', href: '/projects', icon: FolderKanban },
+    { label: 'Upcoming deadlines', value: data.upcomingDeadlineCount ?? 0, context: `Next ${data.deadlineRange ?? 14} days`, href: '/deadlines', icon: CalendarClock },
+    { label: 'Documents to review', value: data.documentsNeedingReview ?? 0, context: 'Awaiting classification', href: '/projects', icon: FileText, attention: Number(data.documentsNeedingReview ?? 0) > 0 },
+    { label: 'Automation ready', value: data.automationJobsReady ?? 0, context: 'Jobs ready to run', href: '/automation-jobs?status=READY', icon: Bot, attention: Number(data.automationJobsReady ?? 0) > 0 },
+    { label: 'Planning actions', value: data.planningActionCount ?? 0, context: Number(data.planningActionCount ?? 0) ? 'Needs attention' : 'No action needed', href: '/projects', icon: Landmark, attention: Number(data.planningActionCount ?? 0) > 0 },
+    { label: 'Warrant actions', value: data.warrantActionCount ?? 0, context: Number(data.warrantActionCount ?? 0) ? 'Needs attention' : 'No action needed', href: '/projects', icon: Workflow, attention: Number(data.warrantActionCount ?? 0) > 0 },
   ];
+  const attentionItems = data.needsAttention ?? [];
+  const activeProjects = data.activeProjectSummaries ?? [];
+  const pipeline = data.pipeline ?? [];
+
   return (
-    <>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(([label, value, context, href]) => (
-          <a key={String(label)} href={String(href)} className="panel block rounded-lg p-4 transition hover:-translate-y-0.5 hover:bg-stone-50">
-            <p className="text-xs font-semibold uppercase text-stone-500">{label}</p>
-            <p className="mt-3 text-3xl font-semibold text-ink">{String(value)}</p>
-            <p className="mt-2 text-sm text-stone-500">{context}</p>
-          </a>
-        ))}
+    <div className="space-y-6">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {metrics.map((metric) => <DashboardMetricCard key={metric.label} metric={metric} />)}
       </section>
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-        <ListPanel title="Upcoming deadlines" href="/deadlines" rows={data.upcomingDeadlines} empty="No urgent deadlines in this range." render={(item) => (
-          <a href="/deadlines" className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50">
-            <div className="flex justify-between gap-3"><div><p className="font-semibold">{item.title}</p><p className="text-xs text-stone-500">{item.project?.name ?? 'General'} - {human(item.type)}</p></div><Chip label={date(item.dueDate)} tone={new Date(item.dueDate) < new Date() ? 'danger' : 'info'} /></div>
-          </a>
-        )} />
-        <ListPanel title="Missing document warnings" href="/documents" rows={data.missingDocumentWarnings} empty="No missing key document warnings found." render={(item) => (
-          <a href={`/documents/projects/${item.project.id}`} className="block rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3 hover:bg-amber-50">
-            <p className="font-semibold">{item.project.name}</p><p className="text-xs text-amber-800">Missing: {item.missing.join(', ')}</p>
-          </a>
-        )} />
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <NeedsAttentionPanel items={attentionItems} />
+        <ProjectPipeline pipeline={pipeline} activeProjectCount={Number(data.activeProjects ?? 0)} />
       </section>
-      <section className="mt-6 grid items-start gap-6 xl:grid-cols-3">
-        <ListPanel title="Planning awaiting action" href="/projects" rows={data.planningAwaitingAction} empty="No planning applications waiting for action." render={(item) => (
-          <a href={`/projects/${item.projectId}/planning`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="font-semibold">{item.project.name}</p><p className="text-xs text-stone-500">{item.applicationReference || 'No reference'} - {human(item.status)}</p></a>
-        )} />
-        <ListPanel title="Building warrants awaiting action" href="/projects" rows={data.warrantsAwaitingAction} empty="No warrant applications waiting for action." render={(item) => (
-          <a href={`/projects/${item.projectId}/building-warrant`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="font-semibold">{item.project.name}</p><p className="text-xs text-stone-500">{item.warrantReference || human(item.warrantType)} - {human(item.status)}</p></a>
-        )} />
-        <ListPanel title="Recent files" href="/documents" rows={data.recentFiles} empty="Upload documents to start seeing file activity." render={(file) => (
-          <div className="rounded-lg border border-stone-200 px-3 py-3"><p className="truncate font-semibold">{file.originalName}</p><p className="text-xs text-stone-500">{file.project.name} - {human(file.type)}</p><p className="text-xs text-stone-400">{date(file.createdAt)} - {bytes(file.sizeBytes)}</p><div className="mt-2 flex gap-2"><a href={`/projects/${file.projectId}/files`} className="text-xs font-semibold">Open files</a><a href={`/projects/${file.projectId}`} className="text-xs font-semibold">Open project</a></div></div>
-        )} />
+
+      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+        <ActiveProjectsPanel projects={activeProjects} />
+        <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={Number(data.deadlineRange ?? 14)} />
       </section>
-    </>
+
+      <section className="grid items-start gap-6 xl:grid-cols-[1fr_0.78fr]">
+        <ActionColumns data={data} />
+        <RecentFilesPanel files={data.recentFiles ?? []} />
+      </section>
+    </div>
   );
 }
 
+function DashboardMetricCard({ metric }: { metric: AnyRecord }) {
+  const Icon = metric.icon;
+  return (
+    <a href={metric.href} className="panel group block rounded-lg p-4 transition duration-200 hover:-translate-y-0.5 hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase text-stone-500">{metric.label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-ink">{metric.value}</p>
+        </div>
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${metric.attention ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-stone-200 bg-stone-50 text-stone-500'}`}>
+          <Icon size={17} aria-hidden="true" />
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-stone-500">{metric.context}</p>
+    </a>
+  );
+}
+
+function ProjectPipeline({ pipeline, activeProjectCount }: { pipeline: AnyRecord[]; activeProjectCount: number }) {
+  const max = Math.max(1, ...pipeline.map((stage) => Number(stage.count ?? 0)));
+  return (
+    <article className="panel rounded-lg p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Project pipeline</h2>
+          <p className="mt-1 text-sm text-stone-500">Where active work sits across the practice.</p>
+        </div>
+        <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">View projects</a>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-5">
+        {pipeline.map((stage) => (
+          <a key={stage.key} href={stage.href ?? '/projects'} className="rounded-lg border border-stone-200 bg-white p-3 transition hover:border-stone-300 hover:bg-stone-50">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold text-ink">{stage.label}</p>
+              <p className="text-xl font-semibold">{stage.count}</p>
+            </div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
+              <div className="h-full rounded-full bg-moss/70" style={{ width: `${Math.max(8, (Number(stage.count ?? 0) / max) * 100)}%` }} />
+            </div>
+          </a>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-stone-500">{activeProjectCount} active project{activeProjectCount === 1 ? '' : 's'} tracked.</p>
+    </article>
+  );
+}
+
+function NeedsAttentionPanel({ items }: { items: AnyRecord[] }) {
+  return (
+    <article className="panel rounded-lg p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Needs attention</h2>
+          <p className="mt-1 text-sm text-stone-500">Urgent deadlines, missing files and ready jobs in one place.</p>
+        </div>
+        <AlertTriangle size={18} className="mt-1 text-amber-700" aria-hidden="true" />
+      </div>
+      <div className="space-y-2">
+        {items.length ? items.map((item) => <AttentionItem key={item.id} item={item} />) : (
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No urgent practice items found.</div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function AttentionItem({ item }: { item: AnyRecord }) {
+  const tone = item.tone === 'danger' ? 'border-red-200 bg-red-50/60 text-red-800' : item.tone === 'warning' ? 'border-amber-200 bg-amber-50/60 text-amber-800' : 'border-stone-200 bg-white text-ink';
+  return (
+    <a href={item.href} className={`group block rounded-lg border px-3 py-3 transition hover:bg-white ${tone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase opacity-80">{item.type}</p>
+          <p className="mt-1 truncate font-semibold">{item.projectName}</p>
+          <p className="mt-1 text-sm opacity-85">{item.reason}</p>
+          {item.date && <p className="mt-1 text-xs opacity-75">{date(item.date)}</p>}
+        </div>
+        <ArrowRight size={15} className="mt-1 shrink-0 opacity-50 transition group-hover:translate-x-0.5 group-hover:opacity-90" aria-hidden="true" />
+      </div>
+    </a>
+  );
+}
+
+function ActiveProjectsPanel({ projects }: { projects: AnyRecord[] }) {
+  return (
+    <article className="panel rounded-lg p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Active projects</h2>
+          <p className="mt-1 text-sm text-stone-500">Current project movement and next useful action.</p>
+        </div>
+        <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {projects.length ? projects.map((project) => <ActiveProjectCard key={project.id} project={project} />) : (
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500 lg:col-span-2">No active projects yet.</div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ActiveProjectCard({ project }: { project: AnyRecord }) {
+  const stages = ['LEAD', 'DESIGN', 'PLANNING', 'BUILDING_WARRANT', 'COMPLETION'];
+  const currentIndex = Math.max(0, stages.indexOf(project.stage));
+  const actionClass = project.nextAction?.tone === 'danger' ? 'text-red-800' : project.nextAction?.tone === 'warning' ? 'text-amber-800' : 'text-ink';
+  return (
+    <a href={`/projects/${project.id}`} className="rounded-lg border border-stone-200 bg-white p-4 transition hover:border-stone-300 hover:bg-stone-50">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-ink">{project.name}</p>
+          <p className="mt-1 truncate text-xs text-stone-500">{project.siteSummary}</p>
+        </div>
+        {project.readyAutomationJobCount > 0 && <span className="text-xs font-semibold text-moss">{project.readyAutomationJobCount} ready</span>}
+      </div>
+      <div className="mt-4 flex gap-1" aria-hidden="true">
+        {stages.map((stage, index) => <span key={stage} className={`h-1.5 flex-1 rounded-full ${index <= currentIndex ? 'bg-moss/70' : 'bg-stone-100'}`} />)}
+      </div>
+      <p className="mt-3 text-xs text-stone-500">{human(project.stage)} stage</p>
+      <p className={`mt-2 truncate text-sm font-semibold ${actionClass}`}>{project.nextAction?.label ?? 'No action needed'}</p>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
+        <span>{project.nextDeadline ? date(project.nextDeadline.dueDate) : 'No deadline'}</span>
+        <span>{project.documentReviewCount > 0 ? `${project.documentReviewCount} docs to review` : 'Documents clear'}</span>
+      </div>
+    </a>
+  );
+}
+
+function DeadlineTimeline({ deadlines, range }: { deadlines: AnyRecord[]; range: number }) {
+  return (
+    <article className="panel rounded-lg p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Upcoming timeline</h2>
+          <p className="mt-1 text-sm text-stone-500">Next {range} days.</p>
+        </div>
+        <a href="/deadlines" className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
+      </div>
+      <div className="space-y-3">
+        {deadlines.length ? deadlines.slice(0, 6).map((deadline) => {
+          const overdue = new Date(deadline.dueDate) < new Date();
+          return (
+            <a key={deadline.id} href={deadline.project?.id ? `/deadlines?projectId=${deadline.project.id}` : '/deadlines'} className="grid grid-cols-[56px_1fr] gap-3 rounded-lg border border-stone-200 bg-white p-3 hover:bg-stone-50">
+              <div className={`rounded-md border px-2 py-1 text-center ${overdue ? 'border-red-200 bg-red-50 text-red-800' : 'border-stone-200 bg-stone-50 text-stone-700'}`}>
+                <p className="text-xs font-semibold">{new Intl.DateTimeFormat('en-GB', { day: '2-digit' }).format(new Date(deadline.dueDate))}</p>
+                <p className="text-[11px] uppercase">{new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(new Date(deadline.dueDate))}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{deadline.title}</p>
+                <p className="mt-1 truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'} - {human(deadline.type)}</p>
+              </div>
+            </a>
+          );
+        }) : <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No deadlines in this range.</div>}
+      </div>
+    </article>
+  );
+}
+
+function ActionColumns({ data }: { data: AnyRecord }) {
+  return (
+    <section className="grid gap-4 md:grid-cols-2">
+      <CompactActionPanel title="Planning actions" href="/projects" rows={data.planningAwaitingAction ?? []} empty="No planning applications waiting for action." render={(item) => (
+        <a href={`/projects/${item.projectId}/planning`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="truncate font-semibold">{item.project.name}</p><p className="mt-1 text-xs text-stone-500">{item.applicationReference || 'No reference'} - {human(item.status)}</p></a>
+      )} />
+      <CompactActionPanel title="Warrant actions" href="/projects" rows={data.warrantsAwaitingAction ?? []} empty="No warrant applications waiting for action." render={(item) => (
+        <a href={`/projects/${item.projectId}/building-warrant`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="truncate font-semibold">{item.project.name}</p><p className="mt-1 text-xs text-stone-500">{item.warrantReference || human(item.warrantType)} - {human(item.status)}</p></a>
+      )} />
+    </section>
+  );
+}
+
+function CompactActionPanel({ title, href, rows, empty, render }: { title: string; href: string; rows: AnyRecord[]; empty: string; render: (row: AnyRecord) => React.ReactNode }) {
+  return (
+    <article className="panel rounded-lg p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <a href={href} className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
+      </div>
+      <div className="space-y-2">{rows.length ? rows.slice(0, 3).map((row) => <div key={row.id}>{render(row)}</div>) : <p className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">{empty}</p>}</div>
+    </article>
+  );
+}
+
+function RecentFilesPanel({ files }: { files: AnyRecord[] }) {
+  return (
+    <article className="panel rounded-lg p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Recent files</h2>
+        <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">Projects</a>
+      </div>
+      <div className="space-y-2">
+        {files.length ? files.slice(0, 5).map((file) => (
+          <div key={file.id} className="rounded-lg border border-stone-200 px-3 py-3">
+            <a href={`/api/documents/${file.id}`} target="_blank" rel="noreferrer" className="block truncate font-semibold hover:underline">{file.originalName}</a>
+            <p className="mt-1 truncate text-xs text-stone-500">{file.project.name} - {human(file.type)} - {date(file.createdAt)}</p>
+            <div className="mt-2 flex gap-3 text-xs font-semibold"><a href={`/projects/${file.projectId}`}>Open project</a><a href={`/projects/${file.projectId}/files`}>Manage files</a></div>
+          </div>
+        )) : <p className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">Upload documents to start seeing file activity.</p>}
+      </div>
+    </article>
+  );
+}
 function ListPanel({ title, href, rows, empty, render }: { title: string; href?: string; rows: AnyRecord[]; empty: string; render: (row: AnyRecord) => React.ReactNode }) {
   return (
     <article className="panel rounded-lg p-4">

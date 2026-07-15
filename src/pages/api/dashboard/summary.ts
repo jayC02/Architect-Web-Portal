@@ -1,12 +1,28 @@
-export const prerender = false;
+﻿export const prerender = false;
 
-import { DocumentType } from '@prisma/client';
+import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
+import { getProjectNextAction } from '@/lib/projects/next-action';
 import { withPerf } from '@/lib/utils/perf';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
+
+const pipelineDefinitions: Array<{ key: string; label: string; stages: ProjectStage[] }> = [
+  { key: 'lead', label: 'Lead', stages: [ProjectStage.LEAD] },
+  { key: 'documents', label: 'Documents', stages: [ProjectStage.SURVEY, ProjectStage.DESIGN] },
+  { key: 'planning', label: 'Planning', stages: [ProjectStage.PLANNING] },
+  { key: 'warrant', label: 'Warrant', stages: [ProjectStage.BUILDING_WARRANT, ProjectStage.CONSTRUCTION] },
+  { key: 'complete', label: 'Complete', stages: [ProjectStage.COMPLETION] },
+];
+
+const activeProjectWhere = (organisationId: string) => ({
+  organisationId,
+  status: { notIn: [ProjectStatus.COMPLETED, ProjectStatus.ARCHIVED] },
+});
+
+const toTime = (value: unknown) => (value ? new Date(String(value)).getTime() : Number.MAX_SAFE_INTEGER);
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -31,7 +47,7 @@ export const GET: APIRoute = (context) =>
           SELECT d.id, d.title, d.type, d.status, d.priority, d."dueDate", CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object('id', p.id, 'name', p.name) END AS project
           FROM "Deadline" d LEFT JOIN "Project" p ON p.id = d."projectId"
           WHERE d."organisationId" = ${orgId} AND d.status NOT IN ('COMPLETED', 'CANCELLED') AND d."dueDate" <= ${deadlineEnd}
-          ORDER BY d."dueDate" ASC LIMIT 6
+          ORDER BY d."dueDate" ASC LIMIT 8
         ) deadline_row), '[]'::jsonb) AS "upcomingDeadlines",
         COALESCE((SELECT jsonb_agg(to_jsonb(planning_row)) FROM (
           SELECT a.id, a."projectId", a."applicationReference", a.status, a."submissionDate", a."validDate", a."decisionTargetDate", a."updatedAt", jsonb_build_object('id', p.id, 'name', p.name) AS project
@@ -49,7 +65,7 @@ export const GET: APIRoute = (context) =>
           SELECT d.id, d."projectId", d."originalName", d.type, d."createdAt", d."sizeBytes", jsonb_build_object('id', p.id, 'name', p.name) AS project
           FROM "ProjectDocument" d JOIN "Project" p ON p.id = d."projectId"
           WHERE d."organisationId" = ${orgId}
-          ORDER BY d."createdAt" DESC LIMIT 8
+          ORDER BY d."createdAt" DESC LIMIT 6
         ) file_row), '[]'::jsonb) AS "recentFiles",
         COALESCE((SELECT jsonb_agg(to_jsonb(project_row)) FROM (
           SELECT p.id, p.name
@@ -61,18 +77,168 @@ export const GET: APIRoute = (context) =>
         ) project_row), '[]'::jsonb) AS "missingLocationPlanProjects"
     `);
 
+    const [documentsNeedingReview, automationJobsReady, pipelineProjects, activeProjects, documentReviewProjects, automationReadyProjects] = await Promise.all([
+      prisma.projectDocument.count({ where: { organisationId: orgId, status: DocumentStatus.IN_REVIEW } }),
+      prisma.automationJob.count({ where: { organisationId: orgId, status: AutomationJobStatus.READY } }),
+      prisma.project.findMany({ where: { organisationId: orgId, status: { not: ProjectStatus.ARCHIVED } }, select: { stage: true, status: true } }),
+      prisma.project.findMany({
+        where: activeProjectWhere(orgId),
+        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+        take: 6,
+        select: {
+          id: true,
+          name: true,
+          stage: true,
+          status: true,
+          siteAddress: true,
+          client: { select: { name: true } },
+          site: { select: { addressLine1: true, postcode: true } },
+          documents: { where: { OR: [{ status: DocumentStatus.IN_REVIEW }, { type: DocumentType.LOCATION_PLAN }] }, select: { status: true, type: true } },
+          deadlines: { where: { status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] } }, orderBy: { dueDate: 'asc' }, take: 1, select: { title: true, dueDate: true } },
+          planningApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
+          warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
+          _count: { select: { documents: true, automationJobs: { where: { status: AutomationJobStatus.READY } } } },
+        },
+      }),
+      prisma.project.findMany({
+        where: { ...activeProjectWhere(orgId), documents: { some: { status: DocumentStatus.IN_REVIEW } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 6,
+        select: { id: true, name: true, _count: { select: { documents: { where: { status: DocumentStatus.IN_REVIEW } } } } },
+      }),
+      prisma.project.findMany({
+        where: { ...activeProjectWhere(orgId), automationJobs: { some: { status: AutomationJobStatus.READY } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 6,
+        select: { id: true, name: true, _count: { select: { automationJobs: { where: { status: AutomationJobStatus.READY } } } } },
+      }),
+    ]);
+
     const missingDocumentWarnings = (Array.isArray(row?.missingLocationPlanProjects) ? row.missingLocationPlanProjects : [])
       .map((project: { id: string; name: string }) => ({ project, missing: ['Location Plan'] }));
+
+    const pipeline = pipelineDefinitions.map((definition) => ({
+      key: definition.key,
+      label: definition.label,
+      count: pipelineProjects.filter((project) => (
+        definition.key === 'complete'
+          ? project.status === ProjectStatus.COMPLETED || definition.stages.includes(project.stage)
+          : project.status !== ProjectStatus.COMPLETED && definition.stages.includes(project.stage)
+      )).length,
+      href: definition.stages.length === 1 ? `/projects?stage=${definition.stages[0]}` : '/projects',
+    }));
+
+    const activeProjectSummaries = activeProjects.map((project) => {
+      const documentReviewCount = project.documents.filter((document) => document.status === DocumentStatus.IN_REVIEW).length;
+      const hasLocationPlan = project.documents.some((document) => document.type === DocumentType.LOCATION_PLAN);
+      const nextDeadline = project.deadlines[0] ?? null;
+      const nextAction = getProjectNextAction({
+        projectId: project.id,
+        stage: project.stage,
+        documentCount: project._count.documents,
+        documentReviewCount,
+        hasLocationPlan,
+        planningStatus: project.planningApplications[0]?.status,
+        warrantStatus: project.warrantApplications[0]?.status,
+        readyAutomationJobCount: project._count.automationJobs,
+        nextDeadline,
+      });
+      return {
+        id: project.id,
+        name: project.name,
+        stage: project.stage,
+        status: project.status,
+        siteSummary: project.site ? [project.site.addressLine1, project.site.postcode].filter(Boolean).join(', ') : project.siteAddress ?? 'No site address',
+        clientName: project.client?.name ?? null,
+        documentReviewCount,
+        readyAutomationJobCount: project._count.automationJobs,
+        nextDeadline,
+        nextAction,
+      };
+    });
+
+    const upcomingDeadlines = row?.upcomingDeadlines ?? [];
+    const planningAwaitingAction = row?.planningAwaitingAction ?? [];
+    const warrantsAwaitingAction = row?.warrantsAwaitingAction ?? [];
+
+    const needsAttention = [
+      ...upcomingDeadlines.map((deadline: any) => {
+        const overdue = toTime(deadline.dueDate) < today.getTime();
+        return {
+          id: `deadline-${deadline.id}`,
+          type: overdue ? 'Overdue deadline' : 'Upcoming deadline',
+          projectName: deadline.project?.name ?? 'General',
+          reason: `${deadline.title} - ${deadline.project?.name ? deadline.project.name : 'General'}`,
+          date: deadline.dueDate,
+          href: deadline.project?.id ? `/deadlines?projectId=${deadline.project.id}` : '/deadlines',
+          tone: overdue ? 'danger' : 'warning',
+          priority: overdue ? 0 : 3,
+        };
+      }),
+      ...documentReviewProjects.map((project) => ({
+        id: `documents-${project.id}`,
+        type: 'Documents to review',
+        projectName: project.name,
+        reason: `${project._count.documents} file${project._count.documents === 1 ? '' : 's'} need review`,
+        href: `/projects/${project.id}/files`,
+        tone: 'warning',
+        priority: 1,
+      })),
+      ...missingDocumentWarnings.map((warning: any) => ({
+        id: `missing-location-${warning.project.id}`,
+        type: 'Missing location plan',
+        projectName: warning.project.name,
+        reason: 'Location Plan missing',
+        href: `/documents/upload?projectId=${warning.project.id}`,
+        tone: 'warning',
+        priority: 2,
+      })),
+      ...planningAwaitingAction.map((item: any) => ({
+        id: `planning-${item.id}`,
+        type: 'Planning action',
+        projectName: item.project?.name ?? 'Project',
+        reason: `${item.applicationReference || 'Planning application'} - ${item.status}`,
+        date: item.decisionTargetDate ?? item.updatedAt,
+        href: `/projects/${item.projectId}/planning`,
+        tone: item.status === 'FURTHER_INFORMATION_REQUESTED' ? 'danger' : 'neutral',
+        priority: item.status === 'FURTHER_INFORMATION_REQUESTED' ? 0 : 4,
+      })),
+      ...warrantsAwaitingAction.map((item: any) => ({
+        id: `warrant-${item.id}`,
+        type: 'Warrant action',
+        projectName: item.project?.name ?? 'Project',
+        reason: `${item.warrantReference || item.warrantType} - ${item.status}`,
+        date: item.firstResponseTargetDate ?? item.expiryDate ?? item.updatedAt,
+        href: `/projects/${item.projectId}/building-warrant`,
+        tone: item.status === 'FURTHER_INFORMATION_REQUESTED' ? 'danger' : 'neutral',
+        priority: item.status === 'FURTHER_INFORMATION_REQUESTED' ? 0 : 4,
+      })),
+      ...automationReadyProjects.map((project) => ({
+        id: `automation-${project.id}`,
+        type: 'Automation ready',
+        projectName: project.name,
+        reason: `${project._count.automationJobs} job${project._count.automationJobs === 1 ? '' : 's'} ready`,
+        href: `/automation-jobs?projectId=${project.id}`,
+        tone: 'ready',
+        priority: 5,
+      })),
+    ].sort((a, b) => a.priority - b.priority || toTime(a.date) - toTime(b.date)).slice(0, 10);
 
     return jsonResponse(200, {
       activeProjects: Number(row?.activeProjects ?? 0),
       upcomingDeadlineCount: Number(row?.upcomingDeadlineCount ?? 0),
+      documentsNeedingReview,
+      automationJobsReady,
       planningActionCount: Number(row?.planningActionCount ?? 0),
       warrantActionCount: Number(row?.warrantActionCount ?? 0),
-      upcomingDeadlines: row?.upcomingDeadlines ?? [],
-      planningAwaitingAction: row?.planningAwaitingAction ?? [],
-      warrantsAwaitingAction: row?.warrantsAwaitingAction ?? [],
+      upcomingDeadlines,
+      planningAwaitingAction,
+      warrantsAwaitingAction,
       recentFiles: row?.recentFiles ?? [],
       missingDocumentWarnings,
+      pipeline,
+      activeProjectSummaries,
+      needsAttention,
+      deadlineRange,
     });
   }, context);
