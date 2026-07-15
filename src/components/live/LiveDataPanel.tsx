@@ -96,9 +96,9 @@ function Dashboard({ data }: { data: AnyRecord }) {
         {metrics.map((metric) => <DashboardMetricCard key={metric.label} metric={metric} />)}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <NeedsAttentionPanel items={attentionItems} />
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <ActiveProjectsPanel projects={activeProjects} />
+        <NeedsAttentionPanel items={attentionItems} />
       </section>
 
       <section className="grid items-start gap-6 xl:grid-cols-[0.78fr_1fr]">
@@ -175,12 +175,11 @@ function ActiveProjectsPanel({ projects }: { projects: AnyRecord[] }) {
         </div>
         <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
       </div>
-      <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
-        {projects.length ? projects.slice(0, 5).map((project) => <ActiveProjectCard key={project.id} project={project} />) : (
+      <div className="space-y-3">
+        {projects.length ? projects.map((project) => <ActiveProjectCard key={project.id} project={project} />) : (
           <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No active projects yet.</div>
         )}
       </div>
-      {projects.length > 5 && <p className="mt-3 text-xs text-stone-500">Showing 5 of {projects.length} active projects. Use View all for the full register.</p>}
     </article>
   );
 }
@@ -613,7 +612,7 @@ export default function LiveDataPanel({ endpoint, variant }: Props) {
   }, [endpoint]);
 
   const skeleton = useMemo(() => {
-    if (variant === 'dashboard') return <><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="h-32" />)}</section><section className="mt-6 grid gap-6 xl:grid-cols-2"><SkeletonBlock className="h-72" /><SkeletonBlock className="h-72" /></section></>;
+    if (variant === 'dashboard') return <><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="h-32" />)}</section><section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]"><SkeletonBlock className="h-72" /><SkeletonBlock className="h-72" /></section></>;
     if (variant === 'projects' || variant === 'clients' || variant === 'sites') return <SkeletonTable rows={5} />;
     if (variant === 'documentsHub') return <><section className="mb-6 grid gap-4 md:grid-cols-3"><SkeletonBlock className="h-24" /><SkeletonBlock className="h-24" /><SkeletonBlock className="h-24" /></section><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"><SkeletonBlock className="h-64" /><SkeletonBlock className="h-64" /><SkeletonBlock className="h-64" /></div></>;
     return <div className="space-y-4">{Array.from({ length: 4 }, (_, index) => <SkeletonBlock key={index} className="h-28" />)}</div>;
