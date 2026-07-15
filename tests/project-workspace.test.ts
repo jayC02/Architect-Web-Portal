@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { PlanningStatus, WarrantStatus } from '@prisma/client';
 import { planningDateFieldsForStatus, warrantDateFieldsForStatus } from '../src/lib/application-record-fields';
@@ -44,6 +44,16 @@ const appShell = fs.readFileSync('src/components/layout/AppShell.astro', 'utf8')
 assert.match(projectsPage, /organisationId:\s*auth\.organisation\.id/, 'projects list query is organisation scoped');
 assert.match(projectDetailPage, /organisationId:\s*auth\.organisation\.id/, 'project workspace query is organisation scoped');
 assert.match(projectsPage, /readyAutomationJobCount/, 'projects list includes ready automation job counts');
+assert.match(projectsPage, /A clean register of project records/, 'projects page uses register-focused copy');
+assert.match(projectsPage, /<span>Project<\/span>[\s\S]*<span>Client<\/span>[\s\S]*<span>Stage<\/span>[\s\S]*<span>Next action<\/span>[\s\S]*<span>Deadline<\/span>[\s\S]*<span>Documents<\/span>[\s\S]*<span>Automation<\/span>/, 'projects page renders a structured register header');
+assert.match(projectsPage, /name="q"/, 'projects page keeps search input');
+assert.match(projectsPage, /name="status"/, 'projects page keeps status filter');
+assert.match(projectsPage, /name="stage"/, 'projects page keeps stage filter');
+assert.match(projectsPage, /name="scope"/, 'projects page keeps active archived scope filter');
+assert.doesNotMatch(projectsPage, /status-chip/, 'projects register avoids noisy coloured pill badges');
+assert.match(projectsPage, /Ref \{project\.internalReference\}/, 'project reference is shown as muted text instead of a badge');
+assert.match(projectsPage, /documentReviewCount > 0 \? `\$\{project\.documentReviewCount\} need review` : 'All reviewed'/, 'document review count is rendered as plain text');
+assert.match(projectsPage, /readyAutomationJobCount > 0 \? `\$\{project\.readyAutomationJobCount\} ready` : 'None ready'/, 'automation ready count is rendered as plain text');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
 assert.doesNotMatch(projectDetailPage, />View project files</, 'project document section does not show a redundant top-level project files button');

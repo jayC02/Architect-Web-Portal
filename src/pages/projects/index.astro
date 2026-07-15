@@ -1,9 +1,9 @@
----
+﻿---
 import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus, type Prisma } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
 import { formatDate, humanizeEnum } from '@/lib/format';
-import { getProjectNextAction } from '@/lib/projects/next-action';
+import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
@@ -100,97 +100,153 @@ const projectRows = projects.map((project) => {
   return { ...project, documentReviewCount, readyAutomationJobCount, nextDeadline, nextAction, siteSummary };
 });
 
-const actionTone = {
-  neutral: 'bg-stone-100 text-stone-700',
-  info: 'bg-emerald-50 text-emerald-800',
-  warning: 'bg-amber-50 text-amber-800',
-  danger: 'bg-red-50 text-red-800',
+const hasFilters = Boolean(query || status || stage || scope !== 'active');
+
+const statusDotClass = (value: ProjectStatus) => {
+  if (value === ProjectStatus.ACTIVE) return 'bg-moss';
+  if (value === ProjectStatus.ON_HOLD) return 'bg-amber-500';
+  if (value === ProjectStatus.COMPLETED) return 'bg-stone-400';
+  return 'bg-stone-300';
 };
+
+const actionTextClass = (tone: string) => {
+  if (tone === 'danger') return 'text-red-800';
+  if (tone === 'warning') return 'text-amber-800';
+  return 'text-ink';
+};
+
+const attentionTextClass = (count: number) => count > 0 ? 'font-semibold text-amber-800' : 'text-stone-500';
+const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-moss' : 'text-stone-500';
 ---
 <AppShell title="Projects" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
     <div>
-      <h1 class="text-3xl font-semibold">Projects</h1>
-      <p class="mt-1 text-sm text-stone-500">Find a project and open its workspace.</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Projects</h1>
+      <p class="mt-1 text-sm text-stone-500">A clean register of project records, deadlines and document actions.</p>
     </div>
     <a href="/projects/new" class="btn btn-primary">New project</a>
   </div>
 
-  <form method="GET" class="panel mb-5 grid gap-3 rounded-lg p-4 lg:grid-cols-[minmax(260px,1fr)_190px_190px_170px_auto]">
-    <label class="block">
-      <span class="label">Search projects</span>
-      <input name="q" value={query} class="field" placeholder="Project, reference, client or address" />
-    </label>
-    <label class="block">
-      <span class="label">Status</span>
-      <select name="status" class="field">
-        <option value="">All statuses</option>
-        {Object.values(ProjectStatus).map((value) => <option value={value} selected={status === value}>{humanizeEnum(value)}</option>)}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">Stage</span>
-      <select name="stage" class="field">
-        <option value="">All stages</option>
-        {Object.values(ProjectStage).map((value) => <option value={value} selected={stage === value}>{humanizeEnum(value)}</option>)}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">Project view</span>
-      <select name="scope" class="field">
-        <option value="active" selected={scope === 'active'}>Active projects</option>
-        <option value="archived" selected={scope === 'archived'}>Archived projects</option>
-        <option value="all" selected={scope === 'all'}>All projects</option>
-      </select>
-    </label>
-    <button class="btn btn-primary self-end">Apply</button>
+  <form method="GET" class="panel mb-5 rounded-lg p-4">
+    <div class="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_170px_auto] lg:items-end">
+      <label class="block">
+        <span class="label">Search</span>
+        <input name="q" value={query} class="field h-11" placeholder="Project, reference, client or address" />
+      </label>
+      <label class="block">
+        <span class="label">Status</span>
+        <select name="status" class="field h-11">
+          <option value="">All statuses</option>
+          {Object.values(ProjectStatus).map((value) => <option value={value} selected={status === value}>{humanizeEnum(value)}</option>)}
+        </select>
+      </label>
+      <label class="block">
+        <span class="label">Stage</span>
+        <select name="stage" class="field h-11">
+          <option value="">All stages</option>
+          {Object.values(ProjectStage).map((value) => <option value={value} selected={stage === value}>{humanizeEnum(value)}</option>)}
+        </select>
+      </label>
+      <label class="block">
+        <span class="label">View</span>
+        <select name="scope" class="field h-11">
+          <option value="active" selected={scope === 'active'}>Active projects</option>
+          <option value="archived" selected={scope === 'archived'}>Archived projects</option>
+          <option value="all" selected={scope === 'all'}>All projects</option>
+        </select>
+      </label>
+      <button class="btn btn-primary h-11 px-5">Apply</button>
+    </div>
   </form>
 
   <div class="mb-3 flex items-center justify-between gap-3">
     <p class="text-sm text-stone-500">{projectRows.length} project{projectRows.length === 1 ? '' : 's'}</p>
-    {(query || status || stage || scope !== 'active') && <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/projects">Clear filters</a>}
+    {hasFilters && <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/projects">Clear filters</a>}
   </div>
 
   {projectRows.length ? (
-    <div class="space-y-3">
-      {projectRows.map((project) => (
-        <a href={`/projects/${project.id}`} class="panel group block rounded-lg p-4 transition hover:border-stone-300 hover:bg-white hover:shadow-[0_14px_38px_rgba(32,35,31,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
-          <div class="grid gap-4 xl:grid-cols-[minmax(240px,1.35fr)_minmax(180px,1fr)_170px_minmax(220px,1.1fr)_auto] xl:items-center">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="truncate text-lg font-semibold text-ink group-hover:underline">{project.name}</h2>
-                {project.internalReference && <span class="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-600">{project.internalReference}</span>}
+    <section class="panel overflow-hidden rounded-lg">
+      <div class="hidden border-b border-stone-200 bg-stone-50/70 px-4 py-3 text-xs font-semibold uppercase text-stone-500 lg:grid lg:grid-cols-[minmax(260px,1.35fr)_minmax(150px,0.75fr)_130px_minmax(190px,1fr)_145px_150px_125px_90px] lg:items-center lg:gap-4">
+        <span>Project</span>
+        <span>Client</span>
+        <span>Stage</span>
+        <span>Next action</span>
+        <span>Deadline</span>
+        <span>Documents</span>
+        <span>Automation</span>
+        <span class="text-right">Action</span>
+      </div>
+
+      <div class="divide-y divide-stone-100">
+        {projectRows.map((project) => {
+          const deadlineIsOverdue = project.nextDeadline ? isProjectDateOverdue(project.nextDeadline.dueDate) : false;
+          return (
+            <article class="grid gap-4 px-4 py-4 transition hover:bg-stone-50/70 lg:grid-cols-[minmax(260px,1.35fr)_minmax(150px,0.75fr)_130px_minmax(190px,1fr)_145px_150px_125px_90px] lg:items-center lg:gap-4">
+              <div class="min-w-0">
+                <a href={`/projects/${project.id}`} class="block truncate text-base font-semibold text-ink hover:underline">{project.name}</a>
+                <p class="mt-1 truncate text-sm text-stone-500">{project.siteSummary}{project.internalReference ? <span> &middot; Ref {project.internalReference}</span> : null}</p>
               </div>
-              <p class="mt-1 truncate text-sm text-stone-500">{project.siteSummary}</p>
-            </div>
-            <div>
-              <p class="text-xs font-semibold uppercase text-stone-400">Client</p>
-              <p class="mt-1 truncate text-sm font-medium">{project.client?.name ?? 'Not linked'}</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(project.status)}</span>
-              <span class="status-chip bg-moss/10 text-moss">{humanizeEnum(project.stage)}</span>
-            </div>
-            <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase text-stone-400">Next action</p>
-              <span class={`mt-1 inline-flex max-w-full truncate rounded-md px-2 py-1 text-sm font-semibold ${actionTone[project.nextAction.tone]}`}>{project.nextAction.label}</span>
-              <p class="mt-2 text-xs text-stone-500">{project.nextDeadline ? `${project.nextDeadline.title} - ${formatDate(project.nextDeadline.dueDate)}` : 'No upcoming deadline'}</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2 xl:justify-end">
-              {project.documentReviewCount > 0 && <span class="status-chip bg-amber-100 text-amber-800">{project.documentReviewCount} to review</span>}
-              {project.readyAutomationJobCount > 0 && <span class="status-chip bg-emerald-100 text-emerald-800">{project.readyAutomationJobCount} ready</span>}
-              <span class="btn btn-secondary">Open project</span>
-            </div>
-          </div>
-        </a>
-      ))}
-    </div>
+
+              <div class="min-w-0">
+                <p class="label lg:hidden">Client</p>
+                <p class="truncate text-sm text-stone-700">{project.client?.name ?? 'Not linked'}</p>
+              </div>
+
+              <div>
+                <p class="label lg:hidden">Status / stage</p>
+                <div class="flex items-center gap-2 text-sm text-stone-700">
+                  <span class={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(project.status)}`}></span>
+                  <span>{humanizeEnum(project.status)}</span>
+                </div>
+                <p class="mt-1 text-xs text-stone-500">{humanizeEnum(project.stage)}</p>
+              </div>
+
+              <div class="min-w-0">
+                <p class="label lg:hidden">Next action</p>
+                <a href={project.nextAction.href} class={`block truncate text-sm font-semibold hover:underline ${actionTextClass(project.nextAction.tone)}`}>{project.nextAction.label}</a>
+                <p class="mt-1 text-xs text-stone-500">Based on current records</p>
+              </div>
+
+              <div>
+                <p class="label lg:hidden">Deadline</p>
+                {project.nextDeadline ? (
+                  <>
+                    <p class={`truncate text-sm font-medium ${deadlineIsOverdue ? 'text-red-800' : 'text-stone-700'}`}>{formatDate(project.nextDeadline.dueDate)}</p>
+                    <p class="mt-1 truncate text-xs text-stone-500">{project.nextDeadline.title}</p>
+                  </>
+                ) : (
+                  <p class="text-sm text-stone-500">No upcoming deadline</p>
+                )}
+              </div>
+
+              <div>
+                <p class="label lg:hidden">Documents</p>
+                <a href={`/projects/${project.id}/files`} class={`text-sm hover:underline ${attentionTextClass(project.documentReviewCount)}`}>
+                  {project.documentReviewCount > 0 ? `${project.documentReviewCount} need review` : 'All reviewed'}
+                </a>
+              </div>
+
+              <div>
+                <p class="label lg:hidden">Automation</p>
+                <a href={`/automation-jobs?projectId=${project.id}`} class={`text-sm hover:underline ${automationTextClass(project.readyAutomationJobCount)}`}>
+                  {project.readyAutomationJobCount > 0 ? `${project.readyAutomationJobCount} ready` : 'None ready'}
+                </a>
+              </div>
+
+              <div class="lg:text-right">
+                <a href={`/projects/${project.id}`} class="btn btn-secondary h-9 px-3">Open</a>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   ) : (
     <section class="panel rounded-lg p-8 text-center">
-      <h2 class="text-xl font-semibold">{query || status || stage || scope !== 'active' ? 'No projects match these filters' : 'No projects yet'}</h2>
-      <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">{query || status || stage || scope !== 'active' ? 'Clear the filters or try a different search.' : 'Create your first project to start organising documents, applications and deadlines.'}</p>
+      <h2 class="text-xl font-semibold">{hasFilters ? 'No projects match these filters' : 'No projects yet'}</h2>
+      <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">{hasFilters ? 'Clear the filters or try a different search.' : 'Create your first project to organise documents, applications and deadlines.'}</p>
       <div class="mt-5 flex justify-center gap-2">
-        {(query || status || stage || scope !== 'active') && <a class="btn btn-secondary" href="/projects">Clear filters</a>}
+        {hasFilters && <a class="btn btn-secondary" href="/projects">Clear filters</a>}
         <a class="btn btn-primary" href="/projects/new">New project</a>
       </div>
     </section>
