@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { PlanningStatus, WarrantStatus } from '@prisma/client';
 import { planningDateFieldsForStatus, warrantDateFieldsForStatus } from '../src/lib/application-record-fields';
@@ -50,13 +50,14 @@ assert.match(projectsPage, /readyAutomationJobCount/, 'projects list includes re
 assert.match(dashboardPage, /deadlineRange/, 'dashboard keeps deadline range filter links');
 assert.match(dashboardSummaryApi, /requireOrganisation\(context\)/, 'dashboard summary requires organisation auth');
 assert.match(dashboardSummaryApi, /organisationId: orgId/s, 'dashboard Prisma queries remain organisation scoped');
-assert.match(dashboardSummaryApi, /pipelineDefinitions/, 'dashboard summary exposes stage pipeline counts');
+assert.match(dashboardSummaryApi, /activeProjectSummaries/, 'dashboard summary exposes active project summaries');
 assert.match(dashboardSummaryApi, /needsAttention/, 'dashboard summary builds needs-attention items');
 assert.match(dashboardSummaryApi, /\.sort\(\(a, b\) => a\.priority - b\.priority \|\| toTime\(a\.date\) - toTime\(b\.date\)\)/, 'needs-attention items are sorted by urgency then date');
 assert.match(dashboardSummaryApi, /documentsNeedingReview/, 'dashboard summary includes documents needing review metric');
 assert.match(dashboardSummaryApi, /automationJobsReady/, 'dashboard summary includes automation jobs ready metric');
 assert.doesNotMatch(dashboardSummaryApi, /storageUrl/, 'dashboard summary does not expose raw document storage URLs');
-assert.match(liveDataPanel, /Project pipeline/, 'dashboard renders project pipeline section');
+assert.doesNotMatch(liveDataPanel, /Project pipeline/, 'dashboard no longer renders the abstract project pipeline');
+assert.match(liveDataPanel, /NeedsAttentionPanel items=\{attentionItems\}[\s\S]*ActiveProjectsPanel projects=\{activeProjects\}/, 'dashboard places active projects beside needs attention');
 assert.match(liveDataPanel, /Needs attention/, 'dashboard renders needs attention section');
 assert.match(liveDataPanel, /Upcoming timeline/, 'dashboard renders deadline timeline section');
 assert.match(liveDataPanel, /href=\{`\/api\/documents\/\$\{file\.id\}`\}/, 'dashboard recent files use secure document viewer route');

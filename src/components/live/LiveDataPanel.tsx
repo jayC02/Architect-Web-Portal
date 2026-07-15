@@ -1,4 +1,4 @@
-﻿import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, Bot, CalendarClock, FileText, FolderKanban, Landmark, Workflow } from 'lucide-react';
 
@@ -89,7 +89,6 @@ function Dashboard({ data }: { data: AnyRecord }) {
   ];
   const attentionItems = data.needsAttention ?? [];
   const activeProjects = data.activeProjectSummaries ?? [];
-  const pipeline = data.pipeline ?? [];
 
   return (
     <div className="space-y-6">
@@ -99,18 +98,15 @@ function Dashboard({ data }: { data: AnyRecord }) {
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <NeedsAttentionPanel items={attentionItems} />
-        <ProjectPipeline pipeline={pipeline} activeProjectCount={Number(data.activeProjects ?? 0)} />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <ActiveProjectsPanel projects={activeProjects} />
-        <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={Number(data.deadlineRange ?? 14)} />
       </section>
 
-      <section className="grid items-start gap-6 xl:grid-cols-[1fr_0.78fr]">
+      <section className="grid items-start gap-6 xl:grid-cols-[0.78fr_1fr]">
+        <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={Number(data.deadlineRange ?? 14)} />
         <ActionColumns data={data} />
-        <RecentFilesPanel files={data.recentFiles ?? []} />
       </section>
+
+      <RecentFilesPanel files={data.recentFiles ?? []} />
     </div>
   );
 }
@@ -130,35 +126,6 @@ function DashboardMetricCard({ metric }: { metric: AnyRecord }) {
       </div>
       <p className="mt-2 text-sm text-stone-500">{metric.context}</p>
     </a>
-  );
-}
-
-function ProjectPipeline({ pipeline, activeProjectCount }: { pipeline: AnyRecord[]; activeProjectCount: number }) {
-  const max = Math.max(1, ...pipeline.map((stage) => Number(stage.count ?? 0)));
-  return (
-    <article className="panel rounded-lg p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Project pipeline</h2>
-          <p className="mt-1 text-sm text-stone-500">Where active work sits across the practice.</p>
-        </div>
-        <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">View projects</a>
-      </div>
-      <div className="mt-5 grid gap-3 sm:grid-cols-5">
-        {pipeline.map((stage) => (
-          <a key={stage.key} href={stage.href ?? '/projects'} className="rounded-lg border border-stone-200 bg-white p-3 transition hover:border-stone-300 hover:bg-stone-50">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-ink">{stage.label}</p>
-              <p className="text-xl font-semibold">{stage.count}</p>
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-100">
-              <div className="h-full rounded-full bg-moss/70" style={{ width: `${Math.max(8, (Number(stage.count ?? 0) / max) * 100)}%` }} />
-            </div>
-          </a>
-        ))}
-      </div>
-      <p className="mt-4 text-xs text-stone-500">{activeProjectCount} active project{activeProjectCount === 1 ? '' : 's'} tracked.</p>
-    </article>
   );
 }
 
@@ -208,11 +175,12 @@ function ActiveProjectsPanel({ projects }: { projects: AnyRecord[] }) {
         </div>
         <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {projects.length ? projects.map((project) => <ActiveProjectCard key={project.id} project={project} />) : (
-          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500 lg:col-span-2">No active projects yet.</div>
+      <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+        {projects.length ? projects.slice(0, 5).map((project) => <ActiveProjectCard key={project.id} project={project} />) : (
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No active projects yet.</div>
         )}
       </div>
+      {projects.length > 5 && <p className="mt-3 text-xs text-stone-500">Showing 5 of {projects.length} active projects. Use View all for the full register.</p>}
     </article>
   );
 }
