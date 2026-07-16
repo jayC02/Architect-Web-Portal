@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
-import { AlertTriangle, ArrowRight, Bot, CalendarClock, FileText, FolderKanban, Landmark, Workflow } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 
 type Variant =
   | 'dashboard'
@@ -79,31 +79,32 @@ function Chip({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | '
 const dateInput = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 10) : '';
 
 function Dashboard({ data }: { data: AnyRecord }) {
-  const metrics = [
-    { label: 'Active projects', value: data.activeProjects ?? 0, context: 'Open practice workload', href: '/projects', icon: FolderKanban },
-    { label: 'Upcoming deadlines', value: data.upcomingDeadlineCount ?? 0, context: `Next ${data.deadlineRange ?? 14} days`, href: '/deadlines', icon: CalendarClock },
-    { label: 'Documents to review', value: data.documentsNeedingReview ?? 0, context: 'Awaiting classification', href: '/projects', icon: FileText, attention: Number(data.documentsNeedingReview ?? 0) > 0 },
-    { label: 'Automation ready', value: data.automationJobsReady ?? 0, context: 'Jobs ready to run', href: '/automation-jobs?status=READY', icon: Bot, attention: Number(data.automationJobsReady ?? 0) > 0 },
-    { label: 'Planning actions', value: data.planningActionCount ?? 0, context: Number(data.planningActionCount ?? 0) ? 'Needs attention' : 'No action needed', href: '/projects', icon: Landmark, attention: Number(data.planningActionCount ?? 0) > 0 },
-    { label: 'Warrant actions', value: data.warrantActionCount ?? 0, context: Number(data.warrantActionCount ?? 0) ? 'Needs attention' : 'No action needed', href: '/projects', icon: Workflow, attention: Number(data.warrantActionCount ?? 0) > 0 },
-  ];
   const attentionItems = data.needsAttention ?? [];
   const activeProjects = data.activeProjectSummaries ?? [];
+  const pipeline = data.pipeline ?? [];
+  const documentOverview = data.documentOverview ?? { total: 0, reviewed: 0, needsReview: 0 };
+  const actionWorkload = data.actionWorkload ?? {
+    overdueDeadlines: 0,
+    planningActions: Number(data.planningActionCount ?? 0),
+    warrantActions: Number(data.warrantActionCount ?? 0),
+    automationReady: Number(data.automationJobsReady ?? 0),
+  };
+  const range = Number(data.deadlineRange ?? 14);
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {metrics.map((metric) => <DashboardMetricCard key={metric.label} metric={metric} />)}
+      <section className="grid gap-5 xl:grid-cols-[1.08fr_1fr_0.86fr]">
+        <ProjectPipelineCard pipeline={pipeline} activeProjectCount={Number(data.activeProjects ?? 0)} />
+        <DocumentsOverviewCard overview={documentOverview} />
+        <ActionWorkloadCard workload={actionWorkload} range={range} />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-        <ActiveProjectsPanel projects={activeProjects} />
+      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(330px,0.65fr)]">
+        <div className="space-y-6">
+          <ActiveProjectsPanel projects={activeProjects} />
+          <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={range} />
+        </div>
         <NeedsAttentionPanel items={attentionItems} />
-      </section>
-
-      <section className="grid items-start gap-6 xl:grid-cols-[0.78fr_1fr]">
-        <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={Number(data.deadlineRange ?? 14)} />
-        <ActionColumns data={data} />
       </section>
 
       <RecentFilesPanel files={data.recentFiles ?? []} />
@@ -111,31 +112,110 @@ function Dashboard({ data }: { data: AnyRecord }) {
   );
 }
 
-function DashboardMetricCard({ metric }: { metric: AnyRecord }) {
-  const Icon = metric.icon;
+function ProjectPipelineCard({ pipeline, activeProjectCount }: { pipeline: AnyRecord[]; activeProjectCount: number }) {
+  const max = Math.max(1, ...pipeline.map((stage) => Number(stage.count ?? 0)));
   return (
-    <a href={metric.href} className="panel group block rounded-lg p-4 transition duration-200 hover:-translate-y-0.5 hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-semibold uppercase text-stone-500">{metric.label}</p>
-          <p className="mt-3 text-3xl font-semibold tracking-tight text-ink">{metric.value}</p>
-        </div>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border ${metric.attention ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-stone-200 bg-stone-50 text-stone-500'}`}>
-          <Icon size={17} aria-hidden="true" />
-        </span>
+    <article className="panel rounded-lg p-5">
+      <DashboardCardHeader title="Project Pipeline" subtitle="Projects by current stage" />
+      <div className="mt-5 space-y-3">
+        {pipeline.length ? pipeline.map((stage) => {
+          const count = Number(stage.count ?? 0);
+          return (
+            <a key={stage.key} href={stage.href ?? '/projects'} className="grid grid-cols-[118px_minmax(0,1fr)_24px] items-center gap-3 text-sm transition hover:text-ink">
+              <span className="truncate text-stone-700">{stage.label}</span>
+              <span className="h-2 overflow-hidden rounded-full bg-stone-100">
+                <span className="block h-full rounded-full bg-moss/70" style={{ width: `${Math.max(count ? 10 : 0, (count / max) * 100)}%` }} />
+              </span>
+              <span className="text-right font-semibold text-ink">{count}</span>
+            </a>
+          );
+        }) : <p className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No projects to show yet.</p>}
       </div>
-      <p className="mt-2 text-sm text-stone-500">{metric.context}</p>
-    </a>
+      <div className="mt-5 border-t border-stone-200 pt-4 text-sm font-semibold text-ink">Total active projects <span className="float-right">{activeProjectCount}</span></div>
+    </article>
   );
 }
 
+function DocumentsOverviewCard({ overview }: { overview: AnyRecord }) {
+  const total = Number(overview.total ?? 0);
+  const reviewed = Number(overview.reviewed ?? 0);
+  const needsReview = Number(overview.needsReview ?? 0);
+  const reviewedPercent = total ? Math.round((reviewed / total) * 100) : 0;
+  const needsPercent = total ? Math.max(0, 100 - reviewedPercent) : 0;
+
+  return (
+    <article className="panel rounded-lg p-5">
+      <DashboardCardHeader title="Documents Overview" subtitle="All projects" />
+      <div className="mt-5 grid items-center gap-5 sm:grid-cols-[132px_1fr]">
+        <div className="relative mx-auto h-32 w-32">
+          <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" role="img" aria-label={`${total} total documents`}>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="#ede9dd" strokeWidth="12" />
+            <circle cx="50" cy="50" r="38" fill="none" stroke="#738365" strokeWidth="12" pathLength="100" strokeDasharray={`${reviewedPercent} 100`} strokeLinecap="round" />
+            <circle cx="50" cy="50" r="38" fill="none" stroke="#d99a18" strokeWidth="12" pathLength="100" strokeDasharray={`${needsPercent} 100`} strokeDashoffset={-reviewedPercent} strokeLinecap="round" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span className="text-3xl font-semibold text-ink">{total}</span>
+            <span className="text-xs text-stone-500">Total</span>
+          </div>
+        </div>
+        <div className="space-y-3 text-sm">
+          <DocumentLegendRow label="Reviewed" count={reviewed} total={total} className="bg-moss/80" />
+          <DocumentLegendRow label="Need review" count={needsReview} total={total} className="bg-amber-500" />
+        </div>
+      </div>
+      <a href="/projects" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ink hover:text-moss">View all documents <ArrowRight size={14} aria-hidden="true" /></a>
+    </article>
+  );
+}
+
+function DocumentLegendRow({ label, count, total, className }: { label: string; count: number; total: number; className: string }) {
+  const percent = total ? Math.round((count / total) * 100) : 0;
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="inline-flex items-center gap-2 text-stone-600"><span className={`h-2.5 w-2.5 rounded-full ${className}`} />{label}</span>
+      <span className="font-medium text-stone-700">{count} ({percent}%)</span>
+    </div>
+  );
+}
+
+function ActionWorkloadCard({ workload, range }: { workload: AnyRecord; range: number }) {
+  const rows = [
+    { label: 'Overdue deadlines', value: workload.overdueDeadlines ?? 0, className: 'bg-red-700', href: '/deadlines' },
+    { label: 'Planning actions', value: workload.planningActions ?? 0, className: 'bg-amber-500', href: '/projects' },
+    { label: 'Warrant actions', value: workload.warrantActions ?? 0, className: 'bg-amber-500', href: '/projects' },
+    { label: 'Automation ready', value: workload.automationReady ?? 0, className: 'bg-moss/80', href: '/automation-jobs?status=READY' },
+  ];
+  return (
+    <article className="panel rounded-lg p-5">
+      <DashboardCardHeader title="Action Workload" subtitle={`Next ${range} days`} />
+      <div className="mt-5 space-y-4">
+        {rows.map((row) => (
+          <a key={row.label} href={row.href} className="flex items-center justify-between gap-4 text-sm hover:text-ink">
+            <span className="inline-flex min-w-0 items-center gap-3 text-stone-700"><span className={`h-2.5 w-2.5 rounded-full ${row.className}`} />{row.label}</span>
+            <span className="font-semibold text-ink">{row.value}</span>
+          </a>
+        ))}
+      </div>
+      <a href="/deadlines" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-ink hover:text-moss">View all actions <ArrowRight size={14} aria-hidden="true" /></a>
+    </article>
+  );
+}
+
+function DashboardCardHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-ink">{title}</h2>
+      <p className="mt-1 text-sm text-stone-500">{subtitle}</p>
+    </div>
+  );
+}
 function NeedsAttentionPanel({ items }: { items: AnyRecord[] }) {
   return (
     <article className="panel rounded-lg p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Needs attention</h2>
-          <p className="mt-1 text-sm text-stone-500">Urgent deadlines, missing files and ready jobs in one place.</p>
+          <p className="mt-1 text-sm text-stone-500">Urgent deadlines, missing files and ready jobs.</p>
         </div>
         <AlertTriangle size={18} className="mt-1 text-amber-700" aria-hidden="true" />
       </div>
@@ -149,7 +229,7 @@ function NeedsAttentionPanel({ items }: { items: AnyRecord[] }) {
 }
 
 function AttentionItem({ item }: { item: AnyRecord }) {
-  const tone = item.tone === 'danger' ? 'border-red-200 bg-red-50/60 text-red-800' : item.tone === 'warning' ? 'border-amber-200 bg-amber-50/60 text-amber-800' : 'border-stone-200 bg-white text-ink';
+  const tone = item.tone === 'danger' ? 'border-red-200 bg-red-50/70 text-red-800' : item.tone === 'warning' ? 'border-amber-200 bg-amber-50/70 text-amber-800' : item.tone === 'ready' ? 'border-emerald-200 bg-emerald-50/70 text-emerald-800' : 'border-stone-200 bg-white text-ink';
   return (
     <a href={item.href} className={`group block rounded-lg border px-3 py-3 transition hover:bg-white ${tone}`}>
       <div className="flex items-start justify-between gap-3">
@@ -185,9 +265,7 @@ function ActiveProjectsPanel({ projects }: { projects: AnyRecord[] }) {
 }
 
 function ActiveProjectCard({ project }: { project: AnyRecord }) {
-  const stages = ['LEAD', 'DESIGN', 'PLANNING', 'BUILDING_WARRANT', 'COMPLETION'];
-  const currentIndex = Math.max(0, stages.indexOf(project.stage));
-  const stageProgressPercent = Math.round(((currentIndex + 1) / stages.length) * 100);
+  const currentIndex = projectStageIndex(project.stage);
   const actionClass = project.nextAction?.tone === 'danger' ? 'text-red-800' : project.nextAction?.tone === 'warning' ? 'text-amber-800' : 'text-ink';
   const deadlineInfo = project.nextDeadline ? `Deadline: ${date(project.nextDeadline.dueDate)}` : 'No upcoming deadline';
   const documentInfo = project.documentReviewCount > 0 ? `Documents: ${project.documentReviewCount} to review` : 'Documents clear';
@@ -195,28 +273,25 @@ function ActiveProjectCard({ project }: { project: AnyRecord }) {
 
   return (
     <a href={`/projects/${project.id}`} className="group block overflow-hidden rounded-lg border border-stone-200 bg-white p-4 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30 sm:p-5">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.48fr)]">
+      <div className="grid gap-5 lg:grid-cols-[112px_minmax(0,1fr)_minmax(250px,0.46fr)]">
+        <ProjectSketch />
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-ink">{project.name}</p>
+          <p className="truncate text-lg font-semibold text-ink">{project.name}</p>
           <p className="mt-1 truncate text-sm text-stone-500">{project.siteSummary}</p>
-          <div className="mt-4">
-            <div className="flex items-center justify-between gap-3 text-xs text-stone-500">
-              <span>Stage: {human(project.stage)}</span>
-              <span>{stageProgressPercent}%</span>
-            </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stone-100" aria-hidden="true">
-              <div className="h-full rounded-full bg-moss/70" style={{ width: `${stageProgressPercent}%` }} />
-            </div>
-          </div>
+          <p className="mt-3 text-sm text-stone-600">Stage: {human(project.stage)}</p>
+          <ProjectStageProgress currentIndex={currentIndex} />
         </div>
 
-        <div className="min-w-0 rounded-md border border-stone-100 bg-stone-50/70 p-3">
-          <p className="text-xs font-semibold uppercase text-stone-500">Next action</p>
+        <div className="min-w-0 border-stone-200 lg:border-l lg:pl-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Next action</p>
           <p className={`mt-1 break-words text-sm font-semibold ${actionClass}`}>{project.nextAction?.label ?? 'No action needed'}</p>
-          <p className="mt-3 text-xs leading-5 text-stone-500">{deadlineInfo} <span aria-hidden="true">&middot;</span> {documentInfo}</p>
-          <p className="text-xs leading-5 text-stone-500">{automationInfo}</p>
-          <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-stone-700 group-hover:text-ink">
-            Open project <ArrowRight size={13} aria-hidden="true" />
+          <div className="mt-3 space-y-1 text-sm text-stone-500">
+            <p>{deadlineInfo}</p>
+            <p>{documentInfo}</p>
+            <p>{automationInfo}</p>
+          </div>
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-ink group-hover:text-moss">
+            Open project <ArrowRight size={14} aria-hidden="true" />
           </span>
         </div>
       </div>
@@ -224,62 +299,89 @@ function ActiveProjectCard({ project }: { project: AnyRecord }) {
   );
 }
 
+function ProjectSketch() {
+  return (
+    <div className="hidden h-28 w-28 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-[#fbfaf6] text-stone-400 sm:flex" aria-hidden="true">
+      <svg viewBox="0 0 96 96" className="h-20 w-20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 72h60" />
+        <path d="M25 72V34l24-12 23 12v38" />
+        <path d="M35 72V43l14-7 14 7v29" />
+        <path d="M25 34l24 11 23-11" />
+        <path d="M40 50h7M52 50h7M40 60h7M52 60h7" />
+        <path d="M16 78c18-4 46-4 64 0" />
+      </svg>
+    </div>
+  );
+}
+
+function ProjectStageProgress({ currentIndex }: { currentIndex: number }) {
+  const stages = ['Lead', 'Documents', 'Planning', 'Warrant', 'Complete'];
+  return (
+    <div className="mt-4">
+      <div className="grid grid-cols-5 items-center" aria-hidden="true">
+        {stages.map((stage, index) => (
+          <Fragment key={stage}>
+            <div className="flex items-center">
+              <span className={`h-3 w-3 rounded-full border ${index <= currentIndex ? 'border-moss bg-moss' : 'border-stone-300 bg-stone-50'}`} />
+              {index < stages.length - 1 && <span className={`h-px flex-1 ${index < currentIndex ? 'bg-moss/70' : 'bg-stone-200'}`} />}
+            </div>
+          </Fragment>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-5 gap-1 text-[11px] text-stone-500">
+        {stages.map((stage, index) => <span key={stage} className={index <= currentIndex ? 'font-semibold text-moss' : ''}>{stage}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function projectStageIndex(stage?: string | null) {
+  if (stage === 'SURVEY' || stage === 'DESIGN') return 1;
+  if (stage === 'PLANNING') return 2;
+  if (stage === 'BUILDING_WARRANT' || stage === 'CONSTRUCTION') return 3;
+  if (stage === 'COMPLETION' || stage === 'ARCHIVED') return 4;
+  return 0;
+}
 function DeadlineTimeline({ deadlines, range }: { deadlines: AnyRecord[]; range: number }) {
   return (
     <article className="panel rounded-lg p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Upcoming timeline</h2>
-          <p className="mt-1 text-sm text-stone-500">Next {range} days.</p>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink">Upcoming Timeline</h2>
+          <p className="mt-1 text-sm text-stone-500">Next {range} days</p>
         </div>
-        <a href="/deadlines" className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
+        <a href="/deadlines" className="inline-flex items-center gap-1 text-sm font-semibold text-ink hover:text-moss">View full timeline <ArrowRight size={14} aria-hidden="true" /></a>
       </div>
-      <div className="space-y-3">
-        {deadlines.length ? deadlines.slice(0, 6).map((deadline) => {
-          const overdue = new Date(deadline.dueDate) < new Date();
-          return (
-            <a key={deadline.id} href={deadline.project?.id ? `/deadlines?projectId=${deadline.project.id}` : '/deadlines'} className="grid grid-cols-[56px_1fr] gap-3 rounded-lg border border-stone-200 bg-white p-3 hover:bg-stone-50">
-              <div className={`rounded-md border px-2 py-1 text-center ${overdue ? 'border-red-200 bg-red-50 text-red-800' : 'border-stone-200 bg-stone-50 text-stone-700'}`}>
-                <p className="text-xs font-semibold">{new Intl.DateTimeFormat('en-GB', { day: '2-digit' }).format(new Date(deadline.dueDate))}</p>
-                <p className="text-[11px] uppercase">{new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(new Date(deadline.dueDate))}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{deadline.title}</p>
-                <p className="mt-1 truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'} - {human(deadline.type)}</p>
-              </div>
-            </a>
-          );
-        }) : <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No deadlines in this range.</div>}
-      </div>
+      {deadlines.length ? (
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {deadlines.slice(0, 8).map((deadline) => <TimelineItem key={deadline.id} deadline={deadline} />)}
+        </div>
+      ) : <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No deadlines in this range.</div>}
     </article>
   );
 }
 
-function ActionColumns({ data }: { data: AnyRecord }) {
+function TimelineItem({ deadline }: { deadline: AnyRecord }) {
+  const dueDate = new Date(deadline.dueDate);
+  const overdue = dueDate < new Date();
+  const day = new Intl.DateTimeFormat('en-GB', { day: '2-digit' }).format(dueDate);
+  const month = new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(dueDate);
   return (
-    <section className="grid gap-4 md:grid-cols-2">
-      <CompactActionPanel title="Planning actions" href="/projects" rows={data.planningAwaitingAction ?? []} empty="No planning applications waiting for action." render={(item) => (
-        <a href={`/projects/${item.projectId}/planning`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="truncate font-semibold">{item.project.name}</p><p className="mt-1 text-xs text-stone-500">{item.applicationReference || 'No reference'} - {human(item.status)}</p></a>
-      )} />
-      <CompactActionPanel title="Warrant actions" href="/projects" rows={data.warrantsAwaitingAction ?? []} empty="No warrant applications waiting for action." render={(item) => (
-        <a href={`/projects/${item.projectId}/building-warrant`} className="block rounded-lg border border-stone-200 px-3 py-3 hover:bg-stone-50"><p className="truncate font-semibold">{item.project.name}</p><p className="mt-1 text-xs text-stone-500">{item.warrantReference || human(item.warrantType)} - {human(item.status)}</p></a>
-      )} />
-    </section>
-  );
-}
-
-function CompactActionPanel({ title, href, rows, empty, render }: { title: string; href: string; rows: AnyRecord[]; empty: string; render: (row: AnyRecord) => React.ReactNode }) {
-  return (
-    <article className="panel rounded-lg p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <a href={href} className="text-sm font-semibold text-stone-600 hover:text-ink">View all</a>
+    <a href={deadline.project?.id ? `/deadlines?projectId=${deadline.project.id}` : '/deadlines'} className="grid min-w-[260px] grid-cols-[54px_1fr] gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:border-stone-300 hover:bg-stone-50">
+      <div className={`rounded-md border px-2 py-2 text-center ${overdue ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-100 bg-amber-50 text-amber-800'}`}>
+        <p className="text-lg font-semibold leading-none">{day}</p>
+        <p className="mt-1 text-[11px] font-semibold uppercase">{month}</p>
       </div>
-      <div className="space-y-2">{rows.length ? rows.slice(0, 3).map((row) => <div key={row.id}>{render(row)}</div>) : <p className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">{empty}</p>}</div>
-    </article>
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate text-sm font-semibold text-ink">{deadline.title}</p>
+          <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase ${overdue ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-600'}`}>{overdue ? 'Overdue' : 'Upcoming'}</span>
+        </div>
+        <p className="mt-2 truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'}</p>
+      </div>
+    </a>
   );
 }
-
 function RecentFilesPanel({ files }: { files: AnyRecord[] }) {
   return (
     <article className="panel rounded-lg p-4">

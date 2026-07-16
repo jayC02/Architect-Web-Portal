@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStatus } from '@prisma/client';
+import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { getProjectNextAction } from '@/lib/projects/next-action';
@@ -8,6 +8,14 @@ import { withPerf } from '@/lib/utils/perf';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
+
+const pipelineDefinitions: Array<{ key: string; label: string; stages: ProjectStage[] }> = [
+  { key: 'lead', label: 'Lead', stages: [ProjectStage.LEAD] },
+  { key: 'documents', label: 'Documents', stages: [ProjectStage.SURVEY, ProjectStage.DESIGN] },
+  { key: 'planning', label: 'Planning', stages: [ProjectStage.PLANNING] },
+  { key: 'warrant', label: 'Building Warrant', stages: [ProjectStage.BUILDING_WARRANT, ProjectStage.CONSTRUCTION] },
+  { key: 'complete', label: 'Complete', stages: [ProjectStage.COMPLETION] },
+];
 
 const activeProjectWhere = (organisationId: string) => ({
   organisationId,
@@ -69,9 +77,12 @@ export const GET: APIRoute = (context) =>
         ) project_row), '[]'::jsonb) AS "missingLocationPlanProjects"
     `);
 
-    const [documentsNeedingReview, automationJobsReady, activeProjects, documentReviewProjects, automationReadyProjects] = await Promise.all([
+    const [documentsNeedingReview, automationJobsReady, pipelineProjects, documentStatusCounts, overdueDeadlineCount, activeProjects, documentReviewProjects, automationReadyProjects] = await Promise.all([
       prisma.projectDocument.count({ where: { organisationId: orgId, status: DocumentStatus.IN_REVIEW } }),
       prisma.automationJob.count({ where: { organisationId: orgId, status: AutomationJobStatus.READY } }),
+      prisma.project.findMany({ where: { organisationId: orgId, status: { not: ProjectStatus.ARCHIVED } }, select: { stage: true, status: true } }),
+      prisma.projectDocument.groupBy({ by: ['status'], where: { organisationId: orgId }, _count: { _all: true } }),
+      prisma.deadline.count({ where: { organisationId: orgId, status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] }, dueDate: { lt: today } } }),
       prisma.project.findMany({
         where: activeProjectWhere(orgId),
         orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
@@ -104,6 +115,28 @@ export const GET: APIRoute = (context) =>
         select: { id: true, name: true, _count: { select: { automationJobs: { where: { status: AutomationJobStatus.READY } } } } },
       }),
     ]);
+
+    const pipeline = pipelineDefinitions.map((definition) => ({
+      key: definition.key,
+      label: definition.label,
+      count: pipelineProjects.filter((project) => (
+        definition.key === 'complete'
+          ? project.status === ProjectStatus.COMPLETED || definition.stages.includes(project.stage)
+          : project.status !== ProjectStatus.COMPLETED && definition.stages.includes(project.stage)
+      )).length,
+      href: definition.stages.length === 1 ? `/projects?stage=${definition.stages[0]}` : '/projects',
+    }));
+
+    const totalDocuments = documentStatusCounts.reduce((total, item) => total + item._count._all, 0);
+    const documentsNeedingReviewByStatus = documentStatusCounts.find((item) => item.status === DocumentStatus.IN_REVIEW)?._count._all ?? 0;
+    const documentsReviewed = Math.max(0, totalDocuments - documentsNeedingReviewByStatus);
+
+    const actionWorkload = {
+      overdueDeadlines: overdueDeadlineCount,
+      planningActions: Number(row?.planningActionCount ?? 0),
+      warrantActions: Number(row?.warrantActionCount ?? 0),
+      automationReady: automationJobsReady,
+    };
 
     const missingDocumentWarnings = (Array.isArray(row?.missingLocationPlanProjects) ? row.missingLocationPlanProjects : [])
       .map((project: { id: string; name: string }) => ({ project, missing: ['Location Plan'] }));
@@ -216,6 +249,9 @@ export const GET: APIRoute = (context) =>
       warrantsAwaitingAction,
       recentFiles: row?.recentFiles ?? [],
       missingDocumentWarnings,
+      pipeline,
+      documentOverview: { total: totalDocuments, reviewed: documentsReviewed, needsReview: documentsNeedingReviewByStatus },
+      actionWorkload,
       activeProjectSummaries,
       needsAttention,
       deadlineRange,
