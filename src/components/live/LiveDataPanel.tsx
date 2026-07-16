@@ -537,9 +537,9 @@ function DirectoryToolbar({ count, noun, searchLabel, searchPlaceholder, value, 
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="relative w-full lg:max-w-xl">
-        <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
+        <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
         <label className="sr-only">{searchLabel}</label>
-        <input className="field h-12 pl-10" value={value} onChange={(event) => onChange(event.target.value)} placeholder={searchPlaceholder} />
+        <input className="field h-12" style={{ paddingLeft: '3rem' }} value={value} onChange={(event) => onChange(event.target.value)} placeholder={searchPlaceholder} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm text-stone-500">{count} {noun}{count === 1 ? '' : 's'}</span>
