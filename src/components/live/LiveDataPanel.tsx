@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
-import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
 
 type Variant =
   | 'dashboard'
@@ -451,49 +451,204 @@ function InfoCard({ label, value, detail }: { label: string; value: string; deta
 
 function Clients({ data }: { data: AnyRecord }) {
   const clients = data.clients ?? [];
-  if (!clients.length) return <EmptyState>No clients yet.</EmptyState>;
+  const [query, setQuery] = useState('');
+  const [drawer, setDrawer] = useState<{ mode: 'create' | 'view' | 'edit'; item?: AnyRecord } | null>(null);
+
+  useEffect(() => {
+    const closeOnSave = () => setDrawer(null);
+    window.addEventListener('portal:mutation-success', closeOnSave);
+    return () => window.removeEventListener('portal:mutation-success', closeOnSave);
+  }, []);
+
+  const filteredClients = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return clients;
+    return clients.filter((client: AnyRecord) => [client.name, client.email, client.phone, client.address, client.notes].some((value) => String(value ?? '').toLowerCase().includes(needle)));
+  }, [clients, query]);
+
   return (
-    <div className="space-y-6">
-      <SimpleTable headers={['Client', 'Contact', 'Projects']} rows={clients.map((client: AnyRecord) => [<><p className="font-semibold">{client.name}</p><p className="text-xs text-stone-500">{client.address ?? ''}</p></>, <>{client.email ?? 'No email'}<p className="text-xs text-stone-500">{client.phone ?? ''}</p></>, client._count?.projects ?? 0])} />
-      <EditableCards title="Manage clients" rows={clients} kind="client" />
-    </div>
+    <section className="space-y-5">
+      <DirectoryToolbar
+        count={clients.length}
+        noun="client"
+        searchLabel="Search clients"
+        searchPlaceholder="Search clients by name, email, phone or address..."
+        value={query}
+        onChange={setQuery}
+        actionLabel="New client"
+        onAction={() => setDrawer({ mode: 'create' })}
+      />
+
+      {clients.length ? (
+        <ClientDirectoryTable clients={filteredClients} onView={(client) => setDrawer({ mode: 'view', item: client })} onEdit={(client) => setDrawer({ mode: 'edit', item: client })} />
+      ) : (
+        <DirectoryEmptyState title="No clients yet" text="Add your first client so projects can be linked to the right contact." actionLabel="New client" onAction={() => setDrawer({ mode: 'create' })} />
+      )}
+
+      {clients.length > 0 && !filteredClients.length && <EmptyState>No clients match your search.</EmptyState>}
+      {drawer && <ClientDrawer drawer={drawer} onClose={() => setDrawer(null)} onEdit={(client) => setDrawer({ mode: 'edit', item: client })} />}
+    </section>
   );
 }
 
 function Sites({ data }: { data: AnyRecord }) {
   const sites = data.sites ?? [];
-  if (!sites.length) return <EmptyState>No sites yet.</EmptyState>;
-  return (
-    <div className="space-y-6">
-      <SimpleTable headers={['Site', 'Authority', 'Projects']} rows={sites.map((site: AnyRecord) => [<><p className="font-semibold">{site.addressLine1}</p><p className="text-xs text-stone-500">{site.townCity}, {site.postcode}</p></>, site.localAuthority ?? 'Not set', site._count?.projects ?? 0])} />
-      <EditableCards title="Manage sites" rows={sites} kind="site" />
-    </div>
-  );
-}
+  const [query, setQuery] = useState('');
+  const [drawer, setDrawer] = useState<{ mode: 'create' | 'view' | 'edit'; item?: AnyRecord } | null>(null);
 
-function SimpleTable({ headers, rows }: { headers: string[]; rows: React.ReactNode[][] }) {
-  return <div className="panel overflow-hidden rounded-lg"><table className="w-full min-w-[680px] border-collapse"><thead className="table-head"><tr>{headers.map((header) => <th key={header} className="px-4 py-3">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex} className="table-cell">{cell}</td>)}</tr>)}</tbody></table></div>;
-}
+  useEffect(() => {
+    const closeOnSave = () => setDrawer(null);
+    window.addEventListener('portal:mutation-success', closeOnSave);
+    return () => window.removeEventListener('portal:mutation-success', closeOnSave);
+  }, []);
 
-function EditableCards({ title, rows, kind }: { title: string; rows: AnyRecord[]; kind: 'client' | 'site' }) {
+  const filteredSites = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return sites;
+    return sites.filter((site: AnyRecord) => [site.addressLine1, site.addressLine2, site.townCity, site.postcode, site.localAuthority, site.notes].some((value) => String(value ?? '').toLowerCase().includes(needle)));
+  }, [sites, query]);
+
   return (
-    <section>
-      <h2 className="mb-3 text-lg font-semibold">{title}</h2>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {rows.map((row) => kind === 'client' ? <ClientEditor key={row.id} client={row} /> : <SiteEditor key={row.id} site={row} />)}
-      </div>
+    <section className="space-y-5">
+      <DirectoryToolbar
+        count={sites.length}
+        noun="site"
+        searchLabel="Search sites"
+        searchPlaceholder="Search sites by address, postcode, town or authority..."
+        value={query}
+        onChange={setQuery}
+        actionLabel="New site"
+        onAction={() => setDrawer({ mode: 'create' })}
+      />
+
+      {sites.length ? (
+        <SiteDirectoryTable sites={filteredSites} onView={(site) => setDrawer({ mode: 'view', item: site })} onEdit={(site) => setDrawer({ mode: 'edit', item: site })} />
+      ) : (
+        <DirectoryEmptyState title="No sites yet" text="Add your first site so projects can share accurate addresses and local authorities." actionLabel="New site" onAction={() => setDrawer({ mode: 'create' })} />
+      )}
+
+      {sites.length > 0 && !filteredSites.length && <EmptyState>No sites match your search.</EmptyState>}
+      {drawer && <SiteDrawer drawer={drawer} onClose={() => setDrawer(null)} onEdit={(site) => setDrawer({ mode: 'edit', item: site })} />}
     </section>
   );
 }
 
-function ClientEditor({ client }: { client: AnyRecord }) {
-  return <details className="panel rounded-lg p-4"><summary className="cursor-pointer font-semibold">{client.name}</summary><form data-api-form data-action={`/api/clients/${client.id}`} data-method="PATCH" className="mt-4 grid gap-4"><label className="block"><span className="label">Name</span><input required name="name" defaultValue={client.name} className="field" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Email</span><input type="email" name="email" defaultValue={client.email ?? ''} className="field" /></label><label className="block"><span className="label">Phone</span><input name="phone" defaultValue={client.phone ?? ''} className="field" /></label></div><label className="block"><span className="label">Address</span><textarea name="address" rows={3} defaultValue={client.address ?? ''} className="field" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={3} defaultValue={client.notes ?? ''} className="field" /></label><div className="flex flex-wrap items-center gap-3"><button className="btn btn-primary">Save client</button><span data-form-status className="text-sm text-stone-500" /></div></form><form data-api-form data-action={`/api/clients/${client.id}`} data-method="DELETE" data-redirect="reload" data-confirm="Delete this client? Linked projects will keep their project record." className="mt-3"><button className="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete client</button><span data-form-status className="ml-3 text-sm text-stone-500" /></form></details>;
+function DirectoryToolbar({ count, noun, searchLabel, searchPlaceholder, value, onChange, actionLabel, onAction }: { count: number; noun: string; searchLabel: string; searchPlaceholder: string; value: string; onChange: (value: string) => void; actionLabel: string; onAction: () => void }) {
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="relative w-full lg:max-w-xl">
+        <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
+        <label className="sr-only">{searchLabel}</label>
+        <input className="field h-12 pl-10" value={value} onChange={(event) => onChange(event.target.value)} placeholder={searchPlaceholder} />
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm text-stone-500">{count} {noun}{count === 1 ? '' : 's'}</span>
+        <button type="button" className="btn btn-primary inline-flex items-center gap-2" onClick={onAction}><Plus size={16} aria-hidden="true" />{actionLabel}</button>
+      </div>
+    </div>
+  );
 }
 
-function SiteEditor({ site }: { site: AnyRecord }) {
-  return <details className="panel rounded-lg p-4"><summary className="cursor-pointer font-semibold">{site.addressLine1}, {site.postcode}</summary><form data-api-form data-action={`/api/sites/${site.id}`} data-method="PATCH" className="mt-4 grid gap-4"><label className="block"><span className="label">Address line 1</span><input required name="addressLine1" defaultValue={site.addressLine1} className="field" /></label><label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={site.addressLine2 ?? ''} className="field" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Town/city</span><input required name="townCity" defaultValue={site.townCity} className="field" /></label><label className="block"><span className="label">Postcode</span><input required name="postcode" defaultValue={site.postcode} className="field" /></label></div><label className="block"><span className="label">Local authority</span><input name="localAuthority" defaultValue={site.localAuthority ?? ''} className="field" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={3} defaultValue={site.notes ?? ''} className="field" /></label><div className="flex flex-wrap items-center gap-3"><button className="btn btn-primary">Save site</button><span data-form-status className="text-sm text-stone-500" /></div></form><form data-api-form data-action={`/api/sites/${site.id}`} data-method="DELETE" data-redirect="reload" data-confirm="Delete this site? Linked projects will keep their project record." className="mt-3"><button className="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete site</button><span data-form-status className="ml-3 text-sm text-stone-500" /></form></details>;
+function DirectoryEmptyState({ title, text, actionLabel, onAction }: { title: string; text: string; actionLabel: string; onAction: () => void }) {
+  return (
+    <div className="panel rounded-lg p-10 text-center">
+      <p className="text-lg font-semibold text-ink">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-sm text-stone-500">{text}</p>
+      <button type="button" className="btn btn-primary mt-5 inline-flex items-center gap-2" onClick={onAction}><Plus size={16} aria-hidden="true" />{actionLabel}</button>
+    </div>
+  );
 }
 
+function ClientDirectoryTable({ clients, onView, onEdit }: { clients: AnyRecord[]; onView: (client: AnyRecord) => void; onEdit: (client: AnyRecord) => void }) {
+  if (!clients.length) return null;
+  return (
+    <div className="panel overflow-hidden rounded-lg">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] border-collapse">
+          <thead className="table-head"><tr><th className="px-5 py-4">Client</th><th className="px-5 py-4">Contact</th><th className="px-5 py-4">Address</th><th className="px-5 py-4">Projects</th><th className="px-5 py-4 text-right">Actions</th></tr></thead>
+          <tbody>{clients.map((client) => <tr key={client.id} className="border-t border-stone-100 transition hover:bg-stone-50"><td className="px-5 py-5 align-middle"><div className="flex items-center gap-3"><DirectoryInitial label={client.name} /><div className="min-w-0"><p className="truncate font-semibold text-ink">{client.name}</p><p className="text-sm text-stone-500">Client</p></div></div></td><td className="px-5 py-5 align-middle text-sm text-stone-600"><DirectoryContact email={client.email} phone={client.phone} /></td><td className="px-5 py-5 align-middle text-sm text-stone-600"><DirectoryAddress value={client.address} /></td><td className="px-5 py-5 align-middle text-sm text-stone-700">{client._count?.projects ?? 0} project{(client._count?.projects ?? 0) === 1 ? '' : 's'}</td><td className="px-5 py-5 align-middle"><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => onView(client)}>View</button><button type="button" className="btn btn-secondary" onClick={() => onEdit(client)}>Edit</button></div></td></tr>)}</tbody>
+        </table>
+      </div>
+      <div className="border-t border-stone-100 px-5 py-4 text-center text-sm text-stone-500">End of clients</div>
+    </div>
+  );
+}
+
+function SiteDirectoryTable({ sites, onView, onEdit }: { sites: AnyRecord[]; onView: (site: AnyRecord) => void; onEdit: (site: AnyRecord) => void }) {
+  if (!sites.length) return null;
+  return (
+    <div className="panel overflow-hidden rounded-lg">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] border-collapse">
+          <thead className="table-head"><tr><th className="px-5 py-4">Site</th><th className="px-5 py-4">Local authority</th><th className="px-5 py-4">Notes</th><th className="px-5 py-4">Projects</th><th className="px-5 py-4 text-right">Actions</th></tr></thead>
+          <tbody>{sites.map((site) => <tr key={site.id} className="border-t border-stone-100 transition hover:bg-stone-50"><td className="px-5 py-5 align-middle"><div className="flex items-center gap-3"><DirectoryInitial label={site.addressLine1} /><div className="min-w-0"><p className="truncate font-semibold text-ink">{site.addressLine1}</p><p className="text-sm text-stone-500">{[site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ') || 'No address summary'}</p></div></div></td><td className="px-5 py-5 align-middle text-sm text-stone-600">{site.localAuthority || 'Not set'}</td><td className="max-w-sm px-5 py-5 align-middle text-sm text-stone-600"><p className="line-clamp-2">{site.notes || 'No notes'}</p></td><td className="px-5 py-5 align-middle text-sm text-stone-700">{site._count?.projects ?? 0} project{(site._count?.projects ?? 0) === 1 ? '' : 's'}</td><td className="px-5 py-5 align-middle"><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => onView(site)}>View</button><button type="button" className="btn btn-secondary" onClick={() => onEdit(site)}>Edit</button></div></td></tr>)}</tbody>
+        </table>
+      </div>
+      <div className="border-t border-stone-100 px-5 py-4 text-center text-sm text-stone-500">End of sites</div>
+    </div>
+  );
+}
+
+function DirectoryInitial({ label }: { label?: string | null }) {
+  return <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-moss/10 text-sm font-semibold text-moss">{(label || '?').trim().charAt(0).toUpperCase()}</span>;
+}
+
+function DirectoryContact({ email, phone }: { email?: string | null; phone?: string | null }) {
+  return <div className="space-y-1.5"><p className="flex items-center gap-2"><Mail size={14} className="text-stone-400" aria-hidden="true" />{email || 'No email'}</p><p className="flex items-center gap-2"><Phone size={14} className="text-stone-400" aria-hidden="true" />{phone || 'No phone'}</p></div>;
+}
+
+function DirectoryAddress({ value }: { value?: string | null }) {
+  return <p className="flex items-start gap-2"><MapPin size={14} className="mt-0.5 shrink-0 text-stone-400" aria-hidden="true" /><span>{value || 'No address'}</span></p>;
+}
+
+function DirectoryDrawer({ title, description, onClose, children }: { title: string; description: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50">
+      <button type="button" aria-label="Close panel" className="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]" onClick={onClose} />
+      <aside className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-6">
+          <div><h2 className="text-xl font-semibold text-ink">{title}</h2><p className="mt-2 text-sm leading-6 text-stone-500">{description}</p></div>
+          <button type="button" className="rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-ink" onClick={onClose} aria-label="Close panel"><X size={18} aria-hidden="true" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+function ClientDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; onClose: () => void; onEdit: (client: AnyRecord) => void }) {
+  if (drawer.mode === 'view' && drawer.item) {
+    const client = drawer.item;
+    return <DirectoryDrawer title={client.name} description="Client profile linked into project records." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Email" value={client.email || 'No email'} /><DetailRow label="Phone" value={client.phone || 'No phone'} /><DetailRow label="Address" value={client.address || 'No address'} /><DetailRow label="Projects" value={`${client._count?.projects ?? 0} project${(client._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={client.notes || 'No notes'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(client)}>Edit client</button></div></DirectoryDrawer>;
+  }
+  const client = drawer.item;
+  const editing = drawer.mode === 'edit';
+  return <DirectoryDrawer title={editing ? 'Edit client' : 'New client'} description={editing ? 'Update this client profile.' : 'Add a new client profile that can be linked to projects.'} onClose={onClose}><ClientForm client={client} onClose={onClose} />{editing && client && <DeleteForm action={`/api/clients/${client.id}`} label="Delete client" confirm="Delete this client? Linked projects will keep their project record." />}</DirectoryDrawer>;
+}
+
+function ClientForm({ client, onClose }: { client?: AnyRecord; onClose: () => void }) {
+  const editing = Boolean(client?.id);
+  return <form data-api-form data-action={editing ? `/api/clients/${client?.id}` : '/api/clients'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><label className="block"><span className="label">Name</span><input required name="name" defaultValue={client?.name ?? ''} className="field" placeholder="Enter client name" /></label><label className="block"><span className="label">Email</span><input type="email" name="email" defaultValue={client?.email ?? ''} className="field" placeholder="Enter email address" /></label><label className="block"><span className="label">Phone</span><input name="phone" defaultValue={client?.phone ?? ''} className="field" placeholder="Enter phone number" /></label><label className="block"><span className="label">Address</span><textarea name="address" rows={4} defaultValue={client?.address ?? ''} className="field" placeholder="Enter address" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={client?.notes ?? ''} className="field" placeholder="Add any notes about this client" /></label><button className="btn btn-primary w-full">Save client</button><button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
+}
+
+function SiteDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; onClose: () => void; onEdit: (site: AnyRecord) => void }) {
+  if (drawer.mode === 'view' && drawer.item) {
+    const site = drawer.item;
+    return <DirectoryDrawer title={site.addressLine1} description="Site profile for project records and local authority details." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Address" value={[site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ') || 'No address'} /><DetailRow label="Local authority" value={site.localAuthority || 'Not set'} /><DetailRow label="Projects" value={`${site._count?.projects ?? 0} project${(site._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={site.notes || 'No notes'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(site)}>Edit site</button></div></DirectoryDrawer>;
+  }
+  const site = drawer.item;
+  const editing = drawer.mode === 'edit';
+  return <DirectoryDrawer title={editing ? 'Edit site' : 'New site'} description={editing ? 'Update this site profile.' : 'Add a reusable site address for projects.'} onClose={onClose}><SiteForm site={site} onClose={onClose} />{editing && site && <DeleteForm action={`/api/sites/${site.id}`} label="Delete site" confirm="Delete this site? Linked projects will keep their project record." />}</DirectoryDrawer>;
+}
+
+function SiteForm({ site, onClose }: { site?: AnyRecord; onClose: () => void }) {
+  const editing = Boolean(site?.id);
+  return <form data-api-form data-action={editing ? `/api/sites/${site?.id}` : '/api/sites'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><label className="block"><span className="label">Address line 1</span><input required name="addressLine1" defaultValue={site?.addressLine1 ?? ''} className="field" placeholder="Enter address line 1" /></label><label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={site?.addressLine2 ?? ''} className="field" placeholder="Enter address line 2" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Town/city</span><input required name="townCity" defaultValue={site?.townCity ?? ''} className="field" placeholder="Town or city" /></label><label className="block"><span className="label">Postcode</span><input required name="postcode" defaultValue={site?.postcode ?? ''} className="field" placeholder="Postcode" /></label></div><label className="block"><span className="label">Local authority</span><input name="localAuthority" defaultValue={site?.localAuthority ?? ''} className="field" placeholder="Local authority" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={site?.notes ?? ''} className="field" placeholder="Add any notes about this site" /></label><button className="btn btn-primary w-full">Save site</button><button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return <div className="border-b border-stone-100 pb-4 last:border-b-0"><p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{label}</p><p className="mt-1 whitespace-pre-wrap text-stone-800">{value}</p></div>;
+}
 function Deadlines({ data }: { data: AnyRecord }) {
   const deadlines = data.deadlines ?? [];
   if (!deadlines.length) return <EmptyState>No deadlines yet.</EmptyState>;
