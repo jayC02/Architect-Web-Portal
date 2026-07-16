@@ -58,6 +58,10 @@ assert.match(dashboardSummaryApi, /automationJobsReady/, 'dashboard summary incl
 assert.doesNotMatch(dashboardSummaryApi, /storageUrl/, 'dashboard summary does not expose raw document storage URLs');
 assert.doesNotMatch(liveDataPanel, /Project pipeline/, 'dashboard no longer renders the abstract project pipeline');
 assert.match(liveDataPanel, /ActiveProjectsPanel projects=\{activeProjects\}[\s\S]*NeedsAttentionPanel items=\{attentionItems\}/, 'dashboard gives active projects the primary column beside needs attention');
+assert.match(liveDataPanel, /stageProgressPercent/, 'active project cards use a contained single progress line');
+assert.match(liveDataPanel, /Deadline: \$\{date\(project\.nextDeadline\.dueDate\)\}/, 'active project cards label deadline metadata clearly');
+assert.match(liveDataPanel, /Automation: \$\{project\.readyAutomationJobCount\} ready/, 'active project cards label automation metadata clearly');
+assert.doesNotMatch(liveDataPanel, /h-1\.5 flex-1/, 'active project cards avoid the broken segmented progress bar layout');
 assert.match(liveDataPanel, /Needs attention/, 'dashboard renders needs attention section');
 assert.match(liveDataPanel, /Upcoming timeline/, 'dashboard renders deadline timeline section');
 assert.match(liveDataPanel, /href=\{`\/api\/documents\/\$\{file\.id\}`\}/, 'dashboard recent files use secure document viewer route');

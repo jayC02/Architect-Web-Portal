@@ -187,24 +187,38 @@ function ActiveProjectsPanel({ projects }: { projects: AnyRecord[] }) {
 function ActiveProjectCard({ project }: { project: AnyRecord }) {
   const stages = ['LEAD', 'DESIGN', 'PLANNING', 'BUILDING_WARRANT', 'COMPLETION'];
   const currentIndex = Math.max(0, stages.indexOf(project.stage));
+  const stageProgressPercent = Math.round(((currentIndex + 1) / stages.length) * 100);
   const actionClass = project.nextAction?.tone === 'danger' ? 'text-red-800' : project.nextAction?.tone === 'warning' ? 'text-amber-800' : 'text-ink';
+  const deadlineInfo = project.nextDeadline ? `Deadline: ${date(project.nextDeadline.dueDate)}` : 'No upcoming deadline';
+  const documentInfo = project.documentReviewCount > 0 ? `Documents: ${project.documentReviewCount} to review` : 'Documents clear';
+  const automationInfo = project.readyAutomationJobCount > 0 ? `Automation: ${project.readyAutomationJobCount} ready` : 'Automation: none ready';
+
   return (
-    <a href={`/projects/${project.id}`} className="rounded-lg border border-stone-200 bg-white p-4 transition hover:border-stone-300 hover:bg-stone-50">
-      <div className="flex items-start justify-between gap-3">
+    <a href={`/projects/${project.id}`} className="group block overflow-hidden rounded-lg border border-stone-200 bg-white p-4 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30 sm:p-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.48fr)]">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-ink">{project.name}</p>
-          <p className="mt-1 truncate text-xs text-stone-500">{project.siteSummary}</p>
+          <p className="truncate text-base font-semibold text-ink">{project.name}</p>
+          <p className="mt-1 truncate text-sm text-stone-500">{project.siteSummary}</p>
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-3 text-xs text-stone-500">
+              <span>Stage: {human(project.stage)}</span>
+              <span>{stageProgressPercent}%</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-stone-100" aria-hidden="true">
+              <div className="h-full rounded-full bg-moss/70" style={{ width: `${stageProgressPercent}%` }} />
+            </div>
+          </div>
         </div>
-        {project.readyAutomationJobCount > 0 && <span className="text-xs font-semibold text-moss">{project.readyAutomationJobCount} ready</span>}
-      </div>
-      <div className="mt-4 flex gap-1" aria-hidden="true">
-        {stages.map((stage, index) => <span key={stage} className={`h-1.5 flex-1 rounded-full ${index <= currentIndex ? 'bg-moss/70' : 'bg-stone-100'}`} />)}
-      </div>
-      <p className="mt-3 text-xs text-stone-500">{human(project.stage)} stage</p>
-      <p className={`mt-2 truncate text-sm font-semibold ${actionClass}`}>{project.nextAction?.label ?? 'No action needed'}</p>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
-        <span>{project.nextDeadline ? date(project.nextDeadline.dueDate) : 'No deadline'}</span>
-        <span>{project.documentReviewCount > 0 ? `${project.documentReviewCount} docs to review` : 'Documents clear'}</span>
+
+        <div className="min-w-0 rounded-md border border-stone-100 bg-stone-50/70 p-3">
+          <p className="text-xs font-semibold uppercase text-stone-500">Next action</p>
+          <p className={`mt-1 break-words text-sm font-semibold ${actionClass}`}>{project.nextAction?.label ?? 'No action needed'}</p>
+          <p className="mt-3 text-xs leading-5 text-stone-500">{deadlineInfo} <span aria-hidden="true">&middot;</span> {documentInfo}</p>
+          <p className="text-xs leading-5 text-stone-500">{automationInfo}</p>
+          <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-stone-700 group-hover:text-ink">
+            Open project <ArrowRight size={13} aria-hidden="true" />
+          </span>
+        </div>
       </div>
     </a>
   );
