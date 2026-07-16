@@ -10,7 +10,7 @@ import {
   MapPinned,
   Settings,
   Users,
-  Workflow,
+  Monitor,
 } from 'lucide-react';
 
 interface Props {
@@ -27,7 +27,7 @@ const nav = [
   { label: 'Clients', href: '/clients', icon: Users },
   { label: 'Sites', href: '/sites', icon: MapPinned },
   { label: 'Deadlines', href: '/deadlines', icon: CalendarClock },
-  { label: 'Automation Jobs', href: '/automation-jobs', icon: Workflow },
+  { label: 'Desktop Automation', href: '/automation-jobs', icon: Monitor },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 const pathname = Astro.url.pathname;

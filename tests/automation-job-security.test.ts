@@ -48,6 +48,13 @@ assert.match(validation, /'apiKey'/, 'snapshot validation forbids apiKey fields'
 assert.match(projectPage, /Prepare householder job/, 'project detail page can prepare householder jobs');
 assert.match(projectPage, /Prepare planning job/, 'project detail page can prepare planning jobs');
 assert.match(projectPage, /Prepare warrant job/, 'project detail page can prepare building warrant jobs');
-assert.match(jobsPage, /View snapshot contract/, 'automation jobs page exposes a reviewable snapshot contract');
+assert.match(jobsPage, /Desktop Automation/, 'automation jobs page is reframed as Desktop Automation');
+assert.match(jobsPage, /How desktop automation works/, 'automation jobs page explains the desktop handoff workflow');
+assert.match(jobsPage, /Ready for desktop/, 'automation jobs page groups ready jobs with human-friendly copy');
+assert.match(jobsPage, /Draft \/ needs review/, 'automation jobs page groups draft jobs as needs-review work');
+assert.match(jobsPage, /View prepared details/, 'automation jobs page uses human-readable snapshot wording');
+assert.match(jobsPage, /Show technical JSON/, 'automation jobs page hides raw JSON behind a secondary details section');
+assert.match(jobsPage, /redactedSnapshot/, 'automation jobs page redacts sensitive snapshot keys before showing technical JSON');
+assert.doesNotMatch(jobsPage, /View snapshot contract/, 'automation jobs page no longer exposes technical snapshot wording as the primary action');
 
 console.log('automation job security tests passed');

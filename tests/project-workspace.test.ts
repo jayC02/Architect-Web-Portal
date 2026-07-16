@@ -97,6 +97,8 @@ assert.match(projectsPage, /documentReviewCount > 0 \? `\$\{project\.documentRev
 assert.match(projectsPage, /readyAutomationJobCount > 0 \? `\$\{project\.readyAutomationJobCount\} ready` : 'None ready'/, 'automation ready count is rendered as plain text');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
+assert.match(appShell, /label: 'Desktop Automation'/, 'sidebar labels the desktop handoff page clearly');
+assert.doesNotMatch(appShell, /label: 'Automation Jobs'/, 'sidebar no longer uses backend queue wording');
 assert.doesNotMatch(projectDetailPage, />View project files</, 'project document section does not show a redundant top-level project files button');
 assert.match(projectDetailPage, /See more files/, 'project document section has a see more route for larger document lists');
 assert.match(projectDetailPage, /\/api\/documents\/\$\{document\.id\}/, 'project document names open the secure document viewer');
