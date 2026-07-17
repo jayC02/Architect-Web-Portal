@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: light;
+  --asset-build-revision: "2026-07-17";
 }
 
 html {
