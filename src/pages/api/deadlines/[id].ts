@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
+import { removeDeadlineFromGoogleBestEffort, syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calendar';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { deadlineSchema } from '@/lib/validation/domain';
@@ -37,8 +38,9 @@ export const PATCH: APIRoute = (context) =>
       data: { ...body, projectId, planningApplicationId, buildingWarrantApplicationId },
     });
     if (!result.count) throw new HttpError(404, 'Deadline not found.');
-    return jsonResponse(200, { ok: true });
-  });
+    const calendarSync = await syncDeadlineToGoogleBestEffort(organisation.id, id);
+    return jsonResponse(200, { ok: true, calendarSync });
+  }, context);
 
 export const DELETE: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -47,7 +49,10 @@ export const DELETE: APIRoute = (context) =>
     const { organisation } = await requireOrganisation(context);
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Deadline id is required.');
+    const existing = await prisma.deadline.findFirst({ where: { id, organisationId: organisation.id }, select: { id: true } });
+    if (!existing) throw new HttpError(404, 'Deadline not found.');
+    const calendarSync = await removeDeadlineFromGoogleBestEffort(organisation.id, id);
     const result = await prisma.deadline.deleteMany({ where: { id, organisationId: organisation.id } });
     if (!result.count) throw new HttpError(404, 'Deadline not found.');
-    return jsonResponse(200, { ok: true });
+    return jsonResponse(200, { ok: true, calendarSync });
   }, context);

@@ -537,16 +537,20 @@ model Deadline {
 }
 
 model CalendarConnection {
-  id             String                   @id @default(cuid())
-  organisationId String
-  provider       CalendarProvider
-  status         CalendarConnectionStatus @default(NOT_CONNECTED)
-  accountEmail   String?
-  externalId     String?
-  lastSyncedAt   DateTime?
-  syncError      String?
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
+  id                    String                   @id @default(cuid())
+  organisationId        String
+  provider              CalendarProvider
+  status                CalendarConnectionStatus @default(NOT_CONNECTED)
+  accountEmail          String?
+  externalId            String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  accessTokenExpiresAt  DateTime?
+  grantedScopes         String?
+  lastSyncedAt          DateTime?
+  syncError             String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
 
   organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   events       SyncedCalendarEvent[]

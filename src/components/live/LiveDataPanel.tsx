@@ -829,7 +829,7 @@ function DocumentFolder({ data }: { data: AnyRecord }) {
 }
 
 function SettingsOverview({ data }: { data: AnyRecord }) {
-  return <section className="grid gap-4 md:grid-cols-2"><a href="/settings/integrations" className="panel rounded-lg p-5 hover:bg-stone-50"><p className="text-lg font-semibold">Integrations</p><p className="mt-2 text-sm text-stone-500">Calendar connection placeholders and sync status.</p></a><div className="panel rounded-lg p-5"><p className="text-lg font-semibold">Organisation</p><p className="mt-2 text-sm text-stone-500">{data.organisation.name}</p><p className="mt-2 text-xs uppercase text-stone-500">Your role: {data.role}</p></div></section>;
+  return <section className="grid gap-4 md:grid-cols-2"><a href="/settings/integrations" className="panel rounded-lg p-5 hover:bg-stone-50"><p className="text-lg font-semibold">Integrations</p><p className="mt-2 text-sm text-stone-500">Connect Google Calendar and review deadline sync status.</p></a><div className="panel rounded-lg p-5"><p className="text-lg font-semibold">Organisation</p><p className="mt-2 text-sm text-stone-500">{data.organisation.name}</p><p className="mt-2 text-xs uppercase text-stone-500">Your role: {data.role}</p></div></section>;
 }
 
 function Integrations({ data }: { data: AnyRecord }) {

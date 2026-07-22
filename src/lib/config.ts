@@ -6,7 +6,7 @@ export const siteConfig = {
   name: 'Architect Web Portal',
   domain: 'architect-portal.local',
   defaultDescription: 'A secure practice hub for architectural projects, documents, statutory applications, and deadlines.',
-  siteUrl: normalizeOrigin(import.meta.env.PUBLIC_SITE_URL || DEFAULT_SITE_URL),
+  siteUrl: normalizeOrigin(import.meta.env?.PUBLIC_SITE_URL || process.env.PUBLIC_SITE_URL || DEFAULT_SITE_URL),
 };
 
 export const absoluteUrl = (path = '/') => {

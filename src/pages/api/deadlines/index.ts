@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
+import { syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calendar';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { deadlineSchema } from '@/lib/validation/domain';
@@ -61,5 +62,6 @@ export const POST: APIRoute = (context) =>
         organisationId: organisation.id,
       },
     });
-    return jsonResponse(201, { deadline });
+    const calendarSync = await syncDeadlineToGoogleBestEffort(organisation.id, deadline.id);
+    return jsonResponse(201, { deadline, calendarSync });
   }, context);

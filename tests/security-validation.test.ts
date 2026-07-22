@@ -50,7 +50,7 @@ assert.match(privateNoStore, /private/);
 assert.match(privateNoStore, /no-store/);
 assert.match(privateApiNoStore, /private/);
 assert.match(privateApiNoStore, /no-store/);
-assert.match(publicPageShort, /s-maxage=30/);
+assert.match(publicPageShort, /must-revalidate/);
 assert.equal(cacheHeaders.PRIVATE_NO_STORE, privateNoStore);
 assert.equal(jsonResponse(200, { ok: true }).headers.get('Cache-Control'), privateApiNoStore);
 
