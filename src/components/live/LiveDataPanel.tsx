@@ -34,9 +34,7 @@ const documentStatuses = ['DRAFT', 'IN_REVIEW', 'APPROVED', 'SUPERSEDED', 'REJEC
 const warrantTypes = ['INITIAL', 'AMENDMENT', 'STAGED', 'LATE', 'COMPLETION_CERTIFICATE'];
 const warrantStatuses = ['NOT_STARTED', 'DRAFTING', 'SUBMITTED', 'IN_REVIEW', 'FURTHER_INFORMATION_REQUESTED', 'GRANTED', 'REJECTED', 'EXPIRED', 'COMPLETED', 'CLOSED'];
 const certificateStatuses = ['NOT_REQUIRED', 'NOT_STARTED', 'DRAFTING', 'SUBMITTED', 'ACCEPTED', 'REJECTED'];
-const deadlineTypes = ['PLANNING_DECISION', 'WARRANT_RESPONSE', 'WARRANT_EXPIRY', 'COMPLETION_CERTIFICATE', 'CLIENT_ACTION', 'INTERNAL_TASK', 'INSPECTION', 'CUSTOM'];
 const deadlinePriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-const deadlineStatuses = ['UPCOMING', 'DUE_SOON', 'OVERDUE', 'COMPLETED', 'CANCELLED'];
 const packageTypes = ['PLANNING', 'BUILDING_WARRANT'];
 const packageStatuses = ['DRAFT', 'READY', 'EXPORTED', 'SUBMITTED', 'ARCHIVED'];
 
@@ -470,12 +468,14 @@ function Sites({ data }: { data: AnyRecord }) {
 }
 
 function DirectoryToolbar({ count, noun, searchLabel, searchPlaceholder, value, onChange, actionLabel, onAction }: { count: number; noun: string; searchLabel: string; searchPlaceholder: string; value: string; onChange: (value: string) => void; actionLabel: string; onAction: () => void }) {
+  const searchId = `directory-search-${noun.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="relative w-full lg:max-w-xl">
         <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" aria-hidden="true" />
-        <label className="sr-only">{searchLabel}</label>
-        <input className="field h-12" style={{ paddingLeft: '3rem' }} value={value} onChange={(event) => onChange(event.target.value)} placeholder={searchPlaceholder} />
+        <label className="sr-only" htmlFor={searchId}>{searchLabel}</label>
+        <input id={searchId} name={searchId} className="field h-12" style={{ paddingLeft: '3rem' }} value={value} onChange={(event) => onChange(event.target.value)} placeholder={searchPlaceholder} />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm text-stone-500">{count} {noun}{count === 1 ? '' : 's'}</span>
@@ -587,12 +587,101 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 function Deadlines({ data }: { data: AnyRecord }) {
   const deadlines = data.deadlines ?? [];
-  if (!deadlines.length) return <EmptyState>No deadlines yet.</EmptyState>;
-  return <div className="space-y-3">{deadlines.map((deadline: AnyRecord) => <article key={deadline.id} className="panel rounded-lg p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold">{deadline.title}</p><p className="text-sm text-stone-500">{deadline.project?.name ?? 'General'} - {human(deadline.type)}</p></div><Chip label={date(deadline.dueDate)} tone="info" /></div><p className="mt-2 text-sm text-stone-600">{human(deadline.status)} - {human(deadline.priority)}</p><details className="mt-3 rounded-md border border-stone-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Edit deadline</summary><DeadlineForm deadline={deadline} projects={data.projects ?? []} /></details></article>)}</div>;
+  const projects = data.projects ?? [];
+  const [query, setQuery] = useState('');
+  const [drawer, setDrawer] = useState<{ mode: 'create' | 'view' | 'edit'; item?: AnyRecord } | null>(null);
+
+  useEffect(() => {
+    const closeOnSave = () => setDrawer(null);
+    window.addEventListener('portal:mutation-success', closeOnSave);
+    return () => window.removeEventListener('portal:mutation-success', closeOnSave);
+  }, []);
+
+  const filteredDeadlines = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return deadlines;
+    return deadlines.filter((deadline: AnyRecord) => [deadline.title, deadline.description, deadline.project?.name, deadline.priority]
+      .some((value) => String(value ?? '').toLowerCase().includes(needle)));
+  }, [deadlines, query]);
+
+  return (
+    <section className="space-y-5">
+      <DirectoryToolbar
+        count={deadlines.length}
+        noun="deadline"
+        searchLabel="Search deadlines"
+        searchPlaceholder="Search deadlines by project or description..."
+        value={query}
+        onChange={setQuery}
+        actionLabel="New deadline"
+        onAction={() => setDrawer({ mode: 'create' })}
+      />
+
+      {deadlines.length ? (
+        <DeadlineDirectoryTable deadlines={filteredDeadlines} onView={(deadline) => setDrawer({ mode: 'view', item: deadline })} onEdit={(deadline) => setDrawer({ mode: 'edit', item: deadline })} />
+      ) : (
+        <DirectoryEmptyState title="No deadlines yet" text="Add your first deadline to keep project dates visible in the practice calendar." actionLabel="New deadline" onAction={() => setDrawer({ mode: 'create' })} />
+      )}
+
+      {deadlines.length > 0 && !filteredDeadlines.length && <EmptyState>No deadlines match your search.</EmptyState>}
+      {drawer && <DeadlineDrawer drawer={drawer} projects={projects} onClose={() => setDrawer(null)} onEdit={(deadline) => setDrawer({ mode: 'edit', item: deadline })} />}
+    </section>
+  );
 }
 
-function DeadlineForm({ deadline, projects }: { deadline: AnyRecord; projects: AnyRecord[] }) {
-  return <><form data-api-form data-action={`/api/deadlines/${deadline.id}`} data-method="PATCH" className="mt-4 grid gap-4"><label className="block"><span className="label">Title</span><input required name="title" defaultValue={deadline.title} className="field" /></label><label className="block"><span className="label">Linked project</span><select name="projectId" defaultValue={deadline.projectId ?? ''} className="field"><option value="">General</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Due date</span><input required type="date" name="dueDate" defaultValue={dateInput(deadline.dueDate)} className="field" /></label><label className="block"><span className="label">Reminder date</span><input type="date" name="reminderDate" defaultValue={dateInput(deadline.reminderDate)} className="field" /></label><label className="block"><span className="label">Type</span><select name="type" defaultValue={deadline.type} className="field">{deadlineTypes.map((type) => <option key={type} value={type}>{human(type)}</option>)}</select></label><label className="block"><span className="label">Priority</span><select name="priority" defaultValue={deadline.priority} className="field">{deadlinePriorities.map((priority) => <option key={priority} value={priority}>{human(priority)}</option>)}</select></label></div><label className="block"><span className="label">Status</span><select name="status" defaultValue={deadline.status} className="field">{deadlineStatuses.map((status) => <option key={status} value={status}>{human(status)}</option>)}</select></label><label className="block"><span className="label">Description</span><textarea name="description" rows={3} defaultValue={deadline.description ?? ''} className="field" /></label><div className="flex flex-wrap items-center gap-3"><button className="btn btn-primary">Save deadline</button><span data-form-status className="text-sm text-stone-500" /></div></form><form data-api-form data-action={`/api/deadlines/${deadline.id}`} data-method="DELETE" data-redirect="reload" data-confirm="Delete this deadline?" className="mt-3"><button className="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete deadline</button><span data-form-status className="ml-3 text-sm text-stone-500" /></form></>;
+function DeadlineDirectoryTable({ deadlines, onView, onEdit }: { deadlines: AnyRecord[]; onView: (deadline: AnyRecord) => void; onEdit: (deadline: AnyRecord) => void }) {
+  if (!deadlines.length) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (
+    <div className="panel overflow-hidden rounded-lg">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] border-collapse">
+          <thead className="table-head"><tr><th className="px-5 py-4">Deadline</th><th className="px-5 py-4">Project</th><th className="px-5 py-4">Due date</th><th className="px-5 py-4">Priority</th><th className="px-5 py-4 text-right">Actions</th></tr></thead>
+          <tbody>{deadlines.map((deadline) => {
+            const overdue = deadline.status !== 'COMPLETED' && new Date(deadline.dueDate) < today;
+            return <tr key={deadline.id} className="border-t border-stone-100 transition hover:bg-stone-50"><td className="max-w-md px-5 py-5 align-middle"><p className="truncate font-semibold text-ink">{deadline.title}</p><p className="mt-1 line-clamp-1 text-sm text-stone-500">{deadline.description || 'No description'}</p></td><td className="px-5 py-5 align-middle text-sm text-stone-700">{deadline.project?.name ?? 'General'}</td><td className={`px-5 py-5 align-middle text-sm font-medium ${overdue ? 'text-red-800' : 'text-stone-700'}`}>{date(deadline.dueDate)}{overdue && <span className="ml-2 text-xs font-semibold">Overdue</span>}</td><td className="px-5 py-5 align-middle text-sm text-stone-700"><span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${deadline.priority === 'CRITICAL' ? 'bg-red-700' : deadline.priority === 'HIGH' ? 'bg-amber-500' : 'bg-moss/70'}`} />{human(deadline.priority)}</span></td><td className="px-5 py-5 align-middle"><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => onView(deadline)}>View</button><button type="button" className="btn btn-secondary" onClick={() => onEdit(deadline)}>Edit</button></div></td></tr>;
+          })}</tbody>
+        </table>
+      </div>
+      <div className="border-t border-stone-100 px-5 py-4 text-center text-sm text-stone-500">End of deadlines</div>
+    </div>
+  );
+}
+
+function DeadlineDrawer({ drawer, projects, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; projects: AnyRecord[]; onClose: () => void; onEdit: (deadline: AnyRecord) => void }) {
+  if (drawer.mode === 'view' && drawer.item) {
+    const deadline = drawer.item;
+    return <DirectoryDrawer title={deadline.title} description="Project deadline details." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Project" value={deadline.project?.name ?? 'General'} /><DetailRow label="Due date" value={date(deadline.dueDate)} /><DetailRow label="Priority" value={human(deadline.priority)} /><DetailRow label="Description" value={deadline.description || 'No description'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(deadline)}>Edit deadline</button></div></DirectoryDrawer>;
+  }
+  const deadline = drawer.item;
+  const editing = drawer.mode === 'edit';
+  return <DirectoryDrawer title={editing ? 'Edit deadline' : 'New deadline'} description={editing ? 'Update the project, date or details for this deadline.' : 'Add a project date. It will sync automatically when Google Calendar is connected.'} onClose={onClose}><DeadlineForm deadline={deadline} projects={projects} onClose={onClose} />{editing && deadline && <DeleteForm action={`/api/deadlines/${deadline.id}`} label="Delete deadline" confirm="Delete this deadline? It will also be removed from Google Calendar." />}</DirectoryDrawer>;
+}
+
+function DeadlineForm({ deadline, projects, onClose }: { deadline?: AnyRecord; projects: AnyRecord[]; onClose: () => void }) {
+  const selectedFromUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('projectId') ?? '' : '';
+  const [projectId, setProjectId] = useState(deadline?.projectId ?? selectedFromUrl);
+  const [description, setDescription] = useState(deadline?.description ?? '');
+  const editing = Boolean(deadline?.id);
+  const selectedProject = projects.find((project) => project.id === projectId);
+  const firstDescriptionLine = description.trim().split(/\r?\n/)[0]?.slice(0, 160);
+  const generatedTitle = firstDescriptionLine || deadline?.title || (selectedProject ? `${selectedProject.name} deadline` : 'Practice deadline');
+
+  return (
+    <form data-api-form data-action={editing ? `/api/deadlines/${deadline?.id}` : '/api/deadlines'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4">
+      <input type="hidden" name="title" value={generatedTitle} />
+      <input type="hidden" name="type" value={deadline?.type ?? 'CUSTOM'} />
+      <input type="hidden" name="status" value={deadline?.status ?? 'UPCOMING'} />
+      <label className="block"><span className="label">Project</span><select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} className="field"><option value="">General</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+      <label className="block"><span className="label">Due date</span><input required type="date" name="dueDate" defaultValue={dateInput(deadline?.dueDate)} className="field" /></label>
+      <label className="block"><span className="label">Priority</span><select name="priority" defaultValue={deadline?.priority ?? 'MEDIUM'} className="field">{deadlinePriorities.map((priority) => <option key={priority} value={priority}>{human(priority)}</option>)}</select></label>
+      <label className="block"><span className="label">Description <span className="normal-case text-stone-400">(optional)</span></span><textarea name="description" rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" placeholder="What needs to happen by this date?" /></label>
+      <button className="btn btn-primary w-full">Save deadline</button>
+      <button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button>
+      <p data-form-status className="text-sm text-stone-500" />
+    </form>
+  );
 }
 
 function Planning({ data, warrant = false }: { data: AnyRecord; warrant?: boolean }) {

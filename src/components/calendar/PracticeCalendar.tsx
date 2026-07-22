@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 
 type CalendarDeadline = {
@@ -25,7 +25,11 @@ type CalendarResponse = {
   } | null;
 };
 
-type Props = { compact?: boolean };
+type Props = {
+  compact?: boolean;
+  showIntegrationControls?: boolean;
+  canManageIntegration?: boolean;
+};
 
 const pad = (value: number) => String(value).padStart(2, '0');
 const localDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -59,11 +63,14 @@ const deadlineTone = (deadline: CalendarDeadline, today: string) => {
   return 'border-moss/20 bg-moss/10 text-moss';
 };
 
-export default function PracticeCalendar({ compact = false }: Props) {
+export default function PracticeCalendar({ compact = false, showIntegrationControls = false, canManageIntegration = false }: Props) {
   const [month, setMonth] = useState(initialMonth);
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [integrationError, setIntegrationError] = useState('');
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -106,10 +113,52 @@ export default function PracticeCalendar({ compact = false }: Props) {
     [data, month],
   );
   const today = localDateKey(new Date());
-  const connected = data?.googleConnection?.status === 'CONNECTED';
+  const linked = data?.googleConnection?.status === 'CONNECTED' || data?.googleConnection?.status === 'ERROR';
+
+  const syncCalendar = async () => {
+    setSyncing(true);
+    setSyncMessage('');
+    setIntegrationError('');
+    try {
+      const result = await apiRequest<{ synced?: number }>('/api/integrations/google-calendar/sync', { method: 'POST' });
+      setSyncMessage(`${result.synced ?? 0} deadline${result.synced === 1 ? '' : 's'} synced with Google Calendar.`);
+      await load();
+    } catch (requestError) {
+      setIntegrationError(requestError instanceof Error ? requestError.message : 'Google Calendar could not be synced.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <section className="panel overflow-hidden rounded-lg" aria-label="Practice calendar">
+      {showIntegrationControls && !loading && (
+        <div className={`flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 ${linked ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+          <div className="flex items-start gap-3">
+            <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${linked ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+              {linked ? <CheckCircle2 size={17} aria-hidden="true" /> : <CalendarDays size={17} aria-hidden="true" />}
+            </span>
+            <div>
+              <p className="font-semibold text-ink">{linked ? 'Google Calendar connected' : 'Connect Google Calendar'}</p>
+              <p className="mt-0.5 text-sm text-stone-600">
+                {linked
+                  ? `New and updated deadlines sync automatically${data?.googleConnection?.accountEmail ? ` to ${data.googleConnection.accountEmail}` : ''}.`
+                  : 'Keep project deadlines available in your Google Calendar automatically.'}
+              </p>
+            </div>
+          </div>
+          {canManageIntegration ? linked ? (
+            <button type="button" className="btn btn-primary shrink-0 gap-2" disabled={syncing} onClick={() => void syncCalendar()}>
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} aria-hidden="true" />
+              {syncing ? 'Syncing...' : 'Sync now'}
+            </button>
+          ) : (
+            <a href="/api/integrations/google-calendar/connect" className="btn btn-primary shrink-0 gap-2"><CalendarDays size={16} aria-hidden="true" />Connect Google Calendar</a>
+          ) : <span className="text-sm text-stone-600">An owner or admin can manage this connection.</span>}
+        </div>
+      )}
+      {syncMessage && <div role="status" className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 sm:px-5">{syncMessage}</div>}
+      {integrationError && <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:px-5">{integrationError}</div>}
       <header className="flex flex-col gap-4 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-[#fbfaf6] text-moss">
@@ -118,7 +167,7 @@ export default function PracticeCalendar({ compact = false }: Props) {
           <div>
             <h2 className="text-xl font-semibold text-ink">Practice calendar</h2>
             <p className="mt-1 text-sm text-stone-500">
-              {connected ? `Google Calendar connected${data?.googleConnection?.accountEmail ? ` as ${data.googleConnection.accountEmail}` : ''}.` : 'Internal project deadlines and reminders.'}
+              {linked ? `Google Calendar connected${data?.googleConnection?.accountEmail ? ` as ${data.googleConnection.accountEmail}` : ''}.` : 'Internal project deadlines and reminders.'}
             </p>
           </div>
         </div>
@@ -180,7 +229,7 @@ export default function PracticeCalendar({ compact = false }: Props) {
                 <time className="text-sm font-semibold text-stone-600">{fullDate(deadline.dueDate).split(' ').slice(0, 2).join(' ')}</time>
                 <span className="min-w-0">
                   <span className="block truncate font-semibold text-ink">{deadline.title}</span>
-                  <span className="mt-1 block truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'} · {human(deadline.type)}</span>
+                  <span className="mt-1 block truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'} - {human(deadline.type)}</span>
                 </span>
               </a>
             )) : <div className="px-4 py-10 text-center text-sm text-stone-500">No deadlines in {monthLabel(month)}.</div>}

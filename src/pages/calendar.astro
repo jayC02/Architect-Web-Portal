@@ -5,6 +5,7 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
+const canManageIntegration = auth.membership.role === 'OWNER' || auth.membership.role === 'ADMIN';
 ---
 <AppShell title="Calendar" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -16,5 +17,5 @@ if (!auth) return Astro.redirect('/login');
     <a href="/deadlines" class="btn btn-primary">+ New deadline</a>
   </div>
 
-  <PracticeCalendar client:load />
+  <PracticeCalendar client:load showIntegrationControls canManageIntegration={canManageIntegration} />
 </AppShell>

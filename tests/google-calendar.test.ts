@@ -78,6 +78,8 @@ const connectRoute = fs.readFileSync(new URL('../src/pages/api/integrations/goog
 const syncRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/sync.ts', import.meta.url), 'utf8');
 const callbackRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/callback.ts', import.meta.url), 'utf8');
 const calendarService = fs.readFileSync(new URL('../src/lib/integrations/google-calendar.ts', import.meta.url), 'utf8');
+const deadlinesRoute = fs.readFileSync(new URL('../src/pages/api/deadlines/index.ts', import.meta.url), 'utf8');
+const deadlineRoute = fs.readFileSync(new URL('../src/pages/api/deadlines/[id].ts', import.meta.url), 'utf8');
 assert.doesNotMatch(settingsApi, /accessTokenEncrypted:\s*true|refreshTokenEncrypted:\s*true/, 'integration API never selects encrypted tokens');
 assert.match(connectRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\)/, 'only owners and admins can connect Google Calendar');
 assert.match(syncRoute, /assertAllowedOrigin\(context\.request\)/, 'manual sync has origin protection');
@@ -85,5 +87,8 @@ assert.match(syncRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\
 assert.match(callbackRoute, /absoluteUrl\('\/settings\/integrations'\)/, 'OAuth callback redirects to the configured public site, not an internal Vercel origin');
 assert.doesNotMatch(callbackRoute, /cookies\.get/, 'signed OAuth state does not depend on a fragile cross-redirect nonce cookie');
 assert.match(calendarService, /method: 'PUT'/, 'existing Google events are fully replaced so stale reminder overrides cannot survive');
+assert.match(deadlinesRoute, /syncDeadlineToGoogleBestEffort\(organisation\.id, deadline\.id\)/, 'new deadlines automatically sync to Google Calendar');
+assert.match(deadlineRoute, /syncDeadlineToGoogleBestEffort\(organisation\.id, id\)/, 'updated deadlines automatically sync to Google Calendar');
+assert.match(deadlineRoute, /removeDeadlineFromGoogleBestEffort\(organisation\.id, id\)/, 'deleted deadlines are automatically removed from Google Calendar');
 
 console.log('google calendar tests passed');
