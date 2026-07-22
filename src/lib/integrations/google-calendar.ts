@@ -15,8 +15,6 @@ const GOOGLE_SCOPE = [
   'https://www.googleapis.com/auth/calendar.events.owned',
 ].join(' ');
 
-export const googleCalendarOAuthCookie = 'architect_google_calendar_oauth';
-
 type GoogleConfig = {
   clientId: string;
   clientSecret: string;
@@ -68,7 +66,8 @@ export const getGoogleCalendarConfigurationStatus = () => ({
     process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim()
     && process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim()
     && process.env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY?.trim()
-    && process.env.GOOGLE_CALENDAR_OAUTH_STATE_SECRET?.trim(),
+    && process.env.GOOGLE_CALENDAR_OAUTH_STATE_SECRET?.trim()
+    && (process.env.GOOGLE_CALENDAR_REDIRECT_URI?.trim() || process.env.PUBLIC_SITE_URL?.trim()),
   ),
 });
 

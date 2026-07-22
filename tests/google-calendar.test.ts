@@ -50,9 +50,12 @@ assert.equal(event.extendedProperties.private.architectPortalOrganisationId, 'or
 const settingsApi = fs.readFileSync(new URL('../src/pages/api/settings/integrations.ts', import.meta.url), 'utf8');
 const connectRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/connect.ts', import.meta.url), 'utf8');
 const syncRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/sync.ts', import.meta.url), 'utf8');
+const callbackRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/callback.ts', import.meta.url), 'utf8');
 assert.doesNotMatch(settingsApi, /accessTokenEncrypted:\s*true|refreshTokenEncrypted:\s*true/, 'integration API never selects encrypted tokens');
 assert.match(connectRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\)/, 'only owners and admins can connect Google Calendar');
 assert.match(syncRoute, /assertAllowedOrigin\(context\.request\)/, 'manual sync has origin protection');
 assert.match(syncRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\)/, 'manual sync is role protected');
+assert.match(callbackRoute, /absoluteUrl\('\/settings\/integrations'\)/, 'OAuth callback redirects to the configured public site, not an internal Vercel origin');
+assert.doesNotMatch(callbackRoute, /cookies\.get/, 'signed OAuth state does not depend on a fragile cross-redirect nonce cookie');
 
 console.log('google calendar tests passed');
