@@ -8,14 +8,5 @@ if (!auth) return Astro.redirect('/login');
 const canManageIntegration = auth.membership.role === 'OWNER' || auth.membership.role === 'ADMIN';
 ---
 <AppShell title="Calendar" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Practice schedule</p>
-      <h1 class="mt-2 text-4xl font-semibold tracking-normal text-ink">Calendar</h1>
-      <p class="mt-2 text-sm text-stone-500">Project deadlines and reminders, with Google Calendar sync status in one place.</p>
-    </div>
-    <a href="/deadlines" class="btn btn-primary">+ New deadline</a>
-  </div>
-
-  <PracticeCalendar client:load showIntegrationControls canManageIntegration={canManageIntegration} />
+  <PracticeCalendar client:load showPageHeader showIntegrationControls canManageIntegration={canManageIntegration} />
 </AppShell>

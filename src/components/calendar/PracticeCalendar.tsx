@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 
 type CalendarDeadline = {
@@ -29,7 +29,19 @@ type Props = {
   compact?: boolean;
   showIntegrationControls?: boolean;
   canManageIntegration?: boolean;
+  showPageHeader?: boolean;
 };
+
+function GoogleLogo() {
+  return (
+    <svg viewBox="0 0 18 18" className="h-[18px] w-[18px] shrink-0" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.877 2.684-6.614Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.181l-2.909-2.258c-.806.54-1.836.859-3.047.859-2.344 0-4.328-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.963 10.706A5.41 5.41 0 0 1 3.682 9c0-.592.102-1.168.281-1.706V4.962H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.038l3.007-2.332Z" />
+      <path fill="#EA4335" d="M9 3.58c1.321 0 2.507.454 3.441 1.346l2.581-2.581C13.464.892 11.426 0 9 0A9 9 0 0 0 .956 4.962l3.007 2.332C4.672 5.165 6.656 3.58 9 3.58Z" />
+    </svg>
+  );
+}
 
 const pad = (value: number) => String(value).padStart(2, '0');
 const localDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -63,7 +75,7 @@ const deadlineTone = (deadline: CalendarDeadline, today: string) => {
   return 'border-moss/20 bg-moss/10 text-moss';
 };
 
-export default function PracticeCalendar({ compact = false, showIntegrationControls = false, canManageIntegration = false }: Props) {
+export default function PracticeCalendar({ compact = false, showIntegrationControls = false, canManageIntegration = false, showPageHeader = false }: Props) {
   const [month, setMonth] = useState(initialMonth);
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,29 +143,43 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
   };
 
   return (
-    <section className="panel overflow-hidden rounded-lg" aria-label="Practice calendar">
-      {showIntegrationControls && !loading && (
-        <div className={`flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 ${linked ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'}`}>
+    <>
+      {showPageHeader && (
+        <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Practice schedule</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-normal text-ink">Calendar</h1>
+            <p className="mt-2 text-sm text-stone-500">Project deadlines and reminders, with Google Calendar sync status in one place.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {canManageIntegration && linked && !loading && (
+              <button type="button" className="btn btn-secondary gap-2" disabled={syncing} onClick={() => void syncCalendar()}>
+                <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} aria-hidden="true" />
+                Sync
+              </button>
+            )}
+            <a href="/deadlines" className="btn btn-primary">+ New deadline</a>
+          </div>
+        </div>
+      )}
+
+      <section className="panel overflow-hidden rounded-lg" aria-label="Practice calendar">
+      {showIntegrationControls && !loading && !linked && (
+        <div className="flex flex-col gap-4 border-b border-stone-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${linked ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-              {linked ? <CheckCircle2 size={17} aria-hidden="true" /> : <CalendarDays size={17} aria-hidden="true" />}
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white shadow-sm">
+              <GoogleLogo />
             </span>
             <div>
-              <p className="font-semibold text-ink">{linked ? 'Google Calendar connected' : 'Connect Google Calendar'}</p>
-              <p className="mt-0.5 text-sm text-stone-600">
-                {linked
-                  ? `New and updated deadlines sync automatically${data?.googleConnection?.accountEmail ? ` to ${data.googleConnection.accountEmail}` : ''}.`
-                  : 'Keep project deadlines available in your Google Calendar automatically.'}
-              </p>
+              <p className="font-semibold text-ink">Connect Google Calendar</p>
+              <p className="mt-0.5 text-sm text-stone-600">Keep project deadlines available in your Google Calendar automatically.</p>
             </div>
           </div>
-          {canManageIntegration ? linked ? (
-            <button type="button" className="btn btn-primary shrink-0 gap-2" disabled={syncing} onClick={() => void syncCalendar()}>
-              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} aria-hidden="true" />
-              {syncing ? 'Syncing...' : 'Sync now'}
-            </button>
-          ) : (
-            <a href="/api/integrations/google-calendar/connect" className="btn btn-primary shrink-0 gap-2"><CalendarDays size={16} aria-hidden="true" />Connect Google Calendar</a>
+          {canManageIntegration ? (
+            <a href="/api/integrations/google-calendar/connect" className="inline-flex h-11 shrink-0 items-center justify-center gap-3 rounded-md border border-[#747775] bg-white px-4 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8fafd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a73e8] focus-visible:ring-offset-2">
+              <GoogleLogo />
+              Connect with Google
+            </a>
           ) : <span className="text-sm text-stone-600">An owner or admin can manage this connection.</span>}
         </div>
       )}
@@ -241,6 +267,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
         <span className="text-stone-500">Deadlines in the portal remain the source of truth.</span>
         <div className="flex gap-4 font-semibold"><a href="/deadlines" className="hover:text-moss">Manage deadlines</a><a href="/settings/integrations" className="hover:text-moss">Calendar settings</a></div>
       </footer>
-    </section>
+      </section>
+    </>
   );
 }

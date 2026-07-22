@@ -105,8 +105,10 @@ assert.match(calendarApi, /organisationId: organisation\.id/, 'calendar deadline
 assert.doesNotMatch(calendarApi, /accessTokenEncrypted|refreshTokenEncrypted/, 'calendar API never exposes provider tokens');
 assert.match(calendarComponent, /Deadlines in the portal remain the source of truth/, 'calendar makes the source-of-truth behaviour clear');
 assert.match(calendarComponent, /Connect Google Calendar/, 'calendar prompts managers to connect when no account is linked');
-assert.match(calendarComponent, /Sync now/, 'calendar exposes manual full sync after an account is linked');
-assert.match(calendarPage, /showIntegrationControls/, 'full calendar page enables connection controls');
+  assert.match(calendarComponent, />\s*Sync\s*</, 'calendar exposes a compact manual sync action after an account is linked');
+  assert.match(calendarComponent, /GoogleLogo/, 'calendar connection action uses recognisable Google branding');
+  assert.match(calendarPage, /showIntegrationControls/, 'full calendar page enables connection controls');
+  assert.match(calendarPage, /showPageHeader/, 'full calendar page keeps connection-aware actions in its header');
 assert.match(liveDataPanel, /function DeadlineDirectoryTable/, 'deadlines use the same professional directory pattern as clients and sites');
 assert.match(liveDataPanel, /Search deadlines by project or description/, 'deadline directory includes simple search');
 assert.match(liveDataPanel, /name="type" value=\{deadline\?\.type \?\? 'CUSTOM'\}/, 'simplified deadline form supplies a safe hidden type default');
