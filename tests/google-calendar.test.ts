@@ -46,16 +46,44 @@ assert.equal(event.start.date, '2026-08-12');
 assert.equal(event.end.date, '2026-08-13', 'all-day Google events use an exclusive next-day end');
 assert.match(event.summary, /4 Willow Court/);
 assert.equal(event.extendedProperties.private.architectPortalOrganisationId, 'org_1');
+assert.deepEqual(event.reminders, {
+  useDefault: false,
+  overrides: [{ method: 'popup', minutes: 2880 }],
+}, 'custom reminders disable defaults and contain one explicit popup override');
+
+const eventWithoutCustomReminder = buildGoogleDeadlineEvent({
+  id: 'deadline_2',
+  organisationId: 'org_1',
+  projectId: null,
+  planningApplicationId: null,
+  buildingWarrantApplicationId: null,
+  title: 'General reminder',
+  description: null,
+  dueDate: new Date('2026-08-18T00:00:00.000Z'),
+  type: 'INTERNAL_TASK',
+  status: 'UPCOMING',
+  priority: 'MEDIUM',
+  reminderDate: null,
+  completedDate: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  project: null,
+} as never);
+assert.deepEqual(eventWithoutCustomReminder.reminders, {
+  useDefault: true,
+}, 'default reminders never include custom overrides');
 
 const settingsApi = fs.readFileSync(new URL('../src/pages/api/settings/integrations.ts', import.meta.url), 'utf8');
 const connectRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/connect.ts', import.meta.url), 'utf8');
 const syncRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/sync.ts', import.meta.url), 'utf8');
 const callbackRoute = fs.readFileSync(new URL('../src/pages/api/integrations/google-calendar/callback.ts', import.meta.url), 'utf8');
+const calendarService = fs.readFileSync(new URL('../src/lib/integrations/google-calendar.ts', import.meta.url), 'utf8');
 assert.doesNotMatch(settingsApi, /accessTokenEncrypted:\s*true|refreshTokenEncrypted:\s*true/, 'integration API never selects encrypted tokens');
 assert.match(connectRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\)/, 'only owners and admins can connect Google Calendar');
 assert.match(syncRoute, /assertAllowedOrigin\(context\.request\)/, 'manual sync has origin protection');
 assert.match(syncRoute, /requireOrganisationRole\(context, \['OWNER', 'ADMIN'\]\)/, 'manual sync is role protected');
 assert.match(callbackRoute, /absoluteUrl\('\/settings\/integrations'\)/, 'OAuth callback redirects to the configured public site, not an internal Vercel origin');
 assert.doesNotMatch(callbackRoute, /cookies\.get/, 'signed OAuth state does not depend on a fragile cross-redirect nonce cookie');
+assert.match(calendarService, /method: 'PUT'/, 'existing Google events are fully replaced so stale reminder overrides cannot survive');
 
 console.log('google calendar tests passed');

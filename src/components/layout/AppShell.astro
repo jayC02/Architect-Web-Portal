@@ -3,6 +3,7 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 import type { OrganisationRole } from '@prisma/client';
 import {
   Building2,
+  CalendarDays,
   CalendarClock,
   FolderKanban,
   LayoutDashboard,
@@ -27,6 +28,7 @@ const nav = [
   { label: 'Clients', href: '/clients', icon: Users },
   { label: 'Sites', href: '/sites', icon: MapPinned },
   { label: 'Deadlines', href: '/deadlines', icon: CalendarClock },
+  { label: 'Calendar', href: '/calendar', icon: CalendarDays },
   { label: 'Desktop Automation', href: '/automation-jobs', icon: Monitor },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];

@@ -100,14 +100,9 @@ function Dashboard({ data }: { data: AnyRecord }) {
       </section>
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(330px,0.65fr)]">
-        <div className="space-y-6">
-          <ActiveProjectsPanel projects={activeProjects} />
-          <DeadlineTimeline deadlines={data.upcomingDeadlines ?? []} range={range} />
-        </div>
+        <ActiveProjectsPanel projects={activeProjects} />
         <NeedsAttentionPanel items={attentionItems} />
       </section>
-
-      <RecentFilesPanel files={data.recentFiles ?? []} />
     </div>
   );
 }
@@ -341,65 +336,6 @@ function projectStageIndex(stage?: string | null) {
   if (stage === 'BUILDING_WARRANT' || stage === 'CONSTRUCTION') return 3;
   if (stage === 'COMPLETION' || stage === 'ARCHIVED') return 4;
   return 0;
-}
-function DeadlineTimeline({ deadlines, range }: { deadlines: AnyRecord[]; range: number }) {
-  return (
-    <article className="panel rounded-lg p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-ink">Upcoming Timeline</h2>
-          <p className="mt-1 text-sm text-stone-500">Next {range} days</p>
-        </div>
-        <a href="/deadlines" className="inline-flex items-center gap-1 text-sm font-semibold text-ink hover:text-moss">View full timeline <ArrowRight size={14} aria-hidden="true" /></a>
-      </div>
-      {deadlines.length ? (
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          {deadlines.slice(0, 8).map((deadline) => <TimelineItem key={deadline.id} deadline={deadline} />)}
-        </div>
-      ) : <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No deadlines in this range.</div>}
-    </article>
-  );
-}
-
-function TimelineItem({ deadline }: { deadline: AnyRecord }) {
-  const dueDate = new Date(deadline.dueDate);
-  const overdue = dueDate < new Date();
-  const day = new Intl.DateTimeFormat('en-GB', { day: '2-digit' }).format(dueDate);
-  const month = new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(dueDate);
-  return (
-    <a href={deadline.project?.id ? `/deadlines?projectId=${deadline.project.id}` : '/deadlines'} className="grid min-w-[260px] grid-cols-[54px_1fr] gap-3 rounded-lg border border-stone-200 bg-white p-3 transition hover:border-stone-300 hover:bg-stone-50">
-      <div className={`rounded-md border px-2 py-2 text-center ${overdue ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-100 bg-amber-50 text-amber-800'}`}>
-        <p className="text-lg font-semibold leading-none">{day}</p>
-        <p className="mt-1 text-[11px] font-semibold uppercase">{month}</p>
-      </div>
-      <div className="min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <p className="truncate text-sm font-semibold text-ink">{deadline.title}</p>
-          <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold uppercase ${overdue ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-600'}`}>{overdue ? 'Overdue' : 'Upcoming'}</span>
-        </div>
-        <p className="mt-2 truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'}</p>
-      </div>
-    </a>
-  );
-}
-function RecentFilesPanel({ files }: { files: AnyRecord[] }) {
-  return (
-    <article className="panel rounded-lg p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Recent files</h2>
-        <a href="/projects" className="text-sm font-semibold text-stone-600 hover:text-ink">Projects</a>
-      </div>
-      <div className="space-y-2">
-        {files.length ? files.slice(0, 5).map((file) => (
-          <div key={file.id} className="rounded-lg border border-stone-200 px-3 py-3">
-            <a href={`/api/documents/${file.id}`} target="_blank" rel="noreferrer" className="block truncate font-semibold hover:underline">{file.originalName}</a>
-            <p className="mt-1 truncate text-xs text-stone-500">{file.project.name} - {human(file.type)} - {date(file.createdAt)}</p>
-            <div className="mt-2 flex gap-3 text-xs font-semibold"><a href={`/projects/${file.projectId}`}>Open project</a><a href={`/projects/${file.projectId}/files`}>Manage files</a></div>
-          </div>
-        )) : <p className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">Upload documents to start seeing file activity.</p>}
-      </div>
-    </article>
-  );
 }
 function ListPanel({ title, href, rows, empty, render }: { title: string; href?: string; rows: AnyRecord[]; empty: string; render: (row: AnyRecord) => React.ReactNode }) {
   return (

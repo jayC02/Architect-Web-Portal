@@ -319,7 +319,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
       googleEvent = await googleRequest<GoogleEventResponse>(
         accessToken,
         `/calendars/primary/events/${encodeURIComponent(existing.providerEventId)}`,
-        { method: 'PATCH', body: JSON.stringify(eventBody) },
+        { method: 'PUT', body: JSON.stringify(eventBody) },
       );
     } catch (error) {
       if ((error as HttpError & { googleStatus?: number }).googleStatus !== 404) throw error;

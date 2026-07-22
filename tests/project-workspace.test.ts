@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { PlanningStatus, WarrantStatus } from '@prisma/client';
 import { planningDateFieldsForStatus, warrantDateFieldsForStatus } from '../src/lib/application-record-fields';
+import { getCalendarGridRange, normaliseCalendarMonth } from '../src/lib/calendar/month';
 import { getProjectNextAction } from '../src/lib/projects/next-action';
 
 const base = {
@@ -16,6 +17,12 @@ const base = {
   nextDeadline: null,
 };
 const now = new Date('2026-08-10T12:00:00.000Z');
+
+assert.equal(normaliseCalendarMonth('2026-08'), '2026-08', 'valid calendar months are preserved');
+assert.equal(normaliseCalendarMonth('2026-13', now), '2026-08', 'invalid calendar months fall back safely');
+const augustCalendar = getCalendarGridRange('2026-08');
+assert.equal(augustCalendar.gridStart.toISOString(), '2026-07-27T00:00:00.000Z', 'calendar grid starts on Monday');
+assert.equal(augustCalendar.gridEnd.toISOString(), '2026-09-07T00:00:00.000Z', 'calendar query covers six complete weeks');
 
 assert.equal(getProjectNextAction({ ...base, documentCount: 0 }, now).label, 'Upload documents');
 assert.equal(getProjectNextAction({ ...base, hasLocationPlan: false }, now).label, 'Upload location plan');
@@ -43,6 +50,9 @@ const warrantPage = fs.readFileSync('src/pages/projects/[id]/building-warrant.as
 const appShell = fs.readFileSync('src/components/layout/AppShell.astro', 'utf8');
 const dashboardPage = fs.readFileSync('src/pages/dashboard.astro', 'utf8');
 const dashboardSummaryApi = fs.readFileSync('src/pages/api/dashboard/summary.ts', 'utf8');
+const calendarPage = fs.readFileSync('src/pages/calendar.astro', 'utf8');
+const calendarApi = fs.readFileSync('src/pages/api/calendar/index.ts', 'utf8');
+const calendarComponent = fs.readFileSync('src/components/calendar/PracticeCalendar.tsx', 'utf8');
 const liveDataPanel = fs.readFileSync('src/components/live/LiveDataPanel.tsx', 'utf8');
 const clientsPage = fs.readFileSync('src/pages/clients.astro', 'utf8');
 const sitesPage = fs.readFileSync('src/pages/sites.astro', 'utf8');
@@ -83,8 +93,16 @@ assert.match(liveDataPanel, /ProjectStageProgress/, 'active project cards render
 assert.match(liveDataPanel, /Deadline: \$\{date\(project\.nextDeadline\.dueDate\)\}/, 'active project cards label deadline metadata clearly');
 assert.match(liveDataPanel, /Automation: \$\{project\.readyAutomationJobCount\} ready/, 'active project cards label automation metadata clearly');
 assert.match(liveDataPanel, /Needs attention/, 'dashboard renders needs attention section');
-assert.match(liveDataPanel, /Upcoming Timeline/, 'dashboard renders deadline timeline strip');
-assert.match(liveDataPanel, /href=\{`\/api\/documents\/\$\{file\.id\}`\}/, 'dashboard recent files use secure document viewer route');
+assert.doesNotMatch(liveDataPanel, /Upcoming Timeline/, 'dashboard no longer renders the old timeline strip');
+assert.doesNotMatch(liveDataPanel, /Recent files|RecentFilesPanel/, 'dashboard no longer renders recent files');
+assert.doesNotMatch(dashboardSummaryApi, /recentFiles/, 'dashboard no longer queries unused recent files');
+assert.match(dashboardPage, /PracticeCalendar/, 'dashboard renders the full practice calendar');
+assert.match(calendarPage, /PracticeCalendar client:load/, 'calendar page renders the shared calendar component');
+assert.match(appShell, /label: 'Calendar'/, 'sidebar includes the calendar workspace');
+assert.match(calendarApi, /requireOrganisation\(context\)/, 'calendar API requires organisation membership');
+assert.match(calendarApi, /organisationId: organisation\.id/, 'calendar deadlines are organisation scoped');
+assert.doesNotMatch(calendarApi, /accessTokenEncrypted|refreshTokenEncrypted/, 'calendar API never exposes provider tokens');
+assert.match(calendarComponent, /Deadlines in the portal remain the source of truth/, 'calendar makes the source-of-truth behaviour clear');
 assert.match(projectsPage, /A clean register of project records/, 'projects page uses register-focused copy');
 assert.match(projectsPage, /<span>Project<\/span>[\s\S]*<span>Client<\/span>[\s\S]*<span>Stage<\/span>[\s\S]*<span>Next action<\/span>[\s\S]*<span>Deadline<\/span>[\s\S]*<span>Documents<\/span>[\s\S]*<span>Automation<\/span>/, 'projects page renders a structured register header');
 assert.match(projectsPage, /name="q"/, 'projects page keeps search input');

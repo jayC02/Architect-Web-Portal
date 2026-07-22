@@ -61,12 +61,6 @@ export const GET: APIRoute = (context) =>
           WHERE w."organisationId" = ${orgId} AND (w.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (w.status = 'SUBMITTED' AND (w."firstResponseTargetDate" <= ${actionSoon} OR w."updatedAt" <= ${staleDate})) OR (w.status = 'GRANTED' AND w."completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED')))
           ORDER BY w."firstResponseTargetDate" ASC NULLS LAST, w."updatedAt" ASC LIMIT 6
         ) warrant_row), '[]'::jsonb) AS "warrantsAwaitingAction",
-        COALESCE((SELECT jsonb_agg(to_jsonb(file_row)) FROM (
-          SELECT d.id, d."projectId", d."originalName", d.type, d."createdAt", d."sizeBytes", jsonb_build_object('id', p.id, 'name', p.name) AS project
-          FROM "ProjectDocument" d JOIN "Project" p ON p.id = d."projectId"
-          WHERE d."organisationId" = ${orgId}
-          ORDER BY d."createdAt" DESC LIMIT 6
-        ) file_row), '[]'::jsonb) AS "recentFiles",
         COALESCE((SELECT jsonb_agg(to_jsonb(project_row)) FROM (
           SELECT p.id, p.name
           FROM "Project" p
@@ -247,7 +241,6 @@ export const GET: APIRoute = (context) =>
       upcomingDeadlines,
       planningAwaitingAction,
       warrantsAwaitingAction,
-      recentFiles: row?.recentFiles ?? [],
       missingDocumentWarnings,
       pipeline,
       documentOverview: { total: totalDocuments, reviewed: documentsReviewed, needsReview: documentsNeedingReviewByStatus },
