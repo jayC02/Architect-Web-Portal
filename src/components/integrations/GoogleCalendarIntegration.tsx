@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, RefreshCw, Unplug } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
+import GoogleLogo from '@/components/integrations/GoogleLogo';
 
 type Connection = {
   id: string;
@@ -102,9 +103,9 @@ export default function GoogleCalendarIntegration() {
             <a
               href={data?.googleConfigured && data?.canManage ? '/api/integrations/google-calendar/connect' : undefined}
               aria-disabled={!data?.googleConfigured || !data?.canManage}
-              className={`btn btn-primary shrink-0 gap-2 ${!data?.googleConfigured || !data?.canManage ? 'pointer-events-none opacity-50' : ''}`}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-3 rounded-md border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${!data?.googleConfigured || !data?.canManage ? 'pointer-events-none opacity-50' : ''}`}
             >
-              <CalendarDays size={17} aria-hidden="true" /> Connect Google Calendar
+              <GoogleLogo /> Connect with Google
             </a>
           ) : (
             <div className="flex shrink-0 flex-wrap gap-2">

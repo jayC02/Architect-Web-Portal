@@ -45,13 +45,14 @@ assert.doesNotMatch(service, /storageKey:\s*document\.storageKey|storageUrl:\s*d
 assert.match(validation, /'storageKey'/, 'snapshot validation forbids storageKey fields');
 assert.match(validation, /'password'/, 'snapshot validation forbids password fields');
 assert.match(validation, /'apiKey'/, 'snapshot validation forbids apiKey fields');
-assert.match(projectPage, /Prepare householder job/, 'project detail page can prepare householder jobs');
-assert.match(projectPage, /Prepare planning job/, 'project detail page can prepare planning jobs');
-assert.match(projectPage, /Prepare warrant job/, 'project detail page can prepare building warrant jobs');
+assert.match(projectPage, /AutomationLaunchButton/, 'project detail page uses the one-click desktop launcher');
+assert.match(projectPage, /type="HOUSEHOLDER_PLANNING"/, 'project detail page can open householder jobs');
+assert.match(projectPage, /type="BUILDING_WARRANT"/, 'project detail page can open building warrant jobs');
+assert.doesNotMatch(projectPage, /type="PLANNING_APPLICATION"/, 'unsupported generic planning automation is not offered to desktop users');
 assert.match(jobsPage, /Desktop Automation/, 'automation jobs page is reframed as Desktop Automation');
 assert.match(jobsPage, /How desktop automation works/, 'automation jobs page explains the desktop handoff workflow');
 assert.match(jobsPage, /Ready for desktop/, 'automation jobs page groups ready jobs with human-friendly copy');
-assert.match(jobsPage, /Draft \/ needs review/, 'automation jobs page groups draft jobs as needs-review work');
+assert.match(jobsPage, /title: 'Needs review'/, 'automation jobs page groups draft and final-review jobs as needs-review work');
 assert.match(jobsPage, /View prepared details/, 'automation jobs page uses human-readable snapshot wording');
 assert.match(jobsPage, /Show technical JSON/, 'automation jobs page hides raw JSON behind a secondary details section');
 assert.match(jobsPage, /redactedSnapshot/, 'automation jobs page redacts sensitive snapshot keys before showing technical JSON');

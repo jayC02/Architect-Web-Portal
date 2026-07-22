@@ -180,6 +180,7 @@ enum AutomationJobStatus {
   READY
   CLAIMED
   IN_PROGRESS
+  NEEDS_REVIEW
   COMPLETED
   FAILED
   CANCELLED
@@ -208,6 +209,7 @@ model User {
   createdPackages       SubmissionPackage[] @relation("PackageCreatedBy")
   createdAutomationJobs AutomationJob[]     @relation("AutomationJobCreatedBy")
   claimedAutomationJobs AutomationJob[]     @relation("AutomationJobClaimedBy")
+  desktopAccessTokens   DesktopAccessToken[]
 
   @@index([email])
   @@index([createdAt])
@@ -250,6 +252,7 @@ model Organisation {
   submissionPackages   SubmissionPackage[]
   documentSortBatches  DocumentSortBatch[]
   automationJobs       AutomationJob[]
+  desktopAccessTokens  DesktopAccessToken[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -439,8 +442,10 @@ model AutomationJob {
   documentSnapshot Json
   resultSummary    String?
   error            String?
+  payloadVersion   Int                     @default(1)
   createdById      String
   claimedByUserId  String?
+  claimedDeviceId  String?
   claimedAt        DateTime?
   completedAt      DateTime?
   createdAt        DateTime                @default(now())
@@ -455,6 +460,26 @@ model AutomationJob {
   @@index([organisationId, status, createdAt])
   @@index([createdById])
   @@index([claimedByUserId])
+}
+
+model DesktopAccessToken {
+  id             String    @id @default(cuid())
+  organisationId String
+  userId         String
+  name           String
+  tokenHash      String    @unique
+  tokenPrefix    String
+  expiresAt      DateTime
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, userId, revokedAt])
+  @@index([expiresAt])
 }
 model PlanningApplication {
   id                   String         @id @default(cuid())

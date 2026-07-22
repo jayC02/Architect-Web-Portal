@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
+import { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
 import { prisma } from '@/lib/db/prisma';
 import { formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -59,6 +60,7 @@ const displayStatus = (status: AutomationJobStatus) => {
     [AutomationJobStatus.READY]: 'Ready for desktop',
     [AutomationJobStatus.CLAIMED]: 'Running in desktop app',
     [AutomationJobStatus.IN_PROGRESS]: 'Running in desktop app',
+    [AutomationJobStatus.NEEDS_REVIEW]: 'Ready for final review',
     [AutomationJobStatus.COMPLETED]: 'Completed',
     [AutomationJobStatus.FAILED]: 'Failed',
     [AutomationJobStatus.CANCELLED]: 'Cancelled',
@@ -117,6 +119,7 @@ const nextStep = (job: Job) => {
   if (job.status === AutomationJobStatus.READY) return 'Load this job in the desktop app.';
   if (job.status === AutomationJobStatus.DRAFT) return 'Review missing information, then mark this job ready.';
   if (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) return 'The desktop app is working through this job.';
+  if (job.status === AutomationJobStatus.NEEDS_REVIEW) return 'Review the completed portal form before final submission.';
   if (job.status === AutomationJobStatus.COMPLETED) return 'Completed by the desktop workflow.';
   if (job.status === AutomationJobStatus.FAILED) return 'Review the failure details before trying again.';
   return 'This job was cancelled and will not be picked up by the desktop app.';
@@ -135,7 +138,7 @@ const redactedSnapshot = (value: unknown): unknown => {
 
 const summary = {
   ready: jobs.filter((job) => job.status === AutomationJobStatus.READY).length,
-  review: jobs.filter((job) => job.status === AutomationJobStatus.DRAFT).length,
+  review: jobs.filter((job) => job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.NEEDS_REVIEW).length,
   running: jobs.filter((job) => job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS).length,
   completed: jobs.filter((job) => job.status === AutomationJobStatus.COMPLETED).length,
   failed: jobs.filter((job) => job.status === AutomationJobStatus.FAILED || job.status === AutomationJobStatus.CANCELLED).length,
@@ -143,7 +146,7 @@ const summary = {
 
 const groups = [
   { key: 'ready', title: 'Ready for desktop', description: 'Jobs ready to be loaded by the desktop app.', statuses: [AutomationJobStatus.READY] as AutomationJobStatus[], tone: 'ready' as const, empty: 'No jobs are ready for desktop yet.' },
-  { key: 'review', title: 'Draft / needs review', description: 'Prepared jobs that still need details checked.', statuses: [AutomationJobStatus.DRAFT] as AutomationJobStatus[], tone: 'review' as const, empty: 'No draft jobs need review.' },
+  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.NEEDS_REVIEW] as AutomationJobStatus[], tone: 'review' as const, empty: 'No jobs need review.' },
   { key: 'running', title: 'In progress', description: 'Jobs claimed or started by the desktop app.', statuses: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] as AutomationJobStatus[], tone: 'running' as const, empty: 'No jobs are currently running.' },
   { key: 'completed', title: 'Completed', description: 'Jobs completed by the desktop workflow.', statuses: [AutomationJobStatus.COMPLETED] as AutomationJobStatus[], tone: 'complete' as const, empty: 'No completed jobs yet.' },
   { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], tone: 'failed' as const, empty: 'No failed or cancelled jobs.' },
@@ -279,7 +282,7 @@ const summaryCards = [
                         <button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>
                       </form>
                     )}
-                    {job.status === AutomationJobStatus.READY && <button class="btn btn-secondary cursor-not-allowed opacity-60" disabled>Open in desktop app</button>}
+                    {job.status === AutomationJobStatus.READY && <ExistingAutomationJobButton client:load jobId={job.id} />}
                   </div>
                 </div>
 

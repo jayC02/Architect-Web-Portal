@@ -1,6 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import GoogleCalendarIntegration from '@/components/integrations/GoogleCalendarIntegration';
+import DesktopAccessIntegration from '@/components/integrations/DesktopAccessIntegration';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
@@ -14,4 +15,7 @@ if (!auth) return Astro.redirect('/login');
     <p class="mt-1 text-sm text-stone-500">Connect the practice calendar and keep project deadlines aligned automatically.</p>
   </div>
   <GoogleCalendarIntegration client:load />
+  <div class="mt-5">
+    <DesktopAccessIntegration client:load />
+  </div>
 </AppShell>
