@@ -5,14 +5,21 @@ import { absoluteUrl } from '@/lib/config';
 import {
   connectGoogleCalendar,
   exchangeGoogleAuthorizationCode,
+  googleConnectionHasGmailScope,
   syncAllGoogleDeadlines,
   verifyGoogleOAuthCallbackState,
 } from '@/lib/integrations/google-calendar';
+import { prisma } from '@/lib/db/prisma';
 import { requireOrganisationRole } from '@/server/permissions/authz';
 
-const integrationRedirect = (context: Parameters<APIRoute>[0], status: 'connected' | 'error', message?: string) => {
+const integrationRedirect = (
+  context: Parameters<APIRoute>[0],
+  status: 'connected' | 'error',
+  message?: string,
+  capability: 'calendar' | 'gmail' = 'calendar',
+) => {
   const url = new URL(absoluteUrl('/settings/integrations'));
-  url.searchParams.set('google', status);
+  url.searchParams.set(capability === 'gmail' ? 'gmail' : 'google', status);
   if (message) url.searchParams.set('message', message.slice(0, 180));
   return context.redirect(url.toString());
 };
@@ -33,9 +40,18 @@ export const GET: APIRoute = async (context) => {
       return integrationRedirect(context, 'error', 'Google Calendar connection could not be verified.');
     }
     const tokens = await exchangeGoogleAuthorizationCode(code);
-    await connectGoogleCalendar(auth.organisation.id, tokens);
+    const connection = await connectGoogleCalendar(auth.organisation.id, tokens);
+    if (verified.capability === 'gmail') {
+      if (!googleConnectionHasGmailScope(connection)) {
+        return integrationRedirect(context, 'error', 'Google did not grant Gmail read access.', 'gmail');
+      }
+      await prisma.calendarConnection.update({
+        where: { id: connection.id },
+        data: { gmailEnabled: true, gmailSyncError: null },
+      });
+    }
     await syncAllGoogleDeadlines(auth.organisation.id);
-    return integrationRedirect(context, 'connected');
+    return integrationRedirect(context, 'connected', undefined, verified.capability === 'gmail' ? 'gmail' : 'calendar');
   } catch (error) {
     console.error('Google Calendar OAuth callback failed', error);
     const message = error instanceof Error ? error.message : 'Google Calendar connection failed.';

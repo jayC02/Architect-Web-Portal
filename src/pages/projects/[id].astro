@@ -8,7 +8,7 @@ import {
   ProjectStatus,
 } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
-import AutomationLaunchButton from '@/components/automation/AutomationLaunchButton';
+import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
 import { prisma } from '@/lib/db/prisma';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
@@ -27,14 +27,13 @@ if (!project) return Astro.redirect('/projects');
 const [
   clients,
   sites,
-  documentCount,
-  documentReviewCount,
-  locationPlanCount,
+  documentStats,
   recentDocuments,
   planningApplications,
   warrantApplications,
   deadlines,
   automationJobs,
+  recentEmailActivity,
 ] = await Promise.all([
   prisma.client.findMany({
     where: { organisationId: auth.organisation.id },
@@ -46,9 +45,11 @@ const [
     orderBy: { updatedAt: 'desc' },
     select: { id: true, addressLine1: true, postcode: true },
   }),
-  prisma.projectDocument.count({ where: { organisationId: auth.organisation.id, projectId: project.id } }),
-  prisma.projectDocument.count({ where: { organisationId: auth.organisation.id, projectId: project.id, status: DocumentStatus.IN_REVIEW } }),
-  prisma.projectDocument.count({ where: { organisationId: auth.organisation.id, projectId: project.id, type: DocumentType.LOCATION_PLAN } }),
+  prisma.projectDocument.groupBy({
+    by: ['type', 'status'],
+    where: { organisationId: auth.organisation.id, projectId: project.id },
+    _count: { _all: true },
+  }),
   prisma.projectDocument.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
     orderBy: { createdAt: 'desc' },
@@ -87,8 +88,61 @@ const [
       createdAt: true,
     },
   }),
+  prisma.gmailUpdateSuggestion.findMany({
+    where: {
+      organisationId: auth.organisation.id,
+      projectId: project.id,
+      status: 'APPLIED',
+    },
+    orderBy: { appliedAt: 'desc' },
+    take: 8,
+    select: {
+      id: true,
+      updateType: true,
+      fieldName: true,
+      suggestedValue: true,
+      appliedAutomatically: true,
+      appliedAt: true,
+      reviewedBy: { select: { name: true } },
+      trackedEmail: { select: { sender: true, subject: true } },
+    },
+  }),
 ]);
 
+const documentCount = documentStats.reduce((total, group) => total + group._count._all, 0);
+const documentReviewCount = documentStats
+  .filter((group) => group.status === DocumentStatus.IN_REVIEW)
+  .reduce((total, group) => total + group._count._all, 0);
+const locationPlanCount = documentStats
+  .filter((group) => group.type === DocumentType.LOCATION_PLAN)
+  .reduce((total, group) => total + group._count._all, 0);
+const planningDocumentTypes = new Set<DocumentType>([
+  DocumentType.LOCATION_PLAN,
+  DocumentType.SITE_PLAN,
+  DocumentType.BLOCK_PLAN,
+  DocumentType.EXISTING_DRAWING,
+  DocumentType.PROPOSED_DRAWING,
+  DocumentType.ELEVATION,
+  DocumentType.SECTION,
+  DocumentType.DETAILS,
+  DocumentType.SPECIFICATIONS,
+  DocumentType.PHOTO,
+  DocumentType.SUPPORTING_DOCUMENT,
+]);
+const warrantDocumentTypes = new Set<DocumentType>([
+  ...planningDocumentTypes,
+  DocumentType.CALCULATIONS,
+  DocumentType.DRAINAGE,
+  DocumentType.STRUCTURAL,
+  DocumentType.ENERGY,
+  DocumentType.CERTIFICATE,
+]);
+const planningDocumentCount = documentStats
+  .filter((group) => planningDocumentTypes.has(group.type))
+  .reduce((total, group) => total + group._count._all, 0);
+const warrantDocumentCount = documentStats
+  .filter((group) => warrantDocumentTypes.has(group.type))
+  .reduce((total, group) => total + group._count._all, 0);
 const latestPlanning = planningApplications[0] ?? null;
 const latestWarrant = warrantApplications[0] ?? null;
 const nextDeadline = deadlines.find((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED) ?? null;
@@ -111,6 +165,17 @@ const siteSummary = project.site
 const activeDeadlines = deadlines.filter((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED);
 const completedDeadlines = deadlines.filter((deadline) => deadline.status === DeadlineStatus.COMPLETED);
 const overdueCount = activeDeadlines.filter((deadline) => isProjectDateOverdue(deadline.dueDate)).length;
+const applicationStatus = (value: string | undefined) => !value || value === 'NOT_STARTED'
+  ? 'Ready to prepare'
+  : humanizeEnum(value);
+const emailActivityLabel = (activity: typeof recentEmailActivity[number]) => {
+  const value = activity.suggestedValue;
+  const display = value && typeof value === 'object' && !Array.isArray(value)
+    ? String((value as Record<string, unknown>).dueDate ?? (value as Record<string, unknown>).title ?? '')
+    : String(value ?? '');
+  if (activity.updateType === 'DEADLINE') return `${humanizeEnum(activity.fieldName)} updated to ${formatDate(display)}`;
+  return `${humanizeEnum(activity.fieldName)} updated${display ? ` to ${humanizeEnum(display)}` : ''}`;
+};
 
 const actionTone = {
   neutral: 'bg-stone-100 text-stone-700 border-stone-200',
@@ -150,6 +215,7 @@ const jobTone = (status: AutomationJobStatus) => {
       ['Planning', '#planning'],
       ['Building Warrant', '#building-warrant'],
       ['Deadlines', '#deadlines'],
+      ['Email Activity', '#email-activity'],
       ['Automation', '#automation'],
       ['Notes', '#notes'],
     ].map(([label, href]) => <a href={href} class="shrink-0 rounded-md px-3 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">{label}</a>)}
@@ -222,23 +288,65 @@ const jobTone = (status: AutomationJobStatus) => {
     ) : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No documents uploaded yet</p><p class="mt-1 text-sm text-stone-500">Upload drawings, specifications or supporting files for this project.</p></div>}
   </section>
 
-  <div class="mt-6 grid gap-6 xl:grid-cols-2">
-    <section id="planning" class="panel scroll-mt-6 rounded-lg p-4">
-      <div class="flex items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">Planning</h2><p class="mt-1 text-sm text-stone-500">Latest planning application record</p></div><a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/projects/${project.id}/planning`}>Manage</a></div>
-      {latestPlanning ? <dl class="mt-4 grid gap-3 sm:grid-cols-2"><div><dt class="label">Status</dt><dd><span class="status-chip bg-moss/10 text-moss">{humanizeEnum(latestPlanning.status)}</span></dd></div><div><dt class="label">Reference</dt><dd class="font-semibold">{latestPlanning.applicationReference ?? 'Not set'}</dd></div><div><dt class="label">Submitted</dt><dd>{formatDate(latestPlanning.submissionDate)}</dd></div><div><dt class="label">Validated</dt><dd>{formatDate(latestPlanning.validDate)}</dd></div><div><dt class="label">Decision target</dt><dd>{formatDate(latestPlanning.decisionTargetDate)}</dd></div><div><dt class="label">Decision</dt><dd>{formatDate(latestPlanning.decisionDate)}</dd></div></dl> : <div class="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-4"><p class="font-semibold">Householder application ready to prepare</p><p class="mt-1 text-sm text-stone-500">A tracking record is optional and can be added later from Manage.</p></div>}
-      <AutomationLaunchButton client:load className="mt-4 border-t border-stone-100 pt-4" projectId={project.id} type="HOUSEHOLDER_PLANNING" planningApplicationId={latestPlanning?.id} label="Complete Householder" />
-    </section>
-
-    <section id="building-warrant" class="panel scroll-mt-6 rounded-lg p-4">
-      <div class="flex items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">Building Warrant</h2><p class="mt-1 text-sm text-stone-500">Latest building warrant record</p></div><a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/projects/${project.id}/building-warrant`}>Manage</a></div>
-      {latestWarrant ? <dl class="mt-4 grid gap-3 sm:grid-cols-2"><div><dt class="label">Status</dt><dd><span class="status-chip bg-moss/10 text-moss">{humanizeEnum(latestWarrant.status)}</span></dd></div><div><dt class="label">Reference</dt><dd class="font-semibold">{latestWarrant.warrantReference ?? 'Not set'}</dd></div><div><dt class="label">Type</dt><dd>{humanizeEnum(latestWarrant.warrantType)}</dd></div><div><dt class="label">Submitted</dt><dd>{formatDate(latestWarrant.submissionDate)}</dd></div><div><dt class="label">First response</dt><dd>{formatDate(latestWarrant.firstResponseTargetDate)}</dd></div><div><dt class="label">Completion certificate</dt><dd>{humanizeEnum(latestWarrant.completionCertificateStatus)}</dd></div></dl> : <div class="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-4"><p class="font-semibold">Building warrant ready to prepare</p><p class="mt-1 text-sm text-stone-500">A tracking record is optional and can be added later from Manage.</p></div>}
-      <AutomationLaunchButton client:load className="mt-4 border-t border-stone-100 pt-4" projectId={project.id} type="BUILDING_WARRANT" buildingWarrantApplicationId={latestWarrant?.id} label="Complete Building Warrant" />
-    </section>
+  <div class="mt-6 grid items-stretch gap-6 xl:grid-cols-2">
+    <ApplicationSummaryCard
+      id="planning"
+      title="Planning"
+      subtitle="Latest planning application"
+      manageHref={`/projects/${project.id}/planning`}
+      address={siteSummary}
+      clientName={project.client?.name ?? 'Not linked'}
+      applicationType="Householder"
+      status={applicationStatus(latestPlanning?.status)}
+      documentCount={planningDocumentCount}
+      reference={latestPlanning?.applicationReference ?? 'Not assigned'}
+      projectId={project.id}
+      applicationKind="PLANNING"
+      applicationId={latestPlanning?.id}
+      actionLabel="Complete Householder"
+    />
+    <ApplicationSummaryCard
+      id="building-warrant"
+      title="Building Warrant"
+      subtitle="Latest building warrant application"
+      manageHref={`/projects/${project.id}/building-warrant`}
+      address={siteSummary}
+      clientName={project.client?.name ?? 'Not linked'}
+      applicationType="Building Warrant"
+      status={applicationStatus(latestWarrant?.status)}
+      documentCount={warrantDocumentCount}
+      reference={latestWarrant?.warrantReference ?? 'Not assigned'}
+      projectId={project.id}
+      applicationKind="BUILDING_WARRANT"
+      applicationId={latestWarrant?.id}
+      actionLabel="Complete Building Warrant"
+    />
   </div>
 
   <section id="deadlines" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-xl font-semibold">Deadlines</h2><p class="mt-1 text-sm text-stone-500">{activeDeadlines.length} upcoming &middot; {overdueCount} overdue &middot; {completedDeadlines.length} completed</p></div><a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add or manage deadlines</a></div>
     {activeDeadlines.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">{activeDeadlines.slice(0, 6).map((deadline) => <a href={`/deadlines?projectId=${project.id}`} class="flex flex-col gap-2 px-4 py-3 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"><div><p class="font-semibold">{deadline.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(deadline.type)} &middot; {humanizeEnum(deadline.priority)}</p></div><span class={`status-chip ${isProjectDateOverdue(deadline.dueDate) ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-700'}`}>{formatDate(deadline.dueDate)}</span></a>)}</div> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No deadlines added yet</p><p class="mt-1 text-sm text-stone-500">Add an internal task or statutory date for this project.</p></div>}
+  </section>
+
+  <section id="email-activity" class="panel mt-6 scroll-mt-6 overflow-hidden rounded-lg">
+    <div class="flex flex-col gap-3 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+      <div><h2 class="text-xl font-semibold">Email activity</h2><p class="mt-1 text-sm text-stone-500">Confirmed project updates detected from the connected Gmail account.</p></div>
+      <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/email-updates">Review email updates</a>
+    </div>
+    {recentEmailActivity.length ? <div class="divide-y divide-stone-200">
+      {recentEmailActivity.map((activity) => <article class="px-4 py-3 sm:px-5">
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0"><p class="font-semibold">{emailActivityLabel(activity)}</p><p class="mt-1 truncate text-sm text-stone-500">{activity.trackedEmail.subject}</p></div>
+          <time class="shrink-0 text-xs text-stone-500">{formatDate(activity.appliedAt)}</time>
+        </div>
+        <p class="mt-2 text-xs text-stone-500">From {activity.trackedEmail.sender} &middot; {activity.appliedAutomatically ? 'Applied automatically' : `Reviewed by ${activity.reviewedBy?.name ?? 'an organisation member'}`}</p>
+      </article>)}
+    </div> : <div class="px-4 py-8 text-center sm:px-5"><p class="font-semibold">No email-derived updates yet</p><p class="mt-1 text-sm text-stone-500">Confirmed application and deadline changes will appear here after Gmail sync.</p></div>}
+  </section>
+
+  <section id="automation" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-xl font-semibold">Automation</h2><p class="mt-1 text-sm text-stone-500">Prepared desktop automation jobs for this project.</p></div><a class="btn btn-secondary" href={`/automation-jobs?projectId=${project.id}`}>View job queue</a></div>
+    {automationJobs.length ? <div class="mt-4 space-y-3">{automationJobs.map((job) => <article class="rounded-lg border border-stone-200 p-3"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p class="font-semibold">{job.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(job.type)} &middot; {formatDate(job.createdAt)}</p></div><div class="flex flex-wrap gap-2"><span class={`status-chip ${jobTone(job.status)}`}>{humanizeEnum(job.status)}</span>{job.status !== AutomationJobStatus.READY && job.status !== AutomationJobStatus.COMPLETED && job.status !== AutomationJobStatus.CANCELLED && <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH"><input type="hidden" name="status" value="READY" /><button class="btn btn-secondary">Mark ready</button></form>}{job.status !== AutomationJobStatus.CANCELLED && job.status !== AutomationJobStatus.COMPLETED && <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH" data-confirm="Cancel this automation job?"><input type="hidden" name="status" value="CANCELLED" /><button class="btn btn-secondary">Cancel</button></form>}</div></div><details class="mt-3"><summary class="cursor-pointer text-sm font-semibold text-stone-600">View snapshot</summary><div class="mt-3 grid gap-3 xl:grid-cols-2"><pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs">{JSON.stringify(job.dataSnapshot, null, 2)}</pre><pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs">{JSON.stringify(job.documentSnapshot, null, 2)}</pre></div></details></article>)}</div> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No desktop automation jobs prepared yet</p><p class="mt-1 text-sm text-stone-500">Use the project quick actions when the project data is ready.</p></div>}
   </section>
 
   <section id="notes" class="panel mt-6 scroll-mt-6 rounded-lg p-4">

@@ -9,11 +9,12 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
-const GOOGLE_SCOPE = [
+const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned';
+export const GOOGLE_GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const GOOGLE_BASE_SCOPES = [
   'openid',
   'email',
-  'https://www.googleapis.com/auth/calendar.events.owned',
-].join(' ');
+];
 
 type GoogleConfig = {
   clientId: string;
@@ -28,6 +29,7 @@ type OAuthState = {
   userId: string;
   nonce: string;
   expiresAt: number;
+  capability?: 'calendar' | 'gmail';
 };
 
 type GoogleTokenResponse = {
@@ -125,15 +127,27 @@ export const verifyGoogleOAuthState = (state: string, secret: string): OAuthStat
   return payload;
 };
 
-export const createGoogleAuthorizationUrl = (input: Omit<OAuthState, 'expiresAt'>) => {
+export const createGoogleAuthorizationUrl = (
+  input: Omit<OAuthState, 'expiresAt'>,
+  capability: 'calendar' | 'gmail' = 'calendar',
+) => {
   const config = getGoogleConfig();
-  const state = signGoogleOAuthState({ ...input, expiresAt: Date.now() + 10 * 60 * 1000 }, config.stateSecret);
+  const state = signGoogleOAuthState({
+    ...input,
+    capability,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  }, config.stateSecret);
+  const scopes = [
+    ...GOOGLE_BASE_SCOPES,
+    GOOGLE_CALENDAR_SCOPE,
+    ...(capability === 'gmail' ? [GOOGLE_GMAIL_READONLY_SCOPE] : []),
+  ].join(' ');
   const url = new URL(GOOGLE_AUTHORIZE_URL);
   url.search = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: 'code',
-    scope: GOOGLE_SCOPE,
+    scope: scopes,
     access_type: 'offline',
     include_granted_scopes: 'true',
     prompt: 'consent',
@@ -203,7 +217,7 @@ const refreshGoogleAccessToken = async (connection: CalendarConnection) => {
   return tokens.access_token;
 };
 
-const getGoogleAccessToken = async (connection: CalendarConnection) => {
+export const getGoogleAccessToken = async (connection: CalendarConnection) => {
   const config = getGoogleConfig();
   if (
     connection.accessTokenEncrypted
@@ -475,7 +489,7 @@ export const connectGoogleCalendar = async (organisationId: string, tokens: Goog
       accessTokenEncrypted: encryptGoogleToken(tokens.access_token, config.encryptionKey),
       refreshTokenEncrypted: refreshToken,
       accessTokenExpiresAt: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000),
-      grantedScopes: tokens.scope ?? GOOGLE_SCOPE,
+      grantedScopes: tokens.scope ?? [...GOOGLE_BASE_SCOPES, GOOGLE_CALENDAR_SCOPE].join(' '),
       syncError: null,
     },
     create: {
@@ -487,10 +501,13 @@ export const connectGoogleCalendar = async (organisationId: string, tokens: Goog
       accessTokenEncrypted: encryptGoogleToken(tokens.access_token, config.encryptionKey),
       refreshTokenEncrypted: refreshToken,
       accessTokenExpiresAt: new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000),
-      grantedScopes: tokens.scope ?? GOOGLE_SCOPE,
+      grantedScopes: tokens.scope ?? [...GOOGLE_BASE_SCOPES, GOOGLE_CALENDAR_SCOPE].join(' '),
     },
   });
 };
+
+export const googleConnectionHasGmailScope = (connection: Pick<CalendarConnection, 'grantedScopes'> | null | undefined) =>
+  Boolean(connection?.grantedScopes?.split(/\s+/).includes(GOOGLE_GMAIL_READONLY_SCOPE));
 
 export const disconnectGoogleCalendar = async (organisationId: string) => {
   const config = getGoogleConfig();

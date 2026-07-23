@@ -8,6 +8,7 @@ const desktopRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/desktop
 const service = fs.readFileSync('src/server/services/automation-jobs.service.ts', 'utf8');
 const validation = fs.readFileSync('src/lib/validation/automation-job.ts', 'utf8');
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
+const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
 const jobsPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
 
 assert.match(schema, /enum AutomationJobType/, 'schema defines automation job types');
@@ -45,10 +46,11 @@ assert.doesNotMatch(service, /storageKey:\s*document\.storageKey|storageUrl:\s*d
 assert.match(validation, /'storageKey'/, 'snapshot validation forbids storageKey fields');
 assert.match(validation, /'password'/, 'snapshot validation forbids password fields');
 assert.match(validation, /'apiKey'/, 'snapshot validation forbids apiKey fields');
-assert.match(projectPage, /AutomationLaunchButton/, 'project detail page uses the one-click desktop launcher');
-assert.match(projectPage, /type="HOUSEHOLDER_PLANNING"/, 'project detail page can open householder jobs');
-assert.match(projectPage, /type="BUILDING_WARRANT"/, 'project detail page can open building warrant jobs');
-assert.doesNotMatch(projectPage, /type="PLANNING_APPLICATION"/, 'unsupported generic planning automation is not offered to desktop users');
+assert.match(projectPage, /ApplicationSummaryCard/, 'project detail page uses the shared application summary');
+assert.match(applicationSummaryCard, /AutomationLaunchButton/, 'application summaries use the one-click desktop launcher');
+assert.match(applicationSummaryCard, /type="HOUSEHOLDER_PLANNING"/, 'application summaries can open householder jobs');
+assert.match(applicationSummaryCard, /type="BUILDING_WARRANT"/, 'application summaries can open building warrant jobs');
+assert.doesNotMatch(applicationSummaryCard, /type="PLANNING_APPLICATION"/, 'unsupported generic planning automation is not offered to desktop users');
 assert.match(jobsPage, /Desktop Automation/, 'automation jobs page is reframed as Desktop Automation');
 assert.match(jobsPage, /How desktop automation works/, 'automation jobs page explains the desktop handoff workflow');
 assert.match(jobsPage, /Ready for desktop/, 'automation jobs page groups ready jobs with human-friendly copy');

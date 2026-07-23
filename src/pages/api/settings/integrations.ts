@@ -35,6 +35,13 @@ export const GET: APIRoute = (context) =>
           accountEmail: true,
           lastSyncedAt: true,
           syncError: true,
+          grantedScopes: true,
+          gmailEnabled: true,
+          gmailRequireReview: true,
+          gmailAutoApplyHighConfidence: true,
+          gmailLastSuccessfulSyncAt: true,
+          gmailLastAttemptedSyncAt: true,
+          gmailSyncError: true,
           _count: { select: { events: { where: { syncStatus: 'SYNCED' } } } },
         },
         orderBy: { provider: 'asc' },
@@ -42,8 +49,9 @@ export const GET: APIRoute = (context) =>
     });
 
     return jsonResponse(200, {
-      connections: connections.map(({ _count, ...connection }) => ({
+      connections: connections.map(({ _count, grantedScopes, ...connection }) => ({
         ...connection,
+        gmailPermissionGranted: Boolean(grantedScopes?.split(/\s+/).includes('https://www.googleapis.com/auth/gmail.readonly')),
         syncedEventCount: _count.events,
       })),
       canManage: ['OWNER', 'ADMIN'].includes(membership.role),

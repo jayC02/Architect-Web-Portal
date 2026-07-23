@@ -1,0 +1,79 @@
+---
+import AutomationLaunchButton from '@/components/automation/AutomationLaunchButton';
+
+interface Props {
+  id: string;
+  title: string;
+  subtitle: string;
+  manageHref: string;
+  address: string;
+  clientName: string;
+  applicationType: string;
+  status: string;
+  documentCount: number;
+  reference: string;
+  projectId: string;
+  applicationKind: 'PLANNING' | 'BUILDING_WARRANT';
+  applicationId?: string;
+  actionLabel: string;
+}
+
+const {
+  id,
+  title,
+  subtitle,
+  manageHref,
+  address,
+  clientName,
+  applicationType,
+  status,
+  documentCount,
+  reference,
+  projectId,
+  applicationKind,
+  applicationId,
+  actionLabel,
+} = Astro.props;
+---
+<section id={id} class="panel flex h-full scroll-mt-6 flex-col rounded-lg p-4 sm:p-5">
+  <header class="flex items-start justify-between gap-4">
+    <div class="min-w-0">
+      <h2 class="text-xl font-semibold">{title}</h2>
+      <p class="mt-1 text-sm text-stone-500">{subtitle}</p>
+    </div>
+    <a class="shrink-0 rounded-sm text-sm font-semibold text-stone-600 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2" href={manageHref}>Manage</a>
+  </header>
+
+  <dl class="mt-5 grid flex-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+    <div class="min-w-0">
+      <dt class="label">Address</dt>
+      <dd class="break-words text-sm font-medium leading-6 text-ink">{address}</dd>
+    </div>
+    <div class="min-w-0">
+      <dt class="label">Status</dt>
+      <dd class="flex items-center gap-2 text-sm font-semibold text-ink"><span class="h-2 w-2 shrink-0 rounded-full bg-moss" aria-hidden="true"></span>{status}</dd>
+    </div>
+    <div class="min-w-0">
+      <dt class="label">Client</dt>
+      <dd class="break-words text-sm font-medium leading-6 text-ink">{clientName}</dd>
+    </div>
+    <div class="min-w-0">
+      <dt class="label">Documents</dt>
+      <dd class="text-sm font-medium leading-6 text-ink">{documentCount} document{documentCount === 1 ? '' : 's'}</dd>
+    </div>
+    <div class="min-w-0">
+      <dt class="label">Application type</dt>
+      <dd class="break-words text-sm font-medium leading-6 text-ink">{applicationType}</dd>
+    </div>
+    <div class="min-w-0">
+      <dt class="label">Reference</dt>
+      <dd class="break-words text-sm font-medium leading-6 text-ink">{reference}</dd>
+    </div>
+  </dl>
+
+  <footer class="mt-5 border-t border-stone-200 pt-4">
+    {applicationKind === 'PLANNING'
+      ? <AutomationLaunchButton client:load projectId={projectId} type="HOUSEHOLDER_PLANNING" planningApplicationId={applicationId} label={actionLabel} />
+      : <AutomationLaunchButton client:load projectId={projectId} type="BUILDING_WARRANT" buildingWarrantApplicationId={applicationId} label={actionLabel} />}
+  </footer>
+</section>

@@ -156,6 +156,34 @@ enum CalendarConnectionStatus {
   PAUSED
 }
 
+enum GmailMatchStatus {
+  UNMATCHED
+  MATCHED
+  AMBIGUOUS
+  UNRELATED
+}
+
+enum GmailProcessingStatus {
+  DISCOVERED
+  PROCESSED
+  NEEDS_REVIEW
+  FAILED
+}
+
+enum GmailSuggestionStatus {
+  PENDING
+  APPLIED
+  REJECTED
+  FAILED
+}
+
+enum GmailUpdateType {
+  PLANNING_APPLICATION
+  BUILDING_WARRANT
+  DEADLINE
+  PROJECT_ACTIVITY
+}
+
 enum SubmissionPackageType {
   PLANNING
   BUILDING_WARRANT
@@ -210,6 +238,7 @@ model User {
   createdAutomationJobs AutomationJob[]     @relation("AutomationJobCreatedBy")
   claimedAutomationJobs AutomationJob[]     @relation("AutomationJobClaimedBy")
   desktopAccessTokens   DesktopAccessToken[]
+  reviewedGmailSuggestions GmailUpdateSuggestion[] @relation("GmailSuggestionReviewedBy")
 
   @@index([email])
   @@index([createdAt])
@@ -253,6 +282,9 @@ model Organisation {
   documentSortBatches  DocumentSortBatch[]
   automationJobs       AutomationJob[]
   desktopAccessTokens  DesktopAccessToken[]
+  trackedEmails        TrackedEmail[]
+  gmailSuggestions     GmailUpdateSuggestion[]
+  gmailAttachments     GmailAttachment[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -337,6 +369,8 @@ model Project {
   submissionPackages   SubmissionPackage[]
   documentSortBatches  DocumentSortBatch[]
   automationJobs       AutomationJob[]
+  trackedEmails        TrackedEmail[]
+  gmailSuggestions     GmailUpdateSuggestion[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
@@ -373,6 +407,7 @@ model ProjectDocument {
   uploadedBy     User                        @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
   packages       SubmissionPackageDocument[]
   sortBatchItems DocumentSortBatchItem[]
+  sourceGmailAttachment GmailAttachment?
 
   @@index([organisationId, projectId, createdAt])
   @@index([organisationId, createdAt])
@@ -507,6 +542,8 @@ model PlanningApplication {
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   deadlines    Deadline[]
+  trackedEmails TrackedEmail[]
+  gmailSuggestions GmailUpdateSuggestion[]
 
   @@index([organisationId, status, decisionTargetDate])
   @@index([organisationId, updatedAt])
@@ -533,6 +570,8 @@ model BuildingWarrantApplication {
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   deadlines    Deadline[]
+  trackedEmails TrackedEmail[]
+  gmailSuggestions GmailUpdateSuggestion[]
 
   @@index([organisationId, status, firstResponseTargetDate])
   @@index([organisationId, updatedAt])
@@ -554,6 +593,7 @@ model Deadline {
   priority                     DeadlinePriority @default(MEDIUM)
   reminderDate                 DateTime?
   completedDate                DateTime?
+  sourceKey                    String?
   createdAt                    DateTime         @default(now())
   updatedAt                    DateTime         @updatedAt
 
@@ -567,6 +607,7 @@ model Deadline {
   @@index([organisationId, projectId])
   @@index([planningApplicationId])
   @@index([buildingWarrantApplicationId])
+  @@unique([organisationId, sourceKey])
 }
 
 model CalendarConnection {
@@ -582,6 +623,14 @@ model CalendarConnection {
   grantedScopes         String?
   lastSyncedAt          DateTime?
   syncError             String?
+  gmailEnabled          Boolean                  @default(false)
+  gmailRequireReview    Boolean                  @default(true)
+  gmailAutoApplyHighConfidence Boolean           @default(false)
+  gmailHistoryId        String?
+  gmailLastSuccessfulSyncAt DateTime?
+  gmailLastAttemptedSyncAt DateTime?
+  gmailSyncStartedAt    DateTime?
+  gmailSyncError        String?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
@@ -590,6 +639,104 @@ model CalendarConnection {
 
   @@unique([organisationId, provider])
   @@index([organisationId, status])
+}
+
+model TrackedEmail {
+  id                           String                @id @default(cuid())
+  organisationId               String
+  gmailMessageId               String
+  gmailThreadId                String
+  sender                       String
+  recipients                   Json
+  subject                      String
+  sentAt                       DateTime
+  textExcerpt                  String?
+  matchStatus                  GmailMatchStatus      @default(UNMATCHED)
+  processingStatus             GmailProcessingStatus @default(DISCOVERED)
+  projectId                    String?
+  planningApplicationId        String?
+  buildingWarrantApplicationId String?
+  matchConfidence              Float?
+  matchReason                  String?
+  processingError              String?
+  processedAt                  DateTime?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+
+  organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  planningApplication        PlanningApplication?        @relation(fields: [planningApplicationId], references: [id], onDelete: SetNull)
+  buildingWarrantApplication BuildingWarrantApplication? @relation(fields: [buildingWarrantApplicationId], references: [id], onDelete: SetNull)
+  suggestions                GmailUpdateSuggestion[]
+  attachments                GmailAttachment[]
+
+  @@unique([organisationId, gmailMessageId])
+  @@index([organisationId, gmailThreadId])
+  @@index([organisationId, matchStatus, sentAt])
+  @@index([organisationId, processingStatus, sentAt])
+  @@index([organisationId, projectId, sentAt])
+  @@index([planningApplicationId])
+  @@index([buildingWarrantApplicationId])
+}
+
+model GmailUpdateSuggestion {
+  id                           String                @id @default(cuid())
+  organisationId               String
+  trackedEmailId               String
+  projectId                    String?
+  planningApplicationId        String?
+  buildingWarrantApplicationId String?
+  updateType                   GmailUpdateType
+  fieldName                    String
+  dedupeKey                    String
+  existingValue                Json?
+  suggestedValue               Json
+  confidence                   Float
+  reason                       String
+  status                       GmailSuggestionStatus @default(PENDING)
+  appliedAutomatically         Boolean               @default(false)
+  reviewedById                 String?
+  reviewedAt                   DateTime?
+  appliedAt                    DateTime?
+  error                        String?
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+
+  organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  trackedEmail               TrackedEmail                @relation(fields: [trackedEmailId], references: [id], onDelete: Cascade)
+  project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  planningApplication        PlanningApplication?        @relation(fields: [planningApplicationId], references: [id], onDelete: SetNull)
+  buildingWarrantApplication BuildingWarrantApplication? @relation(fields: [buildingWarrantApplicationId], references: [id], onDelete: SetNull)
+  reviewedBy                 User?                       @relation("GmailSuggestionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([trackedEmailId, dedupeKey])
+  @@index([organisationId, status, createdAt])
+  @@index([organisationId, projectId, createdAt])
+  @@index([planningApplicationId])
+  @@index([buildingWarrantApplicationId])
+  @@index([reviewedById])
+}
+
+model GmailAttachment {
+  id                 String   @id @default(cuid())
+  organisationId     String
+  trackedEmailId     String
+  gmailAttachmentId  String
+  fileName           String
+  mimeType           String
+  sizeBytes          Int
+  sha256             String?
+  importedDocumentId String?  @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organisation     Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  trackedEmail     TrackedEmail    @relation(fields: [trackedEmailId], references: [id], onDelete: Cascade)
+  importedDocument ProjectDocument? @relation(fields: [importedDocumentId], references: [id], onDelete: SetNull)
+
+  @@unique([trackedEmailId, gmailAttachmentId])
+  @@index([organisationId, createdAt])
+  @@index([organisationId, sha256])
 }
 
 model SyncedCalendarEvent {

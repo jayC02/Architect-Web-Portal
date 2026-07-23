@@ -1,0 +1,176 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const [emails, suggestions, projects, connection] = await Promise.all([
+  prisma.trackedEmail.findMany({
+    where: {
+      organisationId: auth.organisation.id,
+      OR: [
+        { matchStatus: { in: ['UNMATCHED', 'AMBIGUOUS'] } },
+        { processingStatus: 'NEEDS_REVIEW' },
+        { attachments: { some: { importedDocumentId: null } } },
+      ],
+    },
+    include: {
+      project: { select: { id: true, name: true } },
+      attachments: true,
+      _count: { select: { suggestions: { where: { status: 'PENDING' } } } },
+    },
+    orderBy: { sentAt: 'desc' },
+    take: 100,
+  }),
+  prisma.gmailUpdateSuggestion.findMany({
+    where: { organisationId: auth.organisation.id, status: 'PENDING' },
+    include: {
+      trackedEmail: { select: { subject: true, sender: true, sentAt: true } },
+      project: { select: { id: true, name: true } },
+    },
+    orderBy: [{ confidence: 'desc' }, { createdAt: 'desc' }],
+    take: 200,
+  }),
+  prisma.project.findMany({
+    where: { organisationId: auth.organisation.id, status: { not: 'ARCHIVED' } },
+    select: { id: true, name: true, internalReference: true },
+    orderBy: { name: 'asc' },
+  }),
+  prisma.calendarConnection.findUnique({
+    where: { organisationId_provider: { organisationId: auth.organisation.id, provider: 'GOOGLE' } },
+    select: { gmailEnabled: true, gmailLastSuccessfulSyncAt: true, gmailSyncError: true },
+  }),
+]);
+
+const confidenceLabel = (value: number) => value >= 0.9 ? 'High' : value >= 0.7 ? 'Medium' : 'Low';
+const displaySuggestion = (value: unknown) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    return String(record.dueDate ?? record.title ?? JSON.stringify(value));
+  }
+  return String(value ?? '');
+};
+---
+<AppShell title="Email updates" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <header class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Gmail tracking</p>
+      <h1 class="mt-2 text-3xl font-semibold">Email updates</h1>
+      <p class="mt-2 max-w-2xl text-sm text-stone-500">Review uncertain project matches and confirm changes before they update application records.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {connection?.gmailEnabled && <form data-api-form data-action="/api/integrations/gmail/sync" data-method="POST" data-redirect="reload"><button class="btn btn-secondary">Sync Gmail</button></form>}
+      <a class="btn btn-secondary" href="/settings/integrations">Gmail settings</a>
+    </div>
+  </header>
+
+  {connection?.gmailSyncError && <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Last sync needs attention: {connection.gmailSyncError}</div>}
+
+  <div class="grid gap-4 sm:grid-cols-3">
+    <article class="panel rounded-lg p-4"><p class="label">Emails needing a match</p><p class="mt-2 text-2xl font-semibold">{emails.filter((email) => email.matchStatus !== 'MATCHED').length}</p></article>
+    <article class="panel rounded-lg p-4"><p class="label">Pending updates</p><p class="mt-2 text-2xl font-semibold">{suggestions.length}</p></article>
+    <article class="panel rounded-lg p-4"><p class="label">Last successful sync</p><p class="mt-2 text-sm font-semibold">{formatDate(connection?.gmailLastSuccessfulSyncAt)}</p></article>
+  </div>
+
+  <section class="panel mt-6 overflow-hidden rounded-lg">
+    <div class="border-b border-stone-200 px-5 py-4">
+      <h2 class="text-xl font-semibold">Updates to review</h2>
+      <p class="mt-1 text-sm text-stone-500">Apply, correct or reject each proposed application change.</p>
+    </div>
+    {suggestions.length ? <div class="divide-y divide-stone-200">
+      {suggestions.map((suggestion) => (
+        <article class="px-5 py-4">
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] lg:items-center">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase text-stone-500">{humanizeEnum(suggestion.updateType)} &middot; {confidenceLabel(suggestion.confidence)} confidence</p>
+              <h3 class="mt-1 truncate font-semibold">{suggestion.project?.name ?? 'Project match required'}</h3>
+              <p class="mt-1 truncate text-sm text-stone-600">{suggestion.trackedEmail.subject}</p>
+              <p class="mt-1 text-xs text-stone-500">{suggestion.trackedEmail.sender} &middot; {formatDate(suggestion.trackedEmail.sentAt)}</p>
+            </div>
+            <div>
+              <p class="label">{humanizeEnum(suggestion.fieldName)}</p>
+              <p class="break-words font-semibold">{displaySuggestion(suggestion.suggestedValue)}</p>
+              <p class="mt-1 text-xs leading-5 text-stone-500">{suggestion.reason}</p>
+            </div>
+            <div class="flex flex-wrap gap-2 lg:justify-end">
+              <form data-api-form data-action={`/api/gmail/suggestions/${suggestion.id}`} data-method="PATCH" data-redirect="reload">
+                <input type="hidden" name="action" value="apply" />
+                <button class="btn btn-primary">Apply</button>
+              </form>
+              <form data-api-form data-action={`/api/gmail/suggestions/${suggestion.id}`} data-method="PATCH" data-redirect="reload">
+                <input type="hidden" name="action" value="reject" />
+                <button class="btn btn-secondary">Reject</button>
+              </form>
+            </div>
+          </div>
+          {suggestion.updateType !== 'DEADLINE' && <details class="mt-3">
+            <summary class="cursor-pointer text-sm font-semibold text-stone-600">Edit and apply</summary>
+            <form data-api-form data-action={`/api/gmail/suggestions/${suggestion.id}`} data-method="PATCH" data-redirect="reload" class="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input type="hidden" name="action" value="apply" />
+              <input name="value" class="field" value={displaySuggestion(suggestion.suggestedValue)} aria-label={`Corrected ${humanizeEnum(suggestion.fieldName)}`} />
+              <button class="btn btn-secondary shrink-0">Apply corrected value</button>
+            </form>
+          </details>}
+        </article>
+      ))}
+    </div> : <div class="px-5 py-10 text-center"><p class="font-semibold">No application updates need review</p><p class="mt-1 text-sm text-stone-500">New deterministic suggestions will appear here after Gmail sync.</p></div>}
+  </section>
+
+  <section class="panel mt-6 overflow-hidden rounded-lg">
+    <div class="border-b border-stone-200 px-5 py-4">
+      <h2 class="text-xl font-semibold">Email matching</h2>
+      <p class="mt-1 text-sm text-stone-500">Link ambiguous messages once. Later messages in the same Gmail thread will inherit that project.</p>
+    </div>
+    {emails.filter((email) => email.matchStatus !== 'MATCHED').length ? <div class="divide-y divide-stone-200">
+      {emails.filter((email) => email.matchStatus !== 'MATCHED').map((email) => (
+        <article class="px-5 py-4">
+          <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.9fr)] xl:items-start">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase text-stone-500">{email.matchStatus === 'AMBIGUOUS' ? 'Ambiguous project match' : 'Project not matched'}</p>
+              <h3 class="mt-1 truncate font-semibold">{email.subject}</h3>
+              <p class="mt-1 text-sm text-stone-600">{email.sender} &middot; {formatDate(email.sentAt)}</p>
+              {email.textExcerpt && <p class="mt-3 line-clamp-3 text-sm leading-6 text-stone-500">{email.textExcerpt}</p>}
+              {email.attachments.length > 0 && <p class="mt-2 text-xs font-semibold text-stone-500">{email.attachments.length} attachment{email.attachments.length === 1 ? '' : 's'} available after linking</p>}
+            </div>
+            <div class="space-y-3">
+              <form data-api-form data-action={`/api/gmail/emails/${email.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+                <input type="hidden" name="action" value="link" />
+                <select required name="projectId" class="field" aria-label="Project">
+                  <option value="">Select project</option>
+                  {projects.map((project) => <option value={project.id}>{project.name}{project.internalReference ? ` - ${project.internalReference}` : ''}</option>)}
+                </select>
+                <select name="applicationType" class="field" aria-label="Application area">
+                  <option value="GENERAL">General project email</option>
+                  <option value="PLANNING">Planning</option>
+                  <option value="BUILDING_WARRANT">Building Warrant</option>
+                </select>
+                <button class="btn btn-primary">Link</button>
+              </form>
+              <form data-api-form data-action={`/api/gmail/emails/${email.id}`} data-method="PATCH" data-redirect="reload">
+                <input type="hidden" name="action" value="unrelated" />
+                <button class="text-sm font-semibold text-stone-500 hover:text-ink">Mark thread unrelated</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div> : <div class="px-5 py-10 text-center"><p class="font-semibold">No emails need matching</p><p class="mt-1 text-sm text-stone-500">Strong project references and confirmed threads are linked automatically.</p></div>}
+  </section>
+
+  {emails.some((email) => email.matchStatus === 'MATCHED' && email.attachments.length) && <section class="panel mt-6 overflow-hidden rounded-lg">
+    <div class="border-b border-stone-200 px-5 py-4"><h2 class="text-xl font-semibold">Attachments available</h2><p class="mt-1 text-sm text-stone-500">Attachments are not saved automatically. Import only the files the project needs.</p></div>
+    <div class="divide-y divide-stone-200">
+      {emails.filter((email) => email.matchStatus === 'MATCHED').flatMap((email) => email.attachments.map((attachment) => (
+        <div class="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0"><p class="truncate font-semibold">{attachment.fileName}</p><p class="mt-1 text-xs text-stone-500">{email.project?.name} &middot; {formatBytes(attachment.sizeBytes)}</p></div>
+          {attachment.importedDocumentId
+            ? <a class="text-sm font-semibold text-moss" href={`/api/documents/${attachment.importedDocumentId}`} target="_blank">Open imported file</a>
+            : <form data-api-form data-action={`/api/gmail/attachments/${attachment.id}/import`} data-method="POST" data-redirect="reload"><button class="btn btn-secondary">Import for review</button></form>}
+        </div>
+      )))}
+    </div>
+  </section>}
+</AppShell>

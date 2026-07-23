@@ -2,6 +2,12 @@
   "framework": "astro",
   "buildCommand": "npm run build",
   "regions": ["lhr1"],
+  "crons": [
+    {
+      "path": "/api/cron/gmail-sync",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/_astro/(.*)",
