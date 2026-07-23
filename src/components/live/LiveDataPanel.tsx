@@ -664,15 +664,12 @@ function DeadlineForm({ deadline, projects, onClose }: { deadline?: AnyRecord; p
   const [projectId, setProjectId] = useState(deadline?.projectId ?? selectedFromUrl);
   const [description, setDescription] = useState(deadline?.description ?? '');
   const editing = Boolean(deadline?.id);
-  const selectedProject = projects.find((project) => project.id === projectId);
-  const firstDescriptionLine = description.trim().split(/\r?\n/)[0]?.slice(0, 160);
-  const generatedTitle = firstDescriptionLine || deadline?.title || (selectedProject ? `${selectedProject.name} deadline` : 'Practice deadline');
 
   return (
     <form data-api-form data-action={editing ? `/api/deadlines/${deadline?.id}` : '/api/deadlines'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4">
-      <input type="hidden" name="title" value={generatedTitle} />
       <input type="hidden" name="type" value={deadline?.type ?? 'CUSTOM'} />
       <input type="hidden" name="status" value={deadline?.status ?? 'UPCOMING'} />
+      <label className="block"><span className="label">Title</span><input required name="title" maxLength={160} defaultValue={deadline?.title ?? ''} className="field" placeholder="Enter deadline title" autoFocus /></label>
       <label className="block"><span className="label">Project</span><select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} className="field"><option value="">General</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
       <label className="block"><span className="label">Due date</span><input required type="date" name="dueDate" defaultValue={dateInput(deadline?.dueDate)} className="field" /></label>
       <label className="block"><span className="label">Priority</span><select name="priority" defaultValue={deadline?.priority ?? 'MEDIUM'} className="field">{deadlinePriorities.map((priority) => <option key={priority} value={priority}>{human(priority)}</option>)}</select></label>
