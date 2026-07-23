@@ -13,6 +13,7 @@ import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.se
 import {
   buildDesktopLaunchUrl,
   createDesktopHandoffCode,
+  desktopPortalOrigin,
   desktopHandoffCodeHash,
   desktopHandoffExpiry,
 } from '@/server/auth/desktop-token';
@@ -55,6 +56,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
 
   return jsonResponse(201, {
     job,
-    launchUrl: buildDesktopLaunchUrl(job.id, handoffCode, context.url.origin),
+    launchUrl: buildDesktopLaunchUrl(job.id, handoffCode, desktopPortalOrigin(context.request)),
   });
 }, context);

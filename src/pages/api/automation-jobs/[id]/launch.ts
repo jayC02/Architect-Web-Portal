@@ -10,6 +10,7 @@ import { HttpError, jsonResponse } from '@/lib/utils/http';
 import {
   buildDesktopLaunchUrl,
   createDesktopHandoffCode,
+  desktopPortalOrigin,
   desktopHandoffCodeHash,
   desktopHandoffExpiry,
 } from '@/server/auth/desktop-token';
@@ -34,6 +35,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   if (!updated.count) throw new HttpError(409, 'This automation job is no longer ready to open.');
 
   return jsonResponse(200, {
-    launchUrl: buildDesktopLaunchUrl(id, handoffCode, context.url.origin),
+    launchUrl: buildDesktopLaunchUrl(id, handoffCode, desktopPortalOrigin(context.request)),
   });
 }, context);

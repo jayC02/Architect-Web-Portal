@@ -22,6 +22,12 @@ assert.doesNotMatch(launcher, /password|storageKey/i, 'custom protocol launch mu
 assert.match(createRoute, /buildDesktopLaunchUrl/, 'new jobs must receive a short-lived desktop launch URL');
 assert.match(tokenAuth, /Buffer\.from\(portalOrigin, 'utf8'\)\.toString\('base64url'\)/, 'launch data uses path-safe encoding instead of a query string');
 assert.doesNotMatch(tokenAuth, /new URLSearchParams/, 'custom protocol launches must not depend on query strings that Windows may drop');
+assert.match(tokenAuth, /process\.env\.PUBLIC_SITE_URL/, 'desktop links must prefer the configured public portal origin');
+assert.match(tokenAuth, /PUBLIC_SITE_URL in production/, 'production must reject accidental localhost handoff origins');
+assert.match(createRoute, /desktopPortalOrigin\(context\.request\)/, 'new jobs must encode the trusted public portal origin');
+assert.match(relaunchRoute, /desktopPortalOrigin\(context\.request\)/, 'relaunches must encode the trusted public portal origin');
+assert.doesNotMatch(createRoute, /context\.url\.origin/, 'new job links must not use an internal platform request origin');
+assert.doesNotMatch(relaunchRoute, /context\.url\.origin/, 'relaunch links must not use an internal platform request origin');
 assert.match(relaunchRoute, /requireOrganisation\(context\)/, 'relaunching an existing job requires an organisation session');
 assert.match(relaunchRoute, /organisationId:\s*organisation\.id/, 'existing job relaunch is organisation scoped');
 assert.match(exchangeRoute, /handoffRedeemedAt:\s*null/, 'handoff exchange only accepts unused links');

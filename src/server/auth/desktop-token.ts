@@ -24,6 +24,36 @@ export const buildDesktopLaunchUrl = (jobId: string, handoffCode: string, portal
   return `architectpro://automation/${jobId}/${handoffCode}/${encodedPortal}`;
 };
 
+const normalizeDesktopPortalOrigin = (value: string) => {
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const url = new URL(candidate);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      throw new Error('Unsupported portal URL.');
+    }
+    if (url.hostname === 'architectpro.co.uk') url.hostname = 'www.architectpro.co.uk';
+    return url.origin;
+  } catch {
+    throw new HttpError(500, 'Desktop handoff is not configured with a valid portal URL.');
+  }
+};
+
+export const desktopPortalOrigin = (request: Request) => {
+  const configuredOrigin = process.env.PUBLIC_SITE_URL?.trim();
+  if (configuredOrigin) return normalizeDesktopPortalOrigin(configuredOrigin);
+
+  const vercelOrigin = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (vercelOrigin) return normalizeDesktopPortalOrigin(vercelOrigin);
+
+  const requestOrigin = normalizeDesktopPortalOrigin(request.url);
+  const hostname = new URL(requestOrigin).hostname;
+  if (process.env.NODE_ENV === 'production' && ['localhost', '127.0.0.1', '::1'].includes(hostname)) {
+    throw new HttpError(500, 'Desktop handoff requires PUBLIC_SITE_URL in production.');
+  }
+  return requestOrigin;
+};
+
 export const requireDesktopAuth = async (context: APIContext) => {
   const authorization = context.request.headers.get('authorization') ?? '';
   const [scheme, token] = authorization.split(' ', 2);
