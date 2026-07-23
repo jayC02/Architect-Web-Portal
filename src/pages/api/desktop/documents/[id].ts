@@ -8,7 +8,7 @@ import { prisma } from '@/lib/db/prisma';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError } from '@/lib/utils/http';
-import { requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
 
 const safeFilename = (value: string) => value.replace(/[\r\n"\\]/g, '_');
 const safeStorageKey = (value: string | null) => {
@@ -33,6 +33,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const id = context.params.id;
   const jobId = context.url.searchParams.get('jobId');
   if (!id || !jobId) throw new HttpError(400, 'Document id and automation job id are required.');
+  assertDesktopJobAccess(access, jobId);
 
   const job = await prisma.automationJob.findFirst({
     where: {

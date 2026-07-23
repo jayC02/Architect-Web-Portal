@@ -7,13 +7,14 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopJobClaimSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertRateLimit(context, rateLimitPolicies.desktop, 'desktop-job:claim');
   const access = await requireDesktopAuth(context);
   const id = context.params.id;
   if (!id) throw new HttpError(400, 'Automation job id is required.');
+  assertDesktopJobAccess(access, id);
   await parseBody(context.request, desktopJobClaimSchema);
 
   const existing = await prisma.automationJob.findFirst({

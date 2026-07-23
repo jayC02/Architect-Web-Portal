@@ -10,6 +10,12 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
+import {
+  buildDesktopLaunchUrl,
+  createDesktopHandoffCode,
+  desktopHandoffCodeHash,
+  desktopHandoffExpiry,
+} from '@/server/auth/desktop-token';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
@@ -28,6 +34,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     planningApplicationId: body.planningApplicationId,
     buildingWarrantApplicationId: body.buildingWarrantApplicationId,
   });
+  const handoffCode = createDesktopHandoffCode();
   const job = await prisma.automationJob.create({
     data: {
       organisationId: organisation.id,
@@ -37,6 +44,8 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       sourceType: snapshot.sourceType,
       title: snapshot.title,
       payloadVersion: 1,
+      handoffCodeHash: desktopHandoffCodeHash(handoffCode),
+      handoffExpiresAt: desktopHandoffExpiry(),
       dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
       documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
       createdById: user.id,
@@ -46,6 +55,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
 
   return jsonResponse(201, {
     job,
-    launchUrl: `architectpro://automation/${job.id}`,
+    launchUrl: buildDesktopLaunchUrl(job.id, handoffCode, context.url.origin),
   });
 }, context);

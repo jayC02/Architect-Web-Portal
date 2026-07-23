@@ -7,7 +7,7 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopJobStatusSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
 
 const selectableStatuses = [
   AutomationJobStatus.READY,
@@ -31,6 +31,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const access = await requireDesktopAuth(context);
   const id = context.params.id;
   if (!id) throw new HttpError(400, 'Automation job id is required.');
+  assertDesktopJobAccess(access, id);
   const job = await prisma.automationJob.findFirst({
     where: {
       id,
@@ -53,6 +54,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   const access = await requireDesktopAuth(context);
   const id = context.params.id;
   if (!id) throw new HttpError(400, 'Automation job id is required.');
+  assertDesktopJobAccess(access, id);
   const body = await parseBody(context.request, desktopJobStatusSchema);
   const result = await prisma.automationJob.updateMany({
     where: {

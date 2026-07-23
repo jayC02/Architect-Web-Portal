@@ -15,6 +15,12 @@ export const desktopJobClaimSchema = z.object({
   deviceName: z.string().trim().min(1).max(120).optional(),
 });
 
+export const desktopHandoffExchangeSchema = z.object({
+  jobId: z.string().trim().min(8).max(120),
+  code: z.string().trim().regex(/^aph_[A-Za-z0-9_-]{40,80}$/, 'The desktop handoff code is invalid.'),
+  deviceName: z.string().trim().min(1).max(120).optional(),
+});
+
 export const desktopJobStatusSchema = z.object({
   status: z.enum([
     AutomationJobStatus.IN_PROGRESS,

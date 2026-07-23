@@ -446,6 +446,9 @@ model AutomationJob {
   createdById      String
   claimedByUserId  String?
   claimedDeviceId  String?
+  handoffCodeHash  String?                @unique
+  handoffExpiresAt DateTime?
+  handoffRedeemedAt DateTime?
   claimedAt        DateTime?
   completedAt      DateTime?
   createdAt        DateTime                @default(now())
@@ -455,17 +458,20 @@ model AutomationJob {
   project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy     User         @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   claimedBy     User?        @relation("AutomationJobClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  desktopAccessTokens DesktopAccessToken[] @relation("DesktopTokenAutomationJob")
 
   @@index([organisationId, projectId, status, type, createdAt])
   @@index([organisationId, status, createdAt])
   @@index([createdById])
   @@index([claimedByUserId])
+  @@index([handoffExpiresAt])
 }
 
 model DesktopAccessToken {
   id             String    @id @default(cuid())
   organisationId String
   userId         String
+  automationJobId String?
   name           String
   tokenHash      String    @unique
   tokenPrefix    String
@@ -477,9 +483,11 @@ model DesktopAccessToken {
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  automationJob AutomationJob? @relation("DesktopTokenAutomationJob", fields: [automationJobId], references: [id], onDelete: Cascade)
 
   @@index([organisationId, userId, revokedAt])
   @@index([expiresAt])
+  @@index([automationJobId, revokedAt])
 }
 model PlanningApplication {
   id                   String         @id @default(cuid())
