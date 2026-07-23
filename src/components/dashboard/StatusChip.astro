@@ -6,11 +6,14 @@ interface Props {
 
 const { label, tone = 'neutral' } = Astro.props;
 const tones = {
-  neutral: 'border-stone-200 bg-stone-100 text-stone-700',
-  success: 'border-moss/20 bg-moss/10 text-moss',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800',
-  danger: 'border-red-200 bg-red-50 text-red-700',
-  info: 'border-steel/20 bg-steel/10 text-steel',
+  neutral: { dot: 'bg-stone-400', text: 'text-stone-600' },
+  success: { dot: 'bg-moss', text: 'text-stone-700' },
+  warning: { dot: 'bg-amber-500', text: 'text-amber-800' },
+  danger: { dot: 'bg-red-700', text: 'text-red-700' },
+  info: { dot: 'bg-steel', text: 'text-stone-700' },
 };
 ---
-<span class={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${tones[tone]}`}>{label}</span>
+<span class={`inline-flex items-center gap-2 text-xs font-medium ${tones[tone].text}`}>
+  <span class={`h-2 w-2 rounded-full ${tones[tone].dot}`} aria-hidden="true"></span>
+  {label}
+</span>

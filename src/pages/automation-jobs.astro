@@ -68,24 +68,6 @@ const displayStatus = (status: AutomationJobStatus) => {
   return labels[status];
 };
 
-const statusTone = (status: AutomationJobStatus) => {
-  if (status === AutomationJobStatus.READY || status === AutomationJobStatus.COMPLETED) return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-  if (status === AutomationJobStatus.FAILED || status === AutomationJobStatus.CANCELLED) return 'border-red-200 bg-red-50 text-red-800';
-  if (status === AutomationJobStatus.CLAIMED || status === AutomationJobStatus.IN_PROGRESS) return 'border-blue-200 bg-blue-50 text-blue-800';
-  return 'border-amber-200 bg-amber-50 text-amber-800';
-};
-
-const groupTone = (tone: 'ready' | 'review' | 'running' | 'complete' | 'failed') => {
-  const tones = {
-    ready: 'border-l-emerald-600',
-    review: 'border-l-amber-500',
-    running: 'border-l-blue-500',
-    complete: 'border-l-moss',
-    failed: 'border-l-red-600',
-  };
-  return tones[tone];
-};
-
 const snapshot = (job: Job) => (job.dataSnapshot ?? {}) as SnapshotRecord;
 const documents = (job: Job) => {
   const documentSnapshot = (job.documentSnapshot ?? {}) as SnapshotRecord;
@@ -145,20 +127,23 @@ const summary = {
 };
 
 const groups = [
-  { key: 'ready', title: 'Ready for desktop', description: 'Jobs ready to be loaded by the desktop app.', statuses: [AutomationJobStatus.READY] as AutomationJobStatus[], tone: 'ready' as const, empty: 'No jobs are ready for desktop yet.' },
-  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.NEEDS_REVIEW] as AutomationJobStatus[], tone: 'review' as const, empty: 'No jobs need review.' },
-  { key: 'running', title: 'In progress', description: 'Jobs claimed or started by the desktop app.', statuses: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] as AutomationJobStatus[], tone: 'running' as const, empty: 'No jobs are currently running.' },
-  { key: 'completed', title: 'Completed', description: 'Jobs completed by the desktop workflow.', statuses: [AutomationJobStatus.COMPLETED] as AutomationJobStatus[], tone: 'complete' as const, empty: 'No completed jobs yet.' },
-  { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], tone: 'failed' as const, empty: 'No failed or cancelled jobs.' },
+  { key: 'ready', title: 'Ready for desktop', description: 'Jobs ready to be loaded by the desktop app.', statuses: [AutomationJobStatus.READY] as AutomationJobStatus[], empty: 'No jobs are ready for desktop yet.' },
+  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.NEEDS_REVIEW] as AutomationJobStatus[], empty: 'No jobs need review.' },
+  { key: 'running', title: 'In progress', description: 'Jobs claimed or started by the desktop app.', statuses: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] as AutomationJobStatus[], empty: 'No jobs are currently running.' },
+  { key: 'completed', title: 'Completed', description: 'Jobs completed by the desktop workflow.', statuses: [AutomationJobStatus.COMPLETED] as AutomationJobStatus[], empty: 'No completed jobs yet.' },
+  { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], empty: 'No failed or cancelled jobs.' },
 ].map((group) => ({ ...group, jobs: jobs.filter((job) => group.statuses.includes(job.status)) }));
 
 const summaryCards = [
-  { label: 'Ready for desktop', value: summary.ready, icon: Monitor, tone: 'bg-emerald-50 text-emerald-800' },
-  { label: 'Needs review', value: summary.review, icon: Eye, tone: 'bg-amber-50 text-amber-800' },
-  { label: 'In progress', value: summary.running, icon: Clock3, tone: 'bg-blue-50 text-blue-800' },
-  { label: 'Completed', value: summary.completed, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-800' },
-  { label: 'Failed / cancelled', value: summary.failed, icon: XCircle, tone: 'bg-red-50 text-red-800' },
+  { key: 'ready', label: 'Ready for desktop', value: summary.ready, icon: Monitor },
+  { key: 'review', label: 'Needs review', value: summary.review, icon: Eye },
+  { key: 'running', label: 'In progress', value: summary.running, icon: Clock3 },
+  { key: 'completed', label: 'Completed', value: summary.completed, icon: CheckCircle2 },
+  { key: 'failed', label: 'Failed / cancelled', value: summary.failed, icon: XCircle },
 ];
+
+const initiallyOpenGroup = groups.find((group) => group.key !== 'failed' && group.jobs.length)?.key
+  ?? groups.find((group) => group.jobs.length)?.key;
 ---
 <AppShell title="Desktop Automation" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -188,21 +173,21 @@ const summaryCards = [
   </div>
 
   <section class="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-    {summaryCards.map(({ label, value, icon: Icon, tone }) => (
-      <article class="panel rounded-lg p-4 transition hover:border-stone-300">
+    {summaryCards.map(({ key, label, value, icon: Icon }) => (
+      <a data-job-group-link href={`#jobs-${key}`} class="panel rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
         <div class="flex items-center justify-between gap-3">
-          <span class={`flex h-8 w-8 items-center justify-center rounded-full ${tone}`}><Icon size={16} /></span>
+          <Icon size={18} className="text-stone-500" aria-hidden="true" />
           <ChevronRight size={17} className="text-stone-400" />
         </div>
         <p class="mt-3 text-sm font-semibold text-stone-700">{label}</p>
         <p class="mt-1 text-2xl font-semibold text-ink">{value}</p>
-      </article>
+      </a>
     ))}
   </section>
 
   {jobs.length === 0 ? (
     <section class="panel rounded-lg p-10 text-center">
-      <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-600"><Monitor size={25} /></span>
+      <Monitor size={28} className="mx-auto text-stone-500" aria-hidden="true" />
       <h2 class="mt-5 text-xl font-semibold">No desktop jobs prepared yet</h2>
       <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-500">Prepare a job from a project when you are ready to complete a Planning, Householder or Building Warrant application in the desktop app.</p>
       <a class="btn btn-primary mt-5" href="/projects">Go to projects</a>
@@ -210,14 +195,14 @@ const summaryCards = [
   ) : (
     <div class="space-y-5">
       {groups.map((group) => (
-        <section class={`panel overflow-hidden rounded-lg border-l-4 ${groupTone(group.tone)}`}>
-          <header class="flex flex-col gap-2 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <details id={`jobs-${group.key}`} class="group panel scroll-mt-6 overflow-hidden rounded-lg" open={group.key === initiallyOpenGroup}>
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 border-b border-transparent px-5 py-4 transition hover:bg-stone-50 group-open:border-stone-100">
             <div>
               <h2 class="text-lg font-semibold">{group.title} <span class="text-stone-400">({group.jobs.length})</span></h2>
               <p class="mt-1 text-sm text-stone-500">{group.description}</p>
             </div>
-            <span class={`self-start rounded-md border px-3 py-1 text-xs font-semibold sm:self-auto ${group.tone === 'ready' || group.tone === 'complete' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : group.tone === 'review' ? 'border-amber-200 bg-amber-50 text-amber-800' : group.tone === 'failed' ? 'border-red-200 bg-red-50 text-red-800' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>{group.title}</span>
-          </header>
+            <ChevronRight size={18} className="shrink-0 text-stone-400 transition group-open:rotate-90" aria-hidden="true" />
+          </summary>
 
           {group.jobs.length ? group.jobs.map((job) => {
             const data = snapshot(job);
@@ -228,16 +213,16 @@ const summaryCards = [
               <article class="border-b border-stone-100 p-5 last:border-b-0">
                 <div class="grid gap-5 xl:grid-cols-[minmax(280px,1.1fr)_minmax(260px,0.8fr)_minmax(260px,auto)] xl:items-center">
                   <div class="flex min-w-0 gap-4">
-                    <span class={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ${job.status === AutomationJobStatus.READY || job.status === AutomationJobStatus.COMPLETED ? 'bg-emerald-50 text-emerald-800' : job.status === AutomationJobStatus.DRAFT ? 'bg-amber-50 text-amber-800' : job.status === AutomationJobStatus.FAILED || job.status === AutomationJobStatus.CANCELLED ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-800'}`}>
-                      <FileText size={24} />
-                    </span>
+                    <FileText size={23} className="mt-0.5 shrink-0 text-stone-500" aria-hidden="true" />
                     <div class="min-w-0">
-                      <h3 class="truncate text-lg font-semibold">{job.title}</h3>
-                      <div class="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-                        <span class={`rounded-md border px-2.5 py-1 ${statusTone(job.status)}`}>{appTypeLabel(job.type)}</span>
-                        <span class="rounded-md border border-stone-200 bg-stone-50 px-2.5 py-1 text-stone-600">{sourceLabel(job.sourceType)}</span>
-                        <span class="rounded-md border border-stone-200 bg-white px-2.5 py-1 text-stone-600">{displayStatus(job.status)}</span>
-                      </div>
+                      <h3 class="truncate text-lg font-semibold">{projectName}</h3>
+                      <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+                        <span class="font-medium text-stone-700">{appTypeLabel(job.type)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{sourceLabel(job.sourceType)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{displayStatus(job.status)}</span>
+                      </p>
                       <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
                         <span>Created {formatDate(job.createdAt)}</span>
                         <span>by {job.createdBy.name}</span>
@@ -259,7 +244,7 @@ const summaryCards = [
                         <p class="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-emerald-800">
                           <CheckCircle2 size={16} />
                           <span>Project snapshot prepared</span>
-                          <span class="h-1 w-1 rounded-full bg-emerald-700" aria-hidden="true"></span>
+                          <span aria-hidden="true">·</span>
                           <span>{docs.length} documents linked</span>
                         </p>
                         <p class="mt-2 text-stone-600">Next step: {nextStep(job)}</p>
@@ -361,8 +346,18 @@ const summaryCards = [
               </article>
             );
           }) : <div class="px-5 py-5 text-center text-sm text-stone-500">{group.empty}</div>}
-        </section>
+        </details>
       ))}
     </div>
   )}
 </AppShell>
+
+<script>
+  document.addEventListener('click', (event) => {
+    const link = event.target instanceof Element ? event.target.closest('[data-job-group-link]') : null;
+    if (!(link instanceof HTMLAnchorElement)) return;
+    const target = document.querySelector(link.hash);
+    if (!(target instanceof HTMLDetailsElement)) return;
+    target.open = true;
+  });
+</script>

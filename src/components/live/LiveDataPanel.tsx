@@ -66,12 +66,12 @@ function EmptyState({ children }: { children: string }) {
 
 function Chip({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'warning' | 'danger' | 'info' }) {
   const classes = {
-    neutral: 'bg-stone-100 text-stone-600',
-    warning: 'bg-amber-100 text-amber-800',
-    danger: 'bg-red-100 text-red-800',
-    info: 'bg-moss/10 text-moss',
+    neutral: { dot: 'bg-stone-400', text: 'text-stone-600' },
+    warning: { dot: 'bg-amber-500', text: 'text-amber-800' },
+    danger: { dot: 'bg-red-700', text: 'text-red-800' },
+    info: { dot: 'bg-moss', text: 'text-stone-700' },
   }[tone];
-  return <span className={`status-chip ${classes}`}>{label}</span>;
+  return <span className={`inline-flex items-center gap-2 text-xs font-medium ${classes.text}`}><span className={`h-2 w-2 rounded-full ${classes.dot}`} aria-hidden="true" />{label}</span>;
 }
 
 const dateInput = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 10) : '';

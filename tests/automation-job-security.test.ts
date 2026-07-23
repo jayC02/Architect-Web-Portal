@@ -56,6 +56,10 @@ assert.match(jobsPage, /title: 'Needs review'/, 'automation jobs page groups dra
 assert.match(jobsPage, /View prepared details/, 'automation jobs page uses human-readable snapshot wording');
 assert.match(jobsPage, /Show technical JSON/, 'automation jobs page hides raw JSON behind a secondary details section');
 assert.match(jobsPage, /redactedSnapshot/, 'automation jobs page redacts sensitive snapshot keys before showing technical JSON');
+assert.match(jobsPage, /data-job-group-link/, 'status summary links navigate to collapsible job groups');
+assert.match(jobsPage, /<details id=\{`jobs-\$\{group\.key\}`\}/, 'job status groups are collapsible');
+assert.match(jobsPage, /<h3 class="truncate text-lg font-semibold">\{projectName\}<\/h3>/, 'job rows lead with the project name');
+assert.doesNotMatch(jobsPage, /<h3[^>]*>\{job\.title\}<\/h3>/, 'generated automation titles are not used as the visible row heading');
 assert.doesNotMatch(jobsPage, /View snapshot contract/, 'automation jobs page no longer exposes technical snapshot wording as the primary action');
 
 console.log('automation job security tests passed');
