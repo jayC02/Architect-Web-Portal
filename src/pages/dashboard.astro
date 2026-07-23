@@ -14,12 +14,10 @@ const deadlineRange = [7, 14, 30].includes(selectedRange) ? selectedRange : 14;
   <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
     <div>
       <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">{auth.organisation.name}</p>
-      <h1 class="mt-2 text-4xl font-semibold tracking-normal text-ink">Practice dashboard</h1>
-      <p class="mt-2 text-sm text-stone-500">A snapshot of your practice activity and priorities.</p>
+      <h1 class="mt-2 text-4xl font-semibold tracking-normal text-ink">Dashboard</h1>
     </div>
     <a href="/projects/new" class="btn btn-primary gap-2">+ New project</a>
   </div>
-
   <div class="mb-4 flex flex-wrap gap-2">
     {[
       { label: 'This week', value: 7 },

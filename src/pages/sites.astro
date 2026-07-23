@@ -10,7 +10,7 @@ if (!auth) return Astro.redirect('/login');
 <AppShell title="Sites" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <h1 class="text-3xl font-semibold">Sites</h1>
-    <p class="mt-1 text-sm text-stone-500">Reusable site profiles for project addresses and authorities.</p>
+    <p class="mt-1 text-sm text-stone-500">Re-use site/address information across projects.</p>
   </div>
   <LiveDataPanel client:load variant="sites" endpoint="/api/sites" />
 </AppShell>

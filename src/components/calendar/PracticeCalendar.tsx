@@ -137,7 +137,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
       {showPageHeader && (
         <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Practice schedule</p>
+            <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Schedule</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-normal text-ink">Calendar</h1>
             <p className="mt-2 text-sm text-stone-500">Project deadlines and reminders, with Google Calendar sync status in one place.</p>
           </div>
@@ -181,7 +181,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
             <CalendarDays size={19} aria-hidden="true" />
           </span>
           <div>
-            <h2 className="text-xl font-semibold text-ink">Practice calendar</h2>
+            <h2 className="text-xl font-semibold text-ink">Calendar</h2>
             <p className="mt-1 text-sm text-stone-500">
               {linked ? `Google Calendar connected${data?.googleConnection?.accountEmail ? ` as ${data.googleConnection.accountEmail}` : ''}.` : 'Internal project deadlines and reminders.'}
             </p>

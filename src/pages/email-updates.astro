@@ -59,7 +59,7 @@ const displaySuggestion = (value: unknown) => {
     <div>
       <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Gmail tracking</p>
       <h1 class="mt-2 text-3xl font-semibold">Email updates</h1>
-      <p class="mt-2 max-w-2xl text-sm text-stone-500">Review uncertain project matches and confirm changes before they update application records.</p>
+      <p class="mt-2 max-w-2xl text-sm text-stone-500">Automatic email tracking and update suggestions.</p>
     </div>
     <div class="flex flex-wrap gap-2">
       {connection?.gmailEnabled && <form data-api-form data-action="/api/integrations/gmail/sync" data-method="POST" data-redirect="reload"><button class="btn btn-secondary">Sync Gmail</button></form>}
