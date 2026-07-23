@@ -20,6 +20,8 @@ assert.match(documentRoute, /organisationId:\s*access\.organisationId/, 'documen
 assert.match(documentRoute, /documentSnapshot/, 'downloads must be restricted to documents frozen into the job');
 assert.doesNotMatch(launcher, /password|storageKey/i, 'custom protocol launch must not include portal passwords or storage keys');
 assert.match(createRoute, /buildDesktopLaunchUrl/, 'new jobs must receive a short-lived desktop launch URL');
+assert.match(tokenAuth, /Buffer\.from\(portalOrigin, 'utf8'\)\.toString\('base64url'\)/, 'launch data uses path-safe encoding instead of a query string');
+assert.doesNotMatch(tokenAuth, /new URLSearchParams/, 'custom protocol launches must not depend on query strings that Windows may drop');
 assert.match(relaunchRoute, /requireOrganisation\(context\)/, 'relaunching an existing job requires an organisation session');
 assert.match(relaunchRoute, /organisationId:\s*organisation\.id/, 'existing job relaunch is organisation scoped');
 assert.match(exchangeRoute, /handoffRedeemedAt:\s*null/, 'handoff exchange only accepts unused links');

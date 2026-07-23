@@ -20,8 +20,8 @@ export const desktopHandoffCodeHash = hashToken;
 export const desktopHandoffExpiry = () => new Date(Date.now() + HANDOFF_LIFETIME_MS);
 export const desktopJobTokenExpiry = () => new Date(Date.now() + JOB_TOKEN_LIFETIME_MS);
 export const buildDesktopLaunchUrl = (jobId: string, handoffCode: string, portalOrigin: string) => {
-  const params = new URLSearchParams({ code: handoffCode, portal: portalOrigin });
-  return `architectpro://automation/${jobId}?${params.toString()}`;
+  const encodedPortal = Buffer.from(portalOrigin, 'utf8').toString('base64url');
+  return `architectpro://automation/${jobId}/${handoffCode}/${encodedPortal}`;
 };
 
 export const requireDesktopAuth = async (context: APIContext) => {
