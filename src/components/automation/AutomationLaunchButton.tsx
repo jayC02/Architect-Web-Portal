@@ -8,9 +8,10 @@ type Props = {
   planningApplicationId?: string;
   buildingWarrantApplicationId?: string;
   className?: string;
+  label?: string;
 };
 
-export default function AutomationLaunchButton({ projectId, type, planningApplicationId, buildingWarrantApplicationId, className = '' }: Props) {
+export default function AutomationLaunchButton({ projectId, type, planningApplicationId, buildingWarrantApplicationId, className = '', label = 'Open in Automation App' }: Props) {
   const [working, setWorking] = useState(false);
   const [launchUrl, setLaunchUrl] = useState('');
   const [error, setError] = useState('');
@@ -37,7 +38,7 @@ export default function AutomationLaunchButton({ projectId, type, planningApplic
     <div className={className}>
       <button type="button" className="btn btn-primary gap-2" disabled={working} onClick={() => void open()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-        {working ? 'Preparing application...' : 'Open in Automation App'}
+        {working ? 'Preparing application...' : label}
       </button>
       {launchUrl && (
         <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">

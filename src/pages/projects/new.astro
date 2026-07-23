@@ -19,7 +19,7 @@ const [clients, sites] = await Promise.all([
     <h1 class="mt-2 text-3xl font-semibold">New project</h1>
   </div>
 
-  <form data-api-form data-action="/api/projects" data-method="POST" data-redirect="/projects" class="panel grid gap-5 rounded-lg p-5 lg:grid-cols-2">
+  <form data-api-form data-action="/api/projects" data-method="POST" class="panel grid gap-5 rounded-lg p-5 lg:grid-cols-2">
     <label class="block lg:col-span-2">
       <span class="label">Project name</span>
       <input required name="name" class="field" />
@@ -46,16 +46,18 @@ const [clients, sites] = await Promise.all([
     </label>
     <label class="block">
       <span class="label">Client</span>
-      <select name="clientId" class="field">
+      <select name="clientId" class="field" data-client-select>
         <option value="">Not linked</option>
         {clients.map((client) => <option value={client.id}>{client.name}</option>)}
+        <option value="__add_client__">+ Add a new client</option>
       </select>
     </label>
     <label class="block">
       <span class="label">Linked site</span>
-      <select name="siteId" class="field">
+      <select name="siteId" class="field" data-site-select>
         <option value="">Not linked</option>
         {sites.map((site) => <option value={site.id}>{site.addressLine1}, {site.postcode}</option>)}
+        <option value="__add_site__">+ Add a new site</option>
       </select>
     </label>
     <label class="block">
@@ -75,4 +77,188 @@ const [clients, sites] = await Promise.all([
       <span data-form-status class="text-sm text-stone-500"></span>
     </div>
   </form>
+
+  <dialog data-create-client-dialog class="create-record-dialog">
+    <form data-create-client-form class="grid gap-4">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-semibold">Add a new client</h2>
+          <p class="mt-1 text-sm text-stone-500">The client will be saved to your directory and linked to this project.</p>
+        </div>
+        <button type="button" class="dialog-close" data-close-client aria-label="Close client form">
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <label class="block"><span class="label">Name</span><input required name="name" class="field" /></label>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block"><span class="label">Email</span><input type="email" name="email" class="field" /></label>
+        <label class="block"><span class="label">Phone</span><input name="phone" class="field" /></label>
+      </div>
+      <label class="block"><span class="label">Address</span><textarea name="address" rows="3" class="field"></textarea></label>
+      <label class="block"><span class="label">Notes</span><textarea name="notes" rows="3" class="field"></textarea></label>
+      <p data-create-client-status class="text-sm text-stone-500"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" data-close-client>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save client</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog data-create-site-dialog class="create-record-dialog">
+    <form data-create-site-form class="grid gap-4">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-semibold">Add a new site</h2>
+          <p class="mt-1 text-sm text-stone-500">The site will be saved to your directory and linked to this project.</p>
+        </div>
+        <button type="button" class="dialog-close" data-close-site aria-label="Close site form">
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <label class="block"><span class="label">Address line 1</span><input required name="addressLine1" class="field" /></label>
+      <label class="block"><span class="label">Address line 2</span><input name="addressLine2" class="field" /></label>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block"><span class="label">Town/city</span><input required name="townCity" class="field" /></label>
+        <label class="block"><span class="label">Postcode</span><input required name="postcode" class="field" /></label>
+      </div>
+      <label class="block"><span class="label">Local authority</span><input name="localAuthority" class="field" /></label>
+      <label class="block"><span class="label">Notes</span><textarea name="notes" rows="3" class="field"></textarea></label>
+      <p data-create-site-status class="text-sm text-stone-500"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" data-close-site>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save site</button>
+      </div>
+    </form>
+  </dialog>
 </AppShell>
+
+<script>
+  const clientSelect = document.querySelector('[data-client-select]');
+  const siteSelect = document.querySelector('[data-site-select]');
+  const clientDialog = document.querySelector('[data-create-client-dialog]');
+  const siteDialog = document.querySelector('[data-create-site-dialog]');
+  const clientForm = document.querySelector('[data-create-client-form]');
+  const siteForm = document.querySelector('[data-create-site-form]');
+
+  const closeDialog = (dialog: Element | null) => {
+    if (dialog instanceof HTMLDialogElement) dialog.close();
+  };
+
+  const submitRelatedRecord = async (
+    form: HTMLFormElement,
+    endpoint: string,
+    key: 'client' | 'site',
+    select: HTMLSelectElement,
+    dialog: HTMLDialogElement,
+    status: HTMLElement | null,
+  ) => {
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit instanceof HTMLButtonElement) submit.disabled = true;
+    if (status) {
+      status.textContent = 'Saving...';
+      status.classList.remove('text-red-700');
+    }
+    try {
+      const values = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `Could not save ${key}.`);
+      const record = payload[key];
+      const label = key === 'client'
+        ? record.name
+        : `${record.addressLine1}, ${record.postcode}`;
+      const addOption = select.querySelector(`option[value="__add_${key}__"]`);
+      const option = new Option(label, record.id, true, true);
+      select.insertBefore(option, addOption);
+      if (key === 'site') {
+        const authority = document.querySelector('input[name="localAuthority"]');
+        const address = document.querySelector('input[name="siteAddress"]');
+        if (authority instanceof HTMLInputElement && !authority.value) authority.value = record.localAuthority || '';
+        if (address instanceof HTMLInputElement && !address.value) {
+          address.value = [record.addressLine1, record.addressLine2, record.townCity, record.postcode].filter(Boolean).join(', ');
+        }
+      }
+      form.reset();
+      dialog.close();
+    } catch (error) {
+      if (status) {
+        status.textContent = error instanceof Error ? error.message : `Could not save ${key}.`;
+        status.classList.add('text-red-700');
+      }
+    } finally {
+      if (submit instanceof HTMLButtonElement) submit.disabled = false;
+    }
+  };
+
+  if (clientSelect instanceof HTMLSelectElement && clientDialog instanceof HTMLDialogElement) {
+    clientSelect.addEventListener('change', () => {
+      if (clientSelect.value !== '__add_client__') return;
+      clientSelect.value = '';
+      clientDialog.showModal();
+    });
+    document.querySelectorAll('[data-close-client]').forEach((button) => button.addEventListener('click', () => closeDialog(clientDialog)));
+  }
+
+  if (siteSelect instanceof HTMLSelectElement && siteDialog instanceof HTMLDialogElement) {
+    siteSelect.addEventListener('change', () => {
+      if (siteSelect.value !== '__add_site__') return;
+      siteSelect.value = '';
+      siteDialog.showModal();
+    });
+    document.querySelectorAll('[data-close-site]').forEach((button) => button.addEventListener('click', () => closeDialog(siteDialog)));
+  }
+
+  if (clientForm instanceof HTMLFormElement && clientSelect instanceof HTMLSelectElement && clientDialog instanceof HTMLDialogElement) {
+    clientForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void submitRelatedRecord(clientForm, '/api/clients', 'client', clientSelect, clientDialog, clientForm.querySelector('[data-create-client-status]'));
+    });
+  }
+
+  if (siteForm instanceof HTMLFormElement && siteSelect instanceof HTMLSelectElement && siteDialog instanceof HTMLDialogElement) {
+    siteForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void submitRelatedRecord(siteForm, '/api/sites', 'site', siteSelect, siteDialog, siteForm.querySelector('[data-create-site-status]'));
+    });
+  }
+</script>
+
+<style>
+  .create-record-dialog {
+    width: min(36rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    border: 1px solid rgb(231 229 228);
+    border-radius: 8px;
+    background: white;
+    padding: 1.5rem;
+    color: inherit;
+    box-shadow: 0 24px 70px rgb(28 25 23 / 0.18);
+  }
+
+  .create-record-dialog::backdrop {
+    background: rgb(28 25 23 / 0.35);
+    backdrop-filter: blur(2px);
+  }
+
+  .dialog-close {
+    display: inline-flex;
+    height: 2.5rem;
+    width: 2.5rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: rgb(87 83 78);
+  }
+
+  .dialog-close:hover {
+    background: rgb(245 245 244);
+    color: rgb(28 25 23);
+  }
+</style>

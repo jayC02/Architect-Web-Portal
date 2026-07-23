@@ -55,5 +55,5 @@ export const POST: APIRoute = (context) =>
     const project = await prisma.project.create({
       data: { ...body, clientId, siteId, organisationId: organisation.id },
     });
-    return jsonResponse(201, { project });
+    return jsonResponse(201, { project, redirectTo: `/projects/${project.id}` });
   }, context);

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const baseUrl = 'http://127.0.0.1:4321';
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4321';
 const stamp = Date.now();
 const email = `stabilise-${stamp}@example.test`;
 const password = 'ChangeMe123!';
@@ -42,18 +42,20 @@ test('MVP stabilisation flow', async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto(`${baseUrl}/clients`);
+  await page.getByRole('button', { name: 'New client' }).first().click();
   await page.getByLabel('Name').first().fill(`Client ${stamp}`);
   await page.getByLabel('Email').first().fill(`client-${stamp}@example.test`);
   await page.getByLabel('Phone').first().fill('0131 000 0000');
   await page.getByRole('button', { name: 'Save client' }).first().click();
   await expect(page.getByText(`Client ${stamp}`).first()).toBeVisible();
 
-  await page.getByText(`Client ${stamp}`).last().click();
+  await page.getByRole('row').filter({ hasText: `Client ${stamp}` }).getByRole('button', { name: 'Edit' }).click();
   await page.getByLabel('Phone').last().fill('0131 111 1111');
   await page.getByRole('button', { name: 'Save client' }).last().click();
-  await expect(page.getByText('Saved.')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: `Client ${stamp}` })).toContainText('0131 111 1111');
 
   await page.goto(`${baseUrl}/sites`);
+  await page.getByRole('button', { name: 'New site' }).first().click();
   await page.getByLabel('Address line 1').first().fill(`${stamp} Test Street`);
   await page.getByLabel('Town/city').first().fill('Edinburgh');
   await page.getByLabel('Postcode').first().fill('EH1 1AA');
@@ -65,14 +67,30 @@ test('MVP stabilisation flow', async ({ page }) => {
   await page.getByLabel('Project name').fill(projectName);
   await page.getByLabel('Internal reference').fill(`ST-${stamp}`);
   await page.getByLabel('Project type').fill('Domestic extension');
-  await page.getByLabel('Client').selectOption({ label: `Client ${stamp}` });
-  await page.getByLabel('Linked site').selectOption({ label: `${stamp} Test Street, EH1 1AA` });
-  await page.getByLabel('Local authority').fill('City of Edinburgh Council');
-  await page.getByRole('button', { name: 'Create project' }).click();
-  await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByText(projectName)).toBeVisible();
+  const projectClientSelect = page.locator('select[name="clientId"]');
+  await projectClientSelect.selectOption('__add_client__');
+  const clientDialog = page.getByRole('dialog').filter({ hasText: 'Add a new client' });
+  await expect(clientDialog).toBeVisible();
+  await clientDialog.getByLabel('Name').fill(`Project Client ${stamp}`);
+  await clientDialog.getByLabel('Email').fill(`project-client-${stamp}@example.test`);
+  await clientDialog.getByRole('button', { name: 'Save client' }).click();
+  await expect(projectClientSelect).toHaveValue(/.+/);
+  await expect(projectClientSelect.locator('option:checked')).toHaveText(`Project Client ${stamp}`);
 
-  await page.getByRole('link', { name: projectName }).click();
+  await page.getByLabel('Linked site').selectOption('__add_site__');
+  const siteDialog = page.getByRole('dialog').filter({ hasText: 'Add a new site' });
+  await expect(siteDialog).toBeVisible();
+  await siteDialog.getByLabel('Address line 1').fill(`${stamp} Project Road`);
+  await siteDialog.getByLabel('Town/city').fill('Edinburgh');
+  await siteDialog.getByLabel('Postcode').fill('EH2 2AA');
+  await siteDialog.getByLabel('Local authority').fill('City of Edinburgh Council');
+  await siteDialog.getByRole('button', { name: 'Save site' }).click();
+  await expect(page.getByLabel('Linked site').locator('option:checked')).toHaveText(`${stamp} Project Road, EH2 2AA`);
+  await page.locator('form[data-api-form] input[name="localAuthority"]').fill('City of Edinburgh Council');
+  await page.getByRole('button', { name: 'Create project' }).click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
+  await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
+  await page.getByText('Edit project details').click();
   await page.getByLabel('Project type').fill('Retrofit assessment');
   await page.getByRole('button', { name: 'Save project' }).click();
   await expect(page.getByText('Saved.')).toBeVisible();

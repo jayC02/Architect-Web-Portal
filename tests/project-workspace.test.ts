@@ -44,6 +44,8 @@ assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.SUBMITTED), ['submissi
 assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.GRANTED), ['submissionDate', 'grantedDate', 'expiryDate'], 'granted warrant records show granted and expiry dates');
 
 const projectsPage = fs.readFileSync('src/pages/projects/index.astro', 'utf8');
+const newProjectPage = fs.readFileSync('src/pages/projects/new.astro', 'utf8');
+const projectsApi = fs.readFileSync('src/pages/api/projects/index.ts', 'utf8');
 const projectDetailPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const planningPage = fs.readFileSync('src/pages/projects/[id]/planning.astro', 'utf8');
 const warrantPage = fs.readFileSync('src/pages/projects/[id]/building-warrant.astro', 'utf8');
@@ -126,6 +128,15 @@ assert.match(projectsPage, /Ref \{project\.internalReference\}/, 'project refere
 assert.match(projectsPage, /documentReviewCount > 0 \? `\$\{project\.documentReviewCount\} need review` : 'All reviewed'/, 'document review count is rendered as plain text');
 assert.match(projectsPage, /readyAutomationJobCount > 0 \? `\$\{project\.readyAutomationJobCount\} ready` : 'None ready'/, 'automation ready count is rendered as plain text');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
+assert.match(newProjectPage, /\+ Add a new client/, 'new project flow can create and select a client inline');
+assert.match(newProjectPage, /\+ Add a new site/, 'new project flow can create and select a site inline');
+assert.match(newProjectPage, /submitRelatedRecord\(clientForm, '\/api\/clients'/, 'inline client creation reuses the organisation-scoped client API');
+assert.match(newProjectPage, /submitRelatedRecord\(siteForm, '\/api\/sites'/, 'inline site creation reuses the organisation-scoped site API');
+assert.match(projectsApi, /redirectTo: `\/projects\/\$\{project\.id\}`/, 'new projects open directly in their workspace');
+assert.match(projectDetailPage, /label="Complete Householder"/, 'householder automation is immediately available from a new project');
+assert.match(projectDetailPage, /label="Complete Building Warrant"/, 'building warrant automation is immediately available from a new project');
+assert.doesNotMatch(projectDetailPage, />Add planning record</, 'project overview does not require a planning tracker before automation');
+assert.doesNotMatch(projectDetailPage, />Add warrant record</, 'project overview does not require a warrant tracker before automation');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
 assert.match(appShell, /label: 'Desktop Automation'/, 'sidebar labels the desktop handoff page clearly');
 assert.doesNotMatch(appShell, /label: 'Automation Jobs'/, 'sidebar no longer uses backend queue wording');
