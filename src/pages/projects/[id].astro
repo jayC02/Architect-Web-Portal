@@ -216,7 +216,6 @@ const jobTone = (status: AutomationJobStatus) => {
       ['Building Warrant', '#building-warrant'],
       ['Deadlines', '#deadlines'],
       ['Email Activity', '#email-activity'],
-      ['Automation', '#automation'],
       ['Notes', '#notes'],
     ].map(([label, href]) => <a href={href} class="shrink-0 rounded-md px-3 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">{label}</a>)}
   </nav>
@@ -342,11 +341,6 @@ const jobTone = (status: AutomationJobStatus) => {
         <p class="mt-2 text-xs text-stone-500">From {activity.trackedEmail.sender} &middot; {activity.appliedAutomatically ? 'Applied automatically' : `Reviewed by ${activity.reviewedBy?.name ?? 'an organisation member'}`}</p>
       </article>)}
     </div> : <div class="px-4 py-8 text-center sm:px-5"><p class="font-semibold">No email-derived updates yet</p><p class="mt-1 text-sm text-stone-500">Confirmed application and deadline changes will appear here after Gmail sync.</p></div>}
-  </section>
-
-  <section id="automation" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-xl font-semibold">Automation</h2><p class="mt-1 text-sm text-stone-500">Prepared desktop automation jobs for this project.</p></div><a class="btn btn-secondary" href={`/automation-jobs?projectId=${project.id}`}>View job queue</a></div>
-    {automationJobs.length ? <div class="mt-4 space-y-3">{automationJobs.map((job) => <article class="rounded-lg border border-stone-200 p-3"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p class="font-semibold">{job.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(job.type)} &middot; {formatDate(job.createdAt)}</p></div><div class="flex flex-wrap gap-2"><span class={`status-chip ${jobTone(job.status)}`}>{humanizeEnum(job.status)}</span>{job.status !== AutomationJobStatus.READY && job.status !== AutomationJobStatus.COMPLETED && job.status !== AutomationJobStatus.CANCELLED && <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH"><input type="hidden" name="status" value="READY" /><button class="btn btn-secondary">Mark ready</button></form>}{job.status !== AutomationJobStatus.CANCELLED && job.status !== AutomationJobStatus.COMPLETED && <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH" data-confirm="Cancel this automation job?"><input type="hidden" name="status" value="CANCELLED" /><button class="btn btn-secondary">Cancel</button></form>}</div></div><details class="mt-3"><summary class="cursor-pointer text-sm font-semibold text-stone-600">View snapshot</summary><div class="mt-3 grid gap-3 xl:grid-cols-2"><pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs">{JSON.stringify(job.dataSnapshot, null, 2)}</pre><pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs">{JSON.stringify(job.documentSnapshot, null, 2)}</pre></div></details></article>)}</div> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No desktop automation jobs prepared yet</p><p class="mt-1 text-sm text-stone-500">Use the project quick actions when the project data is ready.</p></div>}
   </section>
 
   <section id="notes" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
