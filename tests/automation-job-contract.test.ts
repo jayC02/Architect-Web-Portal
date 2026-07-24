@@ -6,6 +6,10 @@ import {
   DocumentType,
 } from '@prisma/client';
 import {
+  buildingWarrantProfileForTypeOfWork,
+  TYPE_OF_WORK_OPTIONS,
+} from '../src/lib/projects/type-of-work';
+import {
   assertSafeAutomationSnapshot,
   automationJobDocumentSnapshotSchema,
   automationJobSnapshotSchema,
@@ -71,5 +75,26 @@ assert.doesNotThrow(() => assertSafeAutomationSnapshot(dataSnapshot));
 assert.doesNotThrow(() => assertSafeAutomationSnapshot(documentSnapshot));
 assert.throws(() => assertSafeAutomationSnapshot({ project: { storageKey: 'private/path.pdf' } }), /Unsafe automation snapshot field/);
 assert.throws(() => assertSafeAutomationSnapshot({ credentials: { password: 'secret' } }), /Unsafe automation snapshot field/);
+
+assert.deepEqual(TYPE_OF_WORK_OPTIONS, [
+  'Domestic alteration / extension',
+  'New build',
+  'Conversion / change of use',
+  'Demolition',
+], 'project creation exposes only the four supported Building Warrant profiles');
+
+for (const [typeOfWork, expectedProfile] of [
+  ['Domestic alteration / extension', 'Domestic alteration / extension'],
+  ['New build', 'New build'],
+  ['Conversion / change of use', 'Conversion / change of use'],
+  ['Demolition', 'Demolition'],
+] as const) {
+  assert.equal(
+    buildingWarrantProfileForTypeOfWork(typeOfWork),
+    expectedProfile,
+    `${typeOfWork} maps to the matching Building Warrant profile`,
+  );
+}
+assert.equal(buildingWarrantProfileForTypeOfWork('Extension'), 'Domestic alteration / extension', 'legacy project types retain a safe profile fallback');
 
 console.log('automation job contract tests passed');

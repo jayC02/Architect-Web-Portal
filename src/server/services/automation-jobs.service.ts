@@ -1,5 +1,6 @@
 import { AutomationJobSourceType, AutomationJobType, type ProjectDocument } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { buildingWarrantProfileForTypeOfWork } from '@/lib/projects/type-of-work';
 import {
   assertSafeAutomationSnapshot,
   automationJobDocumentSnapshotSchema,
@@ -105,6 +106,11 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   });
 
   const sourceType = inferSourceType(input);
+  const applicationQuestions = input.type === AutomationJobType.BUILDING_WARRANT
+    ? {
+        'Application Profile': buildingWarrantProfileForTypeOfWork(project.projectType),
+      }
+    : {};
   const dataSnapshot = automationJobSnapshotSchema.parse({
     schemaVersion: 1,
     jobType: input.type,
@@ -167,7 +173,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       portalUrl: buildingWarrantApplication.portalUrl,
       notes: buildingWarrantApplication.notes,
     } : null,
-    applicationQuestions: {},
+    applicationQuestions,
     documents: documentSnapshot.documents,
     notes: input.notes ?? null,
     createdAt: new Date().toISOString(),

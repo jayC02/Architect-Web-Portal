@@ -11,6 +11,7 @@ const tokenAuth = read('../src/server/auth/desktop-token.ts');
 const exchangeRoute = read('../src/pages/api/desktop/handoff/exchange.ts');
 const relaunchRoute = read('../src/pages/api/automation-jobs/[id]/launch.ts');
 const desktopIntegration = read('../src/components/integrations/DesktopAccessIntegration.tsx');
+const automationJobService = read('../src/server/services/automation-jobs.service.ts');
 
 assert.match(createRoute, /requireProjectAccess\(organisation\.id, projectId\)/, 'job creation must verify project access');
 assert.match(createRoute, /status:\s*AutomationJobStatus\.READY/, 'one-click jobs must be ready for desktop');
@@ -38,5 +39,7 @@ assert.match(tokenAuth, /assertDesktopJobAccess/, 'desktop API access can be res
 assert.match(tokenAuth, /createHash\('sha256'\)/, 'desktop access tokens must be stored as hashes');
 assert.doesNotMatch(desktopIntegration, /Copy this connection token|Connect device|clipboard/, 'settings must not ask users to copy connection codes');
 assert.match(desktopIntegration, /No codes, passwords or device connection setup required/, 'settings explains automatic handoff');
+assert.match(automationJobService, /'Application Profile': buildingWarrantProfileForTypeOfWork\(project\.projectType\)/, 'Building Warrant snapshots carry the selected type of work as an application profile');
+assert.match(automationJobService, /input\.type === AutomationJobType\.BUILDING_WARRANT/, 'profile presets are only attached to Building Warrant jobs');
 
 console.log('desktop handoff security tests passed');
