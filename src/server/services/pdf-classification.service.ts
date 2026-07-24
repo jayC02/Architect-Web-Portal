@@ -118,7 +118,6 @@ const WARRANT_TYPES = new Set<DocumentType>([
 
 const JSON_SCHEMA = {
   type: 'object',
-  additionalProperties: false,
   required: ['categoryKey', 'certainty', 'manualReviewRequired', 'warnings'],
   properties: {
     categoryKey: { type: 'string', enum: PDF_CATEGORY_KEYS },
@@ -192,13 +191,34 @@ const timeoutSignal = () => {
   return AbortSignal.timeout(timeout);
 };
 
+const normalizeGeminiModel = (value: string) => {
+  const normalized = value.trim().toLowerCase().replace(/^models\//, '');
+  const compact = normalized.replace(/[^a-z0-9.]+/g, '');
+  if (compact.includes('3.1') && compact.includes('flash') && compact.includes('lite')) {
+    return 'gemini-3.1-flash-lite';
+  }
+  if (compact.includes('flash') && compact.includes('lite') && compact.includes('latest')) {
+    return 'gemini-flash-lite-latest';
+  }
+  return normalized.replace(/[\s_]+/g, '-');
+};
+
+const geminiErrorMessage = async (response: Response) => {
+  const payload = await response.json().catch(() => null) as { error?: { message?: unknown } } | null;
+  const message = payload?.error?.message;
+  if (typeof message !== 'string') return '';
+  return message.replace(/\s+/g, ' ').trim().slice(0, 300);
+};
+
 class GeminiPdfClassificationProvider implements PdfClassificationProvider {
   readonly name = 'gemini';
 
   constructor(
     private readonly apiKey: string,
-    public model = process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.1-flash-lite',
-  ) {}
+    public model = normalizeGeminiModel(process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.1-flash-lite'),
+  ) {
+    this.model = normalizeGeminiModel(this.model);
+  }
 
   async classifyDocument(input: PdfClassificationInput) {
     const models = [...new Set([this.model, 'gemini-flash-lite-latest'])];
@@ -206,26 +226,26 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-goog-api-key': this.apiKey,
-        },
-        signal: timeoutSignal(),
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { inlineData: { mimeType: input.mimeType, data: input.bytes.toString('base64') } },
-              { text: buildPrompt(input) },
-            ],
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: JSON_SCHEMA,
-            temperature: 0,
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-goog-api-key': this.apiKey,
           },
-        }),
+          signal: timeoutSignal(),
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: input.mimeType, data: input.bytes.toString('base64') } },
+                { text: buildPrompt(input) },
+              ],
+            }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: JSON_SCHEMA,
+              temperature: 0,
+            },
+          }),
         },
       );
 
@@ -237,8 +257,11 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
         const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
         return parseStructuredResult(text);
       }
-      if (response.status !== 404 || model === models.at(-1)) {
-        throw new Error(`Gemini model "${model}" failed with status ${response.status}.`);
+      const providerMessage = await geminiErrorMessage(response);
+      const canRetryAlias = (response.status === 400 || response.status === 404) && model !== models.at(-1);
+      if (!canRetryAlias) {
+        const detail = providerMessage ? `: ${providerMessage}` : '';
+        throw new Error(`Gemini model "${model}" failed with status ${response.status}${detail}.`);
       }
     }
     throw new Error('Gemini document classification was unavailable.');

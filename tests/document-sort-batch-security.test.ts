@@ -62,6 +62,8 @@ assert.doesNotMatch(sortReviewPage, /grouped\.entries|1 file header/, 'all revie
 assert.match(sortReviewPage, /data-attention-filter/, 'review page can filter to documents needing attention');
 assert.match(sortReviewPage, /Save document sorting/, 'review page has one clear save action');
 assert.match(sortReviewPage, /data-toggle-details/, 'review rows expose compact inline details controls');
-assert.match(sortReviewPage, /data-details-panel/, 'review details render inside the document row');
-assert.match(sortReviewPage, /for \(const row of getRows\(\)\)/, 'opening details closes the other document rows');
+assert.match(sortReviewPage, /data-details-panel/, 'review rows include compact details panels');
+assert.match(sortReviewPage, /const closeDetails = \(\)/, 'opening details closes the previously opened panel');
+assert.match(sortReviewPage, /positionDetails/, 'details panels are positioned within the current viewport');
+assert.match(sortReviewPage, /class="fixed z-50 hidden/, 'details use the compact floating presentation');
 assert.doesNotMatch(sortReviewPage, /<details/, 'review details do not use browser popovers that can overflow the page');
