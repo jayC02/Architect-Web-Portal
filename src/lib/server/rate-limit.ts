@@ -40,6 +40,8 @@ const pruneExpiredBuckets = (now: number) => {
 
 export const rateLimitPolicies = {
   auth: { name: 'auth', windowMs: 15 * 60 * 1000, max: 20 },
+  oauth: { name: 'oauth', windowMs: 15 * 60 * 1000, max: 30 },
+  passwordReset: { name: 'password-reset', windowMs: 15 * 60 * 1000, max: 8 },
   mutation: { name: 'mutation', windowMs: 10 * 60 * 1000, max: 80 },
   upload: { name: 'upload', windowMs: 15 * 60 * 1000, max: 20 },
   desktop: { name: 'desktop', windowMs: 15 * 60 * 1000, max: 300 },

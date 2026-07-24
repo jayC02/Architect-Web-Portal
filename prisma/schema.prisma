@@ -14,6 +14,10 @@ enum OrganisationRole {
   MEMBER
 }
 
+enum AuthProviderType {
+  GOOGLE
+}
+
 enum ProjectStage {
   LEAD
   SURVEY
@@ -226,11 +230,13 @@ model User {
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
-  passwordHash String
+  passwordHash String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   sessions            Session[]
+  authProviders        AuthProvider[]
+  passwordResetTokens  PasswordResetToken[]
   organisationLinks   OrganisationMember[]
   uploadedDocuments   ProjectDocument[]    @relation("DocumentUploadedBy")
   documentSortBatches DocumentSortBatch[]  @relation("DocumentSortBatchCreatedBy")
@@ -242,6 +248,52 @@ model User {
 
   @@index([email])
   @@index([createdAt])
+}
+
+model AuthProvider {
+  id                String           @id @default(cuid())
+  userId            String
+  provider          AuthProviderType
+  providerAccountId String
+  email             String?
+  displayName       String?
+  avatarUrl         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PendingOAuthSignup {
+  id                String           @id @default(cuid())
+  tokenHash         String           @unique
+  provider          AuthProviderType
+  providerAccountId String
+  email             String
+  displayName       String
+  avatarUrl         String?
+  expiresAt         DateTime
+  createdAt         DateTime         @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@index([expiresAt])
 }
 
 model Session {

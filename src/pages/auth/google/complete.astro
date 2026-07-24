@@ -1,0 +1,44 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { GOOGLE_SIGNUP_COOKIE } from '@/lib/auth/oauth';
+import { hashOpaqueToken } from '@/lib/auth/tokens';
+import { prisma } from '@/lib/db/prisma';
+import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = false;
+setAstroCache(Astro, privateNoStore);
+
+const rawToken = Astro.cookies.get(GOOGLE_SIGNUP_COOKIE)?.value;
+const pending = rawToken
+  ? await prisma.pendingOAuthSignup.findUnique({
+      where: { tokenHash: hashOpaqueToken(rawToken) },
+      select: { email: true, displayName: true, expiresAt: true },
+    })
+  : null;
+const valid = Boolean(pending && pending.expiresAt.getTime() >= Date.now());
+---
+<BaseLayout title="Create your practice | Architect Web Portal" noindex>
+  <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
+    <section class="panel mx-auto w-full max-w-md rounded-lg p-6">
+      {valid && pending ? (
+        <form data-api-form data-action="/api/auth/google/complete" data-method="POST" method="post" action="/api/auth/google/complete">
+          <p class="mb-2 text-xs font-semibold uppercase text-stone-500">One final detail</p>
+          <h1 class="text-2xl font-semibold text-ink">Create your practice workspace</h1>
+          <p class="mt-2 text-sm leading-6 text-stone-500">Signed in as {pending.email}. Give your organisation a name to create its private workspace.</p>
+          <label class="mt-6 block">
+            <span class="label">Practice name</span>
+            <input required name="organisationName" minlength="2" maxlength="100" class="field" autocomplete="organization" autofocus />
+          </label>
+          <button class="btn btn-primary mt-6 w-full">Create workspace</button>
+          <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
+        </form>
+      ) : (
+        <div>
+          <h1 class="text-2xl font-semibold text-ink">Google sign-up expired</h1>
+          <p class="mt-3 text-sm leading-6 text-stone-500">Start Google sign-in again to create your workspace.</p>
+          <a class="btn btn-primary mt-6 w-full" href="/register">Return to registration</a>
+        </div>
+      )}
+    </section>
+  </main>
+</BaseLayout>

@@ -17,7 +17,7 @@ export const POST: APIRoute = (context) =>
     const body = await parseBody(context.request, loginSchema);
 
     const user = await prisma.user.findUnique({ where: { email: body.email } });
-    if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+    if (!user?.passwordHash || !(await verifyPassword(body.password, user.passwordHash))) {
       throw new HttpError(401, 'Invalid credentials.');
     }
 

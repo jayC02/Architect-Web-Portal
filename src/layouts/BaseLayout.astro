@@ -81,10 +81,14 @@ const {
           }
           window.dispatchEvent(new CustomEvent('portal:mutation-success', { detail: { action, method } }));
           if (status) {
-            status.textContent = 'Saved.';
+            status.textContent =
+              typeof payload.message === 'string' && payload.message
+                ? payload.message
+                : form.dataset.successMessage || 'Saved.';
             status.classList.remove('text-red-700');
             status.classList.add('text-stone-500');
           }
+          if (form.hasAttribute('data-reset-on-success')) form.reset();
         } catch (error) {
           if (status) {
             status.textContent = error instanceof Error ? error.message : 'Network error. Please try again.';

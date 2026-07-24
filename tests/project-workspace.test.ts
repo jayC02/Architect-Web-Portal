@@ -149,7 +149,7 @@ assert.doesNotMatch(projectDetailPage, /application ready to prepare/, 'missing 
 assert.doesNotMatch(projectDetailPage, />Add planning record</, 'project overview does not require a planning tracker before automation');
 assert.doesNotMatch(projectDetailPage, />Add warrant record</, 'project overview does not require a warrant tracker before automation');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
-assert.match(appShell, /label: 'Desktop Automation'/, 'sidebar labels the desktop handoff page clearly');
+assert.match(appShell, /label: 'AI Automation'/, 'sidebar labels the automation workspace with the current product wording');
 assert.doesNotMatch(appShell, /label: 'Automation Jobs'/, 'sidebar no longer uses backend queue wording');
 assert.doesNotMatch(projectDetailPage, />View project files</, 'project document section does not show a redundant top-level project files button');
 assert.match(projectDetailPage, /See more files/, 'project document section has a see more route for larger document lists');
