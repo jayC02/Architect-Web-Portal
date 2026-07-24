@@ -197,13 +197,15 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
 
   constructor(
     private readonly apiKey: string,
-    readonly model = process.env.GEMINI_DOCUMENT_MODEL || 'gemini-2.5-flash-lite',
+    public model = process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.1-flash-lite',
   ) {}
 
   async classifyDocument(input: PdfClassificationInput) {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`,
-      {
+    const models = [...new Set([this.model, 'gemini-flash-lite-latest'])];
+    for (const model of models) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -224,15 +226,22 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
             temperature: 0,
           },
         }),
-      },
-    );
+        },
+      );
 
-    if (!response.ok) throw new Error(`Gemini classification failed with status ${response.status}.`);
-    const payload = await response.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
-    return parseStructuredResult(text);
+      if (response.ok) {
+        this.model = model;
+        const payload = await response.json() as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
+        return parseStructuredResult(text);
+      }
+      if (response.status !== 404 || model === models.at(-1)) {
+        throw new Error(`Gemini model "${model}" failed with status ${response.status}.`);
+      }
+    }
+    throw new Error('Gemini document classification was unavailable.');
   }
 }
 
@@ -387,7 +396,9 @@ const classifyOne = async (
   } catch (error) {
     const fallbackReason = error instanceof DOMException && error.name === 'TimeoutError'
       ? 'AI classification timed out.'
-      : 'AI classification failed or returned an invalid response.';
+      : error instanceof Error && /^(Gemini|OpenAI)/.test(error.message)
+        ? error.message
+        : 'AI classification failed or returned an invalid response.';
     return withFallbackDetails(fallback, fallbackReason);
   }
 };

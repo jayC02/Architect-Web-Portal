@@ -151,11 +151,18 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
 
               <p class={`text-sm font-medium ${statusClass}`}>{statusLabel}</p>
 
-              <details class="relative justify-self-start md:justify-self-end">
-                <summary class="cursor-pointer list-none rounded-md px-2 py-1 text-sm font-semibold text-stone-600 hover:bg-stone-100 hover:text-ink">
-                  More
-                </summary>
-                <div class="mt-2 w-full rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600 md:absolute md:right-0 md:z-20 md:w-80 md:bg-white md:shadow-lg">
+              <button
+                type="button"
+                data-toggle-details
+                aria-expanded="false"
+                class="justify-self-start rounded-md px-2 py-1 text-sm font-semibold text-stone-600 hover:bg-stone-100 hover:text-ink md:justify-self-end"
+              >
+                More
+              </button>
+            </div>
+
+            <div data-details-panel class="hidden border-t border-stone-100 bg-stone-50 px-5 py-4">
+              <div class="max-w-3xl text-xs text-stone-600">
                   <dl class="space-y-2">
                     {item.drawingNumber && <div><dt class="font-semibold text-ink">Drawing number</dt><dd>{item.drawingNumber}</dd></div>}
                     {item.revision && <div><dt class="font-semibold text-ink">Revision</dt><dd>{item.revision}</dd></div>}
@@ -170,8 +177,7 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
                     {details?.fallbackReason && <div><dt class="font-semibold text-ink">Fallback</dt><dd>{details.fallbackReason}</dd></div>}
                   </dl>
                   <a href={documentHref} target="_blank" rel="noreferrer" class="mt-3 inline-flex font-semibold text-ink hover:underline">Open document</a>
-                </div>
-              </details>
+              </div>
             </div>
           </div>
         );
@@ -187,6 +193,32 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
     const filter = document.querySelector('[data-attention-filter]');
     const emptyFiltered = document.querySelector('[data-no-attention]');
     const getRows = () => Array.from(document.querySelectorAll('[data-sort-item]')).filter((row): row is HTMLElement => row instanceof HTMLElement);
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const toggle = target.closest('[data-toggle-details]');
+      if (!(toggle instanceof HTMLButtonElement)) return;
+      const selectedRow = toggle.closest('[data-sort-item]');
+      const selectedPanel = selectedRow?.querySelector('[data-details-panel]');
+      const willOpen = selectedPanel instanceof HTMLElement && selectedPanel.classList.contains('hidden');
+
+      for (const row of getRows()) {
+        const panel = row.querySelector('[data-details-panel]');
+        const button = row.querySelector('[data-toggle-details]');
+        if (panel instanceof HTMLElement) panel.classList.add('hidden');
+        if (button instanceof HTMLButtonElement) {
+          button.setAttribute('aria-expanded', 'false');
+          button.textContent = 'More';
+        }
+      }
+
+      if (willOpen && selectedPanel instanceof HTMLElement) {
+        selectedPanel.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.textContent = 'Close';
+      }
+    });
 
     filter?.addEventListener('change', () => {
       if (!(filter instanceof HTMLInputElement)) return;

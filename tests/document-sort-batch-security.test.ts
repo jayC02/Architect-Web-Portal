@@ -61,3 +61,7 @@ assert.doesNotMatch(sortReviewPage, /data-toggle-edit|>Edit</, 'the category dro
 assert.doesNotMatch(sortReviewPage, /grouped\.entries|1 file header/, 'all reviewed files render in one list');
 assert.match(sortReviewPage, /data-attention-filter/, 'review page can filter to documents needing attention');
 assert.match(sortReviewPage, /Save document sorting/, 'review page has one clear save action');
+assert.match(sortReviewPage, /data-toggle-details/, 'review rows expose compact inline details controls');
+assert.match(sortReviewPage, /data-details-panel/, 'review details render inside the document row');
+assert.match(sortReviewPage, /for \(const row of getRows\(\)\)/, 'opening details closes the other document rows');
+assert.doesNotMatch(sortReviewPage, /<details/, 'review details do not use browser popovers that can overflow the page');
