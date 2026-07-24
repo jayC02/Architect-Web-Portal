@@ -15,12 +15,31 @@ import {
   WarrantType,
 } from '@prisma/client';
 import { z } from 'zod';
-import { optionalDate, optionalText, safeUrl } from '@/lib/validation/common';
+import { TYPE_OF_WORK_OPTIONS } from '@/lib/projects/type-of-work';
+import { emptyToUndefined, optionalDate, optionalText, safeUrl } from '@/lib/validation/common';
+import { blankContactToUndefined, isValidUkPhone } from '@/lib/validation/client-contact';
 
 export const clientSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  email: optionalText(160).pipe(z.string().email().optional()),
-  phone: optionalText(60),
+  email: z.preprocess(
+    blankContactToUndefined,
+    z
+      .string()
+      .trim()
+      .max(160)
+      .email('Enter a valid email address.')
+      .transform((value) => value.toLowerCase())
+      .optional(),
+  ),
+  phone: z.preprocess(
+    blankContactToUndefined,
+    z
+      .string()
+      .trim()
+      .max(30, 'Enter a valid phone number.')
+      .refine(isValidUkPhone, 'Enter a valid phone number.')
+      .optional(),
+  ),
   address: optionalText(500),
   notes: optionalText(2000),
 });
@@ -46,6 +65,18 @@ export const projectSchema = z.object({
   status: z.nativeEnum(ProjectStatus).default(ProjectStatus.ACTIVE),
   notes: optionalText(4000),
 });
+
+export const projectCreateSchema = projectSchema
+  .omit({ stage: true, status: true, siteAddress: true, projectType: true })
+  .extend({
+    projectType: z.preprocess(emptyToUndefined, z.enum(TYPE_OF_WORK_OPTIONS).optional()),
+  })
+  .transform((project) => ({
+    ...project,
+    stage: ProjectStage.LEAD,
+    status: ProjectStatus.ACTIVE,
+    siteAddress: undefined,
+  }));
 
 export const documentMetadataSchema = z.object({
   type: z.nativeEnum(DocumentType).default(DocumentType.OTHER),

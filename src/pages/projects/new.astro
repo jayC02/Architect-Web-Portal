@@ -1,9 +1,9 @@
 ---
-import { ProjectStage, ProjectStatus } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
-import { humanizeEnum } from '@/lib/format';
+import { TYPE_OF_WORK_OPTIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -29,19 +29,10 @@ const [clients, sites] = await Promise.all([
       <input name="internalReference" class="field" />
     </label>
     <label class="block">
-      <span class="label">Project type</span>
-      <input name="projectType" class="field" placeholder="Domestic extension, retrofit, new build" />
-    </label>
-    <label class="block">
-      <span class="label">Stage</span>
-      <select name="stage" class="field">
-        {Object.values(ProjectStage).map((stage) => <option value={stage}>{humanizeEnum(stage)}</option>)}
-      </select>
-    </label>
-    <label class="block">
-      <span class="label">Status</span>
-      <select name="status" class="field">
-        {Object.values(ProjectStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}
+      <span class="label">Type of work</span>
+      <select name="projectType" class="field">
+        <option value="">Select type of work</option>
+        {TYPE_OF_WORK_OPTIONS.map((type) => <option value={type}>{type}</option>)}
       </select>
     </label>
     <label class="block">
@@ -64,10 +55,6 @@ const [clients, sites] = await Promise.all([
       <span class="label">Local authority</span>
       <input name="localAuthority" class="field" />
     </label>
-    <label class="block">
-      <span class="label">Manual site address</span>
-      <input name="siteAddress" class="field" />
-    </label>
     <label class="block lg:col-span-2">
       <span class="label">Notes</span>
       <textarea name="notes" rows="5" class="field"></textarea>
@@ -79,7 +66,7 @@ const [clients, sites] = await Promise.all([
   </form>
 
   <dialog data-create-client-dialog class="create-record-dialog">
-    <form data-create-client-form class="grid gap-4">
+    <form data-create-client-form data-field-errors class="grid gap-4">
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-xl font-semibold">Add a new client</h2>
@@ -91,8 +78,42 @@ const [clients, sites] = await Promise.all([
       </div>
       <label class="block"><span class="label">Name</span><input required name="name" class="field" /></label>
       <div class="grid gap-4 sm:grid-cols-2">
-        <label class="block"><span class="label">Email</span><input type="email" name="email" class="field" /></label>
-        <label class="block"><span class="label">Phone</span><input name="phone" class="field" /></label>
+        <label class="block">
+          <span class="label">Email</span>
+          <input
+            type="email"
+            name="email"
+            maxlength="160"
+            autocomplete="email"
+            class="field peer invalid:border-red-300"
+            placeholder="client@example.com"
+            aria-describedby="project-client-email-error"
+          />
+          <p
+            id="project-client-email-error"
+            data-field-error="email"
+            class="mt-1 hidden text-xs text-red-700 peer-invalid:block"
+          >Enter a valid email address.</p>
+        </label>
+        <label class="block">
+          <span class="label">Phone</span>
+          <input
+            type="tel"
+            name="phone"
+            maxlength="20"
+            inputmode="tel"
+            autocomplete="tel"
+            pattern={UK_PHONE_HTML_PATTERN}
+            class="field peer invalid:border-red-300"
+            placeholder="07483 882299"
+            aria-describedby="project-client-phone-error"
+          />
+          <p
+            id="project-client-phone-error"
+            data-field-error="phone"
+            class="mt-1 hidden text-xs text-red-700 peer-invalid:block"
+          >Enter a valid phone number.</p>
+        </label>
       </div>
       <label class="block"><span class="label">Address</span><textarea name="address" rows="3" class="field"></textarea></label>
       <label class="block"><span class="label">Notes</span><textarea name="notes" rows="3" class="field"></textarea></label>
@@ -144,6 +165,23 @@ const [clients, sites] = await Promise.all([
     if (dialog instanceof HTMLDialogElement) dialog.close();
   };
 
+  const renderFieldErrors = (form: HTMLFormElement, payload: any) => {
+    form.querySelectorAll('[data-field-error]').forEach((element) => {
+      element.classList.add('hidden');
+    });
+    const fieldErrors = payload?.details?.fieldErrors;
+    if (!fieldErrors || typeof fieldErrors !== 'object') return;
+    for (const [field, messages] of Object.entries(fieldErrors)) {
+      const error = Array.from(form.querySelectorAll<HTMLElement>('[data-field-error]'))
+        .find((element) => element.dataset.fieldError === field);
+      const message = Array.isArray(messages) ? messages[0] : undefined;
+      if (error && typeof message === 'string') {
+        error.textContent = message;
+        error.classList.remove('hidden');
+      }
+    }
+  };
+
   const submitRelatedRecord = async (
     form: HTMLFormElement,
     endpoint: string,
@@ -153,6 +191,7 @@ const [clients, sites] = await Promise.all([
     status: HTMLElement | null,
   ) => {
     const submit = form.querySelector('button[type="submit"]');
+    renderFieldErrors(form, {});
     if (submit instanceof HTMLButtonElement) submit.disabled = true;
     if (status) {
       status.textContent = 'Saving...';
@@ -167,7 +206,10 @@ const [clients, sites] = await Promise.all([
         body: JSON.stringify(values),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || `Could not save ${key}.`);
+      if (!response.ok) {
+        renderFieldErrors(form, payload);
+        throw new Error(payload.error || `Could not save ${key}.`);
+      }
       const record = payload[key];
       const label = key === 'client'
         ? record.name
@@ -177,11 +219,7 @@ const [clients, sites] = await Promise.all([
       select.insertBefore(option, addOption);
       if (key === 'site') {
         const authority = document.querySelector('input[name="localAuthority"]');
-        const address = document.querySelector('input[name="siteAddress"]');
         if (authority instanceof HTMLInputElement && !authority.value) authority.value = record.localAuthority || '';
-        if (address instanceof HTMLInputElement && !address.value) {
-          address.value = [record.addressLine1, record.addressLine2, record.townCity, record.postcode].filter(Boolean).join(', ');
-        }
       }
       form.reset();
       dialog.close();

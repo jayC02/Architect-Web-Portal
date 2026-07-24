@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
-import { projectSchema } from '@/lib/validation/domain';
+import { projectCreateSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
@@ -49,7 +49,7 @@ export const POST: APIRoute = (context) =>
     assertAllowedOrigin(context.request);
     assertRateLimit(context, rateLimitPolicies.mutation, 'projects:create');
     const { organisation } = await requireOrganisation(context);
-    const body = await parseBody(context.request, projectSchema);
+    const body = await parseBody(context.request, projectCreateSchema);
     const clientId = await assertRelatedRecord(organisation.id, 'client', body.clientId);
     const siteId = await assertRelatedRecord(organisation.id, 'site', body.siteId);
     const project = await prisma.project.create({

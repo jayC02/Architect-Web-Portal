@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
+import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
 type Variant =
   | 'dashboard'
@@ -564,7 +565,73 @@ function ClientDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 
 
 function ClientForm({ client, onClose }: { client?: AnyRecord; onClose: () => void }) {
   const editing = Boolean(client?.id);
-  return <form data-api-form data-action={editing ? `/api/clients/${client?.id}` : '/api/clients'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><label className="block"><span className="label">Name</span><input required name="name" defaultValue={client?.name ?? ''} className="field" placeholder="Enter client name" /></label><label className="block"><span className="label">Email</span><input type="email" name="email" defaultValue={client?.email ?? ''} className="field" placeholder="Enter email address" /></label><label className="block"><span className="label">Phone</span><input name="phone" defaultValue={client?.phone ?? ''} className="field" placeholder="Enter phone number" /></label><label className="block"><span className="label">Address</span><textarea name="address" rows={4} defaultValue={client?.address ?? ''} className="field" placeholder="Enter address" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={client?.notes ?? ''} className="field" placeholder="Add any notes about this client" /></label><button className="btn btn-primary w-full">Save client</button><button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
+  return (
+    <form
+      data-api-form
+      data-field-errors
+      data-action={editing ? `/api/clients/${client?.id}` : '/api/clients'}
+      data-method={editing ? 'PATCH' : 'POST'}
+      className="grid gap-4"
+    >
+      <label className="block">
+        <span className="label">Name</span>
+        <input required name="name" defaultValue={client?.name ?? ''} className="field" placeholder="Enter client name" />
+      </label>
+      <label className="block">
+        <span className="label">Email</span>
+        <input
+          type="email"
+          name="email"
+          maxLength={160}
+          autoComplete="email"
+          defaultValue={client?.email ?? ''}
+          className="field peer invalid:border-red-300"
+          placeholder="Enter email address"
+          aria-describedby="client-email-error"
+        />
+        <p
+          id="client-email-error"
+          data-field-error="email"
+          className="mt-1 hidden text-xs text-red-700 peer-invalid:block"
+        >
+          Enter a valid email address.
+        </p>
+      </label>
+      <label className="block">
+        <span className="label">Phone</span>
+        <input
+          type="tel"
+          name="phone"
+          maxLength={20}
+          inputMode="tel"
+          autoComplete="tel"
+          pattern={UK_PHONE_HTML_PATTERN}
+          defaultValue={client?.phone ?? ''}
+          className="field peer invalid:border-red-300"
+          placeholder="07483 882299"
+          aria-describedby="client-phone-error"
+        />
+        <p
+          id="client-phone-error"
+          data-field-error="phone"
+          className="mt-1 hidden text-xs text-red-700 peer-invalid:block"
+        >
+          Enter a valid phone number.
+        </p>
+      </label>
+      <label className="block">
+        <span className="label">Address</span>
+        <textarea name="address" rows={4} defaultValue={client?.address ?? ''} className="field" placeholder="Enter address" />
+      </label>
+      <label className="block">
+        <span className="label">Notes</span>
+        <textarea name="notes" rows={4} defaultValue={client?.notes ?? ''} className="field" placeholder="Add any notes about this client" />
+      </label>
+      <button className="btn btn-primary w-full">Save client</button>
+      <button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button>
+      <p data-form-status className="text-sm text-stone-500" />
+    </form>
+  );
 }
 
 function SiteDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; onClose: () => void; onEdit: (site: AnyRecord) => void }) {

@@ -26,6 +26,35 @@ const {
   <body>
     <slot />
     <script>
+      const clearFieldErrors = (form: HTMLFormElement, fieldName?: string) => {
+        form.querySelectorAll<HTMLElement>('[data-field-error]').forEach((element) => {
+          if (fieldName && element.dataset.fieldError !== fieldName) return;
+          element.textContent = '';
+          element.classList.add('hidden');
+        });
+      };
+
+      const showFieldErrors = (form: HTMLFormElement, payload: any) => {
+        const fieldErrors = payload?.details?.fieldErrors;
+        if (!fieldErrors || typeof fieldErrors !== 'object') return;
+        for (const [field, messages] of Object.entries(fieldErrors)) {
+          const element = Array.from(form.querySelectorAll<HTMLElement>('[data-field-error]'))
+            .find((candidate) => candidate.dataset.fieldError === field);
+          const message = Array.isArray(messages) ? messages[0] : undefined;
+          if (element && typeof message === 'string') {
+            element.textContent = message;
+            element.classList.remove('hidden');
+          }
+        }
+      };
+
+      document.addEventListener('input', (event) => {
+        const field = event.target;
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)) return;
+        const form = field.closest('form[data-field-errors]');
+        if (form instanceof HTMLFormElement && field.name) clearFieldErrors(form, field.name);
+      });
+
       document.addEventListener('submit', async (event) => {
         const form = event.target;
         if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-api-form')) return;
@@ -37,6 +66,7 @@ const {
         const redirect = form.dataset.redirect;
         const status = form.querySelector('[data-form-status]');
         const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], button:not([type])'));
+        if (form.hasAttribute('data-field-errors')) clearFieldErrors(form);
         if (status) {
           status.textContent = 'Saving...';
           status.setAttribute('role', 'status');
@@ -64,6 +94,7 @@ const {
           const response = await fetch(action, { method, headers, body });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
+            if (form.hasAttribute('data-field-errors')) showFieldErrors(form, payload);
             if (status) {
               status.textContent = payload.error || 'Request failed.';
               status.classList.remove('text-stone-500');
