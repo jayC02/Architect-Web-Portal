@@ -39,7 +39,8 @@ assert.match(documentFolder, /where:\s*\{\s*id:\s*projectId,\s*organisationId:\s
 assert.match(documentFolderApi, /requireProjectAccess\(organisation\.id,\s*projectId\)/, 'lazy project document folder endpoint checks project ownership');
 assert.match(documentFolder, /data-action=\{`\/api\/projects\/\$\{project\.id\}\/document-sort-batches`\}/, 'project document folder reuses the secured project batch upload API');
 assert.match(createRoute, /await requireProjectAccess\(organisation\.id,\s*projectId\)/, 'uploading from documents requires valid project membership through project access');
-assert.match(acceptRoute, /allItemsAccepted \? DocumentSortBatchStatus\.ACCEPTED : DocumentSortBatchStatus\.NEEDS_REVIEW/, 'batch status reflects whether all reviewed items were saved');
+assert.match(acceptRoute, /submittedIds\.size !== batch\.items\.length/, 'saving requires the complete reviewed document list');
+assert.match(acceptRoute, /data:\s*\{\s*status:\s*DocumentSortBatchStatus\.ACCEPTED\s*\}/s, 'a complete review is accepted atomically');
 assert.match(acceptRoute, /submitted\.status === DocumentStatus\.IN_REVIEW \? DocumentStatus\.APPROVED : submitted\.status/, 'reviewed documents are not left in confusing In Review status by default');
 
 console.log('document sort batch security tests passed');
@@ -55,3 +56,8 @@ assert.doesNotMatch(sortReviewPage, /storageUrl/, 'review page does not expose r
 assert.doesNotMatch(sortReviewPage, /Accept selected|Accept all high confidence|Select all|Deselect all|Expand low confidence only/, 'review page hides noisy bulk actions from the primary flow');
 assert.match(sortReviewPage, /DocumentStatus\.APPROVED/, 'review page defaults saved reviewed documents to Approved');
 assert.doesNotMatch(sortReviewPage, /'IN_REVIEW'/, 'review page does not submit In Review as the default status');
+assert.doesNotMatch(sortReviewPage, /Math\.round\(item\.confidence|% High|% Medium/, 'review page does not show confidence percentages');
+assert.doesNotMatch(sortReviewPage, /data-toggle-edit|>Edit</, 'the category dropdown is the only primary editing control');
+assert.doesNotMatch(sortReviewPage, /grouped\.entries|1 file header/, 'all reviewed files render in one list');
+assert.match(sortReviewPage, /data-attention-filter/, 'review page can filter to documents needing attention');
+assert.match(sortReviewPage, /Save document sorting/, 'review page has one clear save action');

@@ -1,26 +1,18 @@
 export const prerender = false;
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { DocumentSortBatchStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
+import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { classifyDocumentBatch } from '@/server/services/document-sorter.service';
+import {
+  classificationAuditForSuggestion,
+  classifyProjectDocumentBatch,
+} from '@/server/services/pdf-classification.service';
 import { requireOrganisation } from '@/server/permissions/authz';
-
-const readLocalDocumentBytes = async (storageKey: string | null) => {
-  if (!storageKey || (process.env.UPLOAD_STORAGE_PROVIDER ?? 'local') !== 'local') return undefined;
-  const configuredLocalDir = process.env.UPLOAD_STORAGE_DIR ?? 'public/uploads';
-  const storageRoot = path.isAbsolute(configuredLocalDir) ? configuredLocalDir : path.resolve(process.cwd(), configuredLocalDir);
-  const resolvedRoot = path.resolve(storageRoot);
-  const resolvedFile = path.resolve(resolvedRoot, storageKey);
-  if (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) return undefined;
-  return fs.readFile(resolvedFile).catch(() => undefined);
-};
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -32,7 +24,10 @@ export const POST: APIRoute = (context) =>
 
     const batch = await prisma.documentSortBatch.findFirst({
       where: { id, organisationId: organisation.id },
-      include: { items: { include: { document: true }, orderBy: { createdAt: 'asc' } } },
+      include: {
+        project: { select: { name: true, projectType: true, stage: true } },
+        items: { include: { document: true }, orderBy: { createdAt: 'asc' } },
+      },
     });
     if (!batch) throw new HttpError(404, 'Document sort batch not found.');
     if (batch.status === DocumentSortBatchStatus.ACCEPTED) {
@@ -49,19 +44,29 @@ export const POST: APIRoute = (context) =>
         documentId: item.documentId ?? undefined,
         filename: item.originalFilename,
         mimeType: item.document?.mimeType,
-        bytes: await readLocalDocumentBytes(item.document?.storageKey ?? null),
+        bytes: item.document?.storageKey
+          ? await readStoredDocumentBytes(item.document.storageKey).catch(() => undefined)
+          : undefined,
       })));
-      const suggestions = await classifyDocumentBatch(inputs);
+      const suggestions = await classifyProjectDocumentBatch(inputs, {
+        projectName: batch.project.name,
+        typeOfWork: batch.project.projectType ?? undefined,
+        applicationType: batch.project.stage,
+      });
 
       await prisma.$transaction(suggestions.map((suggestion, index) => {
         const item = batch.items[index];
+        const audit = classificationAuditForSuggestion(suggestion);
         return prisma.documentSortBatchItem.update({
           where: { id: item.id },
           data: {
             suggestedDocumentType: suggestion.suggestedDocumentType,
             confidence: suggestion.confidence,
             reason: suggestion.reason,
-            matchedRules: suggestion.matchedRules,
+            matchedRules: {
+              ...audit,
+              previousAnalysis: item.matchedRules,
+            },
             revision: suggestion.revision,
             drawingNumber: suggestion.drawingNumber,
             drawingTitle: suggestion.drawingTitle,

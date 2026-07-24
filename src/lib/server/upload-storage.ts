@@ -63,6 +63,14 @@ const normalizeFolder = (folder: string) => {
   return segments.filter(Boolean).join('/');
 };
 
+export const normalizeStorageKey = (storageKey: string) => {
+  const normalized = storageKey.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!normalized || normalized.split('/').some((segment) => segment === '..') || path.isAbsolute(storageKey) || path.win32.isAbsolute(storageKey)) {
+    throw new HttpError(400, 'Document storage key is invalid.');
+  }
+  return normalized;
+};
+
 const assertSafeOriginalName = (file: File, label: string) => {
   if (!file.name) return;
   if (file.name.includes('/') || file.name.includes('\\') || file.name.split('.').includes('..')) {
@@ -130,4 +138,34 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
     mimeType: file.type,
     sizeBytes: file.size,
   };
+}
+
+export async function readStoredDocumentBytes(storageKey: string): Promise<Buffer> {
+  const safeKey = normalizeStorageKey(storageKey);
+  const provider = getStorageProvider();
+
+  if (provider === 'supabase') {
+    const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
+    const response = await fetch(`${supabaseUrl}/storage/v1/object/${supabaseBucket}/${safeKey}`, {
+      headers: {
+        authorization: `Bearer ${supabaseServiceRoleKey}`,
+        apikey: supabaseServiceRoleKey,
+      },
+    });
+    if (!response.ok) throw new HttpError(404, 'Document file could not be opened.');
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  if (provider !== 'local') throw new HttpError(500, `Unsupported upload storage provider: ${provider}.`);
+
+  const configuredLocalDir = getLocalDir();
+  const storageRoot = path.isAbsolute(configuredLocalDir) ? configuredLocalDir : path.resolve(process.cwd(), configuredLocalDir);
+  const resolvedRoot = path.resolve(storageRoot);
+  const resolvedFile = path.resolve(resolvedRoot, safeKey);
+  if (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) {
+    throw new HttpError(400, 'Document path is invalid.');
+  }
+  const bytes = await fs.readFile(resolvedFile).catch(() => null);
+  if (!bytes) throw new HttpError(404, 'Document file could not be opened.');
+  return bytes;
 }

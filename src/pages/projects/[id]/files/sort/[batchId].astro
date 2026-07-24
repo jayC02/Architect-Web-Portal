@@ -3,8 +3,8 @@ import { DocumentSortBatchStatus, DocumentStatus } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
-import { formatDate, humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { classificationDetailsFromAudit } from '@/server/services/pdf-classification.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -15,8 +15,12 @@ if (!projectId || !batchId) return Astro.redirect('/projects');
 
 const returnParam = Astro.url.searchParams.get('returnTo');
 const returnTo = returnParam === 'document-folder' || returnParam === 'project-detail' ? returnParam : 'project-files';
-const backHref = returnTo === 'project-detail' ? `/projects/${projectId}#documents` : returnTo === 'document-folder' ? `/documents/projects/${projectId}` : `/projects/${projectId}/files`;
-const backLabel = returnTo === 'project-detail' ? 'project documents' : returnTo === 'document-folder' ? 'document folder' : 'files';
+const backHref = returnTo === 'project-detail'
+  ? `/projects/${projectId}#documents`
+  : returnTo === 'document-folder'
+    ? `/documents/projects/${projectId}`
+    : `/projects/${projectId}/files`;
+const backLabel = returnTo === 'project-detail' ? 'project documents' : returnTo === 'document-folder' ? 'document folder' : 'project files';
 
 const batch = await prisma.documentSortBatch.findFirst({
   where: { id: batchId, projectId, organisationId: auth.organisation.id },
@@ -28,178 +32,195 @@ const batch = await prisma.documentSortBatch.findFirst({
 
 if (!batch) return Astro.redirect(backHref);
 
-const grouped = new Map<string, typeof batch.items>();
-for (const type of preferredDocumentTypes) grouped.set(documentTypeLabel(type), []);
-for (const item of batch.items) {
-  const key = documentTypeLabel(documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType));
-  grouped.set(key, [...(grouped.get(key) ?? []), item]);
-}
-
-const confidenceBand = (confidence: number) => {
-  if (confidence >= 0.8) return { label: 'High', className: 'border-moss/30 bg-moss/10 text-moss' };
-  if (confidence >= 0.55) return { label: 'Medium', className: 'border-amber-300 bg-amber-50 text-amber-800' };
-  return { label: 'Review', className: 'border-red-200 bg-red-50 text-red-700' };
-};
-
-const matchedRulesText = (value: unknown) => Array.isArray(value) ? value.join(', ') : '';
 const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
+const isProcessing = batch.status === DocumentSortBatchStatus.ANALYSING || batch.status === DocumentSortBatchStatus.UPLOADED;
+const itemView = batch.items.map((item) => {
+  const details = classificationDetailsFromAudit(item.matchedRules);
+  const processingFailed = Boolean(details?.fallbackReason && /failed|timed out/i.test(details.fallbackReason));
+  const needsAttention = Boolean(
+    processingFailed ||
+    details?.manualReviewRequired ||
+    details?.categoryKey === 'unsure' ||
+    item.confidence < 0.55,
+  );
+  return { item, details, processingFailed, needsAttention };
+});
+const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
 ---
-<AppShell title={`Review file sorting - ${batch.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-    <div class="min-w-0">
-      <a href={backHref} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {backLabel}</a>
-      <h1 class="mt-2 text-3xl font-semibold">Review file sorting</h1>
-      <p class="mt-1 text-sm text-stone-500">{batch.project.name} - {batch.fileCount} files - {humanizeEnum(batch.status)} - {formatDate(batch.createdAt)}</p>
+<AppShell title={`Review document sorting - ${batch.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href={backHref} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to {backLabel}</a>
+    <div class="mt-3 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-semibold">Review document sorting</h1>
+        <p class="mt-1 text-sm text-stone-500">
+          {batch.fileCount} document{batch.fileCount === 1 ? '' : 's'} analysed for {batch.project.name}.
+          Review the suggested types and change anything that is incorrect.
+        </p>
+      </div>
+      {!isAccepted && (
+        <form
+          data-api-form
+          data-action={`/api/document-sort-batches/${batch.id}/analyse`}
+          data-method="POST"
+          data-redirect="reload"
+          data-confirm="Analyse the documents again? Unsaved dropdown changes will be replaced."
+        >
+          <button class="btn btn-secondary px-3 py-2 text-sm" disabled={isProcessing}>Analyse again</button>
+          <span data-form-status class="ml-2 text-sm text-stone-500"></span>
+        </form>
+      )}
     </div>
-    <form data-api-form data-action={`/api/document-sort-batches/${batch.id}/analyse`} data-method="POST" data-redirect="reload">
-      <button class="btn btn-secondary" disabled={isAccepted}>Analyse again</button>
-      <span data-form-status class="ml-3 text-sm text-stone-500"></span>
-    </form>
   </div>
 
-  <form data-sort-review-form data-endpoint={`/api/document-sort-batches/${batch.id}/accept`} data-return-to={returnTo} data-redirect={backHref} class="space-y-4">
-    <div class="panel sticky top-0 z-10 rounded-lg p-3">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-sm font-semibold">Review each row, change anything wrong, then save once.</p>
-          <p data-sort-review-status class="mt-1 text-sm text-stone-500">
-            {isAccepted ? 'This batch has already been accepted.' : 'Saving this review will mark the documents as approved unless you choose another status.'}
-          </p>
-        </div>
-        <button type="submit" class="btn btn-primary" disabled={isAccepted || !batch.items.length}>Save reviewed sorting</button>
+  <form
+    data-sort-review-form
+    data-endpoint={`/api/document-sort-batches/${batch.id}/accept`}
+    data-return-to={returnTo}
+    data-redirect={backHref}
+    class="panel overflow-hidden rounded-lg"
+  >
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
+      <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-stone-700">
+        <input data-attention-filter type="checkbox" class="h-4 w-4 accent-ink" />
+        <span>Needs attention only</span>
+        {attentionCount > 0 && <span class="text-stone-500">({attentionCount})</span>}
+      </label>
+      <div class="flex items-center gap-3">
+        <p data-sort-review-status class="text-sm text-stone-500">
+          {isAccepted ? 'Document sorting has been saved.' : isProcessing ? 'Analysis is still in progress.' : ''}
+        </p>
+        <button type="submit" class="btn btn-primary" disabled={isAccepted || isProcessing || !batch.items.length}>
+          Save document sorting
+        </button>
       </div>
     </div>
 
-    {[...grouped.entries()].map(([label, items]) => items.length ? (
-      <section class="panel overflow-hidden rounded-lg">
-        <div class="flex items-center justify-between gap-3 border-b border-stone-100 bg-stone-50 px-4 py-2">
-          <h2 class="text-sm font-semibold">{label}</h2>
-          <span class="text-xs font-semibold text-stone-500">{items.length} file{items.length === 1 ? '' : 's'}</span>
-        </div>
-        <div>
-          {items.map((item) => {
-            const band = confidenceBand(item.confidence);
-            const lowConfidence = item.confidence < 0.55;
-            const documentHref = item.document?.id ? `/api/documents/${item.document.id}` : '#';
-            return (
-              <div data-sort-item data-item-id={item.id} data-confidence={item.confidence} data-low-confidence={lowConfidence ? 'true' : 'false'} class="border-b border-stone-100 last:border-b-0">
-                <div class="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_190px_94px_90px_88px] lg:items-center">
-                  <div class="min-w-0">
-                    <a href={documentHref} target="_blank" rel="noreferrer" title={item.originalFilename} class="block truncate text-sm font-semibold text-ink underline-offset-2 hover:underline">{item.originalFilename}</a>
-                    <p class="mt-1 line-clamp-2 text-xs text-stone-500">{item.reason}</p>
-                    {lowConfidence && <p class="mt-1 text-xs font-semibold text-red-700">Needs review before saving.</p>}
-                  </div>
-                  <label class="block min-w-0">
-                    <span class="sr-only">Document type</span>
-                    <select data-document-type class="field py-1.5 text-sm" disabled={isAccepted}>
-                      {preferredDocumentTypes.map((type) => <option value={type} selected={type === documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType)}>{documentTypeLabel(type)}</option>)}
-                    </select>
-                  </label>
-                  <span class={`inline-flex w-fit rounded-full border px-2 py-1 text-xs font-semibold ${band.className}`}>{Math.round(item.confidence * 100)}% {band.label}</span>
-                  <input data-revision value={item.revision ?? ''} placeholder="No rev" class="field py-1.5 text-sm" disabled={isAccepted} aria-label={`Revision for ${item.originalFilename}`} />
-                  <div class="flex items-center justify-start gap-2 lg:justify-end">
-                    <a href={documentHref} target="_blank" rel="noreferrer" class="btn btn-secondary min-h-8 px-2 py-1 text-xs">Open</a>
-                    <button type="button" data-toggle-edit class="btn btn-secondary min-h-8 px-2 py-1 text-xs">Edit</button>
-                  </div>
-                </div>
-                <div data-edit-panel class="hidden border-t border-stone-100 bg-stone-50 px-3 py-3">
-                  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <label class="block">
-                      <span class="label">Status</span>
-                      <select data-status class="field" disabled={isAccepted}>
-                        {Object.values(DocumentStatus).filter((status) => status !== DocumentStatus.IN_REVIEW).map((status) => <option value={status} selected={status === (isAccepted ? item.document?.status ?? DocumentStatus.APPROVED : item.document?.status === DocumentStatus.IN_REVIEW ? DocumentStatus.APPROVED : item.document?.status ?? DocumentStatus.APPROVED)}>{humanizeEnum(status)}</option>)}
-                      </select>
-                    </label>
-                    <label class="block">
-                      <span class="label">Notes</span>
-                      <input data-notes value={item.document?.notes ?? ''} class="field" disabled={isAccepted} />
-                    </label>
-                    <label class="block">
-                      <span class="label">Drawing number</span>
-                      <input value={item.drawingNumber ?? ''} class="field" disabled />
-                    </label>
-                    <label class="block">
-                      <span class="label">Drawing title</span>
-                      <input value={item.drawingTitle ?? ''} class="field" disabled />
-                    </label>
-                  </div>
-                  <div class="mt-3 grid gap-3 md:grid-cols-2">
-                    <div class="rounded-md border border-stone-200 bg-white p-3 text-xs text-stone-600">
-                      <p class="font-semibold text-ink">Reason</p>
-                      <p class="mt-1">{item.reason}</p>
-                    </div>
-                    <div class="rounded-md border border-stone-200 bg-white p-3 text-xs text-stone-600">
-                      <p class="font-semibold text-ink">Matched rules</p>
-                      <p class="mt-1 break-words">{matchedRulesText(item.matchedRules) || 'No matched rule details.'}</p>
-                    </div>
-                  </div>
-                  <div class="mt-2 flex flex-wrap gap-1 text-[11px]">
-                    {item.suitableForPlanning && <span class="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-stone-600">Planning package</span>}
-                    {item.suitableForBuildingWarrant && <span class="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-stone-600">Building warrant package</span>}
-                    {!item.isLikelyCurrent && <span class="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-800">Older revision</span>}
-                  </div>
+    <div class="hidden border-b border-stone-200 bg-stone-50 px-5 py-2 text-xs font-semibold uppercase text-stone-500 md:grid md:grid-cols-[minmax(0,1fr)_260px_130px_70px] md:gap-4">
+      <span>Document</span>
+      <span>Document type</span>
+      <span>Status</span>
+      <span class="text-right">Details</span>
+    </div>
+
+    <div>
+      {itemView.map(({ item, details, processingFailed, needsAttention }) => {
+        const documentHref = item.document?.id ? `/api/documents/${item.document.id}` : '#';
+        const selectedType = documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType);
+        const statusLabel = isProcessing ? 'Analysing' : processingFailed ? 'Processing failed' : needsAttention ? 'Needs attention' : 'Ready';
+        const statusClass = processingFailed
+          ? 'text-red-700'
+          : needsAttention
+            ? 'text-amber-800'
+            : 'text-stone-600';
+
+        return (
+          <div
+            data-sort-item
+            data-item-id={item.id}
+            data-needs-attention={needsAttention ? 'true' : 'false'}
+            data-revision={item.revision ?? ''}
+            data-status={isAccepted ? item.document?.status ?? DocumentStatus.APPROVED : DocumentStatus.APPROVED}
+            data-notes={item.document?.notes ?? ''}
+            class="border-b border-stone-100 last:border-b-0"
+          >
+            <div class="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_260px_130px_70px] md:items-center md:gap-4">
+              <div class="flex min-w-0 items-center gap-3">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-stone-600" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M6 2.75h8l4 4V21.25H6z"></path>
+                    <path d="M14 2.75v4h4M8.5 15.5h7M8.5 18h5"></path>
+                  </svg>
+                </span>
+                <div class="min-w-0">
+                  <a href={documentHref} target="_blank" rel="noreferrer" class="block truncate text-sm font-semibold text-ink underline-offset-2 hover:underline">
+                    {item.originalFilename}
+                  </a>
+                  {item.drawingTitle && <p class="mt-0.5 truncate text-xs text-stone-500">{item.drawingTitle}</p>}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </section>
-    ) : null)}
 
-    {!batch.items.length && <div class="panel rounded-lg p-8 text-center text-sm text-stone-500">No files are attached to this sorting batch.</div>}
+              <label class="block min-w-0">
+                <span class="label mb-1 md:sr-only">Document type</span>
+                <select data-document-type class="field py-2 text-sm" disabled={isAccepted || isProcessing}>
+                  {preferredDocumentTypes.map((type) => (
+                    <option value={type} selected={type === selectedType}>{documentTypeLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <p class={`text-sm font-medium ${statusClass}`}>{statusLabel}</p>
+
+              <details class="relative justify-self-start md:justify-self-end">
+                <summary class="cursor-pointer list-none rounded-md px-2 py-1 text-sm font-semibold text-stone-600 hover:bg-stone-100 hover:text-ink">
+                  More
+                </summary>
+                <div class="mt-2 w-full rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600 md:absolute md:right-0 md:z-20 md:w-80 md:bg-white md:shadow-lg">
+                  <dl class="space-y-2">
+                    {item.drawingNumber && <div><dt class="font-semibold text-ink">Drawing number</dt><dd>{item.drawingNumber}</dd></div>}
+                    {item.revision && <div><dt class="font-semibold text-ink">Revision</dt><dd>{item.revision}</dd></div>}
+                    <div><dt class="font-semibold text-ink">Why this was suggested</dt><dd>{details?.evidence || item.reason}</dd></div>
+                    <div><dt class="font-semibold text-ink">Classification source</dt><dd>{item.source === 'AI' ? 'AI document analysis' : 'Deterministic document checks'}</dd></div>
+                    {details?.warnings?.length ? (
+                      <div>
+                        <dt class="font-semibold text-ink">Needs checking</dt>
+                        <dd>{details.warnings.join(' ')}</dd>
+                      </div>
+                    ) : null}
+                    {details?.fallbackReason && <div><dt class="font-semibold text-ink">Fallback</dt><dd>{details.fallbackReason}</dd></div>}
+                  </dl>
+                  <a href={documentHref} target="_blank" rel="noreferrer" class="mt-3 inline-flex font-semibold text-ink hover:underline">Open document</a>
+                </div>
+              </details>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {!batch.items.length && <div class="p-10 text-center text-sm text-stone-500">No documents are attached to this sorting batch.</div>}
+    <div data-no-attention class="hidden p-10 text-center text-sm text-stone-500">No documents currently need attention.</div>
   </form>
 
   <script>
     const form = document.querySelector('[data-sort-review-form]');
+    const filter = document.querySelector('[data-attention-filter]');
+    const emptyFiltered = document.querySelector('[data-no-attention]');
     const getRows = () => Array.from(document.querySelectorAll('[data-sort-item]')).filter((row): row is HTMLElement => row instanceof HTMLElement);
 
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      const toggle = target.closest('[data-toggle-edit]');
-      if (!toggle) return;
-      const row = target.closest('[data-sort-item]');
-      const panel = row?.querySelector('[data-edit-panel]');
-      if (panel instanceof HTMLElement) panel.classList.toggle('hidden');
+    filter?.addEventListener('change', () => {
+      if (!(filter instanceof HTMLInputElement)) return;
+      let visible = 0;
+      for (const row of getRows()) {
+        const show = !filter.checked || row.dataset.needsAttention === 'true';
+        row.classList.toggle('hidden', !show);
+        if (show) visible += 1;
+      }
+      emptyFiltered?.classList.toggle('hidden', visible > 0 || !filter.checked);
     });
 
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!(form instanceof HTMLFormElement)) return;
       const status = form.querySelector('[data-sort-review-status]');
-      const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+      const submit = form.querySelector('button[type="submit"]');
       if (status) {
-        status.textContent = 'Saving reviewed classifications...';
+        status.textContent = 'Saving document sorting...';
         status.classList.remove('text-red-700');
         status.classList.add('text-stone-500');
       }
-      submitButtons.forEach((button) => {
-        if (button instanceof HTMLButtonElement) button.disabled = true;
-      });
+      if (submit instanceof HTMLButtonElement) submit.disabled = true;
 
       const items = getRows().map((row) => {
         const documentTypeField = row.querySelector('[data-document-type]');
-        const revisionField = row.querySelector('[data-revision]');
-        const statusField = row.querySelector('[data-status]');
-        const notesField = row.querySelector('[data-notes]');
-        const documentType = documentTypeField instanceof HTMLSelectElement ? documentTypeField.value : '';
-        const revision = revisionField instanceof HTMLInputElement ? revisionField.value : '';
-        const statusValue = statusField instanceof HTMLSelectElement ? statusField.value : 'APPROVED';
-        const notes = notesField instanceof HTMLInputElement ? notesField.value : '';
-        return { itemId: row.dataset.itemId || '', documentType, revision, status: statusValue, notes };
+        return {
+          itemId: row.dataset.itemId || '',
+          documentType: documentTypeField instanceof HTMLSelectElement ? documentTypeField.value : '',
+          revision: row.dataset.revision || '',
+          status: row.dataset.status || 'APPROVED',
+          notes: row.dataset.notes || '',
+        };
       });
-
-      if (!items.length) {
-        if (status) {
-          status.textContent = 'There are no files to save in this sorting batch.';
-          status.classList.remove('text-stone-500');
-          status.classList.add('text-red-700');
-        }
-        submitButtons.forEach((button) => {
-          if (button instanceof HTMLButtonElement) button.disabled = false;
-        });
-        return;
-      }
 
       try {
         const response = await fetch(form.dataset.endpoint || '', {
@@ -210,7 +231,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (status) {
-            status.textContent = payload.error || 'Sorting could not be saved.';
+            status.textContent = payload.error || 'Document sorting could not be saved.';
             status.classList.remove('text-stone-500');
             status.classList.add('text-red-700');
           }
@@ -224,9 +245,7 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
           status.classList.add('text-red-700');
         }
       } finally {
-        submitButtons.forEach((button) => {
-          if (button instanceof HTMLButtonElement) button.disabled = false;
-        });
+        if (submit instanceof HTMLButtonElement) submit.disabled = false;
       }
     });
   </script>

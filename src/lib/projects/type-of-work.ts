@@ -1,7 +1,7 @@
 export const TYPE_OF_WORK_OPTIONS = [
-  'Domestic alteration / Extension',
+  'Domestic alteration / extension',
   'New build',
-  'Conversion / Change of Use',
+  'Conversion / change of use',
   'Demolition',
 ] as const;
 
@@ -15,8 +15,8 @@ export const buildingWarrantProfileForTypeOfWork = (value: string | null | undef
   // Existing projects may still contain one of the older free-text values.
   if (normalised.includes('demol')) return 'Demolition';
   if (normalised.includes('convert') || normalised.includes('change of use')) {
-    return 'Conversion / Change of Use';
+    return 'Conversion / change of use';
   }
   if (normalised.includes('new build') || normalised.includes('new-build')) return 'New build';
-  return 'Domestic alteration / Extension';
+  return 'Domestic alteration / extension';
 };

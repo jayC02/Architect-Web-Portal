@@ -31,14 +31,19 @@ export const POST: APIRoute = (context) =>
     if (batch.status === DocumentSortBatchStatus.ACCEPTED) {
       throw new HttpError(400, 'This sort batch has already been accepted.');
     }
+    if (batch.status === DocumentSortBatchStatus.ANALYSING || batch.status === DocumentSortBatchStatus.UPLOADED) {
+      throw new HttpError(409, 'Document analysis is still in progress.');
+    }
 
     const itemsById = new Map(batch.items.map((item) => [item.id, item]));
     const submittedItems = body.items as AcceptItem[];
     const submittedIds = new Set(submittedItems.map((item: AcceptItem) => item.itemId));
     if (submittedIds.size !== body.items.length) throw new HttpError(400, 'Duplicate sort items are not allowed.');
+    if (submittedIds.size !== batch.items.length) {
+      throw new HttpError(400, 'Review every document before saving the sorting batch.');
+    }
 
     const updates = [];
-    const acceptedItemIds = new Set(batch.items.filter((item) => item.finalDocumentType).map((item) => item.id));
     for (const submitted of submittedItems) {
       const item = itemsById.get(submitted.itemId);
       if (!item) throw new HttpError(400, 'One or more sort items do not belong to this batch.');
@@ -68,19 +73,17 @@ export const POST: APIRoute = (context) =>
           source,
         },
       }));
-      acceptedItemIds.add(item.id);
     }
 
-    const allItemsAccepted = batch.items.every((item) => acceptedItemIds.has(item.id));
     updates.push(prisma.documentSortBatch.update({
       where: { id: batch.id },
-      data: { status: allItemsAccepted ? DocumentSortBatchStatus.ACCEPTED : DocumentSortBatchStatus.NEEDS_REVIEW },
+      data: { status: DocumentSortBatchStatus.ACCEPTED },
     }));
 
     await prisma.$transaction(updates);
     return jsonResponse(200, {
       ok: true,
-      complete: allItemsAccepted,
+      complete: true,
       redirectTo: body.returnTo === 'project-detail' ? `/projects/${batch.projectId}#documents` : body.returnTo === 'document-folder' ? `/documents/projects/${batch.projectId}` : `/projects/${batch.projectId}/files`,
     });
   }, context);

@@ -8,7 +8,10 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { saveUploadedDocument } from '@/lib/server/uploads';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { classifyDocumentBatch } from '@/server/services/document-sorter.service';
+import {
+  classificationAuditForSuggestion,
+  classifyProjectDocumentBatch,
+} from '@/server/services/pdf-classification.service';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
 
 const MAX_BATCH_FILES = 50;
@@ -20,7 +23,7 @@ export const POST: APIRoute = (context) =>
     const { user, organisation } = await requireOrganisation(context);
     const projectId = context.params.id;
     if (!projectId) throw new HttpError(400, 'Project id is required.');
-    await requireProjectAccess(organisation.id, projectId);
+    const project = await requireProjectAccess(organisation.id, projectId);
 
     const form = await context.request.formData();
     const files = form.getAll('files').filter((file): file is File => file instanceof File && file.size > 0);
@@ -39,11 +42,15 @@ export const POST: APIRoute = (context) =>
       uploaded.push({ file, bytes, saved });
     }
 
-    const suggestions = await classifyDocumentBatch(uploaded.map(({ file, bytes }) => ({
+    const suggestions = await classifyProjectDocumentBatch(uploaded.map(({ file, bytes }) => ({
       filename: file.name,
       mimeType: file.type,
       bytes,
-    })));
+    })), {
+      projectName: project.name,
+      typeOfWork: project.projectType ?? undefined,
+      applicationType: project.stage,
+    });
 
     const batch = await prisma.documentSortBatch.create({
       data: {
@@ -60,7 +67,7 @@ export const POST: APIRoute = (context) =>
               suggestedDocumentType: suggestion.suggestedDocumentType,
               confidence: suggestion.confidence,
               reason: suggestion.reason,
-              matchedRules: suggestion.matchedRules,
+              matchedRules: classificationAuditForSuggestion(suggestion),
               revision: suggestion.revision,
               drawingNumber: suggestion.drawingNumber,
               drawingTitle: suggestion.drawingTitle,
@@ -83,7 +90,9 @@ export const POST: APIRoute = (context) =>
                   sortSource: suggestion.source,
                   sortConfidence: suggestion.confidence,
                   sortReason: suggestion.reason,
-                  notes: suggestion.confidence < 0.55 ? 'Needs review after automatic sorting.' : null,
+                  notes: suggestion.classificationDetails?.manualReviewRequired
+                    ? 'Needs attention after automatic sorting.'
+                    : null,
                 },
               },
             };

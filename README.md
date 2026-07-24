@@ -50,6 +50,12 @@ An Astro/React/Prisma MVP foundation for architecture practice operations.
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_STORAGE_BUCKET`
 - `DEBUG_PERF`
+- `DOCUMENT_AI_PROVIDER`
+- `GEMINI_API_KEY`
+- `GEMINI_DOCUMENT_MODEL`
+- `OPENAI_API_KEY`
+- `OPENAI_DOCUMENT_MODEL`
+- `DOCUMENT_AI_TIMEOUT_MS`
 - `GOOGLE_CALENDAR_CLIENT_ID`
 - `GOOGLE_CALENDAR_CLIENT_SECRET`
 - `GOOGLE_CALENDAR_REDIRECT_URI`
@@ -77,6 +83,12 @@ An Astro/React/Prisma MVP foundation for architecture practice operations.
 For an External OAuth app left in Google's `Testing` publishing state, add the architect's Google account as a test user. Google normally expires these refresh tokens after seven days, so move the OAuth app to production or use an Internal Google Workspace app before relying on continuous live sync.
 
 The portal is the source of truth. Active internal deadlines are written to the connected Google account's primary calendar. Completing, cancelling, editing, or deleting a portal deadline updates or removes its synced Google event.
+
+## AI Document Classification
+
+Set `DOCUMENT_AI_PROVIDER` to `gemini` or `openai` and configure the matching server-side API key. The selected provider receives each uploaded PDF so it can inspect the visual document, title block, layout, and embedded text. Keys are never sent to the browser. If no provider is configured, a request fails, output is invalid, or a PDF exceeds the AI limit, the existing deterministic sorter is used instead.
+
+The original uploaded PDF is never modified. AI suggestions remain in review until a user saves the document types. In production, document reads and previews continue through organisation-scoped private routes and Supabase service credentials remain server-side.
 
 ## Validation
 

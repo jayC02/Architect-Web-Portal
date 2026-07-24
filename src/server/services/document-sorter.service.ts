@@ -1,7 +1,7 @@
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
-type SortInput = {
+export type SortInput = {
   filename: string;
   mimeType?: string;
   bytes?: Buffer | Uint8Array;
@@ -23,6 +23,17 @@ export type DocumentSortSuggestion = {
   isLikelyCurrent: boolean;
   suitableForPlanning: boolean;
   suitableForBuildingWarrant: boolean;
+  classificationDetails?: {
+    categoryKey: string;
+    certainty: 'high' | 'medium' | 'low';
+    evidence?: string;
+    warnings: string[];
+    manualReviewRequired: boolean;
+    provider?: string;
+    model?: string;
+    promptVersion: string;
+    fallbackReason?: string;
+  };
 };
 
 type Rule = {
