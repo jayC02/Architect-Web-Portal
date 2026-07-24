@@ -1,11 +1,16 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
+import { getSessionUser } from '@/lib/auth/session';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
 
 export const prerender = false;
 
 setAstroCache(Astro, privateNoStore);
+
+if (await getSessionUser(Astro)) {
+  return Astro.redirect('/dashboard');
+}
 
 const message =
   Astro.url.searchParams.get('reset') === 'success'
@@ -18,15 +23,13 @@ const authError = Astro.url.searchParams.has('authError')
 <BaseLayout title="Sign in | Architect Web Portal" noindex>
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
     <form data-api-form data-action="/api/auth/login" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/login" class="panel mx-auto w-full max-w-md rounded-lg p-6">
-      <div class="mb-6 flex items-center gap-3">
-        <div class="flex h-11 w-11 items-center justify-center rounded-md bg-ink text-paper" aria-hidden="true">AP</div>
-        <div>
-          <h1 class="text-2xl font-semibold text-ink">Sign in</h1>
-          <p class="text-sm text-stone-500">Open your project dashboard.</p>
-        </div>
+      <div class="mb-6">
+        <p class="mb-2 text-xs font-semibold uppercase text-stone-500">ArchitectPro</p>
+        <h1 class="text-2xl font-semibold text-ink">Sign in</h1>
+        <p class="mt-1 text-sm text-stone-500">Open your project dashboard.</p>
       </div>
-      {message && <p class="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{message}</p>}
-      {authError && <p class="mb-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{authError}</p>}
+      {message && <p class="mb-5 border-l-2 border-stone-400 pl-3 text-sm leading-6 text-stone-600">{message}</p>}
+      {authError && <p class="mb-5 border-l-2 border-red-700 pl-3 text-sm leading-6 text-red-800">{authError}</p>}
       <GoogleAuthButton label="Sign in with Google" />
       <div class="my-5 flex items-center gap-3" aria-hidden="true">
         <span class="h-px flex-1 bg-stone-200"></span>

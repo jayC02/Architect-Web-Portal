@@ -1,21 +1,24 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
-import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+import { getSessionUser } from '@/lib/auth/session';
+import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
 
-export const prerender = true;
+export const prerender = false;
 
-setAstroCache(Astro, publicPageShort);
+setAstroCache(Astro, privateNoStore);
+
+if (await getSessionUser(Astro)) {
+  return Astro.redirect('/dashboard');
+}
 ---
 <BaseLayout title="Register | Architect Web Portal">
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
     <form data-api-form data-action="/api/auth/register" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/register" class="panel mx-auto w-full max-w-md rounded-lg p-6">
-      <div class="mb-6 flex items-center gap-3">
-        <div class="flex h-11 w-11 items-center justify-center rounded-md bg-ink text-paper" aria-hidden="true">AP</div>
-        <div>
-          <h1 class="text-2xl font-semibold text-ink">Create practice workspace</h1>
-          <p class="text-sm text-stone-500">Start with an owner account and organisation.</p>
-        </div>
+      <div class="mb-6">
+        <p class="mb-2 text-xs font-semibold uppercase text-stone-500">ArchitectPro</p>
+        <h1 class="text-2xl font-semibold text-ink">Create practice workspace</h1>
+        <p class="mt-1 text-sm text-stone-500">Start with an owner account and organisation.</p>
       </div>
       <GoogleAuthButton label="Create account with Google" />
       <div class="my-5 flex items-center gap-3" aria-hidden="true">

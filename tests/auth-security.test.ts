@@ -72,6 +72,10 @@ const resetRoute = readFileSync(resolve(root, 'src/pages/api/auth/reset-password
 const callbackRoute = readFileSync(resolve(root, 'src/pages/api/auth/google/callback.ts'), 'utf8');
 const googleService = readFileSync(resolve(root, 'src/server/services/google-auth.service.ts'), 'utf8');
 const emailService = readFileSync(resolve(root, 'src/server/services/email.service.ts'), 'utf8');
+const sessionService = readFileSync(resolve(root, 'src/lib/auth/session.ts'), 'utf8');
+const landingPage = readFileSync(resolve(root, 'src/pages/index.astro'), 'utf8');
+const loginPage = readFileSync(resolve(root, 'src/pages/login.astro'), 'utf8');
+const registerPage = readFileSync(resolve(root, 'src/pages/register.astro'), 'utf8');
 
 assert.match(schema, /passwordHash String\?/);
 assert.match(schema, /model AuthProvider/);
@@ -89,6 +93,13 @@ assert.match(googleService, /email_verified !== true/);
 assert.match(googleService, /code_verifier/);
 assert.match(emailService, /RESEND_API_KEY/);
 assert.doesNotMatch(emailService, /PUBLIC_RESEND/);
+assert.match(sessionService, /SESSION_TTL_DAYS = 90/);
+assert.match(sessionService, /maxAge:/);
+assert.match(sessionService, /expiresAt: refreshedExpiresAt/);
+assert.match(landingPage, /getSessionUser\(Astro\)/);
+assert.match(landingPage, /Astro\.redirect\('\/dashboard'\)/);
+assert.match(loginPage, /getSessionUser\(Astro\)/);
+assert.match(registerPage, /getSessionUser\(Astro\)/);
 
 const originalFetch = globalThis.fetch;
 let fetchCalls = 0;
