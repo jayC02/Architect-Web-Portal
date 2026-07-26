@@ -47,7 +47,8 @@ console.log('document sort batch security tests passed');
 
 assert.match(documentRoute, /requireOrganisation\(context\)/, 'document view route requires organisation session');
 assert.match(documentRoute, /where:\s*\{ id, organisationId: organisation\.id \}/s, 'document view route scopes document lookup by organisation');
-assert.match(documentRoute, /storageKey = assertSafeStorageKey/, 'document view route validates storage keys before reading files');
+assert.match(documentRoute, /readStoredDocumentBytes\(document\.storageKey,\s*document\.storageUrl\)/, 'document view route resolves private and legacy storage through the shared reader');
+assert.doesNotMatch(documentRoute, /context\.redirect\(document\.storageUrl\)/, 'document view route never redirects to a persisted public object URL');
 assert.match(documentRoute, /export const DELETE: APIRoute/, 'document route supports secure project file removal');
 assert.match(documentRoute, /assertAllowedOrigin\(context\.request\)/, 'document delete route checks request origin');
 assert.match(documentRoute, /projectDocument\.deleteMany\(\{\s*where:\s*\{\s*id,\s*organisationId:\s*organisation\.id/s, 'document delete is organisation scoped');

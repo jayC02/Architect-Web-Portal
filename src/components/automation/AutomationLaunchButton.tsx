@@ -13,20 +13,17 @@ type Props = {
 
 export default function AutomationLaunchButton({ projectId, type, planningApplicationId, buildingWarrantApplicationId, className = '', label = 'Open in Automation App' }: Props) {
   const [working, setWorking] = useState(false);
-  const [launchUrl, setLaunchUrl] = useState('');
   const [error, setError] = useState('');
 
   const open = async () => {
     setWorking(true);
     setError('');
-    setLaunchUrl('');
     try {
-      const result = await apiRequest<{ launchUrl: string }>(`/api/projects/${projectId}/automation-jobs`, {
+      const result = await apiRequest<{ redirectTo: string }>(`/api/projects/${projectId}/automation-jobs`, {
         method: 'POST',
         json: { type, planningApplicationId, buildingWarrantApplicationId },
       });
-      setLaunchUrl(result.launchUrl);
-      window.location.href = result.launchUrl;
+      window.location.assign(result.redirectTo);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The desktop application could not be prepared.');
     } finally {
@@ -40,12 +37,6 @@ export default function AutomationLaunchButton({ projectId, type, planningApplic
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
         {working ? 'Preparing application...' : label}
       </button>
-      {launchUrl && (
-        <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
-          <p>ArchitectPro Desktop should now open. It must be installed and opened once on this Windows device.</p>
-          <a className="mt-2 inline-flex font-semibold text-ink hover:underline" href={launchUrl}>Open Desktop App Again</a>
-        </div>
-      )}
       {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
     </div>
   );

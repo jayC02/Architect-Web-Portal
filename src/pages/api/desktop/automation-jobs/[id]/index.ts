@@ -1,6 +1,13 @@
 export const prerender = false;
 
-import { AutomationJobStatus } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+import {
+  AutomationJobStatus,
+  DeadlinePriority,
+  DeadlineStatus,
+  DeadlineType,
+  Prisma,
+} from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
@@ -8,12 +15,14 @@ import { desktopJobStatusSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertAutomationJobTransition } from '@/server/services/automation-lifecycle.service';
 
 const selectableStatuses = [
   AutomationJobStatus.READY,
   AutomationJobStatus.CLAIMED,
   AutomationJobStatus.IN_PROGRESS,
   AutomationJobStatus.NEEDS_REVIEW,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
 ];
 
 const serialiseJob = (job: any) => ({
@@ -56,20 +65,105 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   if (!id) throw new HttpError(400, 'Automation job id is required.');
   assertDesktopJobAccess(access, id);
   const body = await parseBody(context.request, desktopJobStatusSchema);
-  const result = await prisma.automationJob.updateMany({
-    where: {
-      id,
-      organisationId: access.organisationId,
-      claimedDeviceId: access.id,
-      status: { notIn: [AutomationJobStatus.COMPLETED, AutomationJobStatus.CANCELLED] },
-    },
-    data: {
+  const outcome = await prisma.$transaction(async (tx) => {
+    const job = await tx.automationJob.findFirst({
+      where: {
+        id,
+        organisationId: access.organisationId,
+        claimedDeviceId: access.id,
+      },
+      select: { id: true, status: true, projectId: true },
+    });
+    if (!job) throw new HttpError(409, 'Automation job is not claimed by this desktop device.');
+
+    const duplicate = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT "id"
+      FROM "AutomationJobEvent"
+      WHERE "idempotencyKey" = ${body.idempotencyKey}
+      LIMIT 1
+    `);
+    if (duplicate.length) return { duplicate: true, status: job.status };
+
+    assertAutomationJobTransition(job.status, body.status);
+    const eventPayload = JSON.stringify({
       status: body.status,
+      eventType: body.eventType,
+      lastCheckpoint: body.lastCheckpoint ?? null,
       resultSummary: body.resultSummary ?? null,
-      error: body.status === AutomationJobStatus.FAILED ? (body.error || 'Desktop automation stopped unexpectedly.') : null,
-      completedAt: body.status === AutomationJobStatus.COMPLETED ? new Date() : null,
-    },
+      result: body.result ?? null,
+    });
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "AutomationJobEvent"
+        ("id", "organisationId", "automationJobId", "idempotencyKey", "eventType", "payload")
+      VALUES
+        (
+          ${randomUUID()},
+          ${access.organisationId},
+          ${id},
+          ${body.idempotencyKey},
+          ${body.eventType},
+          CAST(${eventPayload} AS JSONB)
+        )
+    `);
+
+    const update = await tx.automationJob.updateMany({
+      where: {
+        id,
+        organisationId: access.organisationId,
+        claimedDeviceId: access.id,
+        status: job.status,
+      },
+      data: {
+        status: body.status,
+        resultSummary: body.resultSummary ?? undefined,
+        resultData: body.result ? (body.result as Prisma.InputJsonValue) : undefined,
+        lastCheckpoint: body.lastCheckpoint ?? undefined,
+        error: (
+          body.status === AutomationJobStatus.FAILED_RETRYABLE
+          || body.status === AutomationJobStatus.FAILED_FINAL
+        ) ? (body.error || body.result?.errorSummary || 'Desktop automation stopped unexpectedly.') : null,
+        completedAt: body.status === AutomationJobStatus.FAILED_FINAL ? new Date() : null,
+      },
+    });
+    if (!update.count) throw new HttpError(409, 'Automation job changed while the desktop result was being saved.');
+    const retryDeadlineSource = `automation-job:${id}:retry`;
+    if (body.status === AutomationJobStatus.FAILED_RETRYABLE) {
+      await tx.deadline.upsert({
+        where: {
+          organisationId_sourceKey: {
+            organisationId: access.organisationId,
+            sourceKey: retryDeadlineSource,
+          },
+        },
+        create: {
+          organisationId: access.organisationId,
+          projectId: job.projectId,
+          title: 'Review desktop automation failure',
+          description: body.result?.errorSummary || body.error || 'Review the desktop result and prepare a retry.',
+          dueDate: new Date(),
+          type: DeadlineType.INTERNAL_TASK,
+          status: DeadlineStatus.DUE_SOON,
+          priority: DeadlinePriority.HIGH,
+          sourceKey: retryDeadlineSource,
+        },
+        update: {
+          description: body.result?.errorSummary || body.error || 'Review the desktop result and prepare a retry.',
+          dueDate: new Date(),
+          status: DeadlineStatus.DUE_SOON,
+          completedDate: null,
+        },
+      });
+    } else if (body.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) {
+      await tx.deadline.updateMany({
+        where: {
+          organisationId: access.organisationId,
+          sourceKey: retryDeadlineSource,
+          status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] },
+        },
+        data: { status: DeadlineStatus.CANCELLED },
+      });
+    }
+    return { duplicate: false, status: body.status };
   });
-  if (!result.count) throw new HttpError(409, 'Automation job is not claimed by this desktop device.');
-  return jsonResponse(200, { ok: true, status: body.status });
+  return jsonResponse(200, { ok: true, ...outcome });
 }, context);

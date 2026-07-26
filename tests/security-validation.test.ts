@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { assertAllowedOrigin } from '../src/lib/server/origin-guard';
 import { cacheHeaders, privateApiNoStore, privateNoStore, publicPageShort } from '../src/lib/server/cache-control';
 import { saveUploadedDocument } from '../src/lib/server/uploads';
-import { TYPE_OF_WORK_OPTIONS } from '../src/lib/projects/type-of-work';
+import { TYPE_OF_WORK_OPTIONS, typeOfWorkKey } from '../src/lib/projects/type-of-work';
 import { clientSchema, deadlineSchema, planningApplicationSchema, projectCreateSchema, projectSchema } from '../src/lib/validation/domain';
 import { evidenceUrlSchema } from '../src/lib/validation/security';
 import { jsonResponse } from '../src/lib/utils/http';
@@ -69,8 +69,8 @@ assert.equal(minimalProject.siteId, undefined, 'new projects can be created with
 for (const projectType of TYPE_OF_WORK_OPTIONS) {
   assert.equal(
     projectCreateSchema.parse({ name: 'Typed project', projectType }).projectType,
-    projectType,
-    `type of work is accepted: ${projectType}`,
+    typeOfWorkKey(projectType),
+    `type of work is accepted and normalised to a stable key: ${projectType}`,
   );
 }
 

@@ -34,7 +34,8 @@ type SavedDocument = {
 };
 
 const getStorageProvider = () => process.env.UPLOAD_STORAGE_PROVIDER ?? 'local';
-const getLocalDir = () => process.env.UPLOAD_STORAGE_DIR ?? 'public/uploads';
+const getLocalDir = () => process.env.UPLOAD_STORAGE_DIR ?? '.runtime/uploads';
+const LEGACY_LOCAL_DIR = 'public/uploads';
 
 const getRequiredSupabaseConfig = () => {
   const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, '');
@@ -71,6 +72,26 @@ export const normalizeStorageKey = (storageKey: string) => {
   return normalized;
 };
 
+export const resolveStoredDocumentKey = (storageKey?: string | null, legacyStorageUrl?: string | null) => {
+  if (storageKey) return normalizeStorageKey(storageKey);
+  if (!legacyStorageUrl) throw new HttpError(404, 'Document file is not available.');
+
+  const value = legacyStorageUrl.trim();
+  const publicMarker = '/storage/v1/object/public/';
+  const markerIndex = value.indexOf(publicMarker);
+  if (markerIndex >= 0) {
+    const remainder = value.slice(markerIndex + publicMarker.length);
+    const slashIndex = remainder.indexOf('/');
+    if (slashIndex < 0) throw new HttpError(404, 'Legacy document reference is invalid.');
+    return normalizeStorageKey(decodeURIComponent(remainder.slice(slashIndex + 1)));
+  }
+
+  if (value.startsWith('/uploads/')) {
+    return normalizeStorageKey(decodeURIComponent(value.slice('/uploads/'.length)));
+  }
+  throw new HttpError(404, 'Legacy document reference cannot be resolved safely.');
+};
+
 const assertSafeOriginalName = (file: File, label: string) => {
   if (!file.name) return;
   if (file.name.includes('/') || file.name.includes('\\') || file.name.split('.').includes('..')) {
@@ -97,6 +118,9 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
   const fileName = `${Date.now()}-${randomUUID()}${ext}`;
   const storageKey = path.posix.join(folder, fileName);
   const bytes = Buffer.from(await file.arrayBuffer());
+  if (file.type === 'application/pdf' && !bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+    throw new HttpError(400, `${label} is not a valid PDF file.`);
+  }
 
   if (provider === 'supabase') {
     const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
@@ -114,7 +138,7 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
     if (!response.ok) throw new HttpError(500, `Failed to upload file. ${await response.text()}`.trim());
     return {
       fileName,
-      storageUrl: `${supabaseUrl}/storage/v1/object/public/${supabaseBucket}/${storageKey}`,
+      storageUrl: '',
       storageKey,
       mimeType: file.type,
       sizeBytes: file.size,
@@ -133,15 +157,15 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
 
   return {
     fileName,
-    storageUrl: `/${path.posix.join('uploads', storageKey)}`,
+    storageUrl: '',
     storageKey,
     mimeType: file.type,
     sizeBytes: file.size,
   };
 }
 
-export async function readStoredDocumentBytes(storageKey: string): Promise<Buffer> {
-  const safeKey = normalizeStorageKey(storageKey);
+export async function readStoredDocumentBytes(storageKey?: string | null, legacyStorageUrl?: string | null): Promise<Buffer> {
+  const safeKey = resolveStoredDocumentKey(storageKey, legacyStorageUrl);
   const provider = getStorageProvider();
 
   if (provider === 'supabase') {
@@ -165,7 +189,14 @@ export async function readStoredDocumentBytes(storageKey: string): Promise<Buffe
   if (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) {
     throw new HttpError(400, 'Document path is invalid.');
   }
-  const bytes = await fs.readFile(resolvedFile).catch(() => null);
+  let bytes = await fs.readFile(resolvedFile).catch(() => null);
+  if (!bytes && !process.env.UPLOAD_STORAGE_DIR) {
+    const legacyRoot = path.resolve(process.cwd(), LEGACY_LOCAL_DIR);
+    const legacyFile = path.resolve(legacyRoot, safeKey);
+    if (legacyFile.toLowerCase().startsWith(legacyRoot.toLowerCase() + path.sep)) {
+      bytes = await fs.readFile(legacyFile).catch(() => null);
+    }
+  }
   if (!bytes) throw new HttpError(404, 'Document file could not be opened.');
   return bytes;
 }

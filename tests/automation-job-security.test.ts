@@ -38,8 +38,12 @@ assert.doesNotMatch(desktopRoute, /storageKey|passwordHash|tokenHash/, 'desktop 
 
 assert.match(service, /organisationId:\s*input\.organisationId/s, 'snapshot service queries are organisation scoped');
 assert.match(service, /projectId:\s*project\.id/s, 'snapshot service keeps related records scoped to the project');
-assert.match(service, /automationJobSnapshotSchema\.parse/, 'snapshot service validates data snapshot before saving');
-assert.match(service, /automationJobDocumentSnapshotSchema\.parse/, 'snapshot service validates document snapshot before saving');
+assert.match(service, /automationJobSnapshotV2Schema\.parse/, 'snapshot service validates the v2 data snapshot before saving');
+assert.match(
+  service,
+  /documents:\s*dataSnapshot\.documents/,
+  'document snapshot is derived from the validated v2 snapshot',
+);
 assert.match(service, /assertSafeAutomationSnapshot\(dataSnapshot\)/, 'snapshot service rejects unsafe snapshot fields');
 assert.doesNotMatch(service, /storageKey:\s*document\.storageKey|storageUrl:\s*document\.storageUrl/, 'snapshot service does not include raw storage references');
 

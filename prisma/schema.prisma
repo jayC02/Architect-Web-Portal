@@ -210,11 +210,17 @@ enum AutomationJobType {
 
 enum AutomationJobStatus {
   DRAFT
+  PREFLIGHT_REQUIRED
+  NEEDS_INPUT
   READY
+  STALE
   CLAIMED
   IN_PROGRESS
   NEEDS_REVIEW
+  AWAITING_PORTAL_REVIEW
   COMPLETED
+  FAILED_RETRYABLE
+  FAILED_FINAL
   FAILED
   CANCELLED
 }
@@ -235,16 +241,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sessions            Session[]
-  authProviders        AuthProvider[]
-  passwordResetTokens  PasswordResetToken[]
-  organisationLinks   OrganisationMember[]
-  uploadedDocuments   ProjectDocument[]    @relation("DocumentUploadedBy")
-  documentSortBatches DocumentSortBatch[]  @relation("DocumentSortBatchCreatedBy")
-  createdPackages       SubmissionPackage[] @relation("PackageCreatedBy")
-  createdAutomationJobs AutomationJob[]     @relation("AutomationJobCreatedBy")
-  claimedAutomationJobs AutomationJob[]     @relation("AutomationJobClaimedBy")
-  desktopAccessTokens   DesktopAccessToken[]
+  sessions                 Session[]
+  authProviders            AuthProvider[]
+  passwordResetTokens      PasswordResetToken[]
+  organisationLinks        OrganisationMember[]
+  uploadedDocuments        ProjectDocument[]       @relation("DocumentUploadedBy")
+  documentSortBatches      DocumentSortBatch[]     @relation("DocumentSortBatchCreatedBy")
+  createdPackages          SubmissionPackage[]     @relation("PackageCreatedBy")
+  createdAutomationJobs    AutomationJob[]         @relation("AutomationJobCreatedBy")
+  claimedAutomationJobs    AutomationJob[]         @relation("AutomationJobClaimedBy")
+  desktopAccessTokens      DesktopAccessToken[]
   reviewedGmailSuggestions GmailUpdateSuggestion[] @relation("GmailSuggestionReviewedBy")
 
   @@index([email])
@@ -338,6 +344,9 @@ model Organisation {
   trackedEmails        TrackedEmail[]
   gmailSuggestions     GmailUpdateSuggestion[]
   gmailAttachments     GmailAttachment[]
+  defaults             OrganisationDefaults?
+  certifierPresets     OrganisationCertifierPreset[]
+  automationJobEvents  AutomationJobEvent[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -367,6 +376,15 @@ model Client {
   phone          String?
   address        String?
   notes          String?
+  title          String?
+  firstName      String?
+  lastName       String?
+  companyName    String?
+  addressLine1   String?
+  addressLine2   String?
+  townCity       String?
+  postcode       String?
+  country        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -375,6 +393,53 @@ model Client {
 
   @@index([organisationId, name])
   @@index([organisationId, updatedAt])
+}
+
+model OrganisationDefaults {
+  id                       String   @id @default(cuid())
+  organisationId           String   @unique
+  practiceName             String?
+  agentFirstName           String?
+  agentLastName            String?
+  agentEmail               String?
+  agentPhone               String?
+  agentAddressLine1        String?
+  agentAddressLine2        String?
+  agentTownCity            String?
+  agentPostcode            String?
+  agentCountry             String   @default("United Kingdom")
+  defaultCertifierPresetId String?
+  applicationDefaults      Json?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  organisation           Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  defaultCertifierPreset OrganisationCertifierPreset? @relation("DefaultOrganisationCertifier", fields: [defaultCertifierPresetId], references: [id], onDelete: SetNull)
+
+  @@index([defaultCertifierPresetId])
+}
+
+model OrganisationCertifierPreset {
+  id                 String   @id @default(cuid())
+  organisationId     String
+  displayName        String
+  schemeType         String?
+  registrationAPart1 String?
+  registrationAPart2 String?
+  registrationBPart1 String?
+  registrationBPart2 String?
+  certifierName      String?
+  approvedBody       String?
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organisation Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  defaults     OrganisationDefaults[]       @relation("DefaultOrganisationCertifier")
+  warrants     BuildingWarrantApplication[]
+
+  @@unique([organisationId, displayName])
+  @@index([organisationId, isDefault])
 }
 
 model Site {
@@ -455,11 +520,11 @@ model ProjectDocument {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  organisation   Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project        Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy     User                        @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
-  packages       SubmissionPackageDocument[]
-  sortBatchItems DocumentSortBatchItem[]
+  organisation          Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project               Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy            User                        @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  packages              SubmissionPackageDocument[]
+  sortBatchItems        DocumentSortBatchItem[]
   sourceGmailAttachment GmailAttachment?
 
   @@index([organisationId, projectId, createdAt])
@@ -519,34 +584,41 @@ model DocumentSortBatchItem {
 }
 
 model AutomationJob {
-  id               String                  @id @default(cuid())
-  organisationId   String
-  projectId        String
-  type             AutomationJobType
-  status           AutomationJobStatus     @default(DRAFT)
-  sourceType       AutomationJobSourceType @default(PROJECT)
-  title            String
-  dataSnapshot     Json
-  documentSnapshot Json
-  resultSummary    String?
-  error            String?
-  payloadVersion   Int                     @default(1)
-  createdById      String
-  claimedByUserId  String?
-  claimedDeviceId  String?
-  handoffCodeHash  String?                @unique
-  handoffExpiresAt DateTime?
+  id                String                  @id @default(cuid())
+  organisationId    String
+  projectId         String
+  type              AutomationJobType
+  status            AutomationJobStatus     @default(DRAFT)
+  sourceType        AutomationJobSourceType @default(PROJECT)
+  title             String
+  dataSnapshot      Json
+  documentSnapshot  Json
+  resultSummary     String?
+  error             String?
+  payloadVersion    Int                     @default(1)
+  snapshotHash      String?
+  sourceUpdatedAt   DateTime?
+  preparedAt        DateTime?
+  reviewedAt        DateTime?
+  resultData        Json?
+  lastCheckpoint    String?
+  createdById       String
+  claimedByUserId   String?
+  claimedDeviceId   String?
+  handoffCodeHash   String?                 @unique
+  handoffExpiresAt  DateTime?
   handoffRedeemedAt DateTime?
-  claimedAt        DateTime?
-  completedAt      DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
+  claimedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
-  organisation  Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy     User         @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  claimedBy     User?        @relation("AutomationJobClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy           User                 @relation("AutomationJobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  claimedBy           User?                @relation("AutomationJobClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
   desktopAccessTokens DesktopAccessToken[] @relation("DesktopTokenAutomationJob")
+  events              AutomationJobEvent[]
 
   @@index([organisationId, projectId, status, type, createdAt])
   @@index([organisationId, status, createdAt])
@@ -555,28 +627,45 @@ model AutomationJob {
   @@index([handoffExpiresAt])
 }
 
-model DesktopAccessToken {
-  id             String    @id @default(cuid())
-  organisationId String
-  userId         String
-  automationJobId String?
-  name           String
-  tokenHash      String    @unique
-  tokenPrefix    String
-  expiresAt      DateTime
-  lastUsedAt     DateTime?
-  revokedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+model AutomationJobEvent {
+  id              String   @id @default(cuid())
+  organisationId  String
+  automationJobId String
+  idempotencyKey  String   @unique
+  eventType       String
+  payload         Json
+  createdAt       DateTime @default(now())
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation  Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  automationJob AutomationJob @relation(fields: [automationJobId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, automationJobId, createdAt])
+  @@index([automationJobId, eventType])
+}
+
+model DesktopAccessToken {
+  id              String    @id @default(cuid())
+  organisationId  String
+  userId          String
+  automationJobId String?
+  name            String
+  tokenHash       String    @unique
+  tokenPrefix     String
+  expiresAt       DateTime
+  lastUsedAt      DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organisation  Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   automationJob AutomationJob? @relation("DesktopTokenAutomationJob", fields: [automationJobId], references: [id], onDelete: Cascade)
 
   @@index([organisationId, userId, revokedAt])
   @@index([expiresAt])
   @@index([automationJobId, revokedAt])
 }
+
 model PlanningApplication {
   id                   String         @id @default(cuid())
   organisationId       String
@@ -589,13 +678,17 @@ model PlanningApplication {
   status               PlanningStatus @default(NOT_STARTED)
   portalUrl            String?
   notes                String?
+  description          String?
+  preparationData      Json?
+  preparedAt           DateTime?
+  reviewedAt           DateTime?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  deadlines    Deadline[]
-  trackedEmails TrackedEmail[]
+  organisation     Organisation            @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project          Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deadlines        Deadline[]
+  trackedEmails    TrackedEmail[]
   gmailSuggestions GmailUpdateSuggestion[]
 
   @@index([organisationId, status, decisionTargetDate])
@@ -617,19 +710,31 @@ model BuildingWarrantApplication {
   status                      WarrantStatus               @default(NOT_STARTED)
   portalUrl                   String?
   notes                       String?
+  presetKey                   String?
+  presetVersion               Int                         @default(1)
+  description                 String?
+  estimatedValue              Decimal?                    @db.Decimal(12, 2)
+  currentUse                  String?
+  proposedUse                 String?
+  preparationData             Json?
+  selectedCertifierPresetId   String?
+  preparedAt                  DateTime?
+  reviewedAt                  DateTime?
   createdAt                   DateTime                    @default(now())
   updatedAt                   DateTime                    @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  deadlines    Deadline[]
-  trackedEmails TrackedEmail[]
-  gmailSuggestions GmailUpdateSuggestion[]
+  organisation            Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project                 Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deadlines               Deadline[]
+  trackedEmails           TrackedEmail[]
+  gmailSuggestions        GmailUpdateSuggestion[]
+  selectedCertifierPreset OrganisationCertifierPreset? @relation(fields: [selectedCertifierPresetId], references: [id], onDelete: SetNull)
 
   @@index([organisationId, status, firstResponseTargetDate])
   @@index([organisationId, updatedAt])
   @@index([organisationId, expiryDate])
   @@index([organisationId, projectId])
+  @@index([selectedCertifierPresetId])
 }
 
 model Deadline {
@@ -656,36 +761,36 @@ model Deadline {
   buildingWarrantApplication BuildingWarrantApplication? @relation(fields: [buildingWarrantApplicationId], references: [id], onDelete: SetNull)
   calendarEvents             SyncedCalendarEvent[]
 
+  @@unique([organisationId, sourceKey])
   @@index([organisationId, status, dueDate])
   @@index([organisationId, projectId])
   @@index([planningApplicationId])
   @@index([buildingWarrantApplicationId])
-  @@unique([organisationId, sourceKey])
 }
 
 model CalendarConnection {
-  id                    String                   @id @default(cuid())
-  organisationId        String
-  provider              CalendarProvider
-  status                CalendarConnectionStatus @default(NOT_CONNECTED)
-  accountEmail          String?
-  externalId            String?
-  accessTokenEncrypted  String?
-  refreshTokenEncrypted String?
-  accessTokenExpiresAt  DateTime?
-  grantedScopes         String?
-  lastSyncedAt          DateTime?
-  syncError             String?
-  gmailEnabled          Boolean                  @default(false)
-  gmailRequireReview    Boolean                  @default(true)
-  gmailAutoApplyHighConfidence Boolean           @default(false)
-  gmailHistoryId        String?
-  gmailLastSuccessfulSyncAt DateTime?
-  gmailLastAttemptedSyncAt DateTime?
-  gmailSyncStartedAt    DateTime?
-  gmailSyncError        String?
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
+  id                           String                   @id @default(cuid())
+  organisationId               String
+  provider                     CalendarProvider
+  status                       CalendarConnectionStatus @default(NOT_CONNECTED)
+  accountEmail                 String?
+  externalId                   String?
+  accessTokenEncrypted         String?
+  refreshTokenEncrypted        String?
+  accessTokenExpiresAt         DateTime?
+  grantedScopes                String?
+  lastSyncedAt                 DateTime?
+  syncError                    String?
+  gmailEnabled                 Boolean                  @default(false)
+  gmailRequireReview           Boolean                  @default(true)
+  gmailAutoApplyHighConfidence Boolean                  @default(false)
+  gmailHistoryId               String?
+  gmailLastSuccessfulSyncAt    DateTime?
+  gmailLastAttemptedSyncAt     DateTime?
+  gmailSyncStartedAt           DateTime?
+  gmailSyncError               String?
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
 
   organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   events       SyncedCalendarEvent[]
@@ -752,8 +857,8 @@ model GmailUpdateSuggestion {
   reviewedAt                   DateTime?
   appliedAt                    DateTime?
   error                        String?
-  createdAt                    DateTime               @default(now())
-  updatedAt                    DateTime               @updatedAt
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
 
   organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   trackedEmail               TrackedEmail                @relation(fields: [trackedEmailId], references: [id], onDelete: Cascade)
@@ -783,8 +888,8 @@ model GmailAttachment {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  organisation     Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  trackedEmail     TrackedEmail    @relation(fields: [trackedEmailId], references: [id], onDelete: Cascade)
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  trackedEmail     TrackedEmail     @relation(fields: [trackedEmailId], references: [id], onDelete: Cascade)
   importedDocument ProjectDocument? @relation(fields: [importedDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([trackedEmailId, gmailAttachmentId])
@@ -848,4 +953,3 @@ model SubmissionPackageDocument {
   @@unique([submissionPackageId, documentId])
   @@index([documentId])
 }
-

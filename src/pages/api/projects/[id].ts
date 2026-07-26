@@ -8,16 +8,7 @@ import { projectSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
-
-const assertRelatedRecord = async (organisationId: string, model: 'client' | 'site', id: string | undefined) => {
-  if (!id) return null;
-  const record =
-    model === 'client'
-      ? await prisma.client.findFirst({ where: { id, organisationId }, select: { id: true } })
-      : await prisma.site.findFirst({ where: { id, organisationId }, select: { id: true } });
-  if (!record) throw new HttpError(400, `${model} does not belong to this organisation.`);
-  return id;
-};
+import { resolveProjectLinks } from '@/server/services/project-data.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -48,11 +39,15 @@ export const PATCH: APIRoute = (context) =>
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Project id is required.');
     const body = await parseBody(context.request, projectSchema);
-    const clientId = await assertRelatedRecord(organisation.id, 'client', body.clientId);
-    const siteId = await assertRelatedRecord(organisation.id, 'site', body.siteId);
+    const links = await resolveProjectLinks(organisation.id, body.clientId, body.siteId);
     const result = await prisma.project.updateMany({
       where: { id, organisationId: organisation.id },
-      data: { ...body, clientId, siteId },
+      data: {
+        ...body,
+        clientId: links.clientId,
+        siteId: links.siteId,
+        ...(links.derivedSite ?? {}),
+      },
     });
     if (!result.count) throw new HttpError(404, 'Project not found.');
     return jsonResponse(200, { ok: true });

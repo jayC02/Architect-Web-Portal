@@ -15,7 +15,12 @@ import {
   WarrantType,
 } from '@prisma/client';
 import { z } from 'zod';
-import { TYPE_OF_WORK_OPTIONS } from '@/lib/projects/type-of-work';
+import {
+  TYPE_OF_WORK_KEYS,
+  TYPE_OF_WORK_OPTIONS,
+  type TypeOfWorkKey,
+  typeOfWorkKey,
+} from '@/lib/projects/type-of-work';
 import { emptyToUndefined, optionalDate, optionalText, safeUrl } from '@/lib/validation/common';
 import { blankContactToUndefined, isValidUkPhone } from '@/lib/validation/client-contact';
 
@@ -42,6 +47,15 @@ export const clientSchema = z.object({
   ),
   address: optionalText(500),
   notes: optionalText(2000),
+  title: optionalText(40),
+  firstName: optionalText(100),
+  lastName: optionalText(100),
+  companyName: optionalText(160),
+  addressLine1: optionalText(160),
+  addressLine2: optionalText(160),
+  townCity: optionalText(100),
+  postcode: optionalText(20),
+  country: optionalText(100),
 });
 
 export const siteSchema = z.object({
@@ -69,7 +83,17 @@ export const projectSchema = z.object({
 export const projectCreateSchema = projectSchema
   .omit({ stage: true, status: true, siteAddress: true, projectType: true })
   .extend({
-    projectType: z.preprocess(emptyToUndefined, z.enum(TYPE_OF_WORK_OPTIONS).optional()),
+    projectType: z.preprocess(
+      (value) => {
+        const cleaned = emptyToUndefined(value);
+        if (typeof cleaned !== 'string') return cleaned;
+        const normalised = cleaned.trim().toLowerCase();
+        const supported = TYPE_OF_WORK_KEYS.includes(normalised as TypeOfWorkKey)
+          || TYPE_OF_WORK_OPTIONS.some((label) => label.toLowerCase() === normalised);
+        return supported ? typeOfWorkKey(cleaned) : cleaned;
+      },
+      z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]).optional(),
+    ),
   })
   .transform((project) => ({
     ...project,
@@ -77,6 +101,124 @@ export const projectCreateSchema = projectSchema
     status: ProjectStatus.ACTIVE,
     siteAddress: undefined,
   }));
+
+const yesNoAnswer = z.boolean().default(false);
+const formBoolean = z.preprocess((value) => {
+  if (value === true || value === 'true' || value === 'on') return true;
+  if (value === false || value === 'false') return false;
+  return value;
+}, z.boolean());
+const optionalNonNegativeInteger = z.preprocess(
+  (value) => value === '' || value === null ? undefined : value,
+  z.coerce.number().int().nonnegative().optional(),
+);
+const optionalNonNegativeMoney = z.preprocess(
+  (value) => value === '' || value === null ? undefined : value,
+  z.coerce.number().nonnegative().max(9999999999.99).optional(),
+);
+
+export const buildingWarrantPreparationSchema = z.object({
+  applicantIsOwner: yesNoAnswer.default(true),
+  applicationIsStaged: yesNoAnswer,
+  intendedLifeFiveYearsOrLess: yesNoAnswer,
+  fireAndRescueServiceEnforcingAuthority: yesNoAnswer.default(true),
+  listedBuildingOrConservationArea: yesNoAnswer,
+  otherHistoricalImportance: yesNoAnswer,
+  scottishMinistersRelaxationDirection: yesNoAnswer,
+  dangerousBuildingNotice: yesNoAnswer,
+  approvedCertifierOfConstruction: yesNoAnswer,
+  coveredBySTAS: yesNoAnswer,
+  restrictPublicInspection: yesNoAnswer,
+});
+
+export const householderPreparationSchema = z.object({
+  discussedWithPlanningAuthority: yesNoAnswer,
+  treesOnOrAdjacentToSite: yesNoAnswer,
+  newOrAlteredVehicleAccess: yesNoAnswer,
+  currentParkingSpaces: z.coerce.number().int().nonnegative().optional(),
+  proposedParkingSpaces: z.coerce.number().int().nonnegative().optional(),
+  soleOwner: z.boolean().optional(),
+  agriculturalHolding: z.boolean().optional(),
+}).superRefine((value, context) => {
+  if (!value.newOrAlteredVehicleAccess) return;
+  if (value.currentParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['currentParkingSpaces'], message: 'Enter the current parking spaces.' });
+  }
+  if (value.proposedParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['proposedParkingSpaces'], message: 'Enter the proposed parking spaces.' });
+  }
+});
+
+export const householderPreparationUpdateSchema = z.object({
+  description: optionalText(500),
+  discussedWithPlanningAuthority: formBoolean,
+  treesOnOrAdjacentToSite: formBoolean,
+  newOrAlteredVehicleAccess: formBoolean,
+  currentParkingSpaces: optionalNonNegativeInteger,
+  proposedParkingSpaces: optionalNonNegativeInteger,
+  soleOwner: formBoolean,
+  agriculturalHolding: formBoolean,
+}).superRefine((value, context) => {
+  if (!value.newOrAlteredVehicleAccess) return;
+  if (value.currentParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['currentParkingSpaces'], message: 'Enter the current parking spaces.' });
+  }
+  if (value.proposedParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['proposedParkingSpaces'], message: 'Enter the proposed parking spaces.' });
+  }
+});
+
+export const buildingWarrantPreparationUpdateSchema = z.object({
+  description: optionalText(2000),
+  estimatedValue: optionalNonNegativeMoney,
+  currentUse: optionalText(160),
+  proposedUse: optionalText(160),
+  presetKey: z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]),
+  selectedCertifierPresetId: optionalText(120),
+  applicantIsOwner: formBoolean,
+  applicationIsStaged: formBoolean,
+  intendedLifeFiveYearsOrLess: formBoolean,
+  fireAndRescueServiceEnforcingAuthority: formBoolean,
+  listedBuildingOrConservationArea: formBoolean,
+  otherHistoricalImportance: formBoolean,
+  scottishMinistersRelaxationDirection: formBoolean,
+  dangerousBuildingNotice: formBoolean,
+  approvedCertifierOfConstruction: formBoolean,
+  coveredBySTAS: formBoolean,
+  restrictPublicInspection: formBoolean,
+});
+
+export const organisationDefaultsSchema = z.object({
+  practiceName: optionalText(160),
+  agentFirstName: optionalText(100),
+  agentLastName: optionalText(100),
+  agentEmail: z.preprocess(
+    blankContactToUndefined,
+    z.string().trim().max(160).email('Enter a valid agent email address.').transform((value) => value.toLowerCase()).optional(),
+  ),
+  agentPhone: z.preprocess(
+    blankContactToUndefined,
+    z.string().trim().max(30).refine(isValidUkPhone, 'Enter a valid agent phone number.').optional(),
+  ),
+  agentAddressLine1: optionalText(160),
+  agentAddressLine2: optionalText(160),
+  agentTownCity: optionalText(100),
+  agentPostcode: optionalText(20),
+  agentCountry: z.preprocess(emptyToUndefined, z.string().trim().max(100).default('United Kingdom')),
+  defaultCertifierPresetId: optionalText(120),
+});
+
+export const certifierPresetSchema = z.object({
+  displayName: z.string().trim().min(1).max(160),
+  schemeType: optionalText(120),
+  registrationAPart1: optionalText(20),
+  registrationAPart2: optionalText(80),
+  registrationBPart1: optionalText(20),
+  registrationBPart2: optionalText(80),
+  certifierName: optionalText(160),
+  approvedBody: optionalText(160),
+  isDefault: z.preprocess((value) => value === true || value === 'true' || value === 'on', z.boolean().default(false)),
+});
 
 export const documentMetadataSchema = z.object({
   type: z.nativeEnum(DocumentType).default(DocumentType.OTHER),

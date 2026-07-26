@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   AutomationJobSourceType,
+  AutomationJobStatus,
   AutomationJobType,
   DocumentStatus,
   DocumentType,
@@ -13,7 +15,13 @@ import {
   assertSafeAutomationSnapshot,
   automationJobDocumentSnapshotSchema,
   automationJobSnapshotSchema,
+  automationJobSnapshotV2Schema,
 } from '../src/lib/validation/automation-job';
+import {
+  buildingWarrantPreparationUpdateSchema,
+  householderPreparationUpdateSchema,
+} from '../src/lib/validation/domain';
+import { assertAutomationJobTransition } from '../src/server/services/automation-lifecycle.service';
 
 const document = {
   id: 'doc_1',
@@ -96,5 +104,81 @@ for (const [typeOfWork, expectedProfile] of [
   );
 }
 assert.equal(buildingWarrantProfileForTypeOfWork('Extension'), 'Domestic alteration / extension', 'legacy project types retain a safe profile fallback');
+
+assert.doesNotThrow(() => assertAutomationJobTransition(
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.READY,
+));
+assert.doesNotThrow(() => assertAutomationJobTransition(
+  AutomationJobStatus.IN_PROGRESS,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+));
+assert.throws(
+  () => assertAutomationJobTransition(
+    AutomationJobStatus.IN_PROGRESS,
+    AutomationJobStatus.COMPLETED,
+  ),
+  /cannot move/,
+  'desktop completion must stop at portal review rather than implying submission',
+);
+assert.throws(
+  () => assertAutomationJobTransition(
+    AutomationJobStatus.COMPLETED,
+    AutomationJobStatus.IN_PROGRESS,
+  ),
+  /cannot move/,
+  'terminal jobs cannot return to active execution',
+);
+assert.doesNotThrow(() => assertAutomationJobTransition(
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+  AutomationJobStatus.COMPLETED,
+));
+
+const householderPreparation = householderPreparationUpdateSchema.parse({
+  description: 'Single-storey rear extension',
+  discussedWithPlanningAuthority: 'false',
+  treesOnOrAdjacentToSite: 'false',
+  newOrAlteredVehicleAccess: 'true',
+  currentParkingSpaces: '1',
+  proposedParkingSpaces: '2',
+  soleOwner: 'true',
+  agriculturalHolding: 'false',
+});
+assert.equal(householderPreparation.soleOwner, true);
+assert.equal(householderPreparation.currentParkingSpaces, 1);
+assert.throws(() => householderPreparationUpdateSchema.parse({
+  ...householderPreparation,
+  newOrAlteredVehicleAccess: true,
+  currentParkingSpaces: '',
+}), /current parking spaces/i);
+
+const warrantPreparation = buildingWarrantPreparationUpdateSchema.parse({
+  description: 'Internal alterations and rear extension',
+  estimatedValue: '35000',
+  currentUse: 'Dwelling',
+  proposedUse: 'Dwelling',
+  presetKey: 'domestic_alteration_extension',
+  selectedCertifierPresetId: '',
+  applicantIsOwner: 'true',
+  applicationIsStaged: 'false',
+  intendedLifeFiveYearsOrLess: 'false',
+  fireAndRescueServiceEnforcingAuthority: 'true',
+  listedBuildingOrConservationArea: 'false',
+  otherHistoricalImportance: 'false',
+  scottishMinistersRelaxationDirection: 'false',
+  dangerousBuildingNotice: 'false',
+  approvedCertifierOfConstruction: 'false',
+  coveredBySTAS: 'false',
+  restrictPublicInspection: 'false',
+});
+assert.equal(warrantPreparation.estimatedValue, 35000);
+assert.equal(warrantPreparation.selectedCertifierPresetId, undefined);
+
+const sharedV2Fixture = JSON.parse(readFileSync(
+  new URL('./fixtures/automation-job-v2-building-warrant.json', import.meta.url),
+  'utf8',
+));
+assert.doesNotThrow(() => automationJobSnapshotV2Schema.parse(sharedV2Fixture));
+assert.doesNotThrow(() => assertSafeAutomationSnapshot(sharedV2Fixture));
 
 console.log('automation job contract tests passed');

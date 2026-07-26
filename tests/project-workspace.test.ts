@@ -130,7 +130,8 @@ assert.match(projectsPage, /documentReviewCount > 0 \? `\$\{project\.documentRev
 assert.match(projectsPage, /readyAutomationJobCount > 0 \? `\$\{project\.readyAutomationJobCount\} ready` : 'None ready'/, 'automation ready count is rendered as plain text');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
 assert.match(newProjectPage, /<span class="label">Type of work<\/span>/, 'new project flow uses the clearer type of work label');
-assert.match(newProjectPage, /TYPE_OF_WORK_OPTIONS\.map/, 'new project flow renders the controlled type of work options');
+assert.match(newProjectPage, /TYPE_OF_WORK_DEFINITIONS\.map/, 'new project flow renders the controlled type of work options');
+assert.match(newProjectPage, /<option value=\{type\.key\}>\{type\.label\}<\/option>/, 'new projects submit stable type-of-work keys');
 assert.match(newProjectPage, /<option value="">Select type of work<\/option>/, 'type of work has a neutral placeholder');
 assert.doesNotMatch(newProjectPage, /name="stage"/, 'new project flow does not ask for stage');
 assert.doesNotMatch(newProjectPage, /name="status"/, 'new project flow does not ask for status');

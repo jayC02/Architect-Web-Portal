@@ -1,0 +1,142 @@
+{
+  "contractVersion": "architectpro.automation-job",
+  "snapshotVersion": 2,
+  "metadata": {
+    "jobId": "job_fixture_building_warrant",
+    "organisationId": "org_fixture",
+    "projectId": "project_fixture",
+    "applicationType": "BUILDING_WARRANT",
+    "sourceType": "WARRANT_RECORD",
+    "createdAt": "2026-07-26T12:00:00.000Z",
+    "createdBy": {
+      "id": "user_fixture",
+      "name": "Fixture User",
+      "email": "fixture@example.com"
+    },
+    "sourceUpdatedAt": "2026-07-26T12:00:00.000Z",
+    "presetVersion": 1,
+    "integrity": null
+  },
+  "organisation": {
+    "id": "org_fixture",
+    "name": "Fixture Practice",
+    "practiceName": "Fixture Practice",
+    "agent": {
+      "firstName": "Alex",
+      "lastName": "Architect",
+      "email": "agent@example.com",
+      "phone": "07000000001",
+      "address": {
+        "addressLine1": "1 Practice Street",
+        "addressLine2": null,
+        "townCity": "Glasgow",
+        "postcode": "G1 1AA",
+        "country": "United Kingdom"
+      },
+      "source": "ORGANISATION_DEFAULTS"
+    }
+  },
+  "project": {
+    "id": "project_fixture",
+    "name": "4 Willow Court",
+    "internalReference": "3567",
+    "typeOfWorkKey": "domestic_alteration_extension",
+    "typeOfWorkLabel": "Domestic alteration / extension",
+    "notes": null,
+    "stage": "BUILDING_WARRANT",
+    "status": "ACTIVE",
+    "localAuthority": "Glasgow City Council",
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "site": {
+    "id": "site_fixture",
+    "displayName": "4 Willow Court",
+    "address": {
+      "addressLine1": "4 Willow Court",
+      "addressLine2": null,
+      "townCity": "Glasgow",
+      "postcode": "G2 2BB",
+      "country": "United Kingdom"
+    },
+    "localAuthority": "Glasgow City Council",
+    "source": "SITE",
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "applicant": {
+    "clientId": "client_fixture",
+    "displayName": "Ms Jamie Client",
+    "title": "Ms",
+    "firstName": "Jamie",
+    "lastName": "Client",
+    "companyName": null,
+    "email": "client@example.com",
+    "phone": "07000000002",
+    "address": {
+      "addressLine1": "4 Willow Court",
+      "addressLine2": null,
+      "townCity": "Glasgow",
+      "postcode": "G2 2BB",
+      "country": "United Kingdom"
+    },
+    "applicantIsOwner": true,
+    "source": "CLIENT",
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "planning": null,
+  "buildingWarrant": {
+    "recordId": "warrant_fixture",
+    "presetKey": "domestic_alteration_extension",
+    "presetLabel": "Domestic alteration / extension",
+    "presetVersion": 1,
+    "description": "Internal alterations and a single-storey rear extension.",
+    "estimatedValue": 35000,
+    "currentUse": "Residential dwelling",
+    "proposedUse": "Residential dwelling",
+    "status": "DRAFTING",
+    "warrantReference": null,
+    "unusualAnswers": {
+      "applicantIsOwner": true,
+      "applicationIsStaged": false,
+      "intendedLifeFiveYearsOrLess": false,
+      "fireAndRescueServiceEnforcingAuthority": true,
+      "listedBuildingOrConservationArea": false,
+      "otherHistoricalImportance": false,
+      "scottishMinistersRelaxationDirection": false,
+      "dangerousBuildingNotice": false,
+      "approvedCertifierOfConstruction": false,
+      "coveredBySTAS": false,
+      "restrictPublicInspection": false
+    },
+    "certifier": null,
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "documents": [
+    {
+      "id": "document_fixture",
+      "filename": "Location Plan.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 12000,
+      "categoryKey": "LOCATION_PLAN",
+      "categoryLabel": "Location Plan",
+      "drawingTitle": "Location Plan",
+      "drawingNumber": "A001",
+      "revision": "P01",
+      "classificationSource": "MANUAL",
+      "confidence": 1,
+      "reviewState": "APPROVED",
+      "required": true,
+      "relevance": ["PLANNING", "BUILDING_WARRANT"],
+      "downloadRef": {
+        "documentId": "document_fixture"
+      },
+      "updatedAt": "2026-07-26T12:00:00.000Z"
+    }
+  ],
+  "preflight": {
+    "status": "READY",
+    "missing": [],
+    "warnings": [],
+    "locationPlanStatus": "REVIEWED",
+    "reviewedAt": null
+  }
+}

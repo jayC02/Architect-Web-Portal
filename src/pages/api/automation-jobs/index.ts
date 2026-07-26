@@ -1,6 +1,7 @@
 export const prerender = false;
 
 import { AutomationJobStatus, type Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -10,7 +11,10 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
-import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
+import {
+  buildAutomationJobSnapshot,
+  ensureAutomationApplicationRecord,
+} from '@/server/services/automation-jobs.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -57,15 +61,42 @@ export const POST: APIRoute = (context) =>
     const { organisation, user } = await requireOrganisation(context);
     const body = await parseBody(context.request, automationJobCreateSchema);
     await requireProjectAccess(organisation.id, body.projectId);
+    const existing = await prisma.automationJob.findFirst({
+      where: {
+        organisationId: organisation.id,
+        projectId: body.projectId,
+        type: body.type,
+        status: {
+          in: [
+            AutomationJobStatus.DRAFT,
+            AutomationJobStatus.PREFLIGHT_REQUIRED,
+            AutomationJobStatus.NEEDS_INPUT,
+            AutomationJobStatus.READY,
+            AutomationJobStatus.STALE,
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, status: true, type: true },
+    });
+    if (existing) return jsonResponse(200, { job: existing, redirectTo: `/automation-jobs?job=${existing.id}` });
 
+    const applicationRecord = await ensureAutomationApplicationRecord(
+      organisation.id,
+      body.projectId,
+      body.type,
+    );
+    const jobId = randomUUID();
     const snapshot = await buildAutomationJobSnapshot({
+      jobId,
       organisationId: organisation.id,
       organisationName: organisation.name,
       projectId: body.projectId,
       type: body.type,
+      createdBy: { id: user.id, name: user.name, email: user.email },
       sourceType: body.sourceType,
-      planningApplicationId: body.planningApplicationId,
-      buildingWarrantApplicationId: body.buildingWarrantApplicationId,
+      planningApplicationId: body.planningApplicationId ?? applicationRecord.planningApplicationId,
+      buildingWarrantApplicationId: body.buildingWarrantApplicationId ?? applicationRecord.buildingWarrantApplicationId,
       documentSortBatchId: body.documentSortBatchId,
       documentIds: body.documentIds,
       notes: body.notes,
@@ -73,12 +104,19 @@ export const POST: APIRoute = (context) =>
 
     const job = await prisma.automationJob.create({
       data: {
+        id: jobId,
         organisationId: organisation.id,
         projectId: body.projectId,
         type: body.type,
-        status: AutomationJobStatus.DRAFT,
+        status: snapshot.preflight.status === 'READY'
+          ? AutomationJobStatus.PREFLIGHT_REQUIRED
+          : AutomationJobStatus.NEEDS_INPUT,
         sourceType: snapshot.sourceType,
         title: snapshot.title,
+        payloadVersion: 2,
+        snapshotHash: snapshot.snapshotHash,
+        sourceUpdatedAt: snapshot.sourceUpdatedAt,
+        preparedAt: new Date(),
         dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
         documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
         createdById: user.id,

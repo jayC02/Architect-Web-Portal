@@ -398,7 +398,20 @@ function Clients({ data }: { data: AnyRecord }) {
   const filteredClients = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return clients;
-    return clients.filter((client: AnyRecord) => [client.name, client.email, client.phone, client.address, client.notes].some((value) => String(value ?? '').toLowerCase().includes(needle)));
+    return clients.filter((client: AnyRecord) => [
+      client.name,
+      client.firstName,
+      client.lastName,
+      client.companyName,
+      client.email,
+      client.phone,
+      client.address,
+      client.addressLine1,
+      client.addressLine2,
+      client.townCity,
+      client.postcode,
+      client.notes,
+    ].some((value) => String(value ?? '').toLowerCase().includes(needle)));
   }, [clients, query]);
 
   return (
@@ -577,6 +590,12 @@ function ClientForm({ client, onClose }: { client?: AnyRecord; onClose: () => vo
         <span className="label">Name</span>
         <input required name="name" defaultValue={client?.name ?? ''} className="field" placeholder="Enter client name" />
       </label>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="block"><span className="label">Title</span><select name="title" defaultValue={client?.title ?? ''} className="field"><option value="">Not set</option><option>Mr</option><option>Mrs</option><option>Miss</option><option>Ms</option><option>Other</option></select></label>
+        <label className="block"><span className="label">First name</span><input name="firstName" defaultValue={client?.firstName ?? ''} className="field" /></label>
+        <label className="block"><span className="label">Last name</span><input name="lastName" defaultValue={client?.lastName ?? ''} className="field" /></label>
+      </div>
+      <label className="block"><span className="label">Company name</span><input name="companyName" defaultValue={client?.companyName ?? ''} className="field" /></label>
       <label className="block">
         <span className="label">Email</span>
         <input
@@ -620,9 +639,19 @@ function ClientForm({ client, onClose }: { client?: AnyRecord; onClose: () => vo
         </p>
       </label>
       <label className="block">
-        <span className="label">Address</span>
-        <textarea name="address" rows={4} defaultValue={client?.address ?? ''} className="field" placeholder="Enter address" />
+        <span className="label">Address line 1</span>
+        <input name="addressLine1" defaultValue={client?.addressLine1 ?? ''} className="field" />
       </label>
+      <label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={client?.addressLine2 ?? ''} className="field" /></label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="block"><span className="label">Town/city</span><input name="townCity" defaultValue={client?.townCity ?? ''} className="field" /></label>
+        <label className="block"><span className="label">Postcode</span><input name="postcode" defaultValue={client?.postcode ?? ''} className="field" /></label>
+      </div>
+      <label className="block"><span className="label">Country</span><input name="country" defaultValue={client?.country ?? ''} className="field" placeholder="United Kingdom" /></label>
+      <details className="rounded-md border border-stone-200 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">Legacy address</summary>
+        <textarea name="address" rows={3} defaultValue={client?.address ?? ''} className="field mt-3" placeholder="Used only by older project records" />
+      </details>
       <label className="block">
         <span className="label">Notes</span>
         <textarea name="notes" rows={4} defaultValue={client?.notes ?? ''} className="field" placeholder="Add any notes about this client" />
@@ -918,7 +947,89 @@ function DocumentFolder({ data }: { data: AnyRecord }) {
 }
 
 function SettingsOverview({ data }: { data: AnyRecord }) {
-  return <section className="grid gap-4 md:grid-cols-2"><a href="/settings/integrations" className="panel rounded-lg p-5 hover:bg-stone-50"><p className="text-lg font-semibold">Integrations</p><p className="mt-2 text-sm text-stone-500">Connect Google Calendar and review deadline sync status.</p></a><div className="panel rounded-lg p-5"><p className="text-lg font-semibold">Organisation</p><p className="mt-2 text-sm text-stone-500">{data.organisation.name}</p><p className="mt-2 text-xs uppercase text-stone-500">Your role: {data.role}</p></div></section>;
+  const defaults = data.defaults ?? {};
+  const certifierPresets = data.certifierPresets ?? [];
+  const canManage = data.role === 'OWNER' || data.role === 'ADMIN';
+  return (
+    <section className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <a href="/settings/integrations" className="panel rounded-lg p-5 hover:bg-stone-50">
+          <p className="text-lg font-semibold">Integrations</p>
+          <p className="mt-2 text-sm text-stone-500">Manage Google Calendar, Gmail and desktop access.</p>
+        </a>
+        <div className="panel rounded-lg p-5">
+          <p className="text-lg font-semibold">Organisation</p>
+          <p className="mt-2 text-sm text-stone-500">{data.organisation.name}</p>
+          <p className="mt-2 text-xs uppercase text-stone-500">Your role: {data.role}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+        <form data-api-form data-action="/api/settings/organisation-defaults" data-method="PUT" className="panel grid gap-4 rounded-lg p-5">
+          <div>
+            <h2 className="text-xl font-semibold">Practice and agent defaults</h2>
+            <p className="mt-1 text-sm text-stone-500">Reused when preparing applications. Project-specific facts remain on the application record.</p>
+          </div>
+          <label className="block"><span className="label">Practice name</span><input name="practiceName" defaultValue={defaults.practiceName ?? data.organisation.name} className="field" disabled={!canManage} /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block"><span className="label">Agent first name</span><input name="agentFirstName" defaultValue={defaults.agentFirstName ?? ''} className="field" disabled={!canManage} /></label>
+            <label className="block"><span className="label">Agent last name</span><input name="agentLastName" defaultValue={defaults.agentLastName ?? ''} className="field" disabled={!canManage} /></label>
+            <label className="block"><span className="label">Agent email</span><input type="email" name="agentEmail" defaultValue={defaults.agentEmail ?? ''} className="field" disabled={!canManage} /></label>
+            <label className="block"><span className="label">Agent phone</span><input name="agentPhone" defaultValue={defaults.agentPhone ?? ''} className="field" disabled={!canManage} /></label>
+          </div>
+          <label className="block"><span className="label">Address line 1</span><input name="agentAddressLine1" defaultValue={defaults.agentAddressLine1 ?? ''} className="field" disabled={!canManage} /></label>
+          <label className="block"><span className="label">Address line 2</span><input name="agentAddressLine2" defaultValue={defaults.agentAddressLine2 ?? ''} className="field" disabled={!canManage} /></label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block"><span className="label">Town/city</span><input name="agentTownCity" defaultValue={defaults.agentTownCity ?? ''} className="field" disabled={!canManage} /></label>
+            <label className="block"><span className="label">Postcode</span><input name="agentPostcode" defaultValue={defaults.agentPostcode ?? ''} className="field" disabled={!canManage} /></label>
+            <label className="block"><span className="label">Country</span><input name="agentCountry" defaultValue={defaults.agentCountry ?? 'United Kingdom'} className="field" disabled={!canManage} /></label>
+          </div>
+          <label className="block">
+            <span className="label">Default certifier</span>
+            <select name="defaultCertifierPresetId" defaultValue={defaults.defaultCertifierPresetId ?? ''} className="field" disabled={!canManage}>
+              <option value="">No default certifier</option>
+              {certifierPresets.map((preset: AnyRecord) => <option key={preset.id} value={preset.id}>{preset.displayName}</option>)}
+            </select>
+          </label>
+          {canManage && <button className="btn btn-primary justify-self-start">Save organisation defaults</button>}
+          <p data-form-status className="text-sm text-stone-500" />
+        </form>
+
+        <div className="space-y-4">
+          <div className="panel rounded-lg p-5">
+            <h2 className="text-xl font-semibold">Certifier presets</h2>
+            <p className="mt-1 text-sm text-stone-500">Saved certificate values used by Building Warrant preparation.</p>
+            <div className="mt-4 divide-y divide-stone-100">
+              {certifierPresets.length ? certifierPresets.map((preset: AnyRecord) => (
+                <div key={preset.id} className="py-3 first:pt-0 last:pb-0">
+                  <p className="font-semibold">{preset.displayName}</p>
+                  <p className="mt-1 text-sm text-stone-500">{preset.certifierName || 'No certifier name'}{preset.isDefault ? ' · Default' : ''}</p>
+                </div>
+              )) : <p className="text-sm text-stone-500">No certifier presets saved.</p>}
+            </div>
+          </div>
+          {canManage && (
+            <form data-api-form data-action="/api/settings/certifier-presets" data-method="POST" className="panel grid gap-3 rounded-lg p-5">
+              <h3 className="text-lg font-semibold">New certifier preset</h3>
+              <label className="block"><span className="label">Preset name</span><input required name="displayName" className="field" /></label>
+              <label className="block"><span className="label">Scheme type</span><input name="schemeType" className="field" /></label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block"><span className="label">Registration A prefix</span><input name="registrationAPart1" className="field" placeholder="SER1" /></label>
+                <label className="block"><span className="label">Registration A number</span><input name="registrationAPart2" className="field" /></label>
+                <label className="block"><span className="label">Registration B prefix</span><input name="registrationBPart1" className="field" /></label>
+                <label className="block"><span className="label">Registration B number</span><input name="registrationBPart2" className="field" /></label>
+              </div>
+              <label className="block"><span className="label">Certifier name</span><input name="certifierName" className="field" /></label>
+              <label className="block"><span className="label">Approved body</span><input name="approvedBody" className="field" /></label>
+              <label className="flex items-center gap-3 text-sm"><input type="checkbox" name="isDefault" /> Use as organisation default</label>
+              <button className="btn btn-primary">Save certifier preset</button>
+              <p data-form-status className="text-sm text-stone-500" />
+            </form>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function Integrations({ data }: { data: AnyRecord }) {

@@ -1,0 +1,267 @@
+---
+import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, FolderOpen, RefreshCw } from 'lucide-react';
+import { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/automation-jobs');
+const job = await prisma.automationJob.findFirst({
+  where: { id, organisationId: auth.organisation.id },
+  include: {
+    project: { select: { id: true, name: true, internalReference: true } },
+    createdBy: { select: { name: true, email: true } },
+  },
+});
+if (!job) return Astro.redirect('/automation-jobs');
+
+const parsed = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
+const snapshot = parsed.success ? parsed.data : null;
+const certifierPresets = snapshot?.buildingWarrant
+  ? await prisma.organisationCertifierPreset.findMany({
+      where: { organisationId: auth.organisation.id },
+      orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
+      select: { id: true, displayName: true },
+    })
+  : [];
+type Address = { addressLine1: string | null; addressLine2: string | null; townCity: string | null; postcode: string | null; country: string | null };
+const addressText = (address?: Address) => address
+  ? [address.addressLine1, address.addressLine2, address.townCity, address.postcode, address.country].filter(Boolean).join(', ')
+  : 'Not set';
+const appLabel = job.type === AutomationJobType.BUILDING_WARRANT
+  ? 'Building Warrant'
+  : job.type === AutomationJobType.HOUSEHOLDER_PLANNING ? 'Householder Application' : 'Planning Application';
+const canRefresh = new Set<AutomationJobStatus>([
+  AutomationJobStatus.DRAFT,
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.STALE,
+  AutomationJobStatus.FAILED_RETRYABLE,
+  AutomationJobStatus.FAILED,
+]).has(job.status);
+const canMarkReady = job.status === AutomationJobStatus.PREFLIGHT_REQUIRED && snapshot?.preflight.status === 'READY';
+const yesNo = (value: boolean | null | undefined) => value === true ? 'true' : 'false';
+---
+<AppShell title={`Review ${job.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mx-auto max-w-6xl">
+    <a class="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink" href="/automation-jobs">
+      <ArrowLeft size={16} />Back to desktop automation
+    </a>
+    <header class="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Prepared application</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight">{job.project.name}</h1>
+        <p class="mt-2 text-sm text-stone-600">{appLabel} · {job.project.internalReference ? `Ref ${job.project.internalReference}` : 'No internal reference'}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.projectId}`}><FolderOpen size={16} />Open project</a>
+        {canRefresh && (
+          <form data-api-form data-action={`/api/automation-jobs/${job.id}/prepare`} data-method="POST">
+            <button class="btn btn-secondary inline-flex items-center gap-2"><RefreshCw size={16} />Prepare updated job</button>
+          </form>
+        )}
+        {canMarkReady && (
+          <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH">
+            <input type="hidden" name="status" value="READY" />
+            <button class="btn btn-primary">Mark ready</button>
+          </form>
+        )}
+        {job.status === AutomationJobStatus.READY && <ExistingAutomationJobButton client:load jobId={job.id} />}
+        {job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW && (
+          <form
+            data-api-form
+            data-action={`/api/automation-jobs/${job.id}`}
+            data-method="PATCH"
+            data-confirm="Confirm that you have reviewed the government portal form. This completes the desktop job but does not mark the application as submitted."
+          >
+            <input type="hidden" name="status" value="COMPLETED" />
+            <button class="btn btn-primary">Confirm final review</button>
+          </form>
+        )}
+      </div>
+    </header>
+
+    {!snapshot ? (
+      <section class="panel mt-6 rounded-lg p-6">
+        <div class="flex gap-3">
+          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-700" />
+          <div>
+            <h2 class="font-semibold">Legacy prepared job</h2>
+            <p class="mt-1 text-sm leading-6 text-stone-600">This job uses snapshot v1. It remains available for compatibility, but some details may still need to be entered in the desktop app.</p>
+          </div>
+        </div>
+      </section>
+    ) : (
+      <>
+        <section class="panel mt-6 rounded-lg p-6">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 class="text-xl font-semibold">Preflight</h2>
+              <p class="mt-1 text-sm text-stone-600">Only unresolved or unusual information needs your attention.</p>
+            </div>
+            <p class:list={['text-sm font-semibold', snapshot.preflight.status === 'READY' ? 'text-emerald-800' : 'text-amber-800']}>
+              {snapshot.preflight.status === 'READY' ? 'Ready for final review' : `${snapshot.preflight.missing.length} item(s) need input`}
+            </p>
+          </div>
+          {snapshot.preflight.missing.length ? (
+            <div class="mt-5 divide-y divide-stone-100 border-y border-stone-100">
+              {snapshot.preflight.missing.map((issue) => (
+                <div class="flex gap-3 py-3">
+                  <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-700" />
+                  <div><p class="text-sm font-semibold">{issue.field}</p><p class="mt-0.5 text-sm text-stone-600">{issue.message}</p></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="mt-5 flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={17} />All deterministic preflight checks passed.</p>
+          )}
+        </section>
+
+        {(snapshot.planning?.recordId || snapshot.buildingWarrant?.recordId) && (
+          <section class="panel mt-6 rounded-lg p-6">
+            <div class="max-w-3xl">
+              <h2 class="text-xl font-semibold">Application details</h2>
+              <p class="mt-1 text-sm leading-6 text-stone-600">
+                Complete only the project-specific information. Organisation defaults, agent details and reviewed documents are reused automatically.
+              </p>
+            </div>
+
+            {snapshot.planning?.recordId && (
+              <form class="mt-6 grid gap-5" data-api-form data-field-errors data-action={`/api/planning/${snapshot.planning.recordId}/preparation`} data-method="PATCH">
+                <label class="block">
+                  <span class="label">Description of proposed work</span>
+                  <textarea name="description" rows="4" maxlength="500" class="field" required>{snapshot.planning.description ?? ''}</textarea>
+                  <span data-field-error="description" class="mt-1 hidden text-sm text-red-700"></span>
+                </label>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="label">Sole owner of all land</span>
+                    <select name="soleOwner" class="field" required>
+                      <option value="true" selected={snapshot.planning.answers.soleOwner === true}>Yes</option>
+                      <option value="false" selected={snapshot.planning.answers.soleOwner !== true}>No</option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="label">Land is part of an agricultural holding</span>
+                    <select name="agriculturalHolding" class="field" required>
+                      <option value="false" selected={snapshot.planning.answers.agriculturalHolding !== true}>No</option>
+                      <option value="true" selected={snapshot.planning.answers.agriculturalHolding === true}>Yes</option>
+                    </select>
+                  </label>
+                </div>
+                <details class="rounded-lg border border-stone-200 p-4">
+                  <summary class="cursor-pointer text-sm font-semibold">Unusual application details</summary>
+                  <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label class="block"><span class="label">Discussed with planning authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!snapshot.planning.answers.discussedWithPlanningAuthority}>No</option><option value="true" selected={snapshot.planning.answers.discussedWithPlanningAuthority}>Yes</option></select></label>
+                    <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!snapshot.planning.answers.treesOnOrAdjacentToSite}>No</option><option value="true" selected={snapshot.planning.answers.treesOnOrAdjacentToSite}>Yes</option></select></label>
+                    <label class="block"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!snapshot.planning.answers.newOrAlteredVehicleAccess}>No</option><option value="true" selected={snapshot.planning.answers.newOrAlteredVehicleAccess}>Yes</option></select></label>
+                    <label class="block"><span class="label">Current parking spaces</span><input name="currentParkingSpaces" type="number" min="0" class="field" value={snapshot.planning.answers.currentParkingSpaces ?? ''} /></label>
+                    <label class="block"><span class="label">Proposed parking spaces</span><input name="proposedParkingSpaces" type="number" min="0" class="field" value={snapshot.planning.answers.proposedParkingSpaces ?? ''} /></label>
+                  </div>
+                </details>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button class="btn btn-primary">Save application details</button>
+                  <p data-form-status class="text-sm text-stone-500"></p>
+                </div>
+              </form>
+            )}
+
+            {snapshot.buildingWarrant?.recordId && (
+              <form class="mt-6 grid gap-5" data-api-form data-field-errors data-action={`/api/building-warrant/${snapshot.buildingWarrant.recordId}/preparation`} data-method="PATCH">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block sm:col-span-2"><span class="label">Description of work</span><textarea name="description" rows="4" maxlength="2000" class="field" required>{snapshot.buildingWarrant.description ?? ''}</textarea><span data-field-error="description" class="mt-1 hidden text-sm text-red-700"></span></label>
+                  <label class="block"><span class="label">Type of work</span><select name="presetKey" class="field">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === snapshot.buildingWarrant?.presetKey}>{item.label}</option>)}</select></label>
+                  <label class="block"><span class="label">Estimated work value</span><input name="estimatedValue" type="number" min="0" step="0.01" class="field" value={snapshot.buildingWarrant.estimatedValue ?? ''} /></label>
+                  <label class="block"><span class="label">Current use</span><input name="currentUse" maxlength="160" class="field" value={snapshot.buildingWarrant.currentUse ?? ''} /></label>
+                  <label class="block"><span class="label">Proposed use</span><input name="proposedUse" maxlength="160" class="field" value={snapshot.buildingWarrant.proposedUse ?? ''} /></label>
+                  <label class="block sm:col-span-2"><span class="label">Approved certifier of design</span><select name="selectedCertifierPresetId" class="field"><option value="">No design certificate</option>{certifierPresets.map((preset) => <option value={preset.id} selected={preset.id === snapshot.buildingWarrant?.certifier?.presetId}>{preset.displayName}</option>)}</select></label>
+                </div>
+                <details class="rounded-lg border border-stone-200 p-4">
+                  <summary class="cursor-pointer text-sm font-semibold">Unusual application details</summary>
+                  <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    {[
+                      ['applicantIsOwner', 'Applicant is owner', snapshot.buildingWarrant.unusualAnswers.applicantIsOwner],
+                      ['applicationIsStaged', 'Application is staged', snapshot.buildingWarrant.unusualAnswers.applicationIsStaged],
+                      ['intendedLifeFiveYearsOrLess', 'Intended life is five years or less', snapshot.buildingWarrant.unusualAnswers.intendedLifeFiveYearsOrLess],
+                      ['fireAndRescueServiceEnforcingAuthority', 'Fire and Rescue Service is enforcing authority', snapshot.buildingWarrant.unusualAnswers.fireAndRescueServiceEnforcingAuthority],
+                      ['listedBuildingOrConservationArea', 'Listed building or conservation area', snapshot.buildingWarrant.unusualAnswers.listedBuildingOrConservationArea],
+                      ['otherHistoricalImportance', 'Other historical importance', snapshot.buildingWarrant.unusualAnswers.otherHistoricalImportance],
+                      ['scottishMinistersRelaxationDirection', 'Scottish Ministers relaxation direction', snapshot.buildingWarrant.unusualAnswers.scottishMinistersRelaxationDirection],
+                      ['dangerousBuildingNotice', 'Dangerous building notice', snapshot.buildingWarrant.unusualAnswers.dangerousBuildingNotice],
+                      ['approvedCertifierOfConstruction', 'Approved certifier of construction', snapshot.buildingWarrant.unusualAnswers.approvedCertifierOfConstruction],
+                      ['coveredBySTAS', 'Covered by STAS', snapshot.buildingWarrant.unusualAnswers.coveredBySTAS],
+                      ['restrictPublicInspection', 'Restrict public inspection', snapshot.buildingWarrant.unusualAnswers.restrictPublicInspection],
+                    ].map(([name, label, value]) => (
+                      <label class="block">
+                        <span class="label">{label}</span>
+                        <select name={String(name)} class="field">
+                          <option value="false" selected={yesNo(value as boolean) === 'false'}>No</option>
+                          <option value="true" selected={yesNo(value as boolean) === 'true'}>Yes</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button class="btn btn-primary">Save application details</button>
+                  <p data-form-status class="text-sm text-stone-500"></p>
+                </div>
+              </form>
+            )}
+            <p class="mt-4 text-xs leading-5 text-stone-500">After saving, choose <strong>Prepare updated job</strong> above to create a fresh immutable snapshot and rerun preflight.</p>
+          </section>
+        )}
+
+        <div class="mt-6 grid gap-5 lg:grid-cols-2">
+          <section class="panel rounded-lg p-5">
+            <h2 class="font-semibold">Application</h2>
+            <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
+              <div><dt class="text-stone-500">Type</dt><dd class="mt-1 font-medium">{appLabel}</dd></div>
+              <div><dt class="text-stone-500">Type of work</dt><dd class="mt-1 font-medium">{snapshot.project.typeOfWorkLabel}</dd></div>
+              <div class="sm:col-span-2"><dt class="text-stone-500">Description</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant?.description ?? snapshot.planning?.description ?? 'Not set'}</dd></div>
+              {snapshot.buildingWarrant && <>
+                <div><dt class="text-stone-500">Preset</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant.presetLabel}</dd></div>
+                <div><dt class="text-stone-500">Estimated value</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant.estimatedValue === null ? 'Not set' : `£${snapshot.buildingWarrant.estimatedValue.toLocaleString()}`}</dd></div>
+              </>}
+            </dl>
+          </section>
+          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Site</h2><p class="mt-4 text-sm font-medium">{addressText(snapshot.site.address)}</p><p class="mt-2 text-sm text-stone-600">Local authority: {snapshot.site.localAuthority ?? 'Not set'}</p></section>
+          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Applicant</h2><p class="mt-4 font-medium">{snapshot.applicant.displayName ?? 'Not set'}</p><p class="mt-2 text-sm text-stone-600">{snapshot.applicant.email ?? 'No email'} · {snapshot.applicant.phone ?? 'No phone'}</p><p class="mt-2 text-sm text-stone-600">{addressText(snapshot.applicant.address)}</p></section>
+          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Agent</h2><p class="mt-4 font-medium">{[snapshot.organisation.agent.firstName, snapshot.organisation.agent.lastName].filter(Boolean).join(' ') || 'Not set'}</p><p class="mt-2 text-sm text-stone-600">{snapshot.organisation.agent.email ?? 'No email'} · {snapshot.organisation.agent.phone ?? 'No phone'}</p><p class="mt-2 text-sm text-stone-600">{addressText(snapshot.organisation.agent.address)}</p></section>
+        </div>
+
+        <section class="panel mt-6 rounded-lg p-5">
+          <div class="flex items-center justify-between gap-4">
+            <div><h2 class="font-semibold">Documents</h2><p class="mt-1 text-sm text-stone-600">Reviewed portal classifications will be reused by the desktop app.</p></div>
+            <p class="text-sm font-semibold">{snapshot.documents.length} linked</p>
+          </div>
+          <div class="mt-4 divide-y divide-stone-100 border-y border-stone-100">
+            {snapshot.documents.map((document) => (
+              <div class="flex items-center gap-3 py-3">
+                <FileText size={17} className="shrink-0 text-stone-500" />
+                <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">{document.filename}</p><p class="mt-0.5 text-xs text-stone-500">{document.categoryLabel}{document.revision ? ` · Rev ${document.revision}` : ''}</p></div>
+                <p class="text-xs font-medium text-stone-600">{document.reviewState === 'APPROVED' ? 'Reviewed' : 'Needs review'}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <details class="panel mt-6 rounded-lg p-5">
+          <summary class="cursor-pointer text-sm font-semibold">Advanced application details</summary>
+          <pre class="mt-4 max-h-96 overflow-auto rounded-lg bg-stone-950 p-4 text-xs leading-5 text-stone-100">{JSON.stringify({
+            planningAnswers: snapshot.planning?.answers,
+            buildingWarrantAnswers: snapshot.buildingWarrant?.unusualAnswers,
+            certifier: snapshot.buildingWarrant?.certifier,
+            warnings: snapshot.preflight.warnings,
+          }, null, 2)}</pre>
+        </details>
+      </>
+    )}
+  </div>
+</AppShell>

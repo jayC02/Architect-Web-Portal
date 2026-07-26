@@ -1,7 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
-import { TYPE_OF_WORK_OPTIONS } from '@/lib/projects/type-of-work';
+import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
@@ -32,7 +32,7 @@ const [clients, sites] = await Promise.all([
       <span class="label">Type of work</span>
       <select name="projectType" class="field">
         <option value="">Select type of work</option>
-        {TYPE_OF_WORK_OPTIONS.map((type) => <option value={type}>{type}</option>)}
+        {TYPE_OF_WORK_DEFINITIONS.map((type) => <option value={type.key}>{type.label}</option>)}
       </select>
     </label>
     <label class="block">
@@ -50,10 +50,6 @@ const [clients, sites] = await Promise.all([
         {sites.map((site) => <option value={site.id}>{site.addressLine1}, {site.postcode}</option>)}
         <option value="__add_site__">+ Add a new site</option>
       </select>
-    </label>
-    <label class="block">
-      <span class="label">Local authority</span>
-      <input name="localAuthority" class="field" />
     </label>
     <label class="block lg:col-span-2">
       <span class="label">Notes</span>
@@ -217,10 +213,7 @@ const [clients, sites] = await Promise.all([
       const addOption = select.querySelector(`option[value="__add_${key}__"]`);
       const option = new Option(label, record.id, true, true);
       select.insertBefore(option, addOption);
-      if (key === 'site') {
-        const authority = document.querySelector('input[name="localAuthority"]');
-        if (authority instanceof HTMLInputElement && !authority.value) authority.value = record.localAuthority || '';
-      }
+      if (key === 'site') suggestProjectName(record.addressLine1);
       form.reset();
       dialog.close();
     } catch (error) {
@@ -249,6 +242,19 @@ const [clients, sites] = await Promise.all([
       siteDialog.showModal();
     });
     document.querySelectorAll('[data-close-site]').forEach((button) => button.addEventListener('click', () => closeDialog(siteDialog)));
+  }
+
+  const suggestProjectName = (addressLine1: string) => {
+    const projectName = document.querySelector<HTMLInputElement>('input[name="name"]');
+    if (projectName && !projectName.value.trim()) projectName.value = String(addressLine1 || '').trim();
+  };
+
+  if (siteSelect instanceof HTMLSelectElement) {
+    siteSelect.addEventListener('change', () => {
+      if (!siteSelect.value || siteSelect.value === '__add_site__') return;
+      const label = siteSelect.selectedOptions[0]?.textContent ?? '';
+      suggestProjectName(label.split(',')[0] ?? '');
+    });
   }
 
   if (clientForm instanceof HTMLFormElement && clientSelect instanceof HTMLSelectElement && clientDialog instanceof HTMLDialogElement) {

@@ -1,6 +1,7 @@
 export const prerender = false;
 
 import { AutomationJobStatus, type Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -9,14 +10,10 @@ import { desktopJobCreateSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
-import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 import {
-  buildDesktopLaunchUrl,
-  createDesktopHandoffCode,
-  desktopPortalOrigin,
-  desktopHandoffCodeHash,
-  desktopHandoffExpiry,
-} from '@/server/auth/desktop-token';
+  buildAutomationJobSnapshot,
+  ensureAutomationApplicationRecord,
+} from '@/server/services/automation-jobs.service';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
@@ -26,27 +23,56 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   if (!projectId) throw new HttpError(400, 'Project id is required.');
   await requireProjectAccess(organisation.id, projectId);
   const body = await parseBody(context.request, desktopJobCreateSchema);
+  const existing = await prisma.automationJob.findFirst({
+    where: {
+      organisationId: organisation.id,
+      projectId,
+      type: body.type,
+      status: {
+        in: [
+          AutomationJobStatus.DRAFT,
+          AutomationJobStatus.PREFLIGHT_REQUIRED,
+          AutomationJobStatus.NEEDS_INPUT,
+          AutomationJobStatus.READY,
+          AutomationJobStatus.STALE,
+        ],
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, title: true, type: true, status: true },
+  });
+  if (existing) {
+    return jsonResponse(200, { job: existing, redirectTo: `/automation-job/${existing.id}` });
+  }
+
+  const applicationRecord = await ensureAutomationApplicationRecord(organisation.id, projectId, body.type);
+  const jobId = randomUUID();
 
   const snapshot = await buildAutomationJobSnapshot({
+    jobId,
     organisationId: organisation.id,
     organisationName: organisation.name,
     projectId,
     type: body.type,
-    planningApplicationId: body.planningApplicationId,
-    buildingWarrantApplicationId: body.buildingWarrantApplicationId,
+    createdBy: { id: user.id, name: user.name, email: user.email },
+    planningApplicationId: body.planningApplicationId ?? applicationRecord.planningApplicationId,
+    buildingWarrantApplicationId: body.buildingWarrantApplicationId ?? applicationRecord.buildingWarrantApplicationId,
   });
-  const handoffCode = createDesktopHandoffCode();
   const job = await prisma.automationJob.create({
     data: {
+      id: jobId,
       organisationId: organisation.id,
       projectId,
       type: body.type,
-      status: AutomationJobStatus.READY,
+      status: snapshot.preflight.status === 'READY'
+        ? AutomationJobStatus.PREFLIGHT_REQUIRED
+        : AutomationJobStatus.NEEDS_INPUT,
       sourceType: snapshot.sourceType,
       title: snapshot.title,
-      payloadVersion: 1,
-      handoffCodeHash: desktopHandoffCodeHash(handoffCode),
-      handoffExpiresAt: desktopHandoffExpiry(),
+      payloadVersion: 2,
+      snapshotHash: snapshot.snapshotHash,
+      sourceUpdatedAt: snapshot.sourceUpdatedAt,
+      preparedAt: new Date(),
       dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
       documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
       createdById: user.id,
@@ -56,6 +82,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
 
   return jsonResponse(201, {
     job,
-    launchUrl: buildDesktopLaunchUrl(job.id, handoffCode, desktopPortalOrigin(context.request)),
+    redirectTo: `/automation-job/${job.id}`,
   });
 }, context);

@@ -57,11 +57,17 @@ const sourceLabel = (sourceType: AutomationJobSourceType) => {
 const displayStatus = (status: AutomationJobStatus) => {
   const labels: Record<AutomationJobStatus, string> = {
     [AutomationJobStatus.DRAFT]: 'Needs review',
+    [AutomationJobStatus.PREFLIGHT_REQUIRED]: 'Preflight required',
+    [AutomationJobStatus.NEEDS_INPUT]: 'Needs input',
     [AutomationJobStatus.READY]: 'Ready for desktop',
+    [AutomationJobStatus.STALE]: 'Needs refresh',
     [AutomationJobStatus.CLAIMED]: 'Running in desktop app',
     [AutomationJobStatus.IN_PROGRESS]: 'Running in desktop app',
     [AutomationJobStatus.NEEDS_REVIEW]: 'Ready for final review',
+    [AutomationJobStatus.AWAITING_PORTAL_REVIEW]: 'Ready for final review',
     [AutomationJobStatus.COMPLETED]: 'Completed',
+    [AutomationJobStatus.FAILED_RETRYABLE]: 'Retry available',
+    [AutomationJobStatus.FAILED_FINAL]: 'Failed',
     [AutomationJobStatus.FAILED]: 'Failed',
     [AutomationJobStatus.CANCELLED]: 'Cancelled',
   };
@@ -83,11 +89,17 @@ const projectAddress = (data: SnapshotRecord) => {
   if (data.project?.siteAddress) return data.project.siteAddress;
   const site = data.site;
   if (!site) return '';
-  return [site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ');
+  const address = site.address ?? site;
+  return [address.addressLine1, address.addressLine2, address.townCity, address.postcode].filter(Boolean).join(', ');
 };
 
-const readinessIssues = (job: Job) => {
+const readinessIssues = (job: Job): string[] => {
   const data = snapshot(job);
+  if (data.snapshotVersion === 2 && data.preflight) {
+    return (data.preflight.missing ?? []).map((issue: SnapshotRecord) =>
+      issue.message ?? issue.field ?? 'Missing application information'
+    );
+  }
   const docs = documents(job);
   const issues: string[] = [];
   if (!docs.length) issues.push('No documents linked');
@@ -99,11 +111,14 @@ const readinessIssues = (job: Job) => {
 
 const nextStep = (job: Job) => {
   if (job.status === AutomationJobStatus.READY) return 'Load this job in the desktop app.';
-  if (job.status === AutomationJobStatus.DRAFT) return 'Review missing information, then mark this job ready.';
+  if (job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.PREFLIGHT_REQUIRED) return 'Review the prepared application and preflight.';
+  if (job.status === AutomationJobStatus.NEEDS_INPUT) return 'Resolve the missing project or application information.';
+  if (job.status === AutomationJobStatus.STALE) return 'Project information changed. Prepare an updated job.';
   if (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) return 'The desktop app is working through this job.';
-  if (job.status === AutomationJobStatus.NEEDS_REVIEW) return 'Review the completed portal form before final submission.';
+  if (job.status === AutomationJobStatus.NEEDS_REVIEW || job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) return 'Review the completed portal form before final submission.';
   if (job.status === AutomationJobStatus.COMPLETED) return 'Completed by the desktop workflow.';
-  if (job.status === AutomationJobStatus.FAILED) return 'Review the failure details before trying again.';
+  if (job.status === AutomationJobStatus.FAILED || job.status === AutomationJobStatus.FAILED_RETRYABLE) return 'Review the failure details before preparing a retry.';
+  if (job.status === AutomationJobStatus.FAILED_FINAL) return 'This job ended with a non-retryable failure.';
   return 'This job was cancelled and will not be picked up by the desktop app.';
 };
 
@@ -120,18 +135,30 @@ const redactedSnapshot = (value: unknown): unknown => {
 
 const summary = {
   ready: jobs.filter((job) => job.status === AutomationJobStatus.READY).length,
-  review: jobs.filter((job) => job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.NEEDS_REVIEW).length,
+  review: jobs.filter((job) => new Set<AutomationJobStatus>([
+    AutomationJobStatus.DRAFT,
+    AutomationJobStatus.PREFLIGHT_REQUIRED,
+    AutomationJobStatus.NEEDS_INPUT,
+    AutomationJobStatus.STALE,
+    AutomationJobStatus.NEEDS_REVIEW,
+    AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+  ]).has(job.status)).length,
   running: jobs.filter((job) => job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS).length,
   completed: jobs.filter((job) => job.status === AutomationJobStatus.COMPLETED).length,
-  failed: jobs.filter((job) => job.status === AutomationJobStatus.FAILED || job.status === AutomationJobStatus.CANCELLED).length,
+  failed: jobs.filter((job) => new Set<AutomationJobStatus>([
+    AutomationJobStatus.FAILED,
+    AutomationJobStatus.FAILED_RETRYABLE,
+    AutomationJobStatus.FAILED_FINAL,
+    AutomationJobStatus.CANCELLED,
+  ]).has(job.status)).length,
 };
 
 const groups = [
   { key: 'ready', title: 'Ready for desktop', description: 'Jobs ready to be loaded by the desktop app.', statuses: [AutomationJobStatus.READY] as AutomationJobStatus[], empty: 'No jobs are ready for desktop yet.' },
-  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.NEEDS_REVIEW] as AutomationJobStatus[], empty: 'No jobs need review.' },
+  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.PREFLIGHT_REQUIRED, AutomationJobStatus.NEEDS_INPUT, AutomationJobStatus.STALE, AutomationJobStatus.NEEDS_REVIEW, AutomationJobStatus.AWAITING_PORTAL_REVIEW] as AutomationJobStatus[], empty: 'No jobs need review.' },
   { key: 'running', title: 'In progress', description: 'Jobs claimed or started by the desktop app.', statuses: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] as AutomationJobStatus[], empty: 'No jobs are currently running.' },
   { key: 'completed', title: 'Completed', description: 'Jobs completed by the desktop workflow.', statuses: [AutomationJobStatus.COMPLETED] as AutomationJobStatus[], empty: 'No completed jobs yet.' },
-  { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], empty: 'No failed or cancelled jobs.' },
+  { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.FAILED_RETRYABLE, AutomationJobStatus.FAILED_FINAL, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], empty: 'No failed or cancelled jobs.' },
 ].map((group) => ({ ...group, jobs: jobs.filter((job) => group.statuses.includes(job.status)) }));
 
 const summaryCards = [
@@ -255,7 +282,8 @@ const initiallyOpenGroup = groups.find((group) => group.key !== 'failed' && grou
 
                   <div class="flex flex-wrap gap-2 xl:justify-end">
                     <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.project.id}`}><FolderOpen size={16} />Open project</a>
-                    {job.status !== AutomationJobStatus.READY && job.status !== AutomationJobStatus.COMPLETED && job.status !== AutomationJobStatus.CANCELLED && (
+                    <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>Review prepared job</a>
+                    {job.status === AutomationJobStatus.PREFLIGHT_REQUIRED && !issues.length && (
                       <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH">
                         <input type="hidden" name="status" value="READY" />
                         <button class="btn btn-primary">Mark ready</button>

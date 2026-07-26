@@ -6,19 +6,10 @@ import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { projectCreateSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
-import { HttpError, jsonResponse } from '@/lib/utils/http';
+import { jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
-
-const assertRelatedRecord = async (organisationId: string, model: 'client' | 'site', id: string | undefined) => {
-  if (!id) return undefined;
-  const record =
-    model === 'client'
-      ? await prisma.client.findFirst({ where: { id, organisationId }, select: { id: true } })
-      : await prisma.site.findFirst({ where: { id, organisationId }, select: { id: true } });
-  if (!record) throw new HttpError(400, `${model} does not belong to this organisation.`);
-  return id;
-};
+import { resolveProjectLinks } from '@/server/services/project-data.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -50,10 +41,16 @@ export const POST: APIRoute = (context) =>
     assertRateLimit(context, rateLimitPolicies.mutation, 'projects:create');
     const { organisation } = await requireOrganisation(context);
     const body = await parseBody(context.request, projectCreateSchema);
-    const clientId = await assertRelatedRecord(organisation.id, 'client', body.clientId);
-    const siteId = await assertRelatedRecord(organisation.id, 'site', body.siteId);
+    const links = await resolveProjectLinks(organisation.id, body.clientId, body.siteId);
     const project = await prisma.project.create({
-      data: { ...body, clientId, siteId, organisationId: organisation.id },
+      data: {
+        ...body,
+        clientId: links.clientId,
+        siteId: links.siteId,
+        siteAddress: links.derivedSite?.siteAddress,
+        localAuthority: links.derivedSite?.localAuthority,
+        organisationId: organisation.id,
+      },
     });
     return jsonResponse(201, { project, redirectTo: `/projects/${project.id}` });
   }, context);
