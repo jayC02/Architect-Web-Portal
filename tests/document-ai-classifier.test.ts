@@ -2,10 +2,16 @@ import assert from 'node:assert/strict';
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import {
   classifyProjectDocumentBatch,
+  GEMINI_DOCUMENT_RESPONSE_SCHEMA,
   pdfClassificationResultSchema,
   type PdfClassificationProvider,
   type PdfClassificationResult,
 } from '../src/server/services/pdf-classification.service';
+
+assert.ok(
+  !JSON.stringify(GEMINI_DOCUMENT_RESPONSE_SCHEMA).includes('additionalProperties'),
+  'Gemini response schema must only use keywords accepted by the Gemini API',
+);
 
 const input = (filename: string) => ({
   filename,

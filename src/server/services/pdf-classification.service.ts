@@ -128,7 +128,7 @@ const WARRANT_TYPES = new Set<DocumentType>([
   DocumentType.CALCULATIONS,
 ]);
 
-const JSON_SCHEMA = {
+export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
   type: 'object',
   required: ['categoryKey', 'certainty', 'manualReviewRequired', 'warnings'],
   properties: {
@@ -164,7 +164,6 @@ const JSON_SCHEMA = {
           evidence: { type: 'string' },
           certainty: { type: 'string', enum: ['high', 'medium', 'low'] },
         },
-        additionalProperties: false,
       },
     },
     evidence: { type: 'string' },
@@ -244,6 +243,9 @@ const timeoutSignal = () => {
 const normalizeGeminiModel = (value: string) => {
   const normalized = value.trim().toLowerCase().replace(/^models\//, '');
   const compact = normalized.replace(/[^a-z0-9.]+/g, '');
+  if (compact.includes('3.5') && compact.includes('flash') && compact.includes('lite')) {
+    return 'gemini-3.5-flash-lite';
+  }
   if (compact.includes('3.1') && compact.includes('flash') && compact.includes('lite')) {
     return 'gemini-3.1-flash-lite';
   }
@@ -265,13 +267,14 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
 
   constructor(
     private readonly apiKey: string,
-    public model = normalizeGeminiModel(process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.1-flash-lite'),
+    public model = normalizeGeminiModel(process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.5-flash-lite'),
   ) {
     this.model = normalizeGeminiModel(this.model);
   }
 
   async classifyDocument(input: PdfClassificationInput) {
-    const models = [...new Set([this.model, 'gemini-flash-lite-latest'])];
+    const models = [...new Set([this.model, 'gemini-3.1-flash-lite'])];
+    const failures: string[] = [];
     for (const model of models) {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -292,8 +295,7 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
             }],
             generationConfig: {
               responseMimeType: 'application/json',
-              responseSchema: JSON_SCHEMA,
-              temperature: 0,
+              responseSchema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
             },
           }),
         },
@@ -308,10 +310,13 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
         return parseStructuredResult(text);
       }
       const providerMessage = await geminiErrorMessage(response);
-      const canRetryAlias = (response.status === 400 || response.status === 404) && model !== models.at(-1);
+      failures.push(`${model}: HTTP ${response.status}${providerMessage ? `: ${providerMessage}` : ''}`);
+      const modelUnavailable =
+        response.status === 404 ||
+        (response.status === 400 && /model.+(?:not found|not supported|unavailable)/i.test(providerMessage));
+      const canRetryAlias = modelUnavailable && model !== models.at(-1);
       if (!canRetryAlias) {
-        const detail = providerMessage ? `: ${providerMessage}` : '';
-        throw new Error(`Gemini model "${model}" failed with status ${response.status}${detail}.`);
+        throw new Error(`Gemini request failed (${failures.join(' | ')}).`);
       }
     }
     throw new Error('Gemini document classification was unavailable.');
@@ -352,7 +357,7 @@ class OpenAiPdfClassificationProvider implements PdfClassificationProvider {
             type: 'json_schema',
             name: 'pdf_classification',
             strict: false,
-            schema: JSON_SCHEMA,
+            schema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
           },
         },
       }),
