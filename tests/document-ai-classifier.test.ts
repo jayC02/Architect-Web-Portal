@@ -3,6 +3,7 @@ import { DocumentSortSource, DocumentType } from '@prisma/client';
 import {
   classifyProjectDocumentBatch,
   GEMINI_DOCUMENT_RESPONSE_SCHEMA,
+  geminiDocumentGenerationConfig,
   pdfClassificationResultSchema,
   type PdfClassificationProvider,
   type PdfClassificationResult,
@@ -11,6 +12,13 @@ import {
 assert.ok(
   !JSON.stringify(GEMINI_DOCUMENT_RESPONSE_SCHEMA).includes('additionalProperties'),
   'Gemini response schema must only use keywords accepted by the Gemini API',
+);
+const geminiGenerationConfig = geminiDocumentGenerationConfig();
+assert.equal(geminiGenerationConfig.responseMimeType, 'application/json');
+assert.equal(geminiGenerationConfig.responseJsonSchema, GEMINI_DOCUMENT_RESPONSE_SCHEMA);
+assert.ok(
+  !('responseSchema' in geminiGenerationConfig),
+  'Gemini must receive full JSON Schema through responseJsonSchema, not the legacy protobuf schema field',
 );
 
 const input = (filename: string) => ({

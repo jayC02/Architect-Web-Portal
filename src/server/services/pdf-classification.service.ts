@@ -173,6 +173,11 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
   },
 } as const;
 
+export const geminiDocumentGenerationConfig = () => ({
+  responseMimeType: 'application/json',
+  responseJsonSchema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
+});
+
 const buildPrompt = (input: PdfClassificationInput) => {
   const context = [
     input.projectContext?.projectName && `Project: ${input.projectContext.projectName}`,
@@ -293,10 +298,7 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
                 { text: buildPrompt(input) },
               ],
             }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              responseSchema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
-            },
+            generationConfig: geminiDocumentGenerationConfig(),
           }),
         },
       );
