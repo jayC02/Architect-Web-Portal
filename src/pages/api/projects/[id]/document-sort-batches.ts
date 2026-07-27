@@ -11,6 +11,7 @@ import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import {
   classificationAuditForSuggestion,
+  analysisStatusForSuggestion,
   classificationDetailsFromAudit,
   classifyProjectDocumentBatch,
   DOCUMENT_ANALYSIS_PROMPT_VERSION,
@@ -165,7 +166,7 @@ export const POST: APIRoute = (context) =>
                   analysisModel: suggestion.classificationDetails?.model ?? cached?.analysisModel,
                   analysisPromptVersion: suggestion.classificationDetails?.promptVersion ?? DOCUMENT_ANALYSIS_PROMPT_VERSION,
                   analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
-                  analysisStatus: suggestion.classificationDetails?.fallbackReason ? 'PARTIAL' : 'SUCCESS',
+                  analysisStatus: analysisStatusForSuggestion(suggestion),
                   analysisResult: analysisAudit,
                   analysedAt: new Date(),
                   notes: suggestion.classificationDetails?.manualReviewRequired

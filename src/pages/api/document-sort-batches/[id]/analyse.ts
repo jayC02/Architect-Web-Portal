@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { DocumentSortBatchStatus } from '@prisma/client';
+import { DocumentSortBatchStatus, Prisma } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -9,8 +9,12 @@ import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import {
+  analysisStatusForSuggestion,
   classificationAuditForSuggestion,
   classifyProjectDocumentBatch,
+  DOCUMENT_ANALYSIS_PROMPT_VERSION,
+  DOCUMENT_ANALYSIS_SCHEMA_VERSION,
+  DOCUMENT_ANALYSIS_VERSION,
 } from '@/server/services/pdf-classification.service';
 import { requireOrganisation } from '@/server/permissions/authz';
 
@@ -54,10 +58,10 @@ export const POST: APIRoute = (context) =>
         applicationType: batch.project.stage,
       });
 
-      await prisma.$transaction(suggestions.map((suggestion, index) => {
+      await prisma.$transaction(suggestions.flatMap((suggestion, index) => {
         const item = batch.items[index];
         const audit = classificationAuditForSuggestion(suggestion);
-        return prisma.documentSortBatchItem.update({
+        const updates: Prisma.PrismaPromise<unknown>[] = [prisma.documentSortBatchItem.update({
           where: { id: item.id },
           data: {
             suggestedDocumentType: suggestion.suggestedDocumentType,
@@ -75,7 +79,27 @@ export const POST: APIRoute = (context) =>
             suitableForPlanning: suggestion.suitableForPlanning,
             suitableForBuildingWarrant: suggestion.suitableForBuildingWarrant,
           },
-        });
+        })];
+        if (item.documentId) {
+          updates.push(prisma.projectDocument.update({
+            where: { id: item.documentId },
+            data: {
+              type: suggestion.suggestedDocumentType,
+              sortSource: suggestion.source,
+              sortConfidence: suggestion.confidence,
+              sortReason: suggestion.reason,
+              analysisVersion: DOCUMENT_ANALYSIS_VERSION,
+              analysisProvider: suggestion.classificationDetails?.provider ?? 'deterministic',
+              analysisModel: suggestion.classificationDetails?.model,
+              analysisPromptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
+              analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
+              analysisStatus: analysisStatusForSuggestion(suggestion),
+              analysisResult: audit,
+              analysedAt: new Date(),
+            },
+          }));
+        }
+        return updates;
       }));
 
       await prisma.documentSortBatch.update({

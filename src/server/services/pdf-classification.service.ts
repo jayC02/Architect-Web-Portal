@@ -2,6 +2,7 @@ import { DocumentSortSource, DocumentType } from '@prisma/client';
 import { z } from 'zod';
 import {
   documentFactSchema,
+  documentFactFieldKeys,
   DOCUMENT_INTELLIGENCE_CATEGORY_KEYS,
 } from '@/lib/validation/document-intelligence';
 import {
@@ -56,9 +57,9 @@ export interface PdfClassificationProvider {
 
 export type ProjectClassificationContext = PdfClassificationInput['projectContext'];
 
-export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v1';
-export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v1';
-export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v1';
+export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
+export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v2';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v2';
 const MAX_AI_FILE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
@@ -130,23 +131,35 @@ const WARRANT_TYPES = new Set<DocumentType>([
 
 export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
   type: 'object',
-  required: ['categoryKey', 'certainty', 'manualReviewRequired', 'warnings'],
+  required: [
+    'categoryKey',
+    'certainty',
+    'detectedTitle',
+    'drawingNumber',
+    'revision',
+    'pageCount',
+    'existingOrProposed',
+    'extractedFacts',
+    'evidence',
+    'manualReviewRequired',
+    'warnings',
+    'mixedDocumentDetected',
+  ],
   properties: {
     categoryKey: { type: 'string', enum: PDF_CATEGORY_KEYS },
     certainty: { type: 'string', enum: ['high', 'medium', 'low'] },
-    detectedTitle: { type: 'string' },
-    drawingNumber: { type: 'string' },
-    revision: { type: 'string' },
-    pageCount: { type: 'integer', minimum: 1 },
+    detectedTitle: { type: ['string', 'null'] },
+    drawingNumber: { type: ['string', 'null'] },
+    revision: { type: ['string', 'null'] },
+    pageCount: { type: ['integer', 'null'] },
     existingOrProposed: { type: 'string', enum: ['existing', 'proposed', 'mixed', 'unknown'] },
     extractedFacts: {
       type: 'array',
-      maxItems: 60,
       items: {
         type: 'object',
-        required: ['fieldKey', 'value', 'evidence', 'certainty'],
+        required: ['key', 'value', 'page', 'evidence'],
         properties: {
-          fieldKey: { type: 'string', enum: [
+          key: { type: 'string', enum: [
             'project.title', 'project.typeOfWork',
             'site.addressLine1', 'site.addressLine2', 'site.townCity', 'site.postcode', 'site.localAuthority',
             'applicant.clientType', 'applicant.title', 'applicant.firstName', 'applicant.lastName',
@@ -159,24 +172,98 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
             'application.planningReference', 'evidence.listedOrConservation', 'evidence.ownership',
             'evidence.certifier',
           ] },
-          value: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
-          page: { type: 'integer', minimum: 1 },
+          value: { type: 'string' },
+          page: { type: ['integer', 'null'] },
           evidence: { type: 'string' },
-          certainty: { type: 'string', enum: ['high', 'medium', 'low'] },
         },
       },
     },
-    evidence: { type: 'string' },
+    evidence: { type: ['string', 'null'] },
     manualReviewRequired: { type: 'boolean' },
-    warnings: { type: 'array', items: { type: 'string' }, maxItems: 10 },
+    warnings: { type: 'array', items: { type: 'string' } },
     mixedDocumentDetected: { type: 'boolean' },
   },
 } as const;
 
-export const geminiDocumentGenerationConfig = () => ({
-  responseMimeType: 'application/json',
-  responseJsonSchema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
-});
+const geminiDocumentResultSchema = z.object({
+  categoryKey: z.enum(PDF_CATEGORY_KEYS),
+  certainty: certaintySchema,
+  detectedTitle: z.string().trim().max(240).nullable(),
+  drawingNumber: z.string().trim().max(120).nullable(),
+  revision: z.string().trim().max(40).nullable(),
+  pageCount: z.number().int().positive().nullable(),
+  existingOrProposed: z.enum(['existing', 'proposed', 'mixed', 'unknown']),
+  extractedFacts: z.array(z.object({
+    key: z.enum(documentFactFieldKeys),
+    value: z.string().trim().max(1000),
+    page: z.number().int().positive().nullable(),
+    evidence: z.string().trim().max(500),
+  }).strict()).max(60),
+  evidence: z.string().trim().max(500).nullable(),
+  manualReviewRequired: z.boolean(),
+  warnings: z.array(z.string().trim().max(300)).max(10),
+  mixedDocumentDetected: z.boolean(),
+}).strict();
+
+export type AiProcessingStatus = 'invalid_request' | 'provider_unavailable' | 'invalid_response';
+
+export class PdfAiProcessingError extends Error {
+  constructor(
+    public readonly aiStatus: AiProcessingStatus,
+    message: string,
+    public readonly providerHttpStatus?: number,
+    public readonly providerStatus?: string,
+  ) {
+    super(message);
+    this.name = 'PdfAiProcessingError';
+  }
+}
+
+const schemaDepth = (value: unknown, depth = 0): number => {
+  if (!value || typeof value !== 'object') return depth;
+  const values = Array.isArray(value) ? value : Object.values(value);
+  return values.reduce((maximum, child) => Math.max(maximum, schemaDepth(child, depth + 1)), depth);
+};
+
+export const validateGeminiResponseSchema = (schema: unknown) => {
+  const encoded = JSON.stringify(schema);
+  const byteLength = Buffer.byteLength(encoded);
+  if (byteLength > 12_000) throw new Error('Gemini response schema exceeds the local complexity limit.');
+  if (schemaDepth(schema) > 12) throw new Error('Gemini response schema is too deeply nested.');
+  for (const keyword of ['"$ref"', '"$defs"', '"definitions"', '"oneOf"', '"additionalProperties"']) {
+    if (encoded.includes(keyword)) throw new Error(`Gemini response schema contains unsupported keyword ${keyword}.`);
+  }
+  return { byteLength, depth: schemaDepth(schema) };
+};
+
+export const validateGeminiPdfInput = (input: Pick<PdfClassificationInput, 'mimeType' | 'bytes'>) => {
+  if (input.mimeType !== 'application/pdf') {
+    throw new PdfAiProcessingError('invalid_request', 'The uploaded file is not a PDF.');
+  }
+  if (!input.bytes.length) throw new PdfAiProcessingError('invalid_request', 'The uploaded PDF is empty.');
+  if (input.bytes.length > MAX_AI_FILE_BYTES) {
+    throw new PdfAiProcessingError('invalid_request', 'The PDF exceeds the AI classification size limit.');
+  }
+  const prefix = input.bytes.subarray(0, 32).toString('ascii').trimStart();
+  if (/^(?:data:|JVBERi0)/i.test(prefix)) {
+    throw new PdfAiProcessingError('invalid_request', 'The PDF payload was encoded more than once.');
+  }
+  if (/^(?:<!doctype|<html)/i.test(prefix)) {
+    throw new PdfAiProcessingError('invalid_request', 'The uploaded file contains HTML rather than PDF data.');
+  }
+  if (!input.bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+    throw new PdfAiProcessingError('invalid_request', 'The uploaded file does not have a valid PDF signature.');
+  }
+  return { byteLength: input.bytes.length, mimeType: input.mimeType, signature: '%PDF-' as const };
+};
+
+export const geminiDocumentGenerationConfig = () => {
+  validateGeminiResponseSchema(GEMINI_DOCUMENT_RESPONSE_SCHEMA);
+  return {
+    responseMimeType: 'application/json',
+    responseJsonSchema: GEMINI_DOCUMENT_RESPONSE_SCHEMA,
+  };
+};
 
 const buildPrompt = (input: PdfClassificationInput) => {
   const context = [
@@ -234,9 +321,27 @@ const parseStructuredResult = (text: string) => {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error('AI provider returned malformed JSON.');
+    throw new PdfAiProcessingError('invalid_response', 'The AI provider returned malformed JSON.');
   }
-  return pdfClassificationResultSchema.parse(parsed);
+  const result = geminiDocumentResultSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new PdfAiProcessingError('invalid_response', 'The AI provider returned an unexpected response.');
+  }
+  return pdfClassificationResultSchema.parse({
+    ...result.data,
+    detectedTitle: result.data.detectedTitle ?? undefined,
+    drawingNumber: result.data.drawingNumber ?? undefined,
+    revision: result.data.revision ?? undefined,
+    pageCount: result.data.pageCount ?? undefined,
+    evidence: result.data.evidence ?? undefined,
+    extractedFacts: result.data.extractedFacts.map((fact) => ({
+      fieldKey: fact.key,
+      value: fact.value,
+      page: fact.page ?? undefined,
+      evidence: fact.evidence,
+      certainty: result.data.certainty,
+    })),
+  });
 };
 
 const timeoutSignal = () => {
@@ -260,11 +365,50 @@ const normalizeGeminiModel = (value: string) => {
   return normalized.replace(/[\s_]+/g, '-');
 };
 
-const geminiErrorMessage = async (response: Response) => {
-  const payload = await response.json().catch(() => null) as { error?: { message?: unknown } } | null;
-  const message = payload?.error?.message;
-  if (typeof message !== 'string') return '';
-  return message.replace(/\s+/g, ' ').trim().slice(0, 300);
+const geminiErrorDetails = async (response: Response) => {
+  const payload = await response.json().catch(() => null) as {
+    error?: {
+      message?: unknown;
+      status?: unknown;
+      details?: Array<{ fieldViolations?: Array<{ field?: unknown; description?: unknown }> }>;
+    };
+  } | null;
+  const message = typeof payload?.error?.message === 'string'
+    ? payload.error.message.replace(/\s+/g, ' ').trim().slice(0, 500)
+    : '';
+  const providerStatus = typeof payload?.error?.status === 'string' ? payload.error.status : undefined;
+  const fieldViolations = payload?.error?.details
+    ?.flatMap((detail) => detail.fieldViolations ?? [])
+    .map((violation) => ({
+      field: typeof violation.field === 'string' ? violation.field.slice(0, 200) : undefined,
+      description: typeof violation.description === 'string' ? violation.description.slice(0, 300) : undefined,
+    }));
+  return { message, providerStatus, fieldViolations };
+};
+
+export const buildGeminiGenerateContentRequest = (input: PdfClassificationInput) => {
+  const pdf = validateGeminiPdfInput(input);
+  const generationConfig = geminiDocumentGenerationConfig();
+  return {
+    body: {
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: 'application/pdf', data: input.bytes.toString('base64') } },
+          { text: buildPrompt(input) },
+        ],
+      }],
+      generationConfig,
+    },
+    diagnostics: {
+      apiVersion: 'v1beta',
+      requestMode: 'generateContent',
+      structuredOutput: true,
+      schemaBytes: validateGeminiResponseSchema(GEMINI_DOCUMENT_RESPONSE_SCHEMA).byteLength,
+      pdfBytes: pdf.byteLength,
+      mimeType: pdf.mimeType,
+    },
+  };
 };
 
 class GeminiPdfClassificationProvider implements PdfClassificationProvider {
@@ -278,11 +422,13 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
   }
 
   async classifyDocument(input: PdfClassificationInput) {
+    const request = buildGeminiGenerateContentRequest(input);
     const models = [...new Set([this.model, 'gemini-3.1-flash-lite'])];
     const failures: string[] = [];
     for (const model of models) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        endpoint,
         {
           method: 'POST',
           headers: {
@@ -290,16 +436,7 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
             'x-goog-api-key': this.apiKey,
           },
           signal: timeoutSignal(),
-          body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [
-                { inlineData: { mimeType: input.mimeType, data: input.bytes.toString('base64') } },
-                { text: buildPrompt(input) },
-              ],
-            }],
-            generationConfig: geminiDocumentGenerationConfig(),
-          }),
+          body: JSON.stringify(request.body),
         },
       );
 
@@ -311,17 +448,39 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
         const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
         return parseStructuredResult(text);
       }
-      const providerMessage = await geminiErrorMessage(response);
-      failures.push(`${model}: HTTP ${response.status}${providerMessage ? `: ${providerMessage}` : ''}`);
+      const providerError = await geminiErrorDetails(response);
+      failures.push(`${model}: HTTP ${response.status}${providerError.message ? `: ${providerError.message}` : ''}`);
+      console.error('Gemini document request rejected', {
+        endpoint,
+        model,
+        responseStatus: response.status,
+        providerStatus: providerError.providerStatus,
+        providerMessage: providerError.message,
+        fieldViolations: providerError.fieldViolations,
+        ...request.diagnostics,
+      });
       const modelUnavailable =
         response.status === 404 ||
-        (response.status === 400 && /model.+(?:not found|not supported|unavailable)/i.test(providerMessage));
+        (response.status === 400 && /model.+(?:not found|not supported|unavailable)/i.test(providerError.message));
       const canRetryAlias = modelUnavailable && model !== models.at(-1);
       if (!canRetryAlias) {
-        throw new Error(`Gemini request failed (${failures.join(' | ')}).`);
+        const status: AiProcessingStatus = response.status === 400
+          ? 'invalid_request'
+          : 'provider_unavailable';
+        throw new PdfAiProcessingError(
+          status,
+          status === 'invalid_request'
+            ? 'The AI request format was rejected. A fallback classification was used.'
+            : 'The AI provider was unavailable. A fallback classification was used.',
+          response.status,
+          providerError.providerStatus,
+        );
       }
     }
-    throw new Error('Gemini document classification was unavailable.');
+    throw new PdfAiProcessingError(
+      'provider_unavailable',
+      `Gemini document classification was unavailable (${failures.join(' | ')}).`,
+    );
   }
 }
 
@@ -398,24 +557,30 @@ const humanEvidence = (result: PdfClassificationResult) => {
 const withFallbackDetails = (
   suggestion: DocumentSortSuggestion,
   fallbackReason: string | undefined,
+  aiStatus: AiProcessingStatus = 'provider_unavailable',
+  providerHttpStatus?: number,
+  providerStatus?: string,
 ): DocumentSortSuggestion => {
-  const aiFailure = Boolean(fallbackReason && /failed|timed out/i.test(fallbackReason));
+  const usedFallback = Boolean(fallbackReason);
   return {
     ...suggestion,
     classificationDetails: {
+      aiStatus,
       categoryKey: TYPE_TO_CATEGORY[suggestion.suggestedDocumentType] ?? 'other',
       certainty: suggestion.confidence >= 0.8 ? 'high' : suggestion.confidence >= 0.55 ? 'medium' : 'low',
       evidence: suggestion.reason,
       warnings: [
         ...(suggestion.confidence < 0.55 ? ['The document could not be identified confidently.'] : []),
-        ...(aiFailure ? ['AI analysis was unavailable for this document; the fallback result needs checking.'] : []),
+        ...(usedFallback ? ['A deterministic fallback suggestion was used; please check this document.'] : []),
       ],
-      manualReviewRequired: suggestion.confidence < 0.55 || aiFailure,
+      manualReviewRequired: suggestion.confidence < 0.55 || usedFallback,
       promptVersion: 'deterministic-sorter-v1',
       existingOrProposed: 'unknown',
       extractedFacts: [],
       mixedDocumentDetected: false,
       fallbackReason,
+      providerHttpStatus,
+      providerStatus,
     },
   };
 };
@@ -428,11 +593,26 @@ const classifyOne = async (
 ): Promise<DocumentSortSuggestion> => {
   if (!provider) return withFallbackDetails(fallback, 'No AI document provider is configured.');
   if (input.mimeType !== 'application/pdf' || !input.bytes) {
-    return withFallbackDetails(fallback, 'The document is not an available PDF, so deterministic sorting was used.');
+    return withFallbackDetails(
+      fallback,
+      'The document is not an available PDF, so deterministic sorting was used.',
+      'invalid_request',
+    );
   }
   const bytes = Buffer.isBuffer(input.bytes) ? input.bytes : Buffer.from(input.bytes);
-  if (bytes.length > MAX_AI_FILE_BYTES) {
-    return withFallbackDetails(fallback, 'The PDF exceeds the AI classification size limit.');
+  try {
+    validateGeminiPdfInput({ mimeType: input.mimeType, bytes });
+  } catch (error) {
+    if (error instanceof PdfAiProcessingError) {
+      return withFallbackDetails(
+        fallback,
+        `${error.message} Deterministic sorting was used.`,
+        error.aiStatus,
+        error.providerHttpStatus,
+        error.providerStatus,
+      );
+    }
+    return withFallbackDetails(fallback, 'The PDF could not be validated. Deterministic sorting was used.', 'invalid_request');
   }
 
   try {
@@ -461,6 +641,7 @@ const classifyOne = async (
       suitableForPlanning: PLANNING_TYPES.has(documentType),
       suitableForBuildingWarrant: WARRANT_TYPES.has(documentType),
       classificationDetails: {
+        aiStatus: 'succeeded',
         categoryKey: result.categoryKey,
         certainty: result.certainty,
         evidence: humanEvidence(result),
@@ -481,12 +662,27 @@ const classifyOne = async (
       },
     };
   } catch (error) {
-    const fallbackReason = error instanceof DOMException && error.name === 'TimeoutError'
-      ? 'AI classification timed out.'
-      : error instanceof Error && /^(Gemini|OpenAI)/.test(error.message)
-        ? error.message
-        : 'AI classification failed or returned an invalid response.';
-    return withFallbackDetails(fallback, fallbackReason);
+    if (error instanceof PdfAiProcessingError) {
+      return withFallbackDetails(
+        fallback,
+        error.message,
+        error.aiStatus,
+        error.providerHttpStatus,
+        error.providerStatus,
+      );
+    }
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      return withFallbackDetails(
+        fallback,
+        'AI analysis timed out. A fallback classification was used.',
+        'provider_unavailable',
+      );
+    }
+    return withFallbackDetails(
+      fallback,
+      'The AI response could not be validated. A fallback classification was used.',
+      'invalid_response',
+    );
   }
 };
 
@@ -545,10 +741,26 @@ export const classificationAuditForSuggestion = (suggestion: DocumentSortSuggest
         extractedFacts: suggestion.classificationDetails.extractedFacts ?? [],
         mixedDocumentDetected: suggestion.classificationDetails.mixedDocumentDetected ?? false,
         ...(suggestion.classificationDetails.fallbackReason ? { fallbackReason: suggestion.classificationDetails.fallbackReason } : {}),
+        ...(suggestion.classificationDetails.aiStatus ? { aiStatus: suggestion.classificationDetails.aiStatus } : {}),
+        ...(suggestion.classificationDetails.providerHttpStatus ? { providerHttpStatus: suggestion.classificationDetails.providerHttpStatus } : {}),
+        ...(suggestion.classificationDetails.providerStatus ? { providerStatus: suggestion.classificationDetails.providerStatus } : {}),
       }
     : null,
   analysedAt: new Date().toISOString(),
 });
+
+export const analysisStatusForSuggestion = (suggestion: DocumentSortSuggestion) => {
+  switch (suggestion.classificationDetails?.aiStatus) {
+    case 'invalid_request':
+      return 'INVALID_REQUEST';
+    case 'provider_unavailable':
+      return 'PROVIDER_UNAVAILABLE';
+    case 'invalid_response':
+      return 'INVALID_RESPONSE';
+    default:
+      return suggestion.classificationDetails?.fallbackReason ? 'PARTIAL' : 'SUCCESS';
+  }
+};
 
 export const classificationDetailsFromAudit = (value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;

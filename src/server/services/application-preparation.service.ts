@@ -216,7 +216,9 @@ export const buildApplicationPreparationDraft = async (
 
   const locationPlans = documents.filter((document) => document.type === DocumentType.LOCATION_PLAN);
   const unresolvedClassifications = documents
-    .filter((document) => document.status === DocumentStatus.IN_REVIEW || document.analysisStatus === 'PARTIAL')
+    .filter((document) =>
+      document.status === DocumentStatus.IN_REVIEW
+      || Boolean(document.analysisStatus && document.analysisStatus !== 'SUCCESS'))
     .map((document) => document.id);
   if (locationPlans.length > 1) {
     unresolvedClassifications.push(...locationPlans.map((document) => document.id));
@@ -225,7 +227,8 @@ export const buildApplicationPreparationDraft = async (
     version: 1,
     generatedAt: new Date().toISOString(),
     analysedDocumentCount: documents.filter((document) => document.analysisResult).length,
-    failedDocumentCount: documents.filter((document) => document.analysisStatus === 'PARTIAL' || document.analysisStatus === 'FAILED').length,
+    failedDocumentCount: documents.filter((document) =>
+      Boolean(document.analysisStatus && document.analysisStatus !== 'SUCCESS')).length,
     fields,
     conflicts,
     unresolvedQuestions,

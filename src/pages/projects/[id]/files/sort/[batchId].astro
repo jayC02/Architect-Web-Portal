@@ -36,14 +36,14 @@ const isAccepted = batch.status === DocumentSortBatchStatus.ACCEPTED;
 const isProcessing = batch.status === DocumentSortBatchStatus.ANALYSING || batch.status === DocumentSortBatchStatus.UPLOADED;
 const itemView = batch.items.map((item) => {
   const details = classificationDetailsFromAudit(item.matchedRules);
-  const processingFailed = Boolean(details?.fallbackReason && /failed|timed out/i.test(details.fallbackReason));
+  const fallbackUsed = Boolean(details?.fallbackReason || (details?.aiStatus && details.aiStatus !== 'succeeded'));
   const needsAttention = Boolean(
-    processingFailed ||
+    fallbackUsed ||
     details?.manualReviewRequired ||
     details?.categoryKey === 'unsure' ||
     item.confidence < 0.55,
   );
-  return { item, details, processingFailed, needsAttention };
+  return { item, details, fallbackUsed, needsAttention };
 });
 const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
 ---
@@ -104,13 +104,11 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
     </div>
 
     <div>
-      {itemView.map(({ item, details, processingFailed, needsAttention }) => {
+      {itemView.map(({ item, details, fallbackUsed, needsAttention }) => {
         const documentHref = item.document?.id ? `/api/documents/${item.document.id}` : '#';
         const selectedType = documentGroupType(item.finalDocumentType ?? item.suggestedDocumentType);
-        const statusLabel = isProcessing ? 'Analysing' : processingFailed ? 'Processing failed' : needsAttention ? 'Needs attention' : 'Ready';
-        const statusClass = processingFailed
-          ? 'text-red-700'
-          : needsAttention
+        const statusLabel = isProcessing ? 'Analysing' : fallbackUsed ? 'Suggested using fallback' : needsAttention ? 'Needs attention' : 'Ready';
+        const statusClass = fallbackUsed || needsAttention
             ? 'text-amber-800'
             : 'text-stone-600';
 

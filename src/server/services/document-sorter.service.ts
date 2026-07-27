@@ -24,6 +24,7 @@ export type DocumentSortSuggestion = {
   suitableForPlanning: boolean;
   suitableForBuildingWarrant: boolean;
   classificationDetails?: {
+    aiStatus?: 'succeeded' | 'invalid_request' | 'provider_unavailable' | 'invalid_response';
     categoryKey: string;
     certainty: 'high' | 'medium' | 'low';
     evidence?: string;
@@ -33,6 +34,8 @@ export type DocumentSortSuggestion = {
     model?: string;
     promptVersion: string;
     fallbackReason?: string;
+    providerHttpStatus?: number;
+    providerStatus?: string;
     pageCount?: number;
     existingOrProposed?: 'existing' | 'proposed' | 'mixed' | 'unknown';
     extractedFacts?: Array<{
