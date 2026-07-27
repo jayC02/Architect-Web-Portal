@@ -14,6 +14,7 @@ import {
   buildAutomationJobSnapshot,
   ensureAutomationApplicationRecord,
 } from '@/server/services/automation-jobs.service';
+import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
@@ -79,6 +80,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
     select: { id: true, title: true, type: true, status: true },
   });
+  await persistApplicationPreparationDraft(job.id, organisation.id);
 
   return jsonResponse(201, {
     job,

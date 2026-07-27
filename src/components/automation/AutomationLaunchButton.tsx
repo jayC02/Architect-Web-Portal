@@ -42,7 +42,7 @@ export default function AutomationLaunchButton({ projectId, type, planningApplic
   );
 }
 
-export function ExistingAutomationJobButton({ jobId }: { jobId: string }) {
+export function ExistingAutomationJobButton({ jobId, label = 'Open in desktop app' }: { jobId: string; label?: string }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,7 +63,7 @@ export function ExistingAutomationJobButton({ jobId }: { jobId: string }) {
     <div>
       <button type="button" className="btn btn-primary gap-2" disabled={working} onClick={() => void open()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-        {working ? 'Opening...' : 'Open in desktop app'}
+        {working ? 'Opening...' : label}
       </button>
       {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
     </div>

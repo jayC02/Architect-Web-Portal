@@ -72,7 +72,6 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   requireValue('applicant.firstName', snapshot.applicant.firstName, 'Confirm the applicant first name.');
   requireValue('applicant.lastName', snapshot.applicant.lastName, 'Confirm the applicant last name.');
   requireValue('applicant.email', snapshot.applicant.email, 'Add the applicant email address.');
-  requireValue('applicant.phone', snapshot.applicant.phone, 'Add the applicant phone number.');
   requireValue('applicant.address.addressLine1', snapshot.applicant.address.addressLine1, 'Add the applicant address.');
   requireValue('applicant.address.townCity', snapshot.applicant.address.townCity, 'Add the applicant town or city.');
   requireValue('applicant.address.postcode', snapshot.applicant.address.postcode, 'Add the applicant postcode.');
@@ -96,6 +95,13 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
       field: 'documents.locationPlan',
       message: 'Confirm which uploaded document is the Location Plan.',
       severity: 'warning',
+    });
+  } else if (locationPlans.length > 1) {
+    missing.push({
+      code: 'multiple_location_plans',
+      field: 'documents.locationPlan',
+      message: 'Choose one current Location Plan and reclassify the others.',
+      severity: 'error',
     });
   }
 

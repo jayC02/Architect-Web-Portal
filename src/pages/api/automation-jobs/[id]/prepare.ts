@@ -10,6 +10,7 @@ import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
+import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
 
 const refreshableStatuses = [
   AutomationJobStatus.DRAFT,
@@ -52,7 +53,7 @@ export const POST: APIRoute = (context) =>
     });
 
     const status = snapshot.preflight.status === 'READY'
-      ? AutomationJobStatus.PREFLIGHT_REQUIRED
+      ? AutomationJobStatus.READY
       : AutomationJobStatus.NEEDS_INPUT;
     await prisma.automationJob.update({
       where: { id: job.id },
@@ -68,11 +69,12 @@ export const POST: APIRoute = (context) =>
         error: null,
       },
     });
+    await persistApplicationPreparationDraft(job.id, organisation.id);
 
     return jsonResponse(200, {
       ok: true,
       status,
       preflight: snapshot.preflight,
-      redirectTo: `/automation-jobs?job=${job.id}`,
+      redirectTo: `/automation-job/${job.id}`,
     });
   }, context);

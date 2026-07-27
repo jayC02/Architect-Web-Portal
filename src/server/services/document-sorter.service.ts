@@ -33,6 +33,16 @@ export type DocumentSortSuggestion = {
     model?: string;
     promptVersion: string;
     fallbackReason?: string;
+    pageCount?: number;
+    existingOrProposed?: 'existing' | 'proposed' | 'mixed' | 'unknown';
+    extractedFacts?: Array<{
+      fieldKey: string;
+      value: string | number | boolean;
+      page?: number;
+      evidence: string;
+      certainty: 'high' | 'medium' | 'low';
+    }>;
+    mixedDocumentDetected?: boolean;
   };
 };
 

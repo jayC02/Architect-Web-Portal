@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
+import { clientIdentityLabel, clientStructuredAddress } from '@/lib/clients/display';
 
 type Variant =
   | 'dashboard'
@@ -569,7 +570,9 @@ function DirectoryDrawer({ title, description, onClose, children }: { title: str
 function ClientDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; onClose: () => void; onEdit: (client: AnyRecord) => void }) {
   if (drawer.mode === 'view' && drawer.item) {
     const client = drawer.item;
-    return <DirectoryDrawer title={client.name} description="Client profile linked into project records." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Email" value={client.email || 'No email'} /><DetailRow label="Phone" value={client.phone || 'No phone'} /><DetailRow label="Address" value={client.address || 'No address'} /><DetailRow label="Projects" value={`${client._count?.projects ?? 0} project${(client._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={client.notes || 'No notes'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(client)}>Edit client</button></div></DirectoryDrawer>;
+    const identity = clientIdentityLabel(client);
+    const address = clientStructuredAddress(client);
+    return <DirectoryDrawer title={client.name} description="Client profile linked into project records." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Client" value={identity || 'Individual'} /><DetailRow label="Email" value={client.email || 'No email'} /><DetailRow label="Phone" value={client.phone || 'No phone'} /><DetailRow label="Address" value={address} /><DetailRow label="Projects" value={`${client._count?.projects ?? 0} project${(client._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={client.notes || 'No notes'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(client)}>Edit client</button></div></DirectoryDrawer>;
   }
   const client = drawer.item;
   const editing = drawer.mode === 'edit';

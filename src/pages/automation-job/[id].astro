@@ -1,12 +1,15 @@
 ---
-import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, FolderOpen, RefreshCw } from 'lucide-react';
+import { AutomationJobStatus, AutomationJobType, DocumentStatus, DocumentType } from '@prisma/client';
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, FolderOpen } from 'lucide-react';
 import { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
 import AppShell from '@/components/layout/AppShell.astro';
+import { clientDisplayName } from '@/lib/clients/display';
 import { prisma } from '@/lib/db/prisma';
 import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
+import { applicationPreparationDraftSchema } from '@/lib/validation/document-intelligence';
+import { buildApplicationPreparationDraft } from '@/server/services/application-preparation.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -15,7 +18,7 @@ if (!id) return Astro.redirect('/automation-jobs');
 const job = await prisma.automationJob.findFirst({
   where: { id, organisationId: auth.organisation.id },
   include: {
-    project: { select: { id: true, name: true, internalReference: true } },
+    project: { include: { client: true, site: true } },
     createdBy: { select: { name: true, email: true } },
   },
 });
@@ -23,245 +26,283 @@ if (!job) return Astro.redirect('/automation-jobs');
 
 const parsed = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
 const snapshot = parsed.success ? parsed.data : null;
-const certifierPresets = snapshot?.buildingWarrant
-  ? await prisma.organisationCertifierPreset.findMany({
-      where: { organisationId: auth.organisation.id },
-      orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
-      select: { id: true, displayName: true },
-    })
-  : [];
-type Address = { addressLine1: string | null; addressLine2: string | null; townCity: string | null; postcode: string | null; country: string | null };
-const addressText = (address?: Address) => address
-  ? [address.addressLine1, address.addressLine2, address.townCity, address.postcode, address.country].filter(Boolean).join(', ')
-  : 'Not set';
+const savedDraft = applicationPreparationDraftSchema.safeParse(job.preparationDraft);
+const draft = snapshot
+  ? savedDraft.success ? savedDraft.data : await buildApplicationPreparationDraft(job.id, auth.organisation.id)
+  : null;
+const [defaults, documents, certifierPresets] = await Promise.all([
+  prisma.organisationDefaults.findUnique({ where: { organisationId: auth.organisation.id } }),
+  prisma.projectDocument.findMany({
+    where: { organisationId: auth.organisation.id, projectId: job.projectId },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+  }),
+  job.type === AutomationJobType.BUILDING_WARRANT
+    ? prisma.organisationCertifierPreset.findMany({
+        where: { organisationId: auth.organisation.id },
+        orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
+      })
+    : Promise.resolve([]),
+]);
+
 const appLabel = job.type === AutomationJobType.BUILDING_WARRANT
   ? 'Building Warrant'
   : job.type === AutomationJobType.HOUSEHOLDER_PLANNING ? 'Householder Application' : 'Planning Application';
-const canRefresh = new Set<AutomationJobStatus>([
-  AutomationJobStatus.DRAFT,
-  AutomationJobStatus.PREFLIGHT_REQUIRED,
-  AutomationJobStatus.NEEDS_INPUT,
-  AutomationJobStatus.STALE,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED,
+const currentApplicant = job.project.client;
+const currentSite = job.project.site;
+const suggestion = (key: string, current: unknown): string | number => {
+  if (current !== null && current !== undefined && String(current).trim() !== '') {
+    return typeof current === 'number' ? current : String(current);
+  }
+  const field = draft?.fields[key];
+  if (field?.status !== 'suggested' || field.value === null) return '';
+  return typeof field.value === 'number' ? field.value : String(field.value);
+};
+const fieldNote = (key: string) => {
+  const field = draft?.fields[key];
+  if (!field || !field.sources.length) return null;
+  const source = field.sources[0];
+  const location = `${source.filename}${source.page ? `, page ${source.page}` : ''}`;
+  return field.status === 'conflict'
+    ? `Conflicting information found in ${location}: ${source.evidence}`
+    : `Found in ${location}`;
+};
+const fieldSource = (key: string) => draft?.fields[key]?.sources[0] ?? null;
+const human = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const attentionDocumentIds = new Set(draft?.documentSummary.unresolvedClassifications ?? []);
+const blockers = snapshot?.preflight.missing.length ?? 0;
+const isReady = job.status === AutomationJobStatus.READY && snapshot?.preflight.status === 'READY';
+const canEdit = !new Set<AutomationJobStatus>([
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+  AutomationJobStatus.COMPLETED,
 ]).has(job.status);
-const canMarkReady = job.status === AutomationJobStatus.PREFLIGHT_REQUIRED && snapshot?.preflight.status === 'READY';
-const yesNo = (value: boolean | null | undefined) => value === true ? 'true' : 'false';
+const preparation = snapshot?.buildingWarrant?.unusualAnswers;
+const planning = snapshot?.planning?.answers;
+const documentTypes = Object.values(DocumentType);
+const showListedConfirmation = Boolean(
+  draft?.unresolvedQuestions.some((item) => item.fieldKey.includes('listedBuilding'))
+  || preparation?.listedBuildingOrConservationArea,
+);
+const suggestedClientName = currentApplicant
+  ? clientDisplayName(currentApplicant)
+  : String(
+      suggestion('applicant.companyName', null)
+      || [suggestion('applicant.firstName', null), suggestion('applicant.lastName', null)].filter(Boolean).join(' '),
+    );
 ---
-<AppShell title={`Review ${job.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+<AppShell title={`Prepare ${job.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mx-auto max-w-6xl">
     <a class="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink" href="/automation-jobs">
       <ArrowLeft size={16} />Back to desktop automation
     </a>
     <header class="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Prepared application</p>
-        <h1 class="mt-2 text-3xl font-semibold tracking-tight">{job.project.name}</h1>
-        <p class="mt-2 text-sm text-stone-600">{appLabel} · {job.project.internalReference ? `Ref ${job.project.internalReference}` : 'No internal reference'}</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Application preparation</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight">Prepare {appLabel}</h1>
+        <p class="mt-2 text-sm text-stone-600">{job.project.name}{job.project.internalReference ? ` · Ref ${job.project.internalReference}` : ''}</p>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.projectId}`}><FolderOpen size={16} />Open project</a>
-        {canRefresh && (
-          <form data-api-form data-action={`/api/automation-jobs/${job.id}/prepare`} data-method="POST">
-            <button class="btn btn-secondary inline-flex items-center gap-2"><RefreshCw size={16} />Prepare updated job</button>
-          </form>
-        )}
-        {canMarkReady && (
-          <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH">
-            <input type="hidden" name="status" value="READY" />
-            <button class="btn btn-primary">Mark ready</button>
-          </form>
-        )}
-        {job.status === AutomationJobStatus.READY && <ExistingAutomationJobButton client:load jobId={job.id} />}
-        {job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW && (
-          <form
-            data-api-form
-            data-action={`/api/automation-jobs/${job.id}`}
-            data-method="PATCH"
-            data-confirm="Confirm that you have reviewed the government portal form. This completes the desktop job but does not mark the application as submitted."
-          >
-            <input type="hidden" name="status" value="COMPLETED" />
-            <button class="btn btn-primary">Confirm final review</button>
-          </form>
-        )}
-      </div>
+      <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.projectId}`}><FolderOpen size={16} />Open project</a>
     </header>
 
-    {!snapshot ? (
+    {!snapshot || !draft ? (
       <section class="panel mt-6 rounded-lg p-6">
-        <div class="flex gap-3">
-          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-700" />
-          <div>
-            <h2 class="font-semibold">Legacy prepared job</h2>
-            <p class="mt-1 text-sm leading-6 text-stone-600">This job uses snapshot v1. It remains available for compatibility, but some details may still need to be entered in the desktop app.</p>
-          </div>
-        </div>
+        <h2 class="font-semibold">Manual desktop review available</h2>
+        <p class="mt-2 text-sm text-stone-600">This older job cannot use the consolidated preparation page. It remains available through the desktop app.</p>
       </section>
     ) : (
-      <>
-        <section class="panel mt-6 rounded-lg p-6">
+      <form
+        class="mt-6 grid gap-5"
+        enctype="multipart/form-data"
+        data-api-form
+        data-field-errors
+        data-action={`/api/automation-jobs/${job.id}/preparation`}
+        data-method="PATCH"
+      >
+        <section class="panel rounded-lg p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 class="text-xl font-semibold">Preflight</h2>
-              <p class="mt-1 text-sm text-stone-600">Only unresolved or unusual information needs your attention.</p>
+              <h2 class="text-xl font-semibold">Information prepared from your documents</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
+                We analysed {draft.analysedDocumentCount} document{draft.analysedDocumentCount === 1 ? '' : 's'} and combined the results with your existing project, client, site and practice information.
+              </p>
             </div>
-            <p class:list={['text-sm font-semibold', snapshot.preflight.status === 'READY' ? 'text-emerald-800' : 'text-amber-800']}>
-              {snapshot.preflight.status === 'READY' ? 'Ready for final review' : `${snapshot.preflight.missing.length} item(s) need input`}
-            </p>
+            <div class:list={['flex items-center gap-2 text-sm font-semibold', blockers ? 'text-amber-800' : 'text-emerald-800']}>
+              {blockers ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
+              {blockers ? `${blockers} detail${blockers === 1 ? '' : 's'} need attention` : 'Prepared'}
+            </div>
           </div>
-          {snapshot.preflight.missing.length ? (
-            <div class="mt-5 divide-y divide-stone-100 border-y border-stone-100">
-              {snapshot.preflight.missing.map((issue) => (
-                <div class="flex gap-3 py-3">
-                  <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-700" />
-                  <div><p class="text-sm font-semibold">{issue.field}</p><p class="mt-0.5 text-sm text-stone-600">{issue.message}</p></div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p class="mt-5 flex items-center gap-2 text-sm font-semibold text-emerald-800"><CheckCircle2 size={17} />All deterministic preflight checks passed.</p>
+          {draft.failedDocumentCount > 0 && (
+            <p class="mt-4 border-l-2 border-amber-500 pl-3 text-sm text-stone-600">
+              {draft.failedDocumentCount} document{draft.failedDocumentCount === 1 ? '' : 's'} could not be fully analysed. Their classifications can still be corrected below.
+            </p>
           )}
         </section>
 
-        {(snapshot.planning?.recordId || snapshot.buildingWarrant?.recordId) && (
-          <section class="panel mt-6 rounded-lg p-6">
-            <div class="max-w-3xl">
-              <h2 class="text-xl font-semibold">Application details</h2>
-              <p class="mt-1 text-sm leading-6 text-stone-600">
-                Complete only the project-specific information. Organisation defaults, agent details and reviewed documents are reused automatically.
-              </p>
-            </div>
-
-            {snapshot.planning?.recordId && (
-              <form class="mt-6 grid gap-5" data-api-form data-field-errors data-action={`/api/planning/${snapshot.planning.recordId}/preparation`} data-method="PATCH">
-                <label class="block">
-                  <span class="label">Description of proposed work</span>
-                  <textarea name="description" rows="4" maxlength="500" class="field" required>{snapshot.planning.description ?? ''}</textarea>
-                  <span data-field-error="description" class="mt-1 hidden text-sm text-red-700"></span>
-                </label>
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <label class="block">
-                    <span class="label">Sole owner of all land</span>
-                    <select name="soleOwner" class="field" required>
-                      <option value="true" selected={snapshot.planning.answers.soleOwner === true}>Yes</option>
-                      <option value="false" selected={snapshot.planning.answers.soleOwner !== true}>No</option>
-                    </select>
-                  </label>
-                  <label class="block">
-                    <span class="label">Land is part of an agricultural holding</span>
-                    <select name="agriculturalHolding" class="field" required>
-                      <option value="false" selected={snapshot.planning.answers.agriculturalHolding !== true}>No</option>
-                      <option value="true" selected={snapshot.planning.answers.agriculturalHolding === true}>Yes</option>
-                    </select>
-                  </label>
-                </div>
-                <details class="rounded-lg border border-stone-200 p-4">
-                  <summary class="cursor-pointer text-sm font-semibold">Unusual application details</summary>
-                  <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    <label class="block"><span class="label">Discussed with planning authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!snapshot.planning.answers.discussedWithPlanningAuthority}>No</option><option value="true" selected={snapshot.planning.answers.discussedWithPlanningAuthority}>Yes</option></select></label>
-                    <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!snapshot.planning.answers.treesOnOrAdjacentToSite}>No</option><option value="true" selected={snapshot.planning.answers.treesOnOrAdjacentToSite}>Yes</option></select></label>
-                    <label class="block"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!snapshot.planning.answers.newOrAlteredVehicleAccess}>No</option><option value="true" selected={snapshot.planning.answers.newOrAlteredVehicleAccess}>Yes</option></select></label>
-                    <label class="block"><span class="label">Current parking spaces</span><input name="currentParkingSpaces" type="number" min="0" class="field" value={snapshot.planning.answers.currentParkingSpaces ?? ''} /></label>
-                    <label class="block"><span class="label">Proposed parking spaces</span><input name="proposedParkingSpaces" type="number" min="0" class="field" value={snapshot.planning.answers.proposedParkingSpaces ?? ''} /></label>
-                  </div>
-                </details>
-                <div class="flex flex-wrap items-center gap-3">
-                  <button class="btn btn-primary">Save application details</button>
-                  <p data-form-status class="text-sm text-stone-500"></p>
-                </div>
-              </form>
-            )}
-
-            {snapshot.buildingWarrant?.recordId && (
-              <form class="mt-6 grid gap-5" data-api-form data-field-errors data-action={`/api/building-warrant/${snapshot.buildingWarrant.recordId}/preparation`} data-method="PATCH">
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <label class="block sm:col-span-2"><span class="label">Description of work</span><textarea name="description" rows="4" maxlength="2000" class="field" required>{snapshot.buildingWarrant.description ?? ''}</textarea><span data-field-error="description" class="mt-1 hidden text-sm text-red-700"></span></label>
-                  <label class="block"><span class="label">Type of work</span><select name="presetKey" class="field">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === snapshot.buildingWarrant?.presetKey}>{item.label}</option>)}</select></label>
-                  <label class="block"><span class="label">Estimated work value</span><input name="estimatedValue" type="number" min="0" step="0.01" class="field" value={snapshot.buildingWarrant.estimatedValue ?? ''} /></label>
-                  <label class="block"><span class="label">Current use</span><input name="currentUse" maxlength="160" class="field" value={snapshot.buildingWarrant.currentUse ?? ''} /></label>
-                  <label class="block"><span class="label">Proposed use</span><input name="proposedUse" maxlength="160" class="field" value={snapshot.buildingWarrant.proposedUse ?? ''} /></label>
-                  <label class="block sm:col-span-2"><span class="label">Approved certifier of design</span><select name="selectedCertifierPresetId" class="field"><option value="">No design certificate</option>{certifierPresets.map((preset) => <option value={preset.id} selected={preset.id === snapshot.buildingWarrant?.certifier?.presetId}>{preset.displayName}</option>)}</select></label>
-                </div>
-                <details class="rounded-lg border border-stone-200 p-4">
-                  <summary class="cursor-pointer text-sm font-semibold">Unusual application details</summary>
-                  <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    {[
-                      ['applicantIsOwner', 'Applicant is owner', snapshot.buildingWarrant.unusualAnswers.applicantIsOwner],
-                      ['applicationIsStaged', 'Application is staged', snapshot.buildingWarrant.unusualAnswers.applicationIsStaged],
-                      ['intendedLifeFiveYearsOrLess', 'Intended life is five years or less', snapshot.buildingWarrant.unusualAnswers.intendedLifeFiveYearsOrLess],
-                      ['fireAndRescueServiceEnforcingAuthority', 'Fire and Rescue Service is enforcing authority', snapshot.buildingWarrant.unusualAnswers.fireAndRescueServiceEnforcingAuthority],
-                      ['listedBuildingOrConservationArea', 'Listed building or conservation area', snapshot.buildingWarrant.unusualAnswers.listedBuildingOrConservationArea],
-                      ['otherHistoricalImportance', 'Other historical importance', snapshot.buildingWarrant.unusualAnswers.otherHistoricalImportance],
-                      ['scottishMinistersRelaxationDirection', 'Scottish Ministers relaxation direction', snapshot.buildingWarrant.unusualAnswers.scottishMinistersRelaxationDirection],
-                      ['dangerousBuildingNotice', 'Dangerous building notice', snapshot.buildingWarrant.unusualAnswers.dangerousBuildingNotice],
-                      ['approvedCertifierOfConstruction', 'Approved certifier of construction', snapshot.buildingWarrant.unusualAnswers.approvedCertifierOfConstruction],
-                      ['coveredBySTAS', 'Covered by STAS', snapshot.buildingWarrant.unusualAnswers.coveredBySTAS],
-                      ['restrictPublicInspection', 'Restrict public inspection', snapshot.buildingWarrant.unusualAnswers.restrictPublicInspection],
-                    ].map(([name, label, value]) => (
-                      <label class="block">
-                        <span class="label">{label}</span>
-                        <select name={String(name)} class="field">
-                          <option value="false" selected={yesNo(value as boolean) === 'false'}>No</option>
-                          <option value="true" selected={yesNo(value as boolean) === 'true'}>Yes</option>
-                        </select>
-                      </label>
-                    ))}
-                  </div>
-                </details>
-                <div class="flex flex-wrap items-center gap-3">
-                  <button class="btn btn-primary">Save application details</button>
-                  <p data-form-status class="text-sm text-stone-500"></p>
-                </div>
-              </form>
-            )}
-            <p class="mt-4 text-xs leading-5 text-stone-500">After saving, choose <strong>Prepare updated job</strong> above to create a fresh immutable snapshot and rerun preflight.</p>
-          </section>
-        )}
-
-        <div class="mt-6 grid gap-5 lg:grid-cols-2">
-          <section class="panel rounded-lg p-5">
-            <h2 class="font-semibold">Application</h2>
-            <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-              <div><dt class="text-stone-500">Type</dt><dd class="mt-1 font-medium">{appLabel}</dd></div>
-              <div><dt class="text-stone-500">Type of work</dt><dd class="mt-1 font-medium">{snapshot.project.typeOfWorkLabel}</dd></div>
-              <div class="sm:col-span-2"><dt class="text-stone-500">Description</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant?.description ?? snapshot.planning?.description ?? 'Not set'}</dd></div>
-              {snapshot.buildingWarrant && <>
-                <div><dt class="text-stone-500">Preset</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant.presetLabel}</dd></div>
-                <div><dt class="text-stone-500">Estimated value</dt><dd class="mt-1 font-medium">{snapshot.buildingWarrant.estimatedValue === null ? 'Not set' : `£${snapshot.buildingWarrant.estimatedValue.toLocaleString()}`}</dd></div>
-              </>}
-            </dl>
-          </section>
-          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Site</h2><p class="mt-4 text-sm font-medium">{addressText(snapshot.site.address)}</p><p class="mt-2 text-sm text-stone-600">Local authority: {snapshot.site.localAuthority ?? 'Not set'}</p></section>
-          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Applicant</h2><p class="mt-4 font-medium">{snapshot.applicant.displayName ?? 'Not set'}</p><p class="mt-2 text-sm text-stone-600">{snapshot.applicant.email ?? 'No email'} · {snapshot.applicant.phone ?? 'No phone'}</p><p class="mt-2 text-sm text-stone-600">{addressText(snapshot.applicant.address)}</p></section>
-          <section class="panel rounded-lg p-5"><h2 class="font-semibold">Agent</h2><p class="mt-4 font-medium">{[snapshot.organisation.agent.firstName, snapshot.organisation.agent.lastName].filter(Boolean).join(' ') || 'Not set'}</p><p class="mt-2 text-sm text-stone-600">{snapshot.organisation.agent.email ?? 'No email'} · {snapshot.organisation.agent.phone ?? 'No phone'}</p><p class="mt-2 text-sm text-stone-600">{addressText(snapshot.organisation.agent.address)}</p></section>
-        </div>
-
-        <section class="panel mt-6 rounded-lg p-5">
-          <div class="flex items-center justify-between gap-4">
-            <div><h2 class="font-semibold">Documents</h2><p class="mt-1 text-sm text-stone-600">Reviewed portal classifications will be reused by the desktop app.</p></div>
-            <p class="text-sm font-semibold">{snapshot.documents.length} linked</p>
-          </div>
-          <div class="mt-4 divide-y divide-stone-100 border-y border-stone-100">
-            {snapshot.documents.map((document) => (
-              <div class="flex items-center gap-3 py-3">
-                <FileText size={17} className="shrink-0 text-stone-500" />
-                <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">{document.filename}</p><p class="mt-0.5 text-xs text-stone-500">{document.categoryLabel}{document.revision ? ` · Rev ${document.revision}` : ''}</p></div>
-                <p class="text-xs font-medium text-stone-600">{document.reviewState === 'APPROVED' ? 'Reviewed' : 'Needs review'}</p>
-              </div>
-            ))}
+        <section class="panel rounded-lg p-6">
+          <h2 class="text-lg font-semibold">Project and site</h2>
+          <p class="mt-1 text-sm text-stone-600">Corrections here update the Project and linked Site records.</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <label class="block"><span class="label">Project name</span><input class="field" name="projectName" required value={suggestion('project.title', job.project.name)} />{fieldNote('project.title') && <a class="mt-1 block text-xs text-amber-700 hover:underline" href={`/api/documents/${fieldSource('project.title')?.documentId}`} target="_blank" rel="noopener">{fieldNote('project.title')}</a>}</label>
+            <label class="block"><span class="label">Type of work</span><select class="field" name="projectType">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === job.project.projectType}>{item.label}</option>)}</select></label>
+            <label class="block md:col-span-2"><span class="label">Address line 1</span><input class="field" name="siteAddressLine1" required value={suggestion('site.addressLine1', currentSite?.addressLine1 ?? job.project.siteAddress)} />{fieldNote('site.addressLine1') && <a class="mt-1 block text-xs text-amber-700 hover:underline" href={`/api/documents/${fieldSource('site.addressLine1')?.documentId}`} target="_blank" rel="noopener">{fieldNote('site.addressLine1')}</a>}</label>
+            <label class="block"><span class="label">Address line 2</span><input class="field" name="siteAddressLine2" value={suggestion('site.addressLine2', currentSite?.addressLine2)} /></label>
+            <label class="block"><span class="label">Town or city</span><input class="field" name="siteTownCity" required value={suggestion('site.townCity', currentSite?.townCity)} /></label>
+            <label class="block"><span class="label">Postcode</span><input class="field" name="sitePostcode" required value={suggestion('site.postcode', currentSite?.postcode)} /></label>
+            <label class="block"><span class="label">Local authority</span><input class="field" name="siteLocalAuthority" value={suggestion('site.localAuthority', currentSite?.localAuthority ?? job.project.localAuthority)} /></label>
           </div>
         </section>
 
-        <details class="panel mt-6 rounded-lg p-5">
-          <summary class="cursor-pointer text-sm font-semibold">Advanced application details</summary>
-          <pre class="mt-4 max-h-96 overflow-auto rounded-lg bg-stone-950 p-4 text-xs leading-5 text-stone-100">{JSON.stringify({
-            planningAnswers: snapshot.planning?.answers,
-            buildingWarrantAnswers: snapshot.buildingWarrant?.unusualAnswers,
-            certifier: snapshot.buildingWarrant?.certifier,
-            warnings: snapshot.preflight.warnings,
-          }, null, 2)}</pre>
-        </details>
-      </>
+        <section class="panel rounded-lg p-6">
+          <h2 class="text-lg font-semibold">Applicant</h2>
+          <p class="mt-1 text-sm text-stone-600">Saving updates the linked Client. If none is linked, a complete Client record is created here.</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <label class="block md:col-span-2"><span class="label">Client display name</span><input class="field" name="clientName" required value={suggestedClientName} /></label>
+            <label class="block"><span class="label">Title</span><input class="field" name="clientTitle" value={suggestion('applicant.title', currentApplicant?.title)} /></label>
+            <label class="block"><span class="label">Company name</span><input class="field" name="clientCompanyName" value={suggestion('applicant.companyName', currentApplicant?.companyName)} /></label>
+            <label class="block"><span class="label">First name</span><input class="field" name="clientFirstName" value={suggestion('applicant.firstName', currentApplicant?.firstName)} /></label>
+            <label class="block"><span class="label">Last name</span><input class="field" name="clientLastName" value={suggestion('applicant.lastName', currentApplicant?.lastName)} /></label>
+            <label class="block"><span class="label">Email</span><input class="field" name="clientEmail" type="email" value={suggestion('applicant.email', currentApplicant?.email)} /></label>
+            <label class="block"><span class="label">Phone</span><input class="field" name="clientPhone" value={suggestion('applicant.phone', currentApplicant?.phone)} /></label>
+            <label class="block md:col-span-2"><span class="label">Address line 1</span><input class="field" name="clientAddressLine1" value={suggestion('applicant.addressLine1', currentApplicant?.addressLine1 ?? currentApplicant?.address)} /></label>
+            <label class="block"><span class="label">Address line 2</span><input class="field" name="clientAddressLine2" value={suggestion('applicant.addressLine2', currentApplicant?.addressLine2)} /></label>
+            <label class="block"><span class="label">Town or city</span><input class="field" name="clientTownCity" value={suggestion('applicant.townCity', currentApplicant?.townCity)} /></label>
+            <label class="block"><span class="label">Postcode</span><input class="field" name="clientPostcode" value={suggestion('applicant.postcode', currentApplicant?.postcode)} /></label>
+            <label class="block"><span class="label">Country</span><input class="field" name="clientCountry" value={suggestion('applicant.country', currentApplicant?.country ?? 'United Kingdom')} /></label>
+            <label class="block md:col-span-2"><span class="label">Client notes</span><textarea class="field" name="clientNotes" rows="2">{currentApplicant?.notes ?? ''}</textarea></label>
+          </div>
+        </section>
+
+        <section class="panel rounded-lg p-6">
+          <h2 class="text-lg font-semibold">Agent and practice</h2>
+          <p class="mt-1 text-sm text-stone-600">These details are reused as your organisation defaults for future applications.</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <label class="block md:col-span-2"><span class="label">Practice name</span><input class="field" name="practiceName" value={suggestion('agent.practiceName', defaults?.practiceName ?? auth.organisation.name)} /></label>
+            <label class="block"><span class="label">First name</span><input class="field" name="agentFirstName" value={suggestion('agent.firstName', defaults?.agentFirstName)} /></label>
+            <label class="block"><span class="label">Last name</span><input class="field" name="agentLastName" value={suggestion('agent.lastName', defaults?.agentLastName)} /></label>
+            <label class="block"><span class="label">Email</span><input class="field" name="agentEmail" type="email" value={suggestion('agent.email', defaults?.agentEmail)} /></label>
+            <label class="block"><span class="label">Phone</span><input class="field" name="agentPhone" value={suggestion('agent.phone', defaults?.agentPhone)} /></label>
+            <label class="block md:col-span-2"><span class="label">Address line 1</span><input class="field" name="agentAddressLine1" value={suggestion('agent.addressLine1', defaults?.agentAddressLine1)} /></label>
+            <label class="block"><span class="label">Address line 2</span><input class="field" name="agentAddressLine2" value={suggestion('agent.addressLine2', defaults?.agentAddressLine2)} /></label>
+            <label class="block"><span class="label">Town or city</span><input class="field" name="agentTownCity" value={suggestion('agent.townCity', defaults?.agentTownCity)} /></label>
+            <label class="block"><span class="label">Postcode</span><input class="field" name="agentPostcode" value={suggestion('agent.postcode', defaults?.agentPostcode)} /></label>
+            <label class="block"><span class="label">Country</span><input class="field" name="agentCountry" value={suggestion('agent.country', defaults?.agentCountry ?? 'United Kingdom')} /></label>
+          </div>
+        </section>
+
+        <section class="panel rounded-lg p-6">
+          <h2 class="text-lg font-semibold">Proposed application</h2>
+          <p class="mt-1 text-sm text-stone-600">Review the prepared description before it is sent to the desktop app.</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            <label class="block md:col-span-2"><span class="label">Description of work</span><textarea class="field" name="description" rows="4" required minlength="12">{suggestion('application.descriptionOfWork', snapshot.buildingWarrant?.description ?? snapshot.planning?.description)}</textarea>{fieldNote('application.descriptionOfWork') && <a class="mt-1 block text-xs text-emerald-700 hover:underline" href={`/api/documents/${fieldSource('application.descriptionOfWork')?.documentId}`} target="_blank" rel="noopener">{fieldNote('application.descriptionOfWork')}</a>}</label>
+            {snapshot.buildingWarrant && <>
+              <label class="block"><span class="label">Building Warrant preset</span><select class="field" name="presetKey">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === snapshot.buildingWarrant?.presetKey}>{item.label}</option>)}</select></label>
+              <label class="block"><span class="label">Estimated value</span><input class="field" name="estimatedValue" type="number" min="0" step="0.01" value={suggestion('application.estimatedValue', snapshot.buildingWarrant.estimatedValue)} /></label>
+              <label class="block"><span class="label">Current use</span><input class="field" name="currentUse" value={suggestion('application.currentUse', snapshot.buildingWarrant.currentUse)} /></label>
+              <label class="block"><span class="label">Proposed use</span><input class="field" name="proposedUse" value={suggestion('application.proposedUse', snapshot.buildingWarrant.proposedUse)} /></label>
+              <label class="block md:col-span-2"><span class="label">Approved certifier of design</span><select class="field" name="selectedCertifierPresetId"><option value="">No design certificate selected</option>{certifierPresets.map((preset) => <option value={preset.id} selected={preset.id === snapshot.buildingWarrant?.certifier?.presetId}>{preset.displayName}</option>)}</select></label>
+            </>}
+          </div>
+        </section>
+
+        <section class="panel rounded-lg p-6">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 class="text-lg font-semibold">Documents</h2><p class="mt-1 text-sm text-stone-600">Correct classifications here. The original files are never changed.</p></div>
+            <label class="inline-flex items-center gap-2 text-sm font-medium"><input id="attention-only" type="checkbox" checked />Needs attention only</label>
+          </div>
+          <div class="mt-5 overflow-hidden rounded-lg border border-stone-200">
+            <div class="hidden grid-cols-[minmax(0,1fr)_15rem_8rem] gap-4 border-b border-stone-200 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-500 md:grid">
+              <span>Document</span><span>Type</span><span>Status</span>
+            </div>
+            {documents.map((document) => {
+              const needsAttention = attentionDocumentIds.has(document.id) || document.status !== DocumentStatus.APPROVED;
+              return (
+                <div class="document-row grid gap-3 border-b border-stone-100 px-4 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_15rem_8rem] md:items-center" data-needs-attention={String(needsAttention)}>
+                  <div class="flex min-w-0 gap-3">
+                    <FileText size={18} className="mt-0.5 shrink-0 text-stone-500" />
+                    <div class="min-w-0">
+                      <a class="block truncate text-sm font-semibold hover:underline" href={`/api/documents/${document.id}`} target="_blank" rel="noopener">{document.originalName}</a>
+                      <input type="hidden" name="documentId" value={document.id} />
+                      <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                        <input class="field !py-2 text-sm" name="documentTitle" placeholder="Drawing title" value={document.drawingTitle ?? ''} />
+                        <input class="field !py-2 text-sm" name="documentRevision" placeholder="Revision" value={document.revision ?? ''} />
+                      </div>
+                    </div>
+                  </div>
+                  <select class="field" name="documentType">{documentTypes.map((type) => <option value={type} selected={type === document.type}>{human(type)}</option>)}</select>
+                  <span class:list={['text-sm font-medium', needsAttention ? 'text-amber-800' : 'text-stone-600']}>{needsAttention ? 'Needs review' : 'Prepared'}</span>
+                </div>
+              );
+            })}
+            {!documents.length && <p class="px-4 py-8 text-center text-sm text-stone-500">No documents are linked to this project yet.</p>}
+          </div>
+        </section>
+
+        <section class="panel rounded-lg p-6">
+          <h2 class="text-lg font-semibold">Confirmations</h2>
+          <p class="mt-1 text-sm text-stone-600">Only answers that affect legal or conditional portal branches are shown.</p>
+          <div class="mt-5 grid gap-4 md:grid-cols-2">
+            {snapshot.buildingWarrant ? <>
+              <label class="block"><span class="label">Is the applicant the owner?</span><select class="field" name="applicantIsOwner"><option value="true" selected={preparation?.applicantIsOwner}>Yes</option><option value="false" selected={!preparation?.applicantIsOwner}>No</option></select></label>
+              <label class="block"><span class="label">Is the application staged?</span><select class="field" name="applicationIsStaged"><option value="false" selected={!preparation?.applicationIsStaged}>No</option><option value="true" selected={preparation?.applicationIsStaged}>Yes</option></select></label>
+              {showListedConfirmation && <label class="block"><span class="label">Listed building or conservation area?</span><select class="field" name="listedBuildingOrConservationArea"><option value="false" selected={!preparation?.listedBuildingOrConservationArea}>No</option><option value="true" selected={preparation?.listedBuildingOrConservationArea}>Yes</option></select></label>}
+              <label class="block"><span class="label">Approved certifier of construction?</span><select class="field" name="approvedCertifierOfConstruction"><option value="false" selected={!preparation?.approvedCertifierOfConstruction}>No</option><option value="true" selected={preparation?.approvedCertifierOfConstruction}>Yes</option></select></label>
+              <input type="hidden" name="soleOwner" value="false" /><input type="hidden" name="agriculturalHolding" value="false" />
+            </> : <>
+              <label class="block"><span class="label">Is the applicant the sole owner of all land?</span><select class="field" name="soleOwner"><option value="true" selected={planning?.soleOwner === true}>Yes</option><option value="false" selected={planning?.soleOwner === false}>No</option></select></label>
+              <label class="block"><span class="label">Is any land part of an agricultural holding?</span><select class="field" name="agriculturalHolding"><option value="false" selected={planning?.agriculturalHolding === false}>No</option><option value="true" selected={planning?.agriculturalHolding === true}>Yes</option></select></label>
+              <label class="block"><span class="label">Discussed with planning authority?</span><select class="field" name="discussedWithPlanningAuthority"><option value="false" selected={!planning?.discussedWithPlanningAuthority}>No</option><option value="true" selected={planning?.discussedWithPlanningAuthority}>Yes</option></select></label>
+              <label class="block"><span class="label">Trees on or adjacent to site?</span><select class="field" name="treesOnOrAdjacentToSite"><option value="false" selected={!planning?.treesOnOrAdjacentToSite}>No</option><option value="true" selected={planning?.treesOnOrAdjacentToSite}>Yes</option></select></label>
+              <label class="block"><span class="label">New or altered vehicle access?</span><select class="field" name="newOrAlteredVehicleAccess" data-vehicle-access><option value="false" selected={!planning?.newOrAlteredVehicleAccess}>No</option><option value="true" selected={planning?.newOrAlteredVehicleAccess}>Yes</option></select></label>
+              <div class="grid gap-4 sm:grid-cols-2 md:col-span-2" data-parking-fields hidden={!planning?.newOrAlteredVehicleAccess}>
+                <label class="block"><span class="label">Current parking spaces</span><input class="field" type="number" min="0" max="999" name="currentParkingSpaces" value={planning?.currentParkingSpaces ?? ''} /></label>
+                <label class="block"><span class="label">Proposed parking spaces</span><input class="field" type="number" min="0" max="999" name="proposedParkingSpaces" value={planning?.proposedParkingSpaces ?? ''} /></label>
+              </div>
+              <input type="hidden" name="applicantIsOwner" value="false" /><input type="hidden" name="applicationIsStaged" value="false" /><input type="hidden" name="approvedCertifierOfConstruction" value="false" />
+            </>}
+            {!showListedConfirmation && <input type="hidden" name="listedBuildingOrConservationArea" value="false" />}
+          </div>
+        </section>
+
+        <section class="panel rounded-lg p-6">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold">{isReady ? 'Ready for desktop' : blockers ? `${blockers} detail${blockers === 1 ? '' : 's'} need attention` : 'Save to validate readiness'}</h2>
+              <p class="mt-1 text-sm text-stone-600">Saving updates the linked records and validates the prepared desktop snapshot automatically.</p>
+              <p data-form-status class="mt-2 text-sm text-stone-500"></p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              {canEdit && <button class="btn btn-primary" type="submit">{isReady ? 'Save application details' : 'Save application details'}</button>}
+              {isReady && <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop app" />}
+            </div>
+          </div>
+        </section>
+      </form>
     )}
   </div>
+  <script>
+    const filter = document.querySelector('#attention-only');
+    const updateDocumentRows = () => {
+      const attentionOnly = filter instanceof HTMLInputElement && filter.checked;
+      document.querySelectorAll('.document-row').forEach((row) => {
+        if (!(row instanceof HTMLElement)) return;
+        row.hidden = attentionOnly && row.dataset.needsAttention !== 'true';
+      });
+    };
+    filter?.addEventListener('change', updateDocumentRows);
+    updateDocumentRows();
+
+    const vehicleAccess = document.querySelector('[data-vehicle-access]');
+    const parkingFields = document.querySelector('[data-parking-fields]');
+    const updateParkingFields = () => {
+      if (!(vehicleAccess instanceof HTMLSelectElement) || !(parkingFields instanceof HTMLElement)) return;
+      const visible = vehicleAccess.value === 'true';
+      parkingFields.hidden = !visible;
+      parkingFields.querySelectorAll('input').forEach((input) => {
+        input.required = visible;
+      });
+    };
+    vehicleAccess?.addEventListener('change', updateParkingFields);
+    updateParkingFields();
+  </script>
 </AppShell>

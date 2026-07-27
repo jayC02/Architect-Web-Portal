@@ -1,27 +1,16 @@
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import { z } from 'zod';
 import {
+  documentFactSchema,
+  DOCUMENT_INTELLIGENCE_CATEGORY_KEYS,
+} from '@/lib/validation/document-intelligence';
+import {
   classifyDocumentBatch,
   type DocumentSortSuggestion,
   type SortInput,
 } from '@/server/services/document-sorter.service';
 
-export const PDF_CATEGORY_KEYS = [
-  'location_plan',
-  'site_block_plan',
-  'existing_plans',
-  'proposed_plans',
-  'elevations',
-  'sections',
-  'drainage',
-  'construction_details',
-  'specifications',
-  'calculations',
-  'photographs',
-  'supporting_documents',
-  'other',
-  'unsure',
-] as const;
+export const PDF_CATEGORY_KEYS = DOCUMENT_INTELLIGENCE_CATEGORY_KEYS;
 
 const certaintySchema = z.enum(['high', 'medium', 'low']);
 
@@ -31,9 +20,13 @@ export const pdfClassificationResultSchema = z.object({
   detectedTitle: z.string().trim().max(240).optional(),
   drawingNumber: z.string().trim().max(120).optional(),
   revision: z.string().trim().max(40).optional(),
+  pageCount: z.number().int().positive().optional(),
+  existingOrProposed: z.enum(['existing', 'proposed', 'mixed', 'unknown']).default('unknown'),
+  extractedFacts: z.array(documentFactSchema).max(60).default([]),
   evidence: z.string().trim().max(500).optional(),
   manualReviewRequired: z.boolean(),
   warnings: z.array(z.string().trim().max(300)).max(10),
+  mixedDocumentDetected: z.boolean().default(false),
 }).strict();
 
 export type PdfClassificationResult = z.infer<typeof pdfClassificationResultSchema>;
@@ -48,6 +41,10 @@ export type PdfClassificationInput = {
     projectName?: string;
     typeOfWork?: string;
     applicationType?: string;
+    siteAddress?: string;
+    localAuthority?: string;
+    clientName?: string;
+    projectNotes?: string;
   };
 };
 
@@ -59,9 +56,24 @@ export interface PdfClassificationProvider {
 
 export type ProjectClassificationContext = PdfClassificationInput['projectContext'];
 
-const PROMPT_VERSION = 'document-classifier-v1';
+export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v1';
+export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v1';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v1';
 const MAX_AI_FILE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 45_000;
+
+export const documentAnalysisCacheMatches = (input: {
+  fileHash: string | null;
+  analysisVersion: string | null;
+  analysisSchemaVersion: string | null;
+  analysisPromptVersion: string | null;
+  analysisStatus: string | null;
+}, fileHash: string) =>
+  input.fileHash === fileHash
+  && input.analysisVersion === DOCUMENT_ANALYSIS_VERSION
+  && input.analysisSchemaVersion === DOCUMENT_ANALYSIS_SCHEMA_VERSION
+  && input.analysisPromptVersion === DOCUMENT_ANALYSIS_PROMPT_VERSION
+  && input.analysisStatus === 'SUCCESS';
 
 const CATEGORY_TO_DOCUMENT_TYPE: Record<PdfClassificationResult['categoryKey'], DocumentType> = {
   location_plan: DocumentType.LOCATION_PLAN,
@@ -125,9 +137,40 @@ const JSON_SCHEMA = {
     detectedTitle: { type: 'string' },
     drawingNumber: { type: 'string' },
     revision: { type: 'string' },
+    pageCount: { type: 'integer', minimum: 1 },
+    existingOrProposed: { type: 'string', enum: ['existing', 'proposed', 'mixed', 'unknown'] },
+    extractedFacts: {
+      type: 'array',
+      maxItems: 60,
+      items: {
+        type: 'object',
+        required: ['fieldKey', 'value', 'evidence', 'certainty'],
+        properties: {
+          fieldKey: { type: 'string', enum: [
+            'project.title', 'project.typeOfWork',
+            'site.addressLine1', 'site.addressLine2', 'site.townCity', 'site.postcode', 'site.localAuthority',
+            'applicant.clientType', 'applicant.title', 'applicant.firstName', 'applicant.lastName',
+            'applicant.companyName', 'applicant.email', 'applicant.phone', 'applicant.addressLine1',
+            'applicant.addressLine2', 'applicant.townCity', 'applicant.postcode', 'applicant.country',
+            'agent.practiceName', 'agent.firstName', 'agent.lastName', 'agent.email', 'agent.phone',
+            'agent.addressLine1', 'agent.addressLine2', 'agent.townCity', 'agent.postcode', 'agent.country',
+            'application.descriptionOfWork', 'application.currentUse', 'application.proposedUse',
+            'application.buildingType', 'application.numberOfStoreys', 'application.estimatedValue',
+            'application.planningReference', 'evidence.listedOrConservation', 'evidence.ownership',
+            'evidence.certifier',
+          ] },
+          value: { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }] },
+          page: { type: 'integer', minimum: 1 },
+          evidence: { type: 'string' },
+          certainty: { type: 'string', enum: ['high', 'medium', 'low'] },
+        },
+        additionalProperties: false,
+      },
+    },
     evidence: { type: 'string' },
     manualReviewRequired: { type: 'boolean' },
     warnings: { type: 'array', items: { type: 'string' }, maxItems: 10 },
+    mixedDocumentDetected: { type: 'boolean' },
   },
 } as const;
 
@@ -136,6 +179,10 @@ const buildPrompt = (input: PdfClassificationInput) => {
     input.projectContext?.projectName && `Project: ${input.projectContext.projectName}`,
     input.projectContext?.typeOfWork && `Type of work: ${input.projectContext.typeOfWork}`,
     input.projectContext?.applicationType && `Application: ${input.projectContext.applicationType}`,
+    input.projectContext?.siteAddress && `Known site: ${input.projectContext.siteAddress}`,
+    input.projectContext?.localAuthority && `Known local authority: ${input.projectContext.localAuthority}`,
+    input.projectContext?.clientName && `Linked client: ${input.projectContext.clientName}`,
+    input.projectContext?.projectNotes && `Project notes: ${input.projectContext.projectNotes.slice(0, 1000)}`,
   ].filter(Boolean).join('\n');
 
   return `Classify this architecture-practice PDF using exactly one permitted category.
@@ -153,6 +200,9 @@ Rules:
 - If the PDF contains mixed document types, choose the best overall category, require manual review, and add a warning.
 - Do not invent a title, drawing number, or revision.
 - Keep evidence to one short, human-readable sentence.
+- Extract only facts supported by visible evidence, using only the permitted field keys in the schema.
+- Never convert a mention of ownership, listing, certification, or legal status into a confirmed declaration.
+- Include a short evidence excerpt and page number when visible.
 
 Filename: ${input.filename}
 ${context || 'No additional project context.'}`;
@@ -355,6 +405,9 @@ const withFallbackDetails = (
       ],
       manualReviewRequired: suggestion.confidence < 0.55 || aiFailure,
       promptVersion: 'deterministic-sorter-v1',
+      existingOrProposed: 'unknown',
+      extractedFacts: [],
+      mixedDocumentDetected: false,
       fallbackReason,
     },
   };
@@ -413,7 +466,11 @@ const classifyOne = async (
           warnings.length > 0,
         provider: provider.name,
         model: provider.model,
-        promptVersion: PROMPT_VERSION,
+        promptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
+        pageCount: result.pageCount,
+        existingOrProposed: result.existingOrProposed,
+        extractedFacts: result.extractedFacts,
+        mixedDocumentDetected: result.mixedDocumentDetected,
       },
     };
   } catch (error) {
@@ -476,6 +533,10 @@ export const classificationAuditForSuggestion = (suggestion: DocumentSortSuggest
         ...(suggestion.classificationDetails.provider ? { provider: suggestion.classificationDetails.provider } : {}),
         ...(suggestion.classificationDetails.model ? { model: suggestion.classificationDetails.model } : {}),
         promptVersion: suggestion.classificationDetails.promptVersion,
+        ...(suggestion.classificationDetails.pageCount ? { pageCount: suggestion.classificationDetails.pageCount } : {}),
+        ...(suggestion.classificationDetails.existingOrProposed ? { existingOrProposed: suggestion.classificationDetails.existingOrProposed } : {}),
+        extractedFacts: suggestion.classificationDetails.extractedFacts ?? [],
+        mixedDocumentDetected: suggestion.classificationDetails.mixedDocumentDetected ?? false,
         ...(suggestion.classificationDetails.fallbackReason ? { fallbackReason: suggestion.classificationDetails.fallbackReason } : {}),
       }
     : null,

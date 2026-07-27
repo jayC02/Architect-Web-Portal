@@ -57,8 +57,8 @@ const sourceLabel = (sourceType: AutomationJobSourceType) => {
 const displayStatus = (status: AutomationJobStatus) => {
   const labels: Record<AutomationJobStatus, string> = {
     [AutomationJobStatus.DRAFT]: 'Needs review',
-    [AutomationJobStatus.PREFLIGHT_REQUIRED]: 'Preflight required',
-    [AutomationJobStatus.NEEDS_INPUT]: 'Needs input',
+    [AutomationJobStatus.PREFLIGHT_REQUIRED]: 'Review application details',
+    [AutomationJobStatus.NEEDS_INPUT]: 'A few details need attention',
     [AutomationJobStatus.READY]: 'Ready for desktop',
     [AutomationJobStatus.STALE]: 'Needs refresh',
     [AutomationJobStatus.CLAIMED]: 'Running in desktop app',
@@ -111,8 +111,8 @@ const readinessIssues = (job: Job): string[] => {
 
 const nextStep = (job: Job) => {
   if (job.status === AutomationJobStatus.READY) return 'Load this job in the desktop app.';
-  if (job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.PREFLIGHT_REQUIRED) return 'Review the prepared application and preflight.';
-  if (job.status === AutomationJobStatus.NEEDS_INPUT) return 'Resolve the missing project or application information.';
+  if (job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.PREFLIGHT_REQUIRED) return 'Review the prepared application details.';
+  if (job.status === AutomationJobStatus.NEEDS_INPUT) return 'Complete the highlighted application details on one preparation page.';
   if (job.status === AutomationJobStatus.STALE) return 'Project information changed. Prepare an updated job.';
   if (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) return 'The desktop app is working through this job.';
   if (job.status === AutomationJobStatus.NEEDS_REVIEW || job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) return 'Review the completed portal form before final submission.';
@@ -282,13 +282,7 @@ const initiallyOpenGroup = groups.find((group) => group.key !== 'failed' && grou
 
                   <div class="flex flex-wrap gap-2 xl:justify-end">
                     <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.project.id}`}><FolderOpen size={16} />Open project</a>
-                    <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>Review prepared job</a>
-                    {job.status === AutomationJobStatus.PREFLIGHT_REQUIRED && !issues.length && (
-                      <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH">
-                        <input type="hidden" name="status" value="READY" />
-                        <button class="btn btn-primary">Mark ready</button>
-                      </form>
-                    )}
+                    <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>Review application details</a>
                     {job.status !== AutomationJobStatus.CANCELLED && job.status !== AutomationJobStatus.COMPLETED && (
                       <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH" data-confirm="Cancel this desktop automation job?">
                         <input type="hidden" name="status" value="CANCELLED" />

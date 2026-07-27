@@ -516,6 +516,15 @@ model ProjectDocument {
   sortSource     DocumentSortSource?
   sortConfidence Float?
   sortReason     String?
+  fileHash       String?
+  analysisVersion String?
+  analysisProvider String?
+  analysisModel  String?
+  analysisPromptVersion String?
+  analysisSchemaVersion String?
+  analysisStatus String?
+  analysisResult Json?
+  analysedAt     DateTime?
   notes          String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
@@ -530,6 +539,7 @@ model ProjectDocument {
   @@index([organisationId, projectId, createdAt])
   @@index([organisationId, createdAt])
   @@index([organisationId, projectId, type])
+  @@index([organisationId, projectId, fileHash])
   @@index([organisationId, originalName])
   @@index([organisationId, sizeBytes])
   @@index([organisationId, type])
@@ -602,6 +612,9 @@ model AutomationJob {
   reviewedAt        DateTime?
   resultData        Json?
   lastCheckpoint    String?
+  preparationDraft  Json?
+  preparationDraftHash String?
+  preparationDraftAt DateTime?
   createdById       String
   claimedByUserId   String?
   claimedDeviceId   String?

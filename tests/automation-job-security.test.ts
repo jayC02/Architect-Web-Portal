@@ -10,6 +10,8 @@ const validation = fs.readFileSync('src/lib/validation/automation-job.ts', 'utf8
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
 const jobsPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
+const preparationRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/preparation.ts', 'utf8');
+const preparationPage = fs.readFileSync('src/pages/automation-job/[id].astro', 'utf8');
 
 assert.match(schema, /enum AutomationJobType/, 'schema defines automation job types');
 assert.match(schema, /model AutomationJob/, 'schema defines automation job model');
@@ -67,5 +69,13 @@ assert.match(jobsPage, /<details id=\{`jobs-\$\{group\.key\}`\}/, 'job status gr
 assert.match(jobsPage, /<h3 class="truncate text-lg font-semibold">\{projectName\}<\/h3>/, 'job rows lead with the project name');
 assert.doesNotMatch(jobsPage, /<h3[^>]*>\{job\.title\}<\/h3>/, 'generated automation titles are not used as the visible row heading');
 assert.doesNotMatch(jobsPage, /View snapshot contract/, 'automation jobs page no longer exposes technical snapshot wording as the primary action');
+assert.match(preparationRoute, /assertAllowedOrigin\(context\.request\)/, 'preparation updates validate origin');
+assert.match(preparationRoute, /requireOrganisation\(context\)/, 'preparation updates require an organisation session');
+assert.match(preparationRoute, /where:\s*\{\s*id:\s*jobId,\s*organisationId:\s*organisation\.id/s, 'prepared jobs are organisation scoped');
+assert.doesNotMatch(preparationRoute, /organisationId:\s*(raw|value|body)\./, 'the preparation route never trusts a browser organisation id');
+assert.match(preparationRoute, /buildAutomationJobSnapshot/, 'saving preparation automatically reruns deterministic readiness');
+assert.match(preparationPage, /Information prepared from your documents/, 'the preparation page leads with prepared information');
+assert.doesNotMatch(preparationPage, />Preflight</, 'preflight is not exposed as a user-facing destination');
+assert.match(preparationPage, /href=\{`\/api\/documents\/\$\{document\.id\}`\}/, 'document links use the secure organisation-scoped preview route');
 
 console.log('automation job security tests passed');

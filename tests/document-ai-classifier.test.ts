@@ -28,6 +28,9 @@ const validResult = (categoryKey: PdfClassificationResult['categoryKey']): PdfCl
   evidence: `Visible title block identifies ${categoryKey}.`,
   manualReviewRequired: false,
   warnings: [],
+  existingOrProposed: 'unknown',
+  extractedFacts: [],
+  mixedDocumentDetected: false,
 });
 
 assert.doesNotThrow(() => pdfClassificationResultSchema.parse(validResult('location_plan')));
