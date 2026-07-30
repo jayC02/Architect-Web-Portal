@@ -201,6 +201,7 @@ const suggestedClientName = currentApplicant
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Applicant</h2>
           <p class="mt-1 text-sm text-stone-600">Saving updates the linked Client. If none is linked, a complete Client record is created here.</p>
+          <input type="hidden" name="clientName" value={suggestedClientName} />
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <label class="block"><span class="label">Title</span><input class="field" name="clientTitle" value={suggestion('applicant.title', currentApplicant?.title)} /></label>
             <label class="block"><span class="label">Company name</span><input class="field" name="clientCompanyName" value={suggestion('applicant.companyName', currentApplicant?.companyName)} /></label>

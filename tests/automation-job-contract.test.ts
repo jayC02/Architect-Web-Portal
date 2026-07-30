@@ -191,6 +191,7 @@ const preparationPageSource = readFileSync(
   new URL('../src/pages/automation-job/[id].astro', import.meta.url),
   'utf8',
 );
+assert.match(preparationPageSource, /name="clientName" value=\{suggestedClientName\}/);
 const preparationRouteSource = readFileSync(
   new URL('../src/pages/api/automation-jobs/[id]/preparation.ts', import.meta.url),
   'utf8',

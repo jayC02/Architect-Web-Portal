@@ -32,20 +32,42 @@ const {
           element.textContent = '';
           element.classList.add('hidden');
         });
+        form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[aria-invalid="true"]').forEach((field) => {
+          if (fieldName && field.name !== fieldName) return;
+          field.removeAttribute('aria-invalid');
+          field.style.borderColor = '';
+          field.style.boxShadow = '';
+        });
       };
 
       const showFieldErrors = (form: HTMLFormElement, payload: any) => {
-        const fieldErrors = payload?.details?.fieldErrors;
-        if (!fieldErrors || typeof fieldErrors !== 'object') return;
+        const fieldErrors = payload?.details?.fieldErrors ?? payload?.details;
+        if (!fieldErrors || typeof fieldErrors !== 'object') return null;
+        let firstError: { field: string; message: string } | null = null;
         for (const [field, messages] of Object.entries(fieldErrors)) {
           const element = Array.from(form.querySelectorAll<HTMLElement>('[data-field-error]'))
             .find((candidate) => candidate.dataset.fieldError === field);
           const message = Array.isArray(messages) ? messages[0] : undefined;
+          const control = Array.from(form.elements).find(
+            (candidate): candidate is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
+              (candidate instanceof HTMLInputElement
+                || candidate instanceof HTMLTextAreaElement
+                || candidate instanceof HTMLSelectElement)
+              && candidate.name === field
+              && candidate.type !== 'hidden',
+          );
           if (element && typeof message === 'string') {
             element.textContent = message;
             element.classList.remove('hidden');
           }
+          if (control && typeof message === 'string') {
+            control.setAttribute('aria-invalid', 'true');
+            control.style.borderColor = '#b91c1c';
+            control.style.boxShadow = '0 0 0 2px rgba(185, 28, 28, 0.12)';
+          }
+          if (!firstError && typeof message === 'string') firstError = { field, message };
         }
+        return firstError;
       };
 
       document.addEventListener('input', (event) => {
@@ -94,12 +116,20 @@ const {
           const response = await fetch(action, { method, headers, body });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
-            if (form.hasAttribute('data-field-errors')) showFieldErrors(form, payload);
+            const fieldError = form.hasAttribute('data-field-errors') ? showFieldErrors(form, payload) : null;
             if (status) {
-              status.textContent = payload.error || 'Request failed.';
+              const fieldLabel = fieldError?.field
+                .replace(/([a-z])([A-Z])/g, '$1 $2')
+                .replace(/^./, (letter: string) => letter.toUpperCase());
+              status.textContent = fieldError
+                ? `${fieldLabel}: ${fieldError.message}`
+                : payload.error || 'Request failed.';
               status.classList.remove('text-stone-500');
               status.classList.add('text-red-700');
             }
+            const invalidField = form.querySelector<HTMLElement>('[aria-invalid="true"]');
+            invalidField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            invalidField?.focus({ preventScroll: true });
             return;
           }
           if (typeof payload.redirectTo === 'string' && payload.redirectTo) {
