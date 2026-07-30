@@ -1,0 +1,354 @@
+---
+import { ApplicationDraftStatus } from '@prisma/client';
+import { FileText, FolderClock, LockKeyhole, Sparkles, UploadCloud } from 'lucide-react';
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const drafts = await prisma.applicationDraft.findMany({
+  where: {
+    organisationId: auth.organisation.id,
+    status: {
+      notIn: [
+        ApplicationDraftStatus.COMMITTED,
+        ApplicationDraftStatus.CANCELLED,
+        ApplicationDraftStatus.EXPIRED,
+      ],
+    },
+  },
+  select: {
+    id: true,
+    status: true,
+    notes: true,
+    selectedApplicationType: true,
+    updatedAt: true,
+    _count: { select: { documents: true } },
+  },
+  orderBy: { updatedAt: 'desc' },
+  take: 8,
+});
+
+const statusLabel = (status: ApplicationDraftStatus) => ({
+  UPLOADING: 'Ready to analyse',
+  ANALYSING: 'Analysing',
+  NEEDS_REVIEW: 'Needs your review',
+  READY_TO_CREATE: 'Ready to create',
+  COMMITTING: 'Creating records',
+  COMMITTED: 'Created',
+  FAILED: 'Could not prepare',
+  CANCELLED: 'Cancelled',
+  EXPIRED: 'Expired',
+}[status]);
+
+const typeLabel = (value: string | null) => ({
+  AUTO: 'Route not chosen',
+  HOUSEHOLDER_PLANNING: 'Householder planning',
+  PLANNING_APPLICATION: 'Planning application',
+  BUILDING_WARRANT: 'Building Warrant',
+}[value ?? 'AUTO'] ?? 'Route not chosen');
+
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+---
+<AppShell title="New application" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <header class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-moss">AI-assisted preparation</p>
+      <h1 class="mt-2 text-3xl font-semibold text-ink sm:text-4xl">New application</h1>
+      <p class="mt-2 max-w-3xl text-stone-600">
+        Upload the drawings, specifications and supporting documents for the project. Architect Pro will prepare the application details for you.
+      </p>
+    </div>
+    <a href="/projects/new" class="btn btn-secondary shrink-0">Create manually</a>
+  </header>
+
+  <form data-application-upload class="panel overflow-hidden rounded-lg">
+    <div class="grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section class="p-5 sm:p-7">
+        <div class="flex items-start gap-3">
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#eef3e9] text-[#526a4a]">
+            <Sparkles size={21} />
+          </span>
+          <div>
+            <h2 class="text-xl font-semibold">Upload project documents</h2>
+            <p class="mt-1 text-sm leading-6 text-stone-500">Add the whole application package now. You will review every suggestion before records are created.</p>
+          </div>
+        </div>
+
+        <label
+          data-drop-zone
+          class="mt-6 flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 bg-stone-50/70 px-5 py-8 text-center transition hover:border-moss hover:bg-[#f4f7f1] focus-within:border-moss focus-within:ring-2 focus-within:ring-moss/20"
+        >
+          <span class="flex h-14 w-14 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm">
+            <UploadCloud size={25} />
+          </span>
+          <span class="mt-4 text-base font-semibold text-ink">Drop the project package here</span>
+          <span class="mt-1 text-sm text-stone-500">or choose up to 50 files</span>
+          <span class="mt-3 text-xs text-stone-400">PDF, Word, Excel, images and text files · 25 MB per file · 250 MB total</span>
+          <input
+            data-file-input
+            class="sr-only"
+            type="file"
+            name="files"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.txt"
+          />
+        </label>
+
+        <div data-file-panel class="mt-4 hidden rounded-lg border border-stone-200">
+          <div class="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+            <p class="text-sm font-semibold"><span data-file-count>0</span> files selected</p>
+            <button type="button" data-clear-files class="text-sm font-semibold text-stone-500 hover:text-ink">Clear all</button>
+          </div>
+          <div data-file-list class="max-h-64 divide-y divide-stone-100 overflow-y-auto"></div>
+        </div>
+
+        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+          <label class="block">
+            <span class="label">Application route <span class="normal-case font-normal">(optional)</span></span>
+            <select name="applicationType" class="field">
+              <option value="AUTO">Let Architect Pro decide</option>
+              <option value="BUILDING_WARRANT">Building Warrant</option>
+              <option value="HOUSEHOLDER_PLANNING">Householder planning</option>
+              <option value="PLANNING_APPLICATION">Planning application</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="label">Project notes <span class="normal-case font-normal">(optional)</span></span>
+            <textarea name="notes" rows="3" class="field resize-y" placeholder="Paste a short brief, address or client note"></textarea>
+          </label>
+        </div>
+
+        <div data-upload-progress class="mt-5 hidden" aria-live="polite">
+          <div class="mb-2 flex items-center justify-between text-sm">
+            <span data-upload-message class="font-semibold">Uploading documents…</span>
+            <span data-upload-percent class="text-stone-500">0%</span>
+          </div>
+          <div class="h-1.5 overflow-hidden rounded-full bg-stone-100">
+            <div data-upload-bar class="h-full w-0 rounded-full bg-moss transition-[width]"></div>
+          </div>
+        </div>
+
+        <p data-upload-error class="mt-4 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>
+
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button data-submit type="submit" class="btn btn-primary gap-2 sm:min-w-64">
+            <Sparkles size={17} />
+            Analyse and prepare application
+          </button>
+          <p class="flex items-center gap-2 text-xs leading-5 text-stone-500">
+            <LockKeyhole size={14} className="shrink-0" />
+            Files remain private to {auth.organisation.name}.
+          </p>
+        </div>
+      </section>
+
+      <aside class="border-t border-stone-200 bg-[#fbfaf7] p-5 sm:p-7 lg:border-l lg:border-t-0">
+        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">What happens next</p>
+        <ol class="mt-5 space-y-5">
+          {[
+            ['1', 'Documents are checked', 'Each file is classified once, with the existing deterministic sorter retained as fallback.'],
+            ['2', 'Records are prepared', 'Project, site, client and application details are suggested without creating incomplete records.'],
+            ['3', 'You review one summary', 'Only missing, conflicting and legally sensitive details require your attention.'],
+            ['4', 'Create and open', 'Approved details create one Snapshot V2 job ready for the desktop app.'],
+          ].map(([number, title, copy]) => (
+            <li class="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full border border-stone-300 bg-white text-xs font-semibold text-stone-600">{number}</span>
+              <span>
+                <span class="block text-sm font-semibold text-ink">{title}</span>
+                <span class="mt-1 block text-xs leading-5 text-stone-500">{copy}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <div class="mt-7 border-t border-stone-200 pt-5 text-xs leading-5 text-stone-500">
+          Uploaded content is processed by the configured AI provider. Architect Pro never confirms legal declarations or submits a government application automatically.
+        </div>
+      </aside>
+    </div>
+  </form>
+
+  {drafts.length > 0 && (
+    <section class="mt-8">
+      <div class="mb-3 flex items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-semibold">Continue an application</h2>
+          <p class="mt-1 text-sm text-stone-500">Unfinished drafts remain available for 30 days.</p>
+        </div>
+        <FolderClock size={20} className="text-stone-400" />
+      </div>
+      <div class="panel divide-y divide-stone-100 overflow-hidden rounded-lg">
+        {drafts.map((draft) => (
+          <a href={`/applications/${draft.id}`} class="flex flex-col gap-3 px-4 py-4 transition hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
+            <span class="flex min-w-0 items-start gap-3">
+              <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500">
+                <FileText size={17} />
+              </span>
+              <span class="min-w-0">
+                <span class="block truncate font-semibold text-ink">{draft.notes?.trim() || typeLabel(draft.selectedApplicationType)}</span>
+                <span class="mt-1 block text-sm text-stone-500">{draft._count.documents} document{draft._count.documents === 1 ? '' : 's'} · Updated {formatDate(draft.updatedAt)}</span>
+              </span>
+            </span>
+            <span class:list={[
+              'text-sm font-semibold',
+              draft.status === ApplicationDraftStatus.FAILED ? 'text-red-700' : 'text-stone-600',
+            ]}>{statusLabel(draft.status)} →</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+</AppShell>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-application-upload]');
+  const input = document.querySelector<HTMLInputElement>('[data-file-input]');
+  const dropZone = document.querySelector<HTMLElement>('[data-drop-zone]');
+  const filePanel = document.querySelector<HTMLElement>('[data-file-panel]');
+  const fileList = document.querySelector<HTMLElement>('[data-file-list]');
+  const fileCount = document.querySelector<HTMLElement>('[data-file-count]');
+  const clearButton = document.querySelector<HTMLButtonElement>('[data-clear-files]');
+  const submitButton = document.querySelector<HTMLButtonElement>('[data-submit]');
+  const progress = document.querySelector<HTMLElement>('[data-upload-progress]');
+  const progressBar = document.querySelector<HTMLElement>('[data-upload-bar]');
+  const progressPercent = document.querySelector<HTMLElement>('[data-upload-percent]');
+  const progressMessage = document.querySelector<HTMLElement>('[data-upload-message]');
+  const errorBox = document.querySelector<HTMLElement>('[data-upload-error]');
+  let selectedFiles: File[] = [];
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+
+  const renderFiles = () => {
+    if (!filePanel || !fileList || !fileCount) return;
+    filePanel.classList.toggle('hidden', selectedFiles.length === 0);
+    fileCount.textContent = String(selectedFiles.length);
+    fileList.replaceChildren();
+    selectedFiles.forEach((file) => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-3 px-4 py-3';
+
+      const icon = document.createElement('span');
+      icon.className = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-xs font-bold uppercase text-stone-500';
+      icon.textContent = file.name.split('.').pop()?.slice(0, 4) || 'FILE';
+
+      const details = document.createElement('span');
+      details.className = 'min-w-0 flex-1';
+      const name = document.createElement('span');
+      name.className = 'block truncate text-sm font-semibold text-ink';
+      name.textContent = file.name;
+      const size = document.createElement('span');
+      size.className = 'mt-0.5 block text-xs text-stone-500';
+      size.textContent = formatBytes(file.size);
+      details.append(name, size);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-ink';
+      remove.setAttribute('aria-label', `Remove ${file.name}`);
+      remove.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      remove.addEventListener('click', () => {
+        selectedFiles = selectedFiles.filter((candidate) => fileKey(candidate) !== fileKey(file));
+        renderFiles();
+      });
+      row.append(icon, details, remove);
+      fileList.append(row);
+    });
+  };
+
+  const addFiles = (files: File[]) => {
+    const existing = new Set(selectedFiles.map(fileKey));
+    for (const file of files) {
+      if (!existing.has(fileKey(file))) {
+        selectedFiles.push(file);
+        existing.add(fileKey(file));
+      }
+    }
+    renderFiles();
+  };
+
+  input?.addEventListener('change', () => addFiles(Array.from(input.files ?? [])));
+  clearButton?.addEventListener('click', () => {
+    selectedFiles = [];
+    if (input) input.value = '';
+    renderFiles();
+  });
+
+  for (const eventName of ['dragenter', 'dragover']) {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.add('border-moss', 'bg-[#f4f7f1]');
+    });
+  }
+  for (const eventName of ['dragleave', 'drop']) {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('border-moss', 'bg-[#f4f7f1]');
+    });
+  }
+  dropZone?.addEventListener('drop', (event) => addFiles(Array.from(event.dataTransfer?.files ?? [])));
+
+  const showError = (message: string) => {
+    if (!errorBox) return;
+    errorBox.textContent = message;
+    errorBox.classList.remove('hidden');
+  };
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    errorBox?.classList.add('hidden');
+    if (!selectedFiles.length) {
+      showError('Choose at least one project document.');
+      dropZone?.focus();
+      return;
+    }
+
+    const values = new FormData(form);
+    values.delete('files');
+    selectedFiles.forEach((file) => values.append('files', file, file.name));
+    if (submitButton) submitButton.disabled = true;
+    progress?.classList.remove('hidden');
+    if (progressMessage) progressMessage.textContent = 'Uploading documents…';
+
+    const request = new XMLHttpRequest();
+    request.open('POST', '/api/application-drafts');
+    request.setRequestHeader('accept', 'application/json');
+    request.upload.addEventListener('progress', (upload) => {
+      if (!upload.lengthComputable) return;
+      const percentage = Math.min(99, Math.round((upload.loaded / upload.total) * 100));
+      if (progressBar) progressBar.style.width = `${percentage}%`;
+      if (progressPercent) progressPercent.textContent = `${percentage}%`;
+    });
+    request.addEventListener('load', () => {
+      let payload: Record<string, any> = {};
+      try {
+        payload = JSON.parse(request.responseText || '{}');
+      } catch {
+        payload = {};
+      }
+      if (request.status >= 200 && request.status < 300 && typeof payload.redirectTo === 'string') {
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
+        if (progressMessage) progressMessage.textContent = 'Upload complete. Preparing review…';
+        window.location.assign(payload.redirectTo);
+        return;
+      }
+      showError(typeof payload.error === 'string' ? payload.error : 'The documents could not be uploaded. Please try again.');
+      if (submitButton) submitButton.disabled = false;
+      progress?.classList.add('hidden');
+    });
+    request.addEventListener('error', () => {
+      showError('The upload was interrupted. Check your connection and try again.');
+      if (submitButton) submitButton.disabled = false;
+      progress?.classList.add('hidden');
+    });
+    request.send(values);
+  });
+</script>

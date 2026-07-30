@@ -183,7 +183,7 @@ export const automationJobSnapshotV2Schema = z.object({
       email: nullableText,
       phone: nullableText,
       address: structuredAddressSchema,
-      source: z.literal('ORGANISATION_DEFAULTS'),
+      source: z.enum(['ORGANISATION_DEFAULTS', 'APPLICATION_DRAFT']),
     }),
   }),
   project: z.object({
@@ -218,7 +218,7 @@ export const automationJobSnapshotV2Schema = z.object({
     phone: nullableText,
     address: structuredAddressSchema,
     applicantIsOwner: z.boolean().nullable(),
-    source: z.enum(['CLIENT', 'MISSING']),
+    source: z.enum(['CLIENT', 'MISSING', 'APPLICATION_DRAFT']),
     updatedAt: z.string().datetime().nullable(),
   }),
   planning: z.object({

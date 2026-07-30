@@ -43,6 +43,75 @@ const maxDate = (dates: Array<Date | null | undefined>) =>
 const human = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const jsonObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const nullableString = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim() : null;
+
+type PersonOverride = {
+  clientType: 'INDIVIDUAL' | 'ORGANISATION';
+  displayName: string | null;
+  title: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
+  email: string | null;
+  phone: string | null;
+  address: {
+    addressLine1: string | null;
+    addressLine2: string | null;
+    townCity: string | null;
+    postcode: string | null;
+    country: string | null;
+  };
+};
+
+type AgentOverride = {
+  practiceName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  address: PersonOverride['address'];
+};
+
+const parseAddressOverride = (value: unknown): PersonOverride['address'] => {
+  const address = jsonObject(value);
+  return {
+    addressLine1: nullableString(address.addressLine1),
+    addressLine2: nullableString(address.addressLine2),
+    townCity: nullableString(address.townCity),
+    postcode: nullableString(address.postcode),
+    country: nullableString(address.country),
+  };
+};
+
+const parsePersonOverride = (value: unknown): PersonOverride | null => {
+  const person = jsonObject(value);
+  if (!Object.keys(person).length) return null;
+  return {
+    clientType: person.clientType === 'ORGANISATION' ? 'ORGANISATION' : 'INDIVIDUAL',
+    displayName: nullableString(person.displayName),
+    title: nullableString(person.title),
+    firstName: nullableString(person.firstName),
+    lastName: nullableString(person.lastName),
+    companyName: nullableString(person.companyName),
+    email: nullableString(person.email),
+    phone: nullableString(person.phone),
+    address: parseAddressOverride(person.address),
+  };
+};
+
+const parseAgentOverride = (value: unknown): AgentOverride | null => {
+  const agent = jsonObject(value);
+  if (!Object.keys(agent).length) return null;
+  return {
+    practiceName: nullableString(agent.practiceName),
+    firstName: nullableString(agent.firstName),
+    lastName: nullableString(agent.lastName),
+    email: nullableString(agent.email),
+    phone: nullableString(agent.phone),
+    address: parseAddressOverride(agent.address),
+  };
+};
 
 const canonicalJson = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -192,8 +261,20 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
     throw new HttpError(400, 'One or more documents do not belong to this project.');
   }
 
-  const warrantAnswers = buildingWarrantPreparationSchema.parse(jsonObject(warrant?.preparationData));
-  const planningAnswers = householderPreparationSchema.parse(jsonObject(planning?.preparationData));
+  const warrantPreparation = jsonObject(warrant?.preparationData);
+  const planningPreparation = jsonObject(planning?.preparationData);
+  const warrantAnswers = buildingWarrantPreparationSchema.parse(warrantPreparation);
+  const planningAnswers = householderPreparationSchema.parse(planningPreparation);
+  const applicantOverride = parsePersonOverride(
+    input.type === AutomationJobType.BUILDING_WARRANT
+      ? warrantPreparation.applicantOverride
+      : planningPreparation.applicantOverride,
+  );
+  const agentOverride = parseAgentOverride(
+    input.type === AutomationJobType.BUILDING_WARRANT
+      ? warrantPreparation.agentOverride
+      : planningPreparation.agentOverride,
+  );
   const presetKey = typeOfWorkKey(project.projectType);
   const presetLabel = typeOfWorkLabel(presetKey);
   const selectedCertifier = warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
@@ -242,7 +323,15 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const applicantOwner = input.type === AutomationJobType.BUILDING_WARRANT
     ? warrantAnswers.applicantIsOwner
     : planningAnswers.soleOwner ?? null;
-  const applicant = project.client
+  const applicant = applicantOverride
+    ? {
+        clientId: project.client?.id ?? null,
+        ...applicantOverride,
+        applicantIsOwner: applicantOwner,
+        source: 'APPLICATION_DRAFT' as const,
+        updatedAt: null,
+      }
+    : project.client
     ? {
         clientId: project.client.id,
         clientType: project.client.companyName ? 'ORGANISATION' as const : 'INDIVIDUAL' as const,
@@ -298,21 +387,30 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
     organisation: {
       id: input.organisationId,
       name: input.organisationName,
-      practiceName: defaults?.practiceName ?? input.organisationName,
-      agent: {
-        firstName: defaults?.agentFirstName ?? null,
-        lastName: defaults?.agentLastName ?? null,
-        email: defaults?.agentEmail ?? null,
-        phone: defaults?.agentPhone ?? null,
-        address: {
-          addressLine1: defaults?.agentAddressLine1 ?? null,
-          addressLine2: defaults?.agentAddressLine2 ?? null,
-          townCity: defaults?.agentTownCity ?? null,
-          postcode: defaults?.agentPostcode ?? null,
-          country: defaults?.agentCountry ?? 'United Kingdom',
-        },
-        source: 'ORGANISATION_DEFAULTS' as const,
-      },
+      practiceName: agentOverride?.practiceName ?? defaults?.practiceName ?? input.organisationName,
+      agent: agentOverride
+        ? {
+            firstName: agentOverride.firstName,
+            lastName: agentOverride.lastName,
+            email: agentOverride.email,
+            phone: agentOverride.phone,
+            address: agentOverride.address,
+            source: 'APPLICATION_DRAFT' as const,
+          }
+        : {
+            firstName: defaults?.agentFirstName ?? null,
+            lastName: defaults?.agentLastName ?? null,
+            email: defaults?.agentEmail ?? null,
+            phone: defaults?.agentPhone ?? null,
+            address: {
+              addressLine1: defaults?.agentAddressLine1 ?? null,
+              addressLine2: defaults?.agentAddressLine2 ?? null,
+              townCity: defaults?.agentTownCity ?? null,
+              postcode: defaults?.agentPostcode ?? null,
+              country: defaults?.agentCountry ?? 'United Kingdom',
+            },
+            source: 'ORGANISATION_DEFAULTS' as const,
+          },
     },
     project: {
       id: project.id,

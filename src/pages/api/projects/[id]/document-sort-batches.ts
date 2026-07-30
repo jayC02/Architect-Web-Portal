@@ -14,6 +14,7 @@ import {
   analysisStatusForSuggestion,
   classificationDetailsFromAudit,
   classifyProjectDocumentBatch,
+  configuredDocumentAnalysisIdentity,
   DOCUMENT_ANALYSIS_PROMPT_VERSION,
   DOCUMENT_ANALYSIS_SCHEMA_VERSION,
   DOCUMENT_ANALYSIS_VERSION,
@@ -64,12 +65,15 @@ export const POST: APIRoute = (context) =>
       });
     }
 
+    const analysisIdentity = configuredDocumentAnalysisIdentity();
     const cachedDocuments = await prisma.projectDocument.findMany({
       where: {
         organisationId: organisation.id,
         projectId,
         fileHash: { in: uploaded.map((item) => item.fileHash) },
         analysisVersion: DOCUMENT_ANALYSIS_VERSION,
+        analysisProvider: analysisIdentity.provider,
+        analysisModel: analysisIdentity.model,
         analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
         analysisPromptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
         analysisStatus: 'SUCCESS',

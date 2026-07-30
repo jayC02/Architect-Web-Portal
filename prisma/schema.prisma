@@ -233,6 +233,33 @@ enum AutomationJobSourceType {
   MANUAL
 }
 
+enum ApplicationDraftStatus {
+  UPLOADING
+  ANALYSING
+  NEEDS_REVIEW
+  READY_TO_CREATE
+  COMMITTING
+  COMMITTED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum ApplicationDraftType {
+  AUTO
+  HOUSEHOLDER_PLANNING
+  PLANNING_APPLICATION
+  BUILDING_WARRANT
+}
+
+enum ApplicationDraftDocumentStatus {
+  PENDING
+  ANALYSING
+  SUCCESS
+  FALLBACK
+  FAILED
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -251,6 +278,7 @@ model User {
   createdAutomationJobs    AutomationJob[]         @relation("AutomationJobCreatedBy")
   claimedAutomationJobs    AutomationJob[]         @relation("AutomationJobClaimedBy")
   desktopAccessTokens      DesktopAccessToken[]
+  createdApplicationDrafts ApplicationDraft[]      @relation("ApplicationDraftCreatedBy")
   reviewedGmailSuggestions GmailUpdateSuggestion[] @relation("GmailSuggestionReviewedBy")
 
   @@index([email])
@@ -347,6 +375,7 @@ model Organisation {
   defaults             OrganisationDefaults?
   certifierPresets     OrganisationCertifierPreset[]
   automationJobEvents  AutomationJobEvent[]
+  applicationDrafts    ApplicationDraft[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -591,6 +620,74 @@ model DocumentSortBatchItem {
 
   @@index([batchId])
   @@index([documentId])
+}
+
+model ApplicationDraft {
+  id                          String                 @id @default(cuid())
+  organisationId              String
+  createdById                 String
+  status                      ApplicationDraftStatus @default(UPLOADING)
+  notes                       String?
+  suggestedApplicationType    ApplicationDraftType?
+  selectedApplicationType     ApplicationDraftType?
+  preparedData                Json?
+  confirmedData               Json?
+  unresolvedQuestions         Json?
+  analysisSummary             Json?
+  expiresAt                   DateTime
+  committedAt                 DateTime?
+  resultingProjectId          String?
+  resultingPlanningId         String?
+  resultingWarrantId          String?
+  resultingAutomationJobId    String?
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+
+  organisation Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User                      @relation("ApplicationDraftCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  documents    ApplicationDraftDocument[]
+
+  @@index([organisationId, status, updatedAt])
+  @@index([organisationId, createdById, createdAt])
+  @@index([expiresAt, status])
+  @@index([resultingProjectId])
+}
+
+model ApplicationDraftDocument {
+  id                    String                         @id @default(cuid())
+  draftId               String
+  originalFilename      String
+  fileName              String
+  storageKey            String
+  mimeType              String
+  sizeBytes             Int
+  sha256                 String
+  analysisStatus        ApplicationDraftDocumentStatus @default(PENDING)
+  analysisVersion       String?
+  analysisProvider      String?
+  analysisModel         String?
+  analysisPromptVersion String?
+  analysisSchemaVersion String?
+  analysisResult        Json?
+  analysisError         String?
+  documentType          DocumentType                   @default(OTHER)
+  documentStatus        DocumentStatus                 @default(IN_REVIEW)
+  revision              String?
+  drawingNumber         String?
+  drawingTitle          String?
+  classificationSource  DocumentSortSource?
+  confidence            Float?
+  classificationReason  String?
+  committedDocumentId   String?
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+
+  draft ApplicationDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+  @@index([draftId, analysisStatus])
+  @@index([sha256, analysisVersion, analysisProvider, analysisModel])
+  @@index([committedDocumentId])
 }
 
 model AutomationJob {

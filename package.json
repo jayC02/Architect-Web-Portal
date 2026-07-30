@@ -17,7 +17,7 @@
     "predev": "prisma generate",
     "prebuild": "prisma generate",
     "start": "node ./dist/server/entry.mjs",
-    "test:security": "tsx tests/security-validation.test.ts && tsx tests/auth-security.test.ts && tsx tests/upload-storage.test.ts && tsx tests/document-sorter.test.ts && tsx tests/document-ai-classifier.test.ts && tsx tests/application-preparation.test.ts && tsx tests/document-sort-batch-security.test.ts && tsx tests/automation-job-contract.test.ts && tsx tests/automation-job-security.test.ts && tsx tests/project-workspace.test.ts && tsx tests/google-calendar.test.ts && tsx tests/gmail-tracking.test.ts && tsx tests/desktop-handoff.test.ts"
+    "test:security": "tsx tests/security-validation.test.ts && tsx tests/auth-security.test.ts && tsx tests/upload-storage.test.ts && tsx tests/document-sorter.test.ts && tsx tests/document-ai-classifier.test.ts && tsx tests/application-preparation.test.ts && tsx tests/application-draft.test.ts && tsx tests/document-sort-batch-security.test.ts && tsx tests/automation-job-contract.test.ts && tsx tests/automation-job-security.test.ts && tsx tests/project-workspace.test.ts && tsx tests/google-calendar.test.ts && tsx tests/gmail-tracking.test.ts && tsx tests/desktop-handoff.test.ts"
   },
   "dependencies": {
     "@astrojs/node": "^9.5.5",

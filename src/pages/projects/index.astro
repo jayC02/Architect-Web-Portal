@@ -124,7 +124,10 @@ const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-m
       <h1 class="text-3xl font-semibold tracking-tight">Projects</h1>
       <p class="mt-1 text-sm text-stone-500">A clean register of project records, deadlines and document actions.</p>
     </div>
-    <a href="/projects/new" class="btn btn-primary">New project</a>
+    <div class="flex flex-wrap gap-2">
+      <a href="/projects/new" class="btn btn-secondary">Create manually</a>
+      <a href="/applications/new" class="btn btn-primary">New application</a>
+    </div>
   </div>
 
   <form method="GET" class="panel mb-5 rounded-lg p-4">

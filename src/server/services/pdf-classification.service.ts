@@ -66,12 +66,16 @@ const DEFAULT_TIMEOUT_MS = 45_000;
 export const documentAnalysisCacheMatches = (input: {
   fileHash: string | null;
   analysisVersion: string | null;
+  analysisProvider?: string | null;
+  analysisModel?: string | null;
   analysisSchemaVersion: string | null;
   analysisPromptVersion: string | null;
   analysisStatus: string | null;
-}, fileHash: string) =>
+}, fileHash: string, expected?: { provider?: string | null; model?: string | null }) =>
   input.fileHash === fileHash
   && input.analysisVersion === DOCUMENT_ANALYSIS_VERSION
+  && (!expected?.provider || input.analysisProvider === expected.provider)
+  && (!expected?.model || input.analysisModel === expected.model)
   && input.analysisSchemaVersion === DOCUMENT_ANALYSIS_SCHEMA_VERSION
   && input.analysisPromptVersion === DOCUMENT_ANALYSIS_PROMPT_VERSION
   && input.analysisStatus === 'SUCCESS';
@@ -350,6 +354,26 @@ const timeoutSignal = () => {
   return AbortSignal.timeout(timeout);
 };
 
+const retryAfterMs = (response: Response) => {
+  const value = response.headers.get('retry-after');
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 10_000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.min(Math.max(date - Date.now(), 0), 10_000) : null;
+};
+
+const retryDelayMs = (attempt: number, response: Response) => {
+  const configured = Number(process.env.DOCUMENT_AI_RETRY_BASE_MS ?? 750);
+  const base = Number.isFinite(configured) ? Math.min(Math.max(configured, 50), 5_000) : 750;
+  return retryAfterMs(response) ?? Math.min(base * (2 ** attempt), 10_000);
+};
+
+const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+const isTransientProviderStatus = (status: number) =>
+  status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+
 const normalizeGeminiModel = (value: string) => {
   const normalized = value.trim().toLowerCase().replace(/^models\//, '');
   const compact = normalized.replace(/[^a-z0-9.]+/g, '');
@@ -411,7 +435,7 @@ export const buildGeminiGenerateContentRequest = (input: PdfClassificationInput)
   };
 };
 
-class GeminiPdfClassificationProvider implements PdfClassificationProvider {
+export class GeminiPdfClassificationProvider implements PdfClassificationProvider {
   readonly name = 'gemini';
 
   constructor(
@@ -427,9 +451,10 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
     const failures: string[] = [];
     for (const model of models) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      const response = await fetch(
-        endpoint,
-        {
+      const configuredRetries = Number(process.env.DOCUMENT_AI_MAX_RETRIES ?? 2);
+      const maxRetries = Number.isFinite(configuredRetries) ? Math.min(Math.max(configuredRetries, 0), 3) : 2;
+      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
@@ -437,33 +462,41 @@ class GeminiPdfClassificationProvider implements PdfClassificationProvider {
           },
           signal: timeoutSignal(),
           body: JSON.stringify(request.body),
-        },
-      );
+        });
 
-      if (response.ok) {
-        this.model = model;
-        const payload = await response.json() as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
-        return parseStructuredResult(text);
-      }
-      const providerError = await geminiErrorDetails(response);
-      failures.push(`${model}: HTTP ${response.status}${providerError.message ? `: ${providerError.message}` : ''}`);
-      console.error('Gemini document request rejected', {
-        endpoint,
-        model,
-        responseStatus: response.status,
-        providerStatus: providerError.providerStatus,
-        providerMessage: providerError.message,
-        fieldViolations: providerError.fieldViolations,
-        ...request.diagnostics,
-      });
-      const modelUnavailable =
-        response.status === 404 ||
-        (response.status === 400 && /model.+(?:not found|not supported|unavailable)/i.test(providerError.message));
-      const canRetryAlias = modelUnavailable && model !== models.at(-1);
-      if (!canRetryAlias) {
+        if (response.ok) {
+          this.model = model;
+          const payload = await response.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const text = payload.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text ?? '';
+          return parseStructuredResult(text);
+        }
+
+        const providerError = await geminiErrorDetails(response);
+        failures.push(`${model}: HTTP ${response.status}${providerError.message ? `: ${providerError.message}` : ''}`);
+        console.error('Gemini document request rejected', {
+          endpoint,
+          model,
+          responseStatus: response.status,
+          providerStatus: providerError.providerStatus,
+          providerMessage: providerError.message,
+          fieldViolations: providerError.fieldViolations,
+          attempt: attempt + 1,
+          ...request.diagnostics,
+        });
+
+        if (isTransientProviderStatus(response.status) && attempt < maxRetries) {
+          await wait(retryDelayMs(attempt, response));
+          continue;
+        }
+
+        const modelUnavailable =
+          response.status === 404 ||
+          (response.status === 400 && /model.+(?:not found|not supported|unavailable)/i.test(providerError.message));
+        const canTryAlias = modelUnavailable && model !== models.at(-1);
+        if (canTryAlias) break;
+
         const status: AiProcessingStatus = response.status === 400
           ? 'invalid_request'
           : 'provider_unavailable';
@@ -541,6 +574,11 @@ export const createConfiguredPdfClassificationProvider = (): PdfClassificationPr
     return key ? new OpenAiPdfClassificationProvider(key) : null;
   }
   return null;
+};
+
+export const configuredDocumentAnalysisIdentity = () => {
+  const provider = createConfiguredPdfClassificationProvider();
+  return provider ? { provider: provider.name, model: provider.model } : { provider: 'deterministic', model: null };
 };
 
 const certaintyConfidence = (certainty: PdfClassificationResult['certainty']) =>
@@ -716,10 +754,16 @@ export const classifyProjectDocumentBatch = async (
   inputs: SortInput[],
   projectContext: ProjectClassificationContext = {},
   provider: PdfClassificationProvider | null = createConfiguredPdfClassificationProvider(),
+  onProgress?: (result: DocumentSortSuggestion, index: number, completed: number, total: number) => void | Promise<void>,
 ) => {
   const fallbacks = await classifyDocumentBatch(inputs);
-  const suggestions = await mapWithConcurrency(inputs, 4, (input, index) =>
-    classifyOne(input, fallbacks[index], provider, projectContext));
+  let completed = 0;
+  const suggestions = await mapWithConcurrency(inputs, 2, async (input, index) => {
+    const result = await classifyOne(input, fallbacks[index], provider, projectContext);
+    completed += 1;
+    await onProgress?.(result, index, completed, inputs.length);
+    return result;
+  });
   addLocationPlanConflicts(suggestions);
   return suggestions;
 };

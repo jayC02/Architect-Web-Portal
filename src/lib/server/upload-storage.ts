@@ -200,3 +200,36 @@ export async function readStoredDocumentBytes(storageKey?: string | null, legacy
   if (!bytes) throw new HttpError(404, 'Document file could not be opened.');
   return bytes;
 }
+
+export async function deleteStoredDocument(storageKey: string): Promise<void> {
+  const safeKey = normalizeStorageKey(storageKey);
+  const provider = getStorageProvider();
+
+  if (provider === 'supabase') {
+    const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
+    const response = await fetch(`${supabaseUrl}/storage/v1/object/${supabaseBucket}/${safeKey}`, {
+      method: 'DELETE',
+      headers: {
+        authorization: `Bearer ${supabaseServiceRoleKey}`,
+        apikey: supabaseServiceRoleKey,
+      },
+    });
+    if (!response.ok && response.status !== 404) {
+      throw new HttpError(500, 'Draft document could not be removed.');
+    }
+    return;
+  }
+
+  if (provider !== 'local') throw new HttpError(500, `Unsupported upload storage provider: ${provider}.`);
+
+  const configuredLocalDir = getLocalDir();
+  const storageRoot = path.isAbsolute(configuredLocalDir) ? configuredLocalDir : path.resolve(process.cwd(), configuredLocalDir);
+  const resolvedRoot = path.resolve(storageRoot);
+  const resolvedFile = path.resolve(resolvedRoot, safeKey);
+  if (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) {
+    throw new HttpError(400, 'Document path is invalid.');
+  }
+  await fs.unlink(resolvedFile).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+}

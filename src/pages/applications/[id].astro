@@ -1,0 +1,57 @@
+---
+import { ApplicationDraftStatus, DocumentType } from '@prisma/client';
+import ApplicationDraftReview from '@/components/applications/ApplicationDraftReview';
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { documentTypeLabel } from '@/lib/document-categories';
+import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { applicationDraftResponse } from '@/server/services/application-draft-view.service';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const draftId = Astro.params.id;
+if (!draftId) return Astro.redirect('/applications/new');
+
+const [draftRecord, certifierPresets] = await Promise.all([
+  prisma.applicationDraft.findFirst({
+    where: { id: draftId, organisationId: auth.organisation.id },
+    include: { documents: { orderBy: { createdAt: 'asc' } } },
+  }),
+  prisma.organisationCertifierPreset.findMany({
+    where: { organisationId: auth.organisation.id },
+    select: { id: true, displayName: true, isDefault: true },
+    orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
+  }),
+]);
+
+if (!draftRecord) return Astro.redirect('/applications/new');
+if (
+  draftRecord.status === ApplicationDraftStatus.CANCELLED
+  || draftRecord.status === ApplicationDraftStatus.EXPIRED
+) return Astro.redirect('/applications/new');
+
+const draft = applicationDraftResponse(draftRecord);
+const documentTypes = Object.values(DocumentType).map((value) => ({
+  value,
+  label: documentTypeLabel(value),
+}));
+const typeOfWorkOptions = TYPE_OF_WORK_DEFINITIONS.map((option) => ({
+  value: option.key,
+  label: option.label,
+}));
+const certifierOptions = certifierPresets.map((preset) => ({
+  value: preset.id,
+  label: `${preset.displayName}${preset.isDefault ? ' (default)' : ''}`,
+}));
+---
+<AppShell title="Review application" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <ApplicationDraftReview
+    client:load
+    initialDraft={draft}
+    documentTypes={documentTypes}
+    typeOfWorkOptions={typeOfWorkOptions}
+    certifierPresets={certifierOptions}
+  />
+</AppShell>

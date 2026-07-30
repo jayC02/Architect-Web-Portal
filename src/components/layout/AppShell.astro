@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   CalendarClock,
+  FilePlus2,
   FolderKanban,
   LayoutDashboard,
   LogOut,
@@ -25,6 +26,7 @@ interface Props {
 const { title, user, organisation, role } = Astro.props;
 const nav = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'New application', href: '/applications/new', icon: FilePlus2 },
   { label: 'Projects', href: '/projects', icon: FolderKanban },
   { label: 'Clients', href: '/clients', icon: Users },
   { label: 'Sites', href: '/sites', icon: MapPinned },
@@ -39,7 +41,7 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
 ---
 <BaseLayout title={`${title} | Architect Web Portal`} noindex={true}>
   <div class="min-h-screen bg-paper">
-    <aside class="fixed inset-y-0 left-0 hidden w-72 border-r border-stone-200/80 bg-[#fbfaf6] lg:block">
+    <aside class="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-stone-200/80 bg-[#fbfaf6] lg:flex">
       <div class="px-5 py-5">
         <a href="/dashboard" class="flex items-center gap-3 rounded-xl p-2 transition hover:bg-white">
           <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-paper"><Building2 size={20} /></span>
@@ -49,7 +51,7 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
           </span>
         </a>
       </div>
-      <nav class="space-y-1 px-4 py-2">
+      <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-2">
         {nav.map(({ label, href, icon: Icon }) => (
           <a class:list={['app-link', isActive(href) ? 'app-link-active' : '']} href={href}>
             <span class="flex items-center gap-3">
@@ -59,7 +61,7 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
           </a>
         ))}
       </nav>
-      <div class="absolute inset-x-4 bottom-4 rounded-xl border border-stone-200 bg-white p-4 shadow-[0_14px_40px_rgba(32,35,31,0.06)]">
+      <div class="mx-4 mb-4 mt-3 rounded-xl border border-stone-200 bg-white p-4 shadow-[0_14px_40px_rgba(32,35,31,0.06)]">
         <div class="flex items-start gap-3">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold text-ink">{user.name.slice(0, 1).toUpperCase()}</div>
           <div class="min-w-0">
@@ -92,4 +94,3 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
     </div>
   </div>
 </BaseLayout>
-

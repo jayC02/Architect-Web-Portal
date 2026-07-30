@@ -184,7 +184,7 @@ const suggestedClientName = currentApplicant
           )}
         </section>
 
-        <section class="panel rounded-lg p-6">
+        {/* <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Project and site</h2>
           <p class="mt-1 text-sm text-stone-600">Corrections here update the Project and linked Site records.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -196,7 +196,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="sitePostcode" required value={suggestion('site.postcode', currentSite?.postcode)} /></label>
             <label class="block"><span class="label">Local authority</span><input class="field" name="siteLocalAuthority" value={suggestion('site.localAuthority', currentSite?.localAuthority ?? job.project.localAuthority)} /></label>
           </div>
-        </section>
+        </section> */}
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Applicant</h2>
@@ -216,7 +216,7 @@ const suggestedClientName = currentApplicant
           </div>
         </section>
 
-        <section class="panel rounded-lg p-6">
+        {/* <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Agent and practice</h2>
           <p class="mt-1 text-sm text-stone-600">These details are reused as your organisation defaults for future applications.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -231,7 +231,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="agentPostcode" value={suggestion('agent.postcode', defaults?.agentPostcode)} /></label>
             <label class="block"><span class="label">Country</span><input class="field" name="agentCountry" value={suggestion('agent.country', defaults?.agentCountry ?? 'United Kingdom')} /></label>
           </div>
-        </section>
+        </section> */}
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Proposed application</h2>

@@ -5,6 +5,7 @@ import {
   buildGeminiGenerateContentRequest,
   classifyProjectDocumentBatch,
   GEMINI_DOCUMENT_RESPONSE_SCHEMA,
+  GeminiPdfClassificationProvider,
   geminiDocumentGenerationConfig,
   pdfClassificationResultSchema,
   PdfAiProcessingError,
@@ -46,6 +47,7 @@ assert.ok(
 
 const input = (filename: string) => ({
   filename,
+  fileReference: filename,
   mimeType: 'application/pdf',
   bytes: Buffer.from('%PDF-1.4 test document'),
   pdfText: '',
@@ -103,6 +105,21 @@ const validResult = (categoryKey: PdfClassificationResult['categoryKey']): PdfCl
   warnings: [],
   existingOrProposed: 'unknown',
   extractedFacts: [],
+  mixedDocumentDetected: false,
+});
+
+const validGeminiWireResult = (categoryKey: PdfClassificationResult['categoryKey']) => ({
+  categoryKey,
+  certainty: 'high',
+  detectedTitle: null,
+  drawingNumber: null,
+  revision: null,
+  pageCount: 1,
+  existingOrProposed: 'unknown',
+  extractedFacts: [],
+  evidence: `Visible title block identifies ${categoryKey}.`,
+  manualReviewRequired: false,
+  warnings: [],
   mixedDocumentDetected: false,
 });
 
@@ -233,5 +250,93 @@ const duplicateLocations = await classifyProjectDocumentBatch(
 assert.ok(duplicateLocations.every((item) => item.classificationDetails?.manualReviewRequired));
 assert.ok(duplicateLocations.every((item) =>
   item.classificationDetails?.warnings.some((warning) => warning.includes('More than one document'))));
+
+let activeRequests = 0;
+let maximumActiveRequests = 0;
+let progressUpdates = 0;
+await classifyProjectDocumentBatch(
+  Array.from({ length: 6 }, (_, index) => input(`concurrency-${index}.pdf`)),
+  {},
+  {
+    name: 'concurrency-provider',
+    model: 'test-model',
+    async classifyDocument() {
+      activeRequests += 1;
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      activeRequests -= 1;
+      return validResult('supporting_documents');
+    },
+  },
+  async () => {
+    progressUpdates += 1;
+  },
+);
+assert.equal(maximumActiveRequests, 2, 'document AI requests are bounded to two concurrent calls');
+assert.equal(progressUpdates, 6, 'each completed file reports progress independently');
+
+const originalFetch = globalThis.fetch;
+const originalRetries = process.env.DOCUMENT_AI_MAX_RETRIES;
+const originalRetryBase = process.env.DOCUMENT_AI_RETRY_BASE_MS;
+try {
+  process.env.DOCUMENT_AI_MAX_RETRIES = '1';
+  process.env.DOCUMENT_AI_RETRY_BASE_MS = '50';
+  let transientCalls = 0;
+  globalThis.fetch = (async () => {
+    transientCalls += 1;
+    if (transientCalls === 1) {
+      return new Response(JSON.stringify({
+        error: { message: 'Rate limit reached.', status: 'RESOURCE_EXHAUSTED' },
+      }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': '0' },
+      });
+    }
+    return new Response(JSON.stringify({
+      candidates: [{
+        content: {
+          parts: [{ text: JSON.stringify(validGeminiWireResult('location_plan')) }],
+        },
+      }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+  const retried = await new GeminiPdfClassificationProvider(
+    'test-key',
+    'gemini-3.5-flash-lite',
+  ).classifyDocument(input('retry.pdf'));
+  assert.equal(retried.categoryKey, 'location_plan');
+  assert.equal(transientCalls, 2, '429 responses retry once and respect the capped retry loop');
+
+  let invalidCalls = 0;
+  globalThis.fetch = (async () => {
+    invalidCalls += 1;
+    return new Response(JSON.stringify({
+      error: { message: 'Invalid JSON payload.', status: 'INVALID_ARGUMENT' },
+    }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+  await assert.rejects(
+    () => new GeminiPdfClassificationProvider(
+      'test-key',
+      'gemini-3.5-flash-lite',
+    ).classifyDocument(input('invalid.pdf')),
+    (error: unknown) =>
+      error instanceof PdfAiProcessingError
+      && error.aiStatus === 'invalid_request',
+    'invalid schema requests fail immediately and use fallback upstream',
+  );
+  assert.equal(invalidCalls, 1, 'invalid requests are not retried');
+} finally {
+  globalThis.fetch = originalFetch;
+  if (originalRetries === undefined) delete process.env.DOCUMENT_AI_MAX_RETRIES;
+  else process.env.DOCUMENT_AI_MAX_RETRIES = originalRetries;
+  if (originalRetryBase === undefined) delete process.env.DOCUMENT_AI_RETRY_BASE_MS;
+  else process.env.DOCUMENT_AI_RETRY_BASE_MS = originalRetryBase;
+}
 
 console.log('AI document classifier tests passed');
