@@ -80,10 +80,55 @@ const canEdit = !new Set<AutomationJobStatus>([
 const preparation = snapshot?.buildingWarrant?.unusualAnswers;
 const planning = snapshot?.planning?.answers;
 const documentTypes = Object.values(DocumentType);
-const showListedConfirmation = Boolean(
-  draft?.unresolvedQuestions.some((item) => item.fieldKey.includes('listedBuilding'))
-  || preparation?.listedBuildingOrConservationArea,
-);
+const buildingWarrantConfirmations = preparation ? [
+  { name: 'applicantIsOwner', label: 'Is the applicant the owner?', value: preparation.applicantIsOwner },
+  { name: 'applicationIsStaged', label: 'Is the application staged?', value: preparation.applicationIsStaged },
+  {
+    name: 'intendedLifeFiveYearsOrLess',
+    label: 'Is the intended life of the building five years or less?',
+    value: preparation.intendedLifeFiveYearsOrLess,
+  },
+  {
+    name: 'fireAndRescueServiceEnforcingAuthority',
+    label: 'Is Fire and Rescue Service the enforcing authority?',
+    value: preparation.fireAndRescueServiceEnforcingAuthority,
+  },
+  {
+    name: 'listedBuildingOrConservationArea',
+    label: 'Is the building listed or in a conservation area?',
+    value: preparation.listedBuildingOrConservationArea,
+  },
+  {
+    name: 'otherHistoricalImportance',
+    label: 'Does the building have other historical importance?',
+    value: preparation.otherHistoricalImportance,
+  },
+  {
+    name: 'scottishMinistersRelaxationDirection',
+    label: 'Is the work subject to a Scottish Ministers relaxation direction?',
+    value: preparation.scottishMinistersRelaxationDirection,
+  },
+  {
+    name: 'dangerousBuildingNotice',
+    label: 'Is the building subject to a dangerous building notice?',
+    value: preparation.dangerousBuildingNotice,
+  },
+  {
+    name: 'approvedCertifierOfConstruction',
+    label: 'Will an approved certifier of construction be used?',
+    value: preparation.approvedCertifierOfConstruction,
+  },
+  {
+    name: 'coveredBySTAS',
+    label: 'Are the proposals covered by STAS?',
+    value: preparation.coveredBySTAS,
+  },
+  {
+    name: 'restrictPublicInspection',
+    label: 'Should any proposal information be restricted from public inspection?',
+    value: preparation.restrictPublicInspection,
+  },
+] : [];
 const suggestedClientName = currentApplicant
   ? clientDisplayName(currentApplicant)
   : String(
@@ -205,7 +250,7 @@ const suggestedClientName = currentApplicant
           </div>
         </section>
 
-        <section class="panel rounded-lg p-6">
+        {/* <section class="panel rounded-lg p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 class="text-lg font-semibold">Documents</h2><p class="mt-1 text-sm text-stone-600">Correct classifications here. The original files are never changed.</p></div>
             <label class="inline-flex items-center gap-2 text-sm font-medium"><input id="attention-only" type="checkbox" checked />Needs attention only</label>
@@ -236,17 +281,26 @@ const suggestedClientName = currentApplicant
             })}
             {!documents.length && <p class="px-4 py-8 text-center text-sm text-stone-500">No documents are linked to this project yet.</p>}
           </div>
-        </section>
+        </section> */}
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Confirmations</h2>
-          <p class="mt-1 text-sm text-stone-600">Only answers that affect legal or conditional portal branches are shown.</p>
+          <p class="mt-1 text-sm text-stone-600">
+            {snapshot.buildingWarrant
+              ? 'Review the application answers that control Building Warrant portal questions.'
+              : 'Review the Householder planning questions before opening the desktop app.'}
+          </p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             {snapshot.buildingWarrant ? <>
-              <label class="block"><span class="label">Is the applicant the owner?</span><select class="field" name="applicantIsOwner"><option value="true" selected={preparation?.applicantIsOwner}>Yes</option><option value="false" selected={!preparation?.applicantIsOwner}>No</option></select></label>
-              <label class="block"><span class="label">Is the application staged?</span><select class="field" name="applicationIsStaged"><option value="false" selected={!preparation?.applicationIsStaged}>No</option><option value="true" selected={preparation?.applicationIsStaged}>Yes</option></select></label>
-              {showListedConfirmation && <label class="block"><span class="label">Listed building or conservation area?</span><select class="field" name="listedBuildingOrConservationArea"><option value="false" selected={!preparation?.listedBuildingOrConservationArea}>No</option><option value="true" selected={preparation?.listedBuildingOrConservationArea}>Yes</option></select></label>}
-              <label class="block"><span class="label">Approved certifier of construction?</span><select class="field" name="approvedCertifierOfConstruction"><option value="false" selected={!preparation?.approvedCertifierOfConstruction}>No</option><option value="true" selected={preparation?.approvedCertifierOfConstruction}>Yes</option></select></label>
+              {buildingWarrantConfirmations.map((question) => (
+                <label class="block">
+                  <span class="label">{question.label}</span>
+                  <select class="field" name={question.name}>
+                    <option value="true" selected={question.value}>Yes</option>
+                    <option value="false" selected={!question.value}>No</option>
+                  </select>
+                </label>
+              ))}
               <input type="hidden" name="soleOwner" value="false" /><input type="hidden" name="agriculturalHolding" value="false" />
             </> : <>
               <label class="block"><span class="label">Is the applicant the sole owner of all land?</span><select class="field" name="soleOwner"><option value="true" selected={planning?.soleOwner === true}>Yes</option><option value="false" selected={planning?.soleOwner === false}>No</option></select></label>
@@ -260,7 +314,6 @@ const suggestedClientName = currentApplicant
               </div>
               <input type="hidden" name="applicantIsOwner" value="false" /><input type="hidden" name="applicationIsStaged" value="false" /><input type="hidden" name="approvedCertifierOfConstruction" value="false" />
             </>}
-            {!showListedConfirmation && <input type="hidden" name="listedBuildingOrConservationArea" value="false" />}
           </div>
         </section>
 

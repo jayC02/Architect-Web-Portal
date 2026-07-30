@@ -174,6 +174,32 @@ const warrantPreparation = buildingWarrantPreparationUpdateSchema.parse({
 assert.equal(warrantPreparation.estimatedValue, 35000);
 assert.equal(warrantPreparation.selectedCertifierPresetId, undefined);
 
+const warrantConfirmationKeys = [
+  'applicantIsOwner',
+  'applicationIsStaged',
+  'intendedLifeFiveYearsOrLess',
+  'fireAndRescueServiceEnforcingAuthority',
+  'listedBuildingOrConservationArea',
+  'otherHistoricalImportance',
+  'scottishMinistersRelaxationDirection',
+  'dangerousBuildingNotice',
+  'approvedCertifierOfConstruction',
+  'coveredBySTAS',
+  'restrictPublicInspection',
+];
+const preparationPageSource = readFileSync(
+  new URL('../src/pages/automation-job/[id].astro', import.meta.url),
+  'utf8',
+);
+const preparationRouteSource = readFileSync(
+  new URL('../src/pages/api/automation-jobs/[id]/preparation.ts', import.meta.url),
+  'utf8',
+);
+for (const key of warrantConfirmationKeys) {
+  assert.match(preparationPageSource, new RegExp(`name: '${key}'`));
+  assert.match(preparationRouteSource, new RegExp(`${key}: value\\.${key}`));
+}
+
 const sharedV2Fixture = JSON.parse(readFileSync(
   new URL('./fixtures/automation-job-v2-building-warrant.json', import.meta.url),
   'utf8',
