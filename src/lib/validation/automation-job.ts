@@ -208,6 +208,7 @@ export const automationJobSnapshotV2Schema = z.object({
   }),
   applicant: z.object({
     clientId: nullableText,
+    clientType: z.enum(['INDIVIDUAL', 'ORGANISATION']).nullable(),
     displayName: nullableText,
     title: nullableText,
     firstName: nullableText,
@@ -275,6 +276,7 @@ export const automationJobSnapshotV2Schema = z.object({
   }).nullable(),
   documents: z.array(z.object({
     id: z.string().min(1),
+    originalFilename: z.string().min(1),
     filename: z.string().min(1),
     mimeType: z.string().min(1),
     sizeBytes: z.number().int().nonnegative(),

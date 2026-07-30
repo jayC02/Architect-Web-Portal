@@ -109,6 +109,7 @@ const documentRelevance = (type: DocumentType) => {
 
 const mapDocument = (document: ProjectDocument) => ({
   id: document.id,
+  originalFilename: document.originalName || document.fileName,
   filename: document.originalName || document.fileName,
   mimeType: document.mimeType,
   sizeBytes: document.sizeBytes,
@@ -244,6 +245,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const applicant = project.client
     ? {
         clientId: project.client.id,
+        clientType: project.client.companyName ? 'ORGANISATION' as const : 'INDIVIDUAL' as const,
         displayName: project.client.name,
         title: project.client.title,
         firstName: project.client.firstName,
@@ -264,6 +266,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       }
     : {
         clientId: null,
+        clientType: null,
         displayName: null,
         title: null,
         firstName: null,

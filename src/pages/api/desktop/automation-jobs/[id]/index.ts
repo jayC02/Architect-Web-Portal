@@ -30,6 +30,11 @@ const serialiseJob = (job: any) => ({
   documents: Array.isArray(job.documentSnapshot?.documents)
     ? job.documentSnapshot.documents.map((document: any) => ({
         ...document,
+        originalFilename: document.originalFilename ?? document.filename ?? document.originalName ?? document.fileName,
+        originalName: document.originalFilename ?? document.filename ?? document.originalName ?? document.fileName,
+        fileName: document.originalFilename ?? document.filename ?? document.originalName ?? document.fileName,
+        type: document.categoryKey ?? document.type ?? 'OTHER',
+        status: document.reviewState ?? document.status,
         downloadUrl: `/api/desktop/documents/${document.id}?jobId=${job.id}`,
       }))
     : [],
