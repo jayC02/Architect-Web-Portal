@@ -64,6 +64,7 @@
   },
   "applicant": {
     "clientId": "client_fixture",
+    "clientType": "INDIVIDUAL",
     "displayName": "Ms Jamie Client",
     "title": "Ms",
     "firstName": "Jamie",
@@ -114,6 +115,7 @@
     {
       "id": "document_fixture",
       "filename": "Location Plan.pdf",
+      "originalFilename": "Location Plan.pdf",
       "mimeType": "application/pdf",
       "sizeBytes": 12000,
       "categoryKey": "LOCATION_PLAN",

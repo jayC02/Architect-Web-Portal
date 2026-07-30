@@ -194,7 +194,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
 
   const warrantAnswers = buildingWarrantPreparationSchema.parse(jsonObject(warrant?.preparationData));
   const planningAnswers = householderPreparationSchema.parse(jsonObject(planning?.preparationData));
-  const presetKey = typeOfWorkKey(warrant?.presetKey ?? project.projectType);
+  const presetKey = typeOfWorkKey(project.projectType);
   const presetLabel = typeOfWorkLabel(presetKey);
   const selectedCertifier = warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
   const sourceType = inferSourceType(input);

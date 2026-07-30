@@ -139,7 +139,7 @@ const suggestedClientName = currentApplicant
           )}
         </section>
 
-        <section class="panel rounded-lg p-6">
+        {/* <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Project and site</h2>
           <p class="mt-1 text-sm text-stone-600">Corrections here update the Project and linked Site records.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -151,7 +151,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="sitePostcode" required value={suggestion('site.postcode', currentSite?.postcode)} /></label>
             <label class="block"><span class="label">Local authority</span><input class="field" name="siteLocalAuthority" value={suggestion('site.localAuthority', currentSite?.localAuthority ?? job.project.localAuthority)} /></label>
           </div>
-        </section>
+        </section> */}
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Applicant</h2>
@@ -173,7 +173,7 @@ const suggestedClientName = currentApplicant
           </div>
         </section>
 
-        <section class="panel rounded-lg p-6">
+        {/* <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Agent and practice</h2>
           <p class="mt-1 text-sm text-stone-600">These details are reused as your organisation defaults for future applications.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -188,7 +188,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="agentPostcode" value={suggestion('agent.postcode', defaults?.agentPostcode)} /></label>
             <label class="block"><span class="label">Country</span><input class="field" name="agentCountry" value={suggestion('agent.country', defaults?.agentCountry ?? 'United Kingdom')} /></label>
           </div>
-        </section>
+        </section> */}
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Proposed application</h2>
@@ -196,7 +196,7 @@ const suggestedClientName = currentApplicant
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <label class="block md:col-span-2"><span class="label">Description of work</span><textarea class="field" name="description" rows="4" required minlength="12">{suggestion('application.descriptionOfWork', snapshot.buildingWarrant?.description ?? snapshot.planning?.description)}</textarea>{fieldNote('application.descriptionOfWork') && <a class="mt-1 block text-xs text-emerald-700 hover:underline" href={`/api/documents/${fieldSource('application.descriptionOfWork')?.documentId}`} target="_blank" rel="noopener">{fieldNote('application.descriptionOfWork')}</a>}</label>
             {snapshot.buildingWarrant && <>
-              <label class="block"><span class="label">Building Warrant preset</span><select class="field" name="presetKey">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === snapshot.buildingWarrant?.presetKey}>{item.label}</option>)}</select></label>
+              <label class="block"><span class="label">Type of Work</span><select class="field" name="presetKey">{TYPE_OF_WORK_DEFINITIONS.map((item) => <option value={item.key} selected={item.key === snapshot.buildingWarrant?.presetKey}>{item.label}</option>)}</select></label>
               <label class="block"><span class="label">Estimated value</span><input class="field" name="estimatedValue" type="number" min="0" step="0.01" value={suggestion('application.estimatedValue', snapshot.buildingWarrant.estimatedValue)} /></label>
               <label class="block"><span class="label">Current use</span><input class="field" name="currentUse" value={suggestion('application.currentUse', snapshot.buildingWarrant.currentUse)} /></label>
               <label class="block"><span class="label">Proposed use</span><input class="field" name="proposedUse" value={suggestion('application.proposedUse', snapshot.buildingWarrant.proposedUse)} /></label>

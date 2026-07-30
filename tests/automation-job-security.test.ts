@@ -48,6 +48,16 @@ assert.match(
 );
 assert.match(service, /assertSafeAutomationSnapshot\(dataSnapshot\)/, 'snapshot service rejects unsafe snapshot fields');
 assert.doesNotMatch(service, /storageKey:\s*document\.storageKey|storageUrl:\s*document\.storageUrl/, 'snapshot service does not include raw storage references');
+assert.match(
+  service,
+  /const presetKey = typeOfWorkKey\(project\.projectType\)/,
+  'the current project type of work controls the building warrant preset',
+);
+assert.doesNotMatch(
+  service,
+  /typeOfWorkKey\(warrant\?\.presetKey \?\? project\.projectType\)/,
+  'a stale warrant preset cannot override the current project type of work',
+);
 
 assert.match(validation, /'storageKey'/, 'snapshot validation forbids storageKey fields');
 assert.match(validation, /'password'/, 'snapshot validation forbids password fields');
