@@ -184,7 +184,7 @@ const suggestedClientName = currentApplicant
           )}
         </section>
 
-        {/* <section class="panel rounded-lg p-6">
+        <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Project and site</h2>
           <p class="mt-1 text-sm text-stone-600">Corrections here update the Project and linked Site records.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -196,13 +196,12 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="sitePostcode" required value={suggestion('site.postcode', currentSite?.postcode)} /></label>
             <label class="block"><span class="label">Local authority</span><input class="field" name="siteLocalAuthority" value={suggestion('site.localAuthority', currentSite?.localAuthority ?? job.project.localAuthority)} /></label>
           </div>
-        </section> */}
+        </section>
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Applicant</h2>
           <p class="mt-1 text-sm text-stone-600">Saving updates the linked Client. If none is linked, a complete Client record is created here.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
-            <label class="block md:col-span-2"><span class="label">Client display name</span><input class="field" name="clientName" required value={suggestedClientName} /></label>
             <label class="block"><span class="label">Title</span><input class="field" name="clientTitle" value={suggestion('applicant.title', currentApplicant?.title)} /></label>
             <label class="block"><span class="label">Company name</span><input class="field" name="clientCompanyName" value={suggestion('applicant.companyName', currentApplicant?.companyName)} /></label>
             <label class="block"><span class="label">First name</span><input class="field" name="clientFirstName" value={suggestion('applicant.firstName', currentApplicant?.firstName)} /></label>
@@ -210,15 +209,13 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Email</span><input class="field" name="clientEmail" type="email" value={suggestion('applicant.email', currentApplicant?.email)} /></label>
             <label class="block"><span class="label">Phone</span><input class="field" name="clientPhone" value={suggestion('applicant.phone', currentApplicant?.phone)} /></label>
             <label class="block md:col-span-2"><span class="label">Address line 1</span><input class="field" name="clientAddressLine1" value={suggestion('applicant.addressLine1', currentApplicant?.addressLine1 ?? currentApplicant?.address)} /></label>
-            <label class="block"><span class="label">Address line 2</span><input class="field" name="clientAddressLine2" value={suggestion('applicant.addressLine2', currentApplicant?.addressLine2)} /></label>
             <label class="block"><span class="label">Town or city</span><input class="field" name="clientTownCity" value={suggestion('applicant.townCity', currentApplicant?.townCity)} /></label>
             <label class="block"><span class="label">Postcode</span><input class="field" name="clientPostcode" value={suggestion('applicant.postcode', currentApplicant?.postcode)} /></label>
             <label class="block"><span class="label">Country</span><input class="field" name="clientCountry" value={suggestion('applicant.country', currentApplicant?.country ?? 'United Kingdom')} /></label>
-            <label class="block md:col-span-2"><span class="label">Client notes</span><textarea class="field" name="clientNotes" rows="2">{currentApplicant?.notes ?? ''}</textarea></label>
           </div>
         </section>
 
-        {/* <section class="panel rounded-lg p-6">
+        <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Agent and practice</h2>
           <p class="mt-1 text-sm text-stone-600">These details are reused as your organisation defaults for future applications.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
@@ -233,7 +230,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Postcode</span><input class="field" name="agentPostcode" value={suggestion('agent.postcode', defaults?.agentPostcode)} /></label>
             <label class="block"><span class="label">Country</span><input class="field" name="agentCountry" value={suggestion('agent.country', defaults?.agentCountry ?? 'United Kingdom')} /></label>
           </div>
-        </section> */}
+        </section>
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Proposed application</h2>
@@ -250,7 +247,7 @@ const suggestedClientName = currentApplicant
           </div>
         </section>
 
-        {/* <section class="panel rounded-lg p-6">
+        <section class="panel rounded-lg p-6">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 class="text-lg font-semibold">Documents</h2><p class="mt-1 text-sm text-stone-600">Correct classifications here. The original files are never changed.</p></div>
             <label class="inline-flex items-center gap-2 text-sm font-medium"><input id="attention-only" type="checkbox" checked />Needs attention only</label>
@@ -281,7 +278,7 @@ const suggestedClientName = currentApplicant
             })}
             {!documents.length && <p class="px-4 py-8 text-center text-sm text-stone-500">No documents are linked to this project yet.</p>}
           </div>
-        </section> */}
+        </section>
 
         <section class="panel rounded-lg p-6">
           <h2 class="text-lg font-semibold">Confirmations</h2>
