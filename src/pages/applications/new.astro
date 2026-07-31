@@ -85,18 +85,29 @@ const formatDate = (date: Date) =>
           <span class="flex h-14 w-14 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm">
             <UploadCloud size={25} />
           </span>
-          <span class="mt-4 text-base font-semibold text-ink">Drop the project package here</span>
-          <span class="mt-1 text-sm text-stone-500">or choose up to 50 files</span>
-          <span class="mt-3 text-xs text-stone-400">PDF, Word, Excel, images and text files · 25 MB per file · 250 MB total</span>
+          <span class="mt-4 text-base font-semibold text-ink">Drop PDF documents here</span>
+          <span class="mt-1 text-sm text-stone-500">Choose PDF documents or select a folder</span>
+          <span class="mt-3 text-xs text-stone-400">PDF files only - 20 files - 25 MB per file - 75 MB per package</span>
           <input
             data-file-input
             class="sr-only"
             type="file"
             name="files"
             multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.txt"
+            accept=".pdf,application/pdf"
+          />
+          <input
+            data-folder-input
+            class="sr-only"
+            type="file"
+            name="folderFiles"
+            multiple
+            accept=".pdf,application/pdf"
           />
         </label>
+        <button type="button" data-folder-button class="mt-3 text-sm font-semibold text-stone-600 hover:text-ink">
+          Choose a folder of PDFs
+        </button>
 
         <div data-file-panel class="mt-4 hidden rounded-lg border border-stone-200">
           <div class="flex items-center justify-between border-b border-stone-200 px-4 py-3">
@@ -124,10 +135,18 @@ const formatDate = (date: Date) =>
 
         <div data-upload-progress class="mt-5 hidden" aria-live="polite">
           <div class="mb-2 flex items-center justify-between text-sm">
-            <span data-upload-message class="font-semibold">Uploading documents…</span>
+            <span data-upload-message class="font-semibold">Uploading documents...</span>
             <span data-upload-percent class="text-stone-500">0%</span>
           </div>
-          <div class="h-1.5 overflow-hidden rounded-full bg-stone-100">
+          <div
+            class="h-1.5 overflow-hidden rounded-full bg-stone-100"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-label="Document upload progress"
+            data-upload-progressbar
+          >
             <div data-upload-bar class="h-full w-0 rounded-full bg-moss transition-[width]"></div>
           </div>
         </div>
@@ -176,7 +195,7 @@ const formatDate = (date: Date) =>
       <div class="mb-3 flex items-center justify-between gap-4">
         <div>
           <h2 class="text-xl font-semibold">Continue an application</h2>
-          <p class="mt-1 text-sm text-stone-500">Unfinished drafts remain available for 30 days.</p>
+          <p class="mt-1 text-sm text-stone-500">Unfinished drafts remain available for 7 days.</p>
         </div>
         <FolderClock size={20} className="text-stone-400" />
       </div>
@@ -189,13 +208,13 @@ const formatDate = (date: Date) =>
               </span>
               <span class="min-w-0">
                 <span class="block truncate font-semibold text-ink">{draft.notes?.trim() || typeLabel(draft.selectedApplicationType)}</span>
-                <span class="mt-1 block text-sm text-stone-500">{draft._count.documents} document{draft._count.documents === 1 ? '' : 's'} · Updated {formatDate(draft.updatedAt)}</span>
+                <span class="mt-1 block text-sm text-stone-500">{draft._count.documents} document{draft._count.documents === 1 ? '' : 's'} - Updated {formatDate(draft.updatedAt)}</span>
               </span>
             </span>
             <span class:list={[
               'text-sm font-semibold',
               draft.status === ApplicationDraftStatus.FAILED ? 'text-red-700' : 'text-stone-600',
-            ]}>{statusLabel(draft.status)} →</span>
+            ]}>{statusLabel(draft.status)} -></span>
           </a>
         ))}
       </div>
@@ -206,6 +225,8 @@ const formatDate = (date: Date) =>
 <script>
   const form = document.querySelector<HTMLFormElement>('[data-application-upload]');
   const input = document.querySelector<HTMLInputElement>('[data-file-input]');
+  const folderInput = document.querySelector<HTMLInputElement>('[data-folder-input]');
+  const folderButton = document.querySelector<HTMLButtonElement>('[data-folder-button]');
   const dropZone = document.querySelector<HTMLElement>('[data-drop-zone]');
   const filePanel = document.querySelector<HTMLElement>('[data-file-panel]');
   const fileList = document.querySelector<HTMLElement>('[data-file-list]');
@@ -214,10 +235,14 @@ const formatDate = (date: Date) =>
   const submitButton = document.querySelector<HTMLButtonElement>('[data-submit]');
   const progress = document.querySelector<HTMLElement>('[data-upload-progress]');
   const progressBar = document.querySelector<HTMLElement>('[data-upload-bar]');
+  const progressTrack = document.querySelector<HTMLElement>('[data-upload-progressbar]');
   const progressPercent = document.querySelector<HTMLElement>('[data-upload-percent]');
   const progressMessage = document.querySelector<HTMLElement>('[data-upload-message]');
   const errorBox = document.querySelector<HTMLElement>('[data-upload-error]');
   let selectedFiles: File[] = [];
+  let draftId: string | null = null;
+  let uploading = false;
+  const fileStates = new Map<string, { state: string; documentId?: string; error?: string }>();
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -246,7 +271,8 @@ const formatDate = (date: Date) =>
       name.textContent = file.name;
       const size = document.createElement('span');
       size.className = 'mt-0.5 block text-xs text-stone-500';
-      size.textContent = formatBytes(file.size);
+      const status = fileStates.get(fileKey(file));
+      size.textContent = `${formatBytes(file.size)}${status ? ` - ${status.state}` : ''}`;
       details.append(name, size);
 
       const remove = document.createElement('button');
@@ -255,10 +281,22 @@ const formatDate = (date: Date) =>
       remove.setAttribute('aria-label', `Remove ${file.name}`);
       remove.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
       remove.addEventListener('click', () => {
+        if (uploading) return;
         selectedFiles = selectedFiles.filter((candidate) => fileKey(candidate) !== fileKey(file));
+        fileStates.delete(fileKey(file));
         renderFiles();
       });
-      row.append(icon, details, remove);
+      if (status?.state === 'Could not upload' || status?.state === 'Could not finalise') {
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'text-sm font-semibold text-stone-600 hover:text-ink';
+        retry.textContent = 'Retry';
+        retry.setAttribute('aria-label', `Retry ${file.name}`);
+        retry.addEventListener('click', () => void uploadFile(file));
+        row.append(icon, details, retry, remove);
+      } else {
+        row.append(icon, details, remove);
+      }
       fileList.append(row);
     });
   };
@@ -266,8 +304,26 @@ const formatDate = (date: Date) =>
   const addFiles = (files: File[]) => {
     const existing = new Set(selectedFiles.map(fileKey));
     for (const file of files) {
+      if ((file.type && file.type !== 'application/pdf') || !file.name.toLowerCase().endsWith('.pdf')) {
+        showError('PDF files only.');
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        showError(`${file.name} is larger than the 25 MB file limit.`);
+        continue;
+      }
+      if (selectedFiles.length >= 20) {
+        showError('You can upload up to 20 documents.');
+        break;
+      }
       if (!existing.has(fileKey(file))) {
+        const nextTotal = selectedFiles.reduce((total, candidate) => total + candidate.size, 0) + file.size;
+        if (nextTotal > 75 * 1024 * 1024) {
+          showError('This package is larger than the 75 MB project limit.');
+          break;
+        }
         selectedFiles.push(file);
+        fileStates.set(fileKey(file), { state: 'Waiting' });
         existing.add(fileKey(file));
       }
     }
@@ -275,6 +331,9 @@ const formatDate = (date: Date) =>
   };
 
   input?.addEventListener('change', () => addFiles(Array.from(input.files ?? [])));
+  folderInput?.setAttribute('webkitdirectory', '');
+  folderInput?.addEventListener('change', () => addFiles(Array.from(folderInput.files ?? [])));
+  folderButton?.addEventListener('click', () => folderInput?.click());
   clearButton?.addEventListener('click', () => {
     selectedFiles = [];
     if (input) input.value = '';
@@ -301,7 +360,119 @@ const formatDate = (date: Date) =>
     errorBox.classList.remove('hidden');
   };
 
-  form?.addEventListener('submit', (event) => {
+  const api = async <T,>(url: string, body: Record<string, unknown>): Promise<T> => {
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({})) as T & { error?: string };
+    if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
+    return payload;
+  };
+
+  const updateProgress = () => {
+    const completed = selectedFiles.filter((file) => fileStates.get(fileKey(file))?.state === 'Waiting for analysis').length;
+    const active = selectedFiles.filter((file) => fileStates.get(fileKey(file))?.state === 'Uploading').length;
+    const total = selectedFiles.length;
+    if (progressMessage) progressMessage.textContent = active
+      ? `Uploading ${completed + active} of ${total} documents`
+      : completed === total ? 'Finalising documents' : `Uploading ${completed} of ${total} documents`;
+    const percentage = total ? Math.round((completed / total) * 100) : 0;
+    if (progressBar) progressBar.style.width = `${percentage}%`;
+    if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(percentage));
+    if (progressPercent) progressPercent.textContent = `${percentage}%`;
+    renderFiles();
+  };
+
+  const ensureDraft = async () => {
+    if (draftId) return draftId;
+    const notes = form?.querySelector<HTMLTextAreaElement>('textarea[name="notes"]')?.value ?? '';
+    const applicationType = form?.querySelector<HTMLSelectElement>('select[name="applicationType"]')?.value ?? 'AUTO';
+    const payload = await api<{ draft: { id: string } }>('/api/application-drafts', {
+      notes,
+      applicationType,
+    });
+    draftId = payload.draft.id;
+    return draftId;
+  };
+
+  const uploadFile = async (file: File) => {
+    const key = fileKey(file);
+    if (fileStates.get(key)?.state === 'Waiting for analysis') return;
+    fileStates.set(key, { state: 'Uploading' });
+    updateProgress();
+    try {
+      const currentDraftId = await ensureDraft();
+      let complete = false;
+      for (let attempt = 0; attempt < 2 && !complete; attempt += 1) {
+        const intent = await api<{
+          document: { id: string; uploadStatus: string };
+          upload: { url: string; token: string } | null;
+          storage: { warning: boolean; blocked: boolean };
+        }>(`/api/application-drafts/${currentDraftId}/documents/upload-intent`, {
+          filename: file.name,
+          mimeType: file.type || 'application/pdf',
+          size: file.size,
+        });
+        if (intent.storage.warning) showError('Document storage is nearly full.');
+        if (intent.storage.blocked) throw new Error('New uploads are temporarily unavailable because document storage is full.');
+        if (intent.upload) {
+          const response = await fetch(intent.upload.url, {
+            method: 'PUT',
+            headers: {
+              'content-type': file.type || 'application/pdf',
+              'x-upsert': 'false',
+            },
+            body: file,
+          });
+          if (!response.ok) {
+            const uploadError = await response.text().catch(() => '');
+            if (response.status === 409 || /already exists/i.test(uploadError)) {
+              // The previous browser attempt may have reached Storage before its finalisation response was lost.
+            } else if (attempt === 0) {
+              continue;
+            } else {
+              throw new Error('Could not upload this document.');
+            }
+          }
+        }
+        fileStates.set(key, { state: 'Uploaded', documentId: intent.document.id });
+        updateProgress();
+        fileStates.set(key, { state: 'Finalising', documentId: intent.document.id });
+        updateProgress();
+        try {
+          await api(`/api/application-drafts/${currentDraftId}/documents/${intent.document.id}/finalise`, {});
+        } catch {
+          fileStates.set(key, { state: 'Could not finalise', documentId: intent.document.id });
+          showError(`${file.name} was uploaded but could not be finalised. Try again.`);
+          return;
+        }
+        fileStates.set(key, { state: 'Waiting for analysis', documentId: intent.document.id });
+        complete = true;
+      }
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : 'Could not upload this document.';
+      fileStates.set(key, { state: 'Could not upload', error: message });
+      showError(`Could not upload ${file.name}. Your completed uploads have been kept.`);
+    } finally {
+      updateProgress();
+    }
+  };
+
+  const uploadWithConcurrency = async (files: File[]) => {
+    let next = 0;
+    const workers = Array.from({ length: Math.min(3, files.length) }, async () => {
+      while (next < files.length) {
+        const index = next++;
+        await uploadFile(files[index]);
+      }
+    });
+    await Promise.all(workers);
+  };
+
+  form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     errorBox?.classList.add('hidden');
     if (!selectedFiles.length) {
@@ -310,45 +481,19 @@ const formatDate = (date: Date) =>
       return;
     }
 
-    const values = new FormData(form);
-    values.delete('files');
-    selectedFiles.forEach((file) => values.append('files', file, file.name));
+    if (uploading) return;
+    uploading = true;
     if (submitButton) submitButton.disabled = true;
     progress?.classList.remove('hidden');
-    if (progressMessage) progressMessage.textContent = 'Uploading documents…';
-
-    const request = new XMLHttpRequest();
-    request.open('POST', '/api/application-drafts');
-    request.setRequestHeader('accept', 'application/json');
-    request.upload.addEventListener('progress', (upload) => {
-      if (!upload.lengthComputable) return;
-      const percentage = Math.min(99, Math.round((upload.loaded / upload.total) * 100));
-      if (progressBar) progressBar.style.width = `${percentage}%`;
-      if (progressPercent) progressPercent.textContent = `${percentage}%`;
-    });
-    request.addEventListener('load', () => {
-      let payload: Record<string, any> = {};
-      try {
-        payload = JSON.parse(request.responseText || '{}');
-      } catch {
-        payload = {};
-      }
-      if (request.status >= 200 && request.status < 300 && typeof payload.redirectTo === 'string') {
-        if (progressBar) progressBar.style.width = '100%';
-        if (progressPercent) progressPercent.textContent = '100%';
-        if (progressMessage) progressMessage.textContent = 'Upload complete. Preparing review…';
-        window.location.assign(payload.redirectTo);
-        return;
-      }
-      showError(typeof payload.error === 'string' ? payload.error : 'The documents could not be uploaded. Please try again.');
-      if (submitButton) submitButton.disabled = false;
-      progress?.classList.add('hidden');
-    });
-    request.addEventListener('error', () => {
-      showError('The upload was interrupted. Check your connection and try again.');
-      if (submitButton) submitButton.disabled = false;
-      progress?.classList.add('hidden');
-    });
-    request.send(values);
+    updateProgress();
+    await uploadWithConcurrency(selectedFiles.filter((file) => fileStates.get(fileKey(file))?.state !== 'Waiting for analysis'));
+    uploading = false;
+    const completed = selectedFiles.every((file) => fileStates.get(fileKey(file))?.state === 'Waiting for analysis');
+    if (completed && draftId) {
+      if (progressMessage) progressMessage.textContent = 'Documents finalised. Preparing analysis...';
+      window.location.assign(`/applications/${draftId}`);
+      return;
+    }
+    if (submitButton) submitButton.disabled = false;
   });
 </script>

@@ -33,6 +33,16 @@ type SavedDocument = {
   sizeBytes: number;
 };
 
+export type SignedDirectUpload = {
+  uploadUrl: string;
+  token: string;
+};
+
+export type StoredDocumentMetadata = {
+  sizeBytes: number;
+  mimeType: string | null;
+};
+
 const getStorageProvider = () => process.env.UPLOAD_STORAGE_PROVIDER ?? 'local';
 const getLocalDir = () => process.env.UPLOAD_STORAGE_DIR ?? '.runtime/uploads';
 const LEGACY_LOCAL_DIR = 'public/uploads';
@@ -48,6 +58,11 @@ const getRequiredSupabaseConfig = () => {
 
   return { supabaseUrl, supabaseServiceRoleKey, supabaseBucket };
 };
+
+const encodeStorageKey = (storageKey: string) => normalizeStorageKey(storageKey)
+  .split('/')
+  .map(encodeURIComponent)
+  .join('/');
 
 const normalizeFolder = (folder: string) => {
   const normalized = folder.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
@@ -162,6 +177,67 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
     mimeType: file.type,
     sizeBytes: file.size,
   };
+}
+
+export async function createSignedDirectUpload(storageKey: string): Promise<SignedDirectUpload> {
+  if (getStorageProvider() !== 'supabase') {
+    throw new HttpError(503, 'Direct document uploads are not configured.');
+  }
+  const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
+  const encodedBucket = encodeURIComponent(supabaseBucket);
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/upload/sign/${encodedBucket}/${encodeStorageKey(storageKey)}`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${supabaseServiceRoleKey}`,
+        apikey: supabaseServiceRoleKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  if (!response.ok) throw new HttpError(500, 'A secure upload could not be started.');
+  const payload = await response.json() as { url?: string; token?: string };
+  if (!payload.url || !payload.token) throw new HttpError(500, 'A secure upload could not be started.');
+  return {
+    uploadUrl: payload.url.startsWith('http') ? payload.url : `${supabaseUrl}/storage/v1${payload.url}`,
+    token: payload.token,
+  };
+}
+
+export async function getStoredDocumentMetadata(storageKey: string): Promise<StoredDocumentMetadata | null> {
+  const safeKey = normalizeStorageKey(storageKey);
+  const provider = getStorageProvider();
+  if (provider === 'supabase') {
+    const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
+    const response = await fetch(
+      `${supabaseUrl}/storage/v1/object/info/${encodeURIComponent(supabaseBucket)}/${encodeStorageKey(safeKey)}`,
+      {
+        headers: {
+          authorization: `Bearer ${supabaseServiceRoleKey}`,
+          apikey: supabaseServiceRoleKey,
+        },
+      },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) throw new HttpError(500, 'The uploaded document could not be verified.');
+    const payload = await response.json() as { size?: number | string; metadata?: { size?: number | string; mimetype?: string } };
+    const rawSize = payload.metadata?.size ?? payload.size;
+    const sizeBytes = typeof rawSize === 'number' ? rawSize : Number(rawSize);
+    if (!Number.isFinite(sizeBytes)) throw new HttpError(500, 'The uploaded document could not be verified.');
+    return { sizeBytes, mimeType: payload.metadata?.mimetype ?? null };
+  }
+  if (provider !== 'local') throw new HttpError(500, `Unsupported upload storage provider: ${provider}.`);
+  const configuredLocalDir = getLocalDir();
+  const storageRoot = path.isAbsolute(configuredLocalDir) ? configuredLocalDir : path.resolve(process.cwd(), configuredLocalDir);
+  const resolvedRoot = path.resolve(storageRoot);
+  const resolvedFile = path.resolve(resolvedRoot, safeKey);
+  if (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep)) {
+    throw new HttpError(400, 'Document path is invalid.');
+  }
+  const stats = await fs.stat(resolvedFile).catch(() => null);
+  return stats?.isFile() ? { sizeBytes: stats.size, mimeType: null } : null;
 }
 
 export async function readStoredDocumentBytes(storageKey?: string | null, legacyStorageUrl?: string | null): Promise<Buffer> {

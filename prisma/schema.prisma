@@ -245,6 +245,13 @@ enum ApplicationDraftStatus {
   EXPIRED
 }
 
+enum ApplicationDraftDocumentUploadStatus {
+  UPLOADING
+  UPLOADED
+  READY
+  FAILED
+}
+
 enum ApplicationDraftType {
   AUTO
   HOUSEHOLDER_PLANNING
@@ -661,7 +668,11 @@ model ApplicationDraftDocument {
   storageKey            String
   mimeType              String
   sizeBytes             Int
-  sha256                 String
+  sha256                 String?
+  clientSha256           String?
+  uploadIntentKey        String
+  uploadStatus           ApplicationDraftDocumentUploadStatus @default(UPLOADING)
+  finalisedAt            DateTime?
   analysisStatus        ApplicationDraftDocumentStatus @default(PENDING)
   analysisVersion       String?
   analysisProvider      String?
@@ -686,6 +697,8 @@ model ApplicationDraftDocument {
 
   @@index([draftId, createdAt])
   @@index([draftId, analysisStatus])
+  @@index([draftId, uploadStatus, createdAt])
+  @@unique([draftId, uploadIntentKey])
   @@index([sha256, analysisVersion, analysisProvider, analysisModel])
   @@index([committedDocumentId])
 }

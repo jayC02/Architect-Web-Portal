@@ -1,5 +1,6 @@
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import { z } from 'zod';
+import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import {
   documentFactSchema,
   documentFactFieldKeys,
@@ -60,7 +61,7 @@ export type ProjectClassificationContext = PdfClassificationInput['projectContex
 export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
 export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v2';
 export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v2';
-const MAX_AI_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_AI_FILE_BYTES = APPLICATION_UPLOAD_LIMITS.maxFileBytes;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 export const documentAnalysisCacheMatches = (input: {
@@ -758,7 +759,7 @@ export const classifyProjectDocumentBatch = async (
 ) => {
   const fallbacks = await classifyDocumentBatch(inputs);
   let completed = 0;
-  const suggestions = await mapWithConcurrency(inputs, 2, async (input, index) => {
+  const suggestions = await mapWithConcurrency(inputs, APPLICATION_UPLOAD_LIMITS.analysisConcurrency, async (input, index) => {
     const result = await classifyOne(input, fallbacks[index], provider, projectContext);
     completed += 1;
     await onProgress?.(result, index, completed, inputs.length);

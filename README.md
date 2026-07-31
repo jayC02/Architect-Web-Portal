@@ -92,6 +92,12 @@ The default Gemini model is `gemini-3.1-flash-lite`. If a configured Gemini mode
 
 The original uploaded PDF is never modified. AI suggestions remain in review until a user saves the document types. In production, document reads and previews continue through organisation-scoped private routes and Supabase service credentials remain server-side.
 
+## Application Draft Uploads
+
+AI-first application documents use metadata-only portal requests and direct private Supabase Storage uploads. The portal creates each document ID and object key, then finalises the upload by checking provider metadata before analysis. Limits are centralised at 20 files, 25 MB per file, and 75 MB per draft; browser uploads use at most three workers and analysis uses two.
+
+An unfinished draft expires after seven days. Objects that were uploaded but never finalised are removed after 24 hours by the existing opportunistic cleanup path. A future authenticated scheduled cleanup invocation should call the same cleanup service; no scheduler is created by this change. Storage accounting is database metadata based, so it can temporarily differ from provider billing while an abandoned provider object awaits cleanup.
+
 ## Validation
 
 - `npm run check`

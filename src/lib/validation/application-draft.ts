@@ -1,5 +1,6 @@
 import { ApplicationDraftType, DocumentStatus, DocumentType } from '@prisma/client';
 import { z } from 'zod';
+import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { TYPE_OF_WORK_KEYS, type TypeOfWorkKey } from '@/lib/projects/type-of-work';
 
 const optionalText = (maximum: number) =>
@@ -160,7 +161,7 @@ export const applicationDraftReviewSchema = z.object({
     z.string().max(120),
     z.union([z.boolean(), z.string().max(500), z.number(), z.null()]),
   ),
-  documents: z.array(draftDocumentReviewSchema).max(50),
+  documents: z.array(draftDocumentReviewSchema).max(APPLICATION_UPLOAD_LIMITS.maxFiles),
 }).strict();
 
 export type PreparedApplicationDraft = z.infer<typeof preparedApplicationDraftSchema>;

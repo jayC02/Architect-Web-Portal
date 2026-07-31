@@ -822,13 +822,48 @@ export default function ApplicationDraftReview({
     setWorking('files');
     setError('');
     try {
-      const body = new FormData();
-      Array.from(files).forEach((file) => body.append('files', file, file.name));
-      await apiJson<{ draft: ApplicationDraftResponse }>(
-        `/api/application-drafts/${draft.id}/documents`,
-        { method: 'POST', body },
-      );
-      window.location.reload();
+      const queue = Array.from(files);
+      const invalid = queue.find((file) => (file.type && file.type !== 'application/pdf') || !file.name.toLowerCase().endsWith('.pdf'));
+      if (invalid) throw new Error('PDF files only.');
+      let next = 0;
+      const uploadOne = async (file: File) => {
+        const intent = await apiJson<{
+          document: { id: string };
+          upload: { url: string; token: string } | null;
+        }>(`/api/application-drafts/${draft.id}/documents/upload-intent`, {
+          method: 'POST',
+          body: JSON.stringify({ filename: file.name, mimeType: file.type, size: file.size }),
+        });
+        if (intent.upload) {
+          const response = await fetch(intent.upload.url, {
+            method: 'PUT',
+            headers: {
+              'content-type': file.type || 'application/pdf',
+              'x-upsert': 'false',
+            },
+            body: file,
+          });
+          if (!response.ok) {
+            const uploadError = await response.text().catch(() => '');
+            if (response.status !== 409 && !/already exists/i.test(uploadError)) {
+              throw new Error(`Could not upload ${file.name}.`);
+            }
+          }
+        }
+        await apiJson(`/api/application-drafts/${draft.id}/documents/${intent.document.id}/finalise`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      };
+      await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+        while (next < queue.length) await uploadOne(queue[next++]);
+      }));
+      const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
+      setDraft(payload.draft);
+      setReview(payload.draft.review);
+      setIssues(payload.draft.issues);
+      setNotice(`${queue.length} document${queue.length === 1 ? '' : 's'} uploaded. Analyse again when ready.`);
+      setWorking('');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The documents could not be added.');
       setWorking('');
@@ -1262,7 +1297,7 @@ export default function ApplicationDraftReview({
               <input
                 type="file"
                 multiple
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.txt"
+                accept=".pdf,application/pdf"
                 className="sr-only"
                 disabled={Boolean(working)}
                 onChange={(event) => void addDocuments(event.target.files)}

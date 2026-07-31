@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import {
   ApplicationDraftDocumentStatus,
+  ApplicationDraftDocumentUploadStatus,
   ApplicationDraftStatus,
   ApplicationDraftType,
   DocumentSortSource,
@@ -10,9 +12,10 @@ import {
   type OrganisationDefaults,
   type Site,
 } from '@prisma/client';
+import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { prisma } from '@/lib/db/prisma';
 import type { TypeOfWorkKey } from '@/lib/projects/type-of-work';
-import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
+import { deleteStoredDocument, readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import {
   applicationDraftReviewSchema,
   preparedApplicationDraftSchema,
@@ -37,8 +40,8 @@ import {
 } from '@/server/services/application-draft-matching.service';
 import type { DocumentSortSuggestion } from '@/server/services/document-sorter.service';
 
-export const APPLICATION_DRAFT_RETENTION_DAYS = 30;
-export const MAX_APPLICATION_DRAFT_FILES = 50;
+export const APPLICATION_DRAFT_RETENTION_DAYS = APPLICATION_UPLOAD_LIMITS.unfinishedDraftRetentionDays;
+export const MAX_APPLICATION_DRAFT_FILES = APPLICATION_UPLOAD_LIMITS.maxFiles;
 
 type DraftWithDocuments = Prisma.ApplicationDraftGetPayload<{
   include: { documents: true };
@@ -786,7 +789,7 @@ const refreshAnalysisProgress = async (draftId: string, total: number) => {
         completed,
         total,
         message: completed < total
-          ? `Analysing document ${Math.min(completed + 1, total)} of ${total}`
+          ? `Analysing ${Math.min(completed + 1, total)} of ${total} documents`
           : `Analysed ${total} document${total === 1 ? '' : 's'}`,
       },
     },
@@ -871,6 +874,9 @@ export const analyseApplicationDraft = async (
   let draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
   if (!draft.documents.length) throw new HttpError(400, 'Upload at least one document before analysis.');
+  if (draft.documents.some((document) => document.uploadStatus !== ApplicationDraftDocumentUploadStatus.READY)) {
+    throw new HttpError(409, 'Finish uploading each document before analysis.');
+  }
   const identity = configuredDocumentAnalysisIdentity();
   await prisma.applicationDraft.update({
     where: { id: draft.id },
@@ -880,7 +886,7 @@ export const analyseApplicationDraft = async (
         phase: 'document-analysis',
         completed: 0,
         total: draft.documents.length,
-        message: `Analysing document 1 of ${draft.documents.length}`,
+        message: `Analysing 1 of ${draft.documents.length} documents`,
       },
     },
   });
@@ -892,6 +898,7 @@ export const analyseApplicationDraft = async (
   const pending = draft.documents.filter((document) => !reusableIds.has(document.id));
 
   for (const document of pending) {
+    if (!document.sha256) continue;
     const cachedDraft = await prisma.applicationDraftDocument.findFirst({
       where: {
         id: { not: document.id },
@@ -963,13 +970,45 @@ export const analyseApplicationDraft = async (
     });
     const readableInputs = await Promise.all(toAnalyse.map(async (document) => {
       try {
+        const bytes = await readStoredDocumentBytes(document.storageKey);
+        if (document.mimeType === 'application/pdf' && !bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+          await deleteStoredDocument(document.storageKey).catch(() => undefined);
+          await prisma.applicationDraftDocument.update({
+            where: { id: document.id },
+            data: {
+              uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED,
+              analysisStatus: ApplicationDraftDocumentStatus.FAILED,
+              analysisError: 'This document is not a valid PDF. Upload it again.',
+            },
+          });
+          await refreshAnalysisProgress(draft.id, draft.documents.length);
+          return null;
+        }
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        if (document.clientSha256 && document.clientSha256.toLowerCase() !== sha256) {
+          await deleteStoredDocument(document.storageKey).catch(() => undefined);
+          await prisma.applicationDraftDocument.update({
+            where: { id: document.id },
+            data: {
+              uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED,
+              analysisStatus: ApplicationDraftDocumentStatus.FAILED,
+              analysisError: 'This document could not be verified. Upload it again.',
+            },
+          });
+          await refreshAnalysisProgress(draft.id, draft.documents.length);
+          return null;
+        }
+        await prisma.applicationDraftDocument.update({
+          where: { id: document.id },
+          data: { sha256 },
+        });
         return {
-          document,
+          document: { ...document, sha256 },
           input: {
             documentId: document.id,
             filename: document.originalFilename,
             mimeType: document.mimeType,
-            bytes: await readStoredDocumentBytes(document.storageKey),
+            bytes,
           },
         };
       } catch {
