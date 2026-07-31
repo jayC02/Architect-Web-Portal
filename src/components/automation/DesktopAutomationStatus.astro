@@ -1,0 +1,114 @@
+---
+import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
+import AutomationLaunchButton, { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
+import { formatDate } from '@/lib/format';
+import {
+  automationJobDocumentCount,
+  desktopAutomationPresentation,
+  type DesktopAutomationJob,
+} from '@/server/services/desktop-automation-status.service';
+
+interface Props {
+  projectId: string;
+  type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  applicationId?: string | null;
+  applicationLabel: string;
+  manageHref: string;
+  job?: DesktopAutomationJob | null;
+  preparationReady?: boolean;
+  missingCount?: number;
+}
+
+const {
+  projectId,
+  type,
+  applicationId,
+  applicationLabel,
+  manageHref,
+  job = null,
+  preparationReady = false,
+  missingCount = 0,
+} = Astro.props;
+const presentation = job ? desktopAutomationPresentation(job.status) : null;
+const documentCount = job ? automationJobDocumentCount(job) : 0;
+const canPrepare = !job || job.status === AutomationJobStatus.CANCELLED;
+const statusLabel = presentation?.label ?? (preparationReady ? 'Ready to prepare' : 'Needs your attention');
+const description = presentation?.description ?? (preparationReady
+  ? `${applicationLabel} details can now be prepared for ArchitectPro Desktop.`
+  : missingCount > 0
+    ? `${missingCount} application detail${missingCount === 1 ? '' : 's'} must be completed before desktop preparation.`
+    : `Complete the ${applicationLabel.toLowerCase()} details before desktop preparation.`);
+const statusDate = job?.completedAt ?? job?.claimedAt ?? job?.preparedAt ?? job?.updatedAt ?? null;
+const attentionStatuses = new Set<AutomationJobStatus>([
+  AutomationJobStatus.DRAFT,
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.STALE,
+  AutomationJobStatus.NEEDS_REVIEW,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+]);
+const failedStatuses = new Set<AutomationJobStatus>([
+  AutomationJobStatus.FAILED,
+  AutomationJobStatus.FAILED_RETRYABLE,
+  AutomationJobStatus.FAILED_FINAL,
+]);
+---
+<section class="rounded-lg border border-stone-200 bg-stone-50/50 p-4" aria-label={`${applicationLabel} desktop automation`}>
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="min-w-0">
+      <p class="text-xs font-semibold uppercase text-stone-500">Desktop automation</p>
+      <div class="mt-2 flex items-center gap-2">
+        <span class:list={[
+          'h-2 w-2 shrink-0 rounded-full',
+          presentation?.kind === 'failed' ? 'bg-red-700'
+            : presentation?.kind === 'attention' ? 'bg-amber-600'
+              : presentation?.kind === 'ready' || presentation?.kind === 'completed' ? 'bg-moss'
+                : 'bg-stone-500',
+        ]} aria-hidden="true"></span>
+        <h3 class="font-semibold text-ink">{statusLabel}</h3>
+      </div>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-stone-600">{description}</p>
+      {job && (
+        <p class="mt-2 text-xs text-stone-500">
+          {statusDate ? formatDate(statusDate) : 'Date not recorded'}
+          {documentCount > 0 ? ` / ${documentCount} document${documentCount === 1 ? '' : 's'}` : ''}
+        </p>
+      )}
+    </div>
+
+    <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+      {job?.status === AutomationJobStatus.READY && (
+        <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop" />
+      )}
+      {job && attentionStatuses.has(job.status) && (
+        <a class="btn btn-primary" href={`/automation-job/${job.id}`}>Review application</a>
+      )}
+      {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) && (
+        <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>View status</a>
+      )}
+      {job?.status === AutomationJobStatus.COMPLETED && (
+        <a class="btn btn-secondary" href={manageHref}>View application</a>
+      )}
+      {job && failedStatuses.has(job.status) && (
+        <a class="btn btn-primary" href={`/automation-job/${job.id}`}>Review issue</a>
+      )}
+      {canPrepare && preparationReady && (
+        <AutomationLaunchButton
+          client:load
+          projectId={projectId}
+          type={type}
+          planningApplicationId={type === AutomationJobType.HOUSEHOLDER_PLANNING ? applicationId ?? undefined : undefined}
+          buildingWarrantApplicationId={type === AutomationJobType.BUILDING_WARRANT ? applicationId ?? undefined : undefined}
+          label="Prepare for desktop"
+        />
+      )}
+      {canPrepare && !preparationReady && (
+        <a class="btn btn-secondary" href={manageHref}>Complete application details</a>
+      )}
+      {job?.status === AutomationJobStatus.READY && (
+        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>
+      )}
+      <a class="text-xs font-semibold text-stone-500 hover:text-ink" href="/automation-jobs">View desktop job history</a>
+    </div>
+  </div>
+</section>

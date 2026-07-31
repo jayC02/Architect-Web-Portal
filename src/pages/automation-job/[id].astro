@@ -139,13 +139,13 @@ const suggestedClientName = currentApplicant
 <AppShell title={`Prepare ${job.project.name}`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mx-auto max-w-6xl">
     <a class="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink" href="/automation-jobs">
-      <ArrowLeft size={16} />Back to desktop automation
+      <ArrowLeft size={16} />Back to desktop job history
     </a>
     <header class="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Application preparation</p>
         <h1 class="mt-2 text-3xl font-semibold tracking-tight">Prepare {appLabel}</h1>
-        <p class="mt-2 text-sm text-stone-600">{job.project.name}{job.project.internalReference ? ` · Ref ${job.project.internalReference}` : ''}</p>
+        <p class="mt-2 text-sm text-stone-600">{job.project.name}{job.project.internalReference ? ` / Ref ${job.project.internalReference}` : ''}</p>
       </div>
       <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.projectId}`}><FolderOpen size={16} />Open project</a>
     </header>
@@ -164,6 +164,25 @@ const suggestedClientName = currentApplicant
         data-action={`/api/automation-jobs/${job.id}/preparation`}
         data-method="PATCH"
       >
+        <input type="hidden" name="projectName" value={suggestion('project.title', job.project.name)} />
+        <input type="hidden" name="projectType" value={job.project.projectType ?? ''} />
+        <input type="hidden" name="siteAddressLine1" value={suggestion('site.addressLine1', currentSite?.addressLine1 ?? job.project.siteAddress)} />
+        <input type="hidden" name="siteAddressLine2" value={suggestion('site.addressLine2', currentSite?.addressLine2)} />
+        <input type="hidden" name="siteTownCity" value={suggestion('site.townCity', currentSite?.townCity)} />
+        <input type="hidden" name="sitePostcode" value={suggestion('site.postcode', currentSite?.postcode)} />
+        <input type="hidden" name="siteLocalAuthority" value={suggestion('site.localAuthority', currentSite?.localAuthority ?? job.project.localAuthority)} />
+        <input type="hidden" name="clientAddressLine2" value={suggestion('applicant.addressLine2', currentApplicant?.addressLine2)} />
+        <input type="hidden" name="clientNotes" value={currentApplicant?.notes ?? ''} />
+        <input type="hidden" name="practiceName" value={suggestion('agent.practiceName', defaults?.practiceName ?? auth.organisation.name)} />
+        <input type="hidden" name="agentFirstName" value={suggestion('agent.firstName', defaults?.agentFirstName)} />
+        <input type="hidden" name="agentLastName" value={suggestion('agent.lastName', defaults?.agentLastName)} />
+        <input type="hidden" name="agentEmail" value={suggestion('agent.email', defaults?.agentEmail)} />
+        <input type="hidden" name="agentPhone" value={suggestion('agent.phone', defaults?.agentPhone)} />
+        <input type="hidden" name="agentAddressLine1" value={suggestion('agent.addressLine1', defaults?.agentAddressLine1)} />
+        <input type="hidden" name="agentAddressLine2" value={suggestion('agent.addressLine2', defaults?.agentAddressLine2)} />
+        <input type="hidden" name="agentTownCity" value={suggestion('agent.townCity', defaults?.agentTownCity)} />
+        <input type="hidden" name="agentPostcode" value={suggestion('agent.postcode', defaults?.agentPostcode)} />
+        <input type="hidden" name="agentCountry" value={suggestion('agent.country', defaults?.agentCountry ?? 'United Kingdom')} />
         <section class="panel rounded-lg p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>

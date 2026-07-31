@@ -1,6 +1,6 @@
 ﻿---
 import {
-  AutomationJobStatus,
+  AutomationJobType,
   DeadlineStatus,
   DocumentStatus,
   DocumentType,
@@ -13,6 +13,10 @@ import { prisma } from '@/lib/db/prisma';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import {
+  desktopAutomationJobSelect,
+  getDesktopAutomationContext,
+} from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -73,20 +77,9 @@ const [
   }),
   prisma.automationJob.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: {
-      id: true,
-      title: true,
-      type: true,
-      status: true,
-      sourceType: true,
-      dataSnapshot: true,
-      documentSnapshot: true,
-      resultSummary: true,
-      error: true,
-      createdAt: true,
-    },
+    orderBy: { updatedAt: 'desc' },
+    take: 100,
+    select: desktopAutomationJobSelect,
   }),
   prisma.gmailUpdateSuggestion.findMany({
     where: {
@@ -146,7 +139,28 @@ const warrantDocumentCount = documentStats
 const latestPlanning = planningApplications[0] ?? null;
 const latestWarrant = warrantApplications[0] ?? null;
 const nextDeadline = deadlines.find((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED) ?? null;
-const readyAutomationJobCount = automationJobs.filter((job) => job.status === AutomationJobStatus.READY).length;
+const desktopContextBase = {
+  organisationId: auth.organisation.id,
+  organisationName: auth.organisation.name,
+  projectId: project.id,
+  createdBy: { id: auth.user.id, name: auth.user.name, email: auth.user.email },
+  jobs: automationJobs,
+};
+const [planningDesktop, warrantDesktop] = await Promise.all([
+  getDesktopAutomationContext({
+    ...desktopContextBase,
+    type: AutomationJobType.HOUSEHOLDER_PLANNING,
+    matchingTypes: [AutomationJobType.HOUSEHOLDER_PLANNING, AutomationJobType.PLANNING_APPLICATION],
+    applicationId: latestPlanning?.id,
+  }),
+  getDesktopAutomationContext({
+    ...desktopContextBase,
+    type: AutomationJobType.BUILDING_WARRANT,
+    applicationId: latestWarrant?.id,
+  }),
+]);
+const readyAutomationJobCount = [planningDesktop.job, warrantDesktop.job]
+  .filter((job) => job?.status === 'READY').length;
 const nextAction = getProjectNextAction({
   projectId: project.id,
   stage: project.stage,
@@ -177,6 +191,11 @@ const emailActivityLabel = (activity: typeof recentEmailActivity[number]) => {
   return `${humanizeEnum(activity.fieldName)} updated${display ? ` to ${humanizeEnum(display)}` : ''}`;
 };
 
+const preparedJobId = Astro.url.searchParams.get('job');
+const preparedContext = [planningDesktop, warrantDesktop]
+  .find((context) => context.job?.id === preparedJobId);
+const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') === '1' && preparedContext?.job;
+
 const actionTone = {
   neutral: 'bg-stone-100 text-stone-700 border-stone-200',
   info: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -184,11 +203,6 @@ const actionTone = {
   danger: 'bg-red-50 text-red-800 border-red-200',
 };
 
-const jobTone = (status: AutomationJobStatus) => {
-  if (status === AutomationJobStatus.READY) return 'bg-emerald-100 text-emerald-800';
-  if (status === AutomationJobStatus.FAILED || status === AutomationJobStatus.CANCELLED) return 'bg-red-100 text-red-800';
-  return 'bg-stone-100 text-stone-700';
-};
 ---
 <AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <header class="mb-5">
@@ -207,6 +221,17 @@ const jobTone = (status: AutomationJobStatus) => {
       </div>
     </div>
   </header>
+
+  {showPreparedNotice && (
+    <section class="panel mb-5 rounded-lg border-l-4 border-l-moss p-4" aria-live="polite">
+      <p class="font-semibold">{preparedContext.job?.status === 'READY' ? 'Application prepared' : 'Application created'}</p>
+      <p class="mt-1 text-sm text-stone-600">
+        {preparedContext.job?.status === 'READY'
+          ? 'The reviewed application and its documents are ready to open in ArchitectPro Desktop.'
+          : 'A few application details still need your attention before it can be opened in desktop.'}
+      </p>
+    </section>
+  )}
 
   <nav aria-label="Project sections" class="panel mb-6 flex gap-1 overflow-x-auto rounded-lg p-1.5">
     {[
@@ -302,7 +327,9 @@ const jobTone = (status: AutomationJobStatus) => {
       projectId={project.id}
       applicationKind="PLANNING"
       applicationId={latestPlanning?.id}
-      actionLabel="Complete Householder"
+      desktopJob={planningDesktop.job}
+      desktopPreparationReady={planningDesktop.preparationReady}
+      desktopMissingCount={planningDesktop.missingCount}
     />
     <ApplicationSummaryCard
       id="building-warrant"
@@ -318,7 +345,9 @@ const jobTone = (status: AutomationJobStatus) => {
       projectId={project.id}
       applicationKind="BUILDING_WARRANT"
       applicationId={latestWarrant?.id}
-      actionLabel="Complete Building Warrant"
+      desktopJob={warrantDesktop.job}
+      desktopPreparationReady={warrantDesktop.preparationReady}
+      desktopMissingCount={warrantDesktop.missingCount}
     />
   </div>
 

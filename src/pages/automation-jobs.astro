@@ -1,385 +1,190 @@
 ---
-import { AutomationJobStatus, AutomationJobType, type AutomationJobSourceType } from '@prisma/client';
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  Eye,
-  FileText,
-  FolderOpen,
-  Monitor,
-  Plus,
-  XCircle,
-} from 'lucide-react';
+import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
 import { prisma } from '@/lib/db/prisma';
-import { formatDate, humanizeEnum } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import {
+  automationJobDocumentCount,
+  desktopAutomationJobSelect,
+  desktopAutomationPresentation,
+} from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
+const attentionStatuses: AutomationJobStatus[] = [
+  AutomationJobStatus.DRAFT,
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.STALE,
+  AutomationJobStatus.NEEDS_REVIEW,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+  AutomationJobStatus.FAILED_RETRYABLE,
+  AutomationJobStatus.FAILED,
+];
+const activeStatuses: AutomationJobStatus[] = [
+  ...attentionStatuses,
+  AutomationJobStatus.READY,
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+];
+const historyStatuses: AutomationJobStatus[] = [
+  AutomationJobStatus.COMPLETED,
+  AutomationJobStatus.FAILED_FINAL,
+  AutomationJobStatus.CANCELLED,
+];
+
+type View = 'active' | 'attention' | 'history';
+const requestedView = Astro.url.searchParams.get('view');
+const view: View = requestedView === 'attention' || requestedView === 'history'
+  ? requestedView
+  : 'active';
 const projectId = Astro.url.searchParams.get('projectId');
+const statusFilter = view === 'attention'
+  ? attentionStatuses
+  : view === 'history'
+    ? historyStatuses
+    : activeStatuses;
+
 const jobs = await prisma.automationJob.findMany({
-  where: { organisationId: auth.organisation.id, ...(projectId ? { projectId } : {}) },
-  include: {
-    project: { select: { id: true, name: true, internalReference: true } },
-    createdBy: { select: { name: true, email: true } },
-    claimedBy: { select: { name: true, email: true } },
+  where: {
+    organisationId: auth.organisation.id,
+    status: { in: statusFilter },
+    ...(projectId ? { projectId } : {}),
   },
-  orderBy: { createdAt: 'desc' },
+  select: {
+    ...desktopAutomationJobSelect,
+    project: { select: { id: true, name: true, internalReference: true } },
+  },
+  orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
   take: 100,
 });
 
-type Job = typeof jobs[number];
-type SnapshotRecord = Record<string, any>;
+if (view === 'active') {
+  const priority = (status: AutomationJobStatus) => attentionStatuses.includes(status)
+    ? 0
+    : status === AutomationJobStatus.READY
+      ? 1
+      : 2;
+  jobs.sort((left, right) => priority(left.status) - priority(right.status)
+    || right.updatedAt.getTime() - left.updatedAt.getTime());
+}
 
-const appTypeLabel = (type: AutomationJobType) => {
-  if (type === AutomationJobType.HOUSEHOLDER_PLANNING) return 'Householder Application';
-  if (type === AutomationJobType.PLANNING_APPLICATION) return 'Planning Application';
-  return 'Building Warrant';
-};
+const applicationLabel = (type: AutomationJobType) => type === AutomationJobType.BUILDING_WARRANT
+  ? 'Building Warrant'
+  : 'Householder application';
+const applicationHref = (job: typeof jobs[number]) => job.type === AutomationJobType.BUILDING_WARRANT
+  ? `/projects/${job.projectId}/building-warrant`
+  : `/projects/${job.projectId}/planning`;
+const updatedDate = (job: typeof jobs[number]) =>
+  job.completedAt ?? job.claimedAt ?? job.preparedAt ?? job.updatedAt;
 
-const sourceLabel = (sourceType: AutomationJobSourceType) => {
-  const labels: Record<string, string> = {
-    PROJECT: 'Project',
-    PLANNING_RECORD: 'Planning Record',
-    WARRANT_RECORD: 'Warrant Record',
-    DOCUMENT_BATCH: 'Document Batch',
-    MANUAL: 'Manual',
-  };
-  return labels[sourceType] ?? humanizeEnum(sourceType);
-};
-
-const displayStatus = (status: AutomationJobStatus) => {
-  const labels: Record<AutomationJobStatus, string> = {
-    [AutomationJobStatus.DRAFT]: 'Needs review',
-    [AutomationJobStatus.PREFLIGHT_REQUIRED]: 'Review application details',
-    [AutomationJobStatus.NEEDS_INPUT]: 'A few details need attention',
-    [AutomationJobStatus.READY]: 'Ready for desktop',
-    [AutomationJobStatus.STALE]: 'Needs refresh',
-    [AutomationJobStatus.CLAIMED]: 'Running in desktop app',
-    [AutomationJobStatus.IN_PROGRESS]: 'Running in desktop app',
-    [AutomationJobStatus.NEEDS_REVIEW]: 'Ready for final review',
-    [AutomationJobStatus.AWAITING_PORTAL_REVIEW]: 'Ready for final review',
-    [AutomationJobStatus.COMPLETED]: 'Completed',
-    [AutomationJobStatus.FAILED_RETRYABLE]: 'Retry available',
-    [AutomationJobStatus.FAILED_FINAL]: 'Failed',
-    [AutomationJobStatus.FAILED]: 'Failed',
-    [AutomationJobStatus.CANCELLED]: 'Cancelled',
-  };
-  return labels[status];
-};
-
-const snapshot = (job: Job) => (job.dataSnapshot ?? {}) as SnapshotRecord;
-const documents = (job: Job) => {
-  const documentSnapshot = (job.documentSnapshot ?? {}) as SnapshotRecord;
-  const snapshotDocuments = Array.isArray(documentSnapshot.documents) ? documentSnapshot.documents : [];
-  if (snapshotDocuments.length) return snapshotDocuments as SnapshotRecord[];
-  const dataDocuments = snapshot(job).documents;
-  return Array.isArray(dataDocuments) ? dataDocuments as SnapshotRecord[] : [];
-};
-
-const valueOrDash = (value: unknown) => typeof value === 'string' && value.trim() ? value : value ? String(value) : 'Not set';
-
-const projectAddress = (data: SnapshotRecord) => {
-  if (data.project?.siteAddress) return data.project.siteAddress;
-  const site = data.site;
-  if (!site) return '';
-  const address = site.address ?? site;
-  return [address.addressLine1, address.addressLine2, address.townCity, address.postcode].filter(Boolean).join(', ');
-};
-
-const readinessIssues = (job: Job): string[] => {
-  const data = snapshot(job);
-  if (data.snapshotVersion === 2 && data.preflight) {
-    return (data.preflight.missing ?? []).map((issue: SnapshotRecord) =>
-      issue.message ?? issue.field ?? 'Missing application information'
-    );
-  }
-  const docs = documents(job);
-  const issues: string[] = [];
-  if (!docs.length) issues.push('No documents linked');
-  if (!docs.some((document) => document.type === 'LOCATION_PLAN')) issues.push('Location Plan missing');
-  if (!data.client?.email) issues.push('Applicant email missing');
-  if (!projectAddress(data)) issues.push('Site address missing');
-  return issues;
-};
-
-const nextStep = (job: Job) => {
-  if (job.status === AutomationJobStatus.READY) return 'Load this job in the desktop app.';
-  if (job.status === AutomationJobStatus.DRAFT || job.status === AutomationJobStatus.PREFLIGHT_REQUIRED) return 'Review the prepared application details.';
-  if (job.status === AutomationJobStatus.NEEDS_INPUT) return 'Complete the highlighted application details on one preparation page.';
-  if (job.status === AutomationJobStatus.STALE) return 'Project information changed. Prepare an updated job.';
-  if (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) return 'The desktop app is working through this job.';
-  if (job.status === AutomationJobStatus.NEEDS_REVIEW || job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) return 'Review the completed portal form before final submission.';
-  if (job.status === AutomationJobStatus.COMPLETED) return 'Completed by the desktop workflow.';
-  if (job.status === AutomationJobStatus.FAILED || job.status === AutomationJobStatus.FAILED_RETRYABLE) return 'Review the failure details before preparing a retry.';
-  if (job.status === AutomationJobStatus.FAILED_FINAL) return 'This job ended with a non-retryable failure.';
-  return 'This job was cancelled and will not be picked up by the desktop app.';
-};
-
-const redactedKeys = ['password', 'token', 'apiKey', 'apikey', 'secret', 'session', 'storageKey', 'storageUrl', 'passwordHash', 'tokenHash'];
-const redactedSnapshot = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(redactedSnapshot);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value as SnapshotRecord)
-      .filter(([key]) => !redactedKeys.some((unsafeKey) => key.toLowerCase().includes(unsafeKey.toLowerCase())))
-      .map(([key, childValue]) => [key, redactedSnapshot(childValue)]));
-  }
-  return value;
-};
-
-const summary = {
-  ready: jobs.filter((job) => job.status === AutomationJobStatus.READY).length,
-  review: jobs.filter((job) => new Set<AutomationJobStatus>([
-    AutomationJobStatus.DRAFT,
-    AutomationJobStatus.PREFLIGHT_REQUIRED,
-    AutomationJobStatus.NEEDS_INPUT,
-    AutomationJobStatus.STALE,
-    AutomationJobStatus.NEEDS_REVIEW,
-    AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-  ]).has(job.status)).length,
-  running: jobs.filter((job) => job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS).length,
-  completed: jobs.filter((job) => job.status === AutomationJobStatus.COMPLETED).length,
-  failed: jobs.filter((job) => new Set<AutomationJobStatus>([
-    AutomationJobStatus.FAILED,
-    AutomationJobStatus.FAILED_RETRYABLE,
-    AutomationJobStatus.FAILED_FINAL,
-    AutomationJobStatus.CANCELLED,
-  ]).has(job.status)).length,
-};
-
-const groups = [
-  { key: 'ready', title: 'Ready for desktop', description: 'Jobs ready to be loaded by the desktop app.', statuses: [AutomationJobStatus.READY] as AutomationJobStatus[], empty: 'No jobs are ready for desktop yet.' },
-  { key: 'review', title: 'Needs review', description: 'Prepared jobs or completed portal forms that need a user check.', statuses: [AutomationJobStatus.DRAFT, AutomationJobStatus.PREFLIGHT_REQUIRED, AutomationJobStatus.NEEDS_INPUT, AutomationJobStatus.STALE, AutomationJobStatus.NEEDS_REVIEW, AutomationJobStatus.AWAITING_PORTAL_REVIEW] as AutomationJobStatus[], empty: 'No jobs need review.' },
-  { key: 'running', title: 'In progress', description: 'Jobs claimed or started by the desktop app.', statuses: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] as AutomationJobStatus[], empty: 'No jobs are currently running.' },
-  { key: 'completed', title: 'Completed', description: 'Jobs completed by the desktop workflow.', statuses: [AutomationJobStatus.COMPLETED] as AutomationJobStatus[], empty: 'No completed jobs yet.' },
-  { key: 'failed', title: 'Failed / cancelled', description: 'Jobs that failed or were cancelled.', statuses: [AutomationJobStatus.FAILED, AutomationJobStatus.FAILED_RETRYABLE, AutomationJobStatus.FAILED_FINAL, AutomationJobStatus.CANCELLED] as AutomationJobStatus[], empty: 'No failed or cancelled jobs.' },
-].map((group) => ({ ...group, jobs: jobs.filter((job) => group.statuses.includes(job.status)) }));
-
-const summaryCards = [
-  { key: 'ready', label: 'Ready for desktop', value: summary.ready, icon: Monitor },
-  { key: 'review', label: 'Needs review', value: summary.review, icon: Eye },
-  { key: 'running', label: 'In progress', value: summary.running, icon: Clock3 },
-  { key: 'completed', label: 'Completed', value: summary.completed, icon: CheckCircle2 },
-  { key: 'failed', label: 'Failed / cancelled', value: summary.failed, icon: XCircle },
+const tabs: Array<{ value: View; label: string; description: string }> = [
+  { value: 'active', label: 'Active', description: 'Ready, running and unresolved desktop work.' },
+  { value: 'attention', label: 'Needs attention', description: 'Applications that need review or recovery.' },
+  { value: 'history', label: 'History', description: 'Completed, final failures and cancelled runs.' },
 ];
-
-const initiallyOpenGroup = groups.find((group) => group.key !== 'failed' && group.jobs.length)?.key
-  ?? groups.find((group) => group.jobs.length)?.key;
 ---
-<AppShell title="Desktop Automation" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">Desktop handoff</p>
-      <div class="mt-3 flex flex-wrap items-center gap-3">
-        <h1 class="text-4xl font-semibold tracking-tight">AI Automation</h1>
-        <details class="relative">
-          <summary class="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-stone-200 bg-white text-sm font-semibold text-stone-600 transition hover:border-stone-300 hover:text-ink" aria-label="Desktop automation help">?</summary>
-          <div class="absolute left-0 z-20 mt-3 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-stone-200 bg-white p-4 text-sm shadow-[0_18px_50px_rgba(32,35,31,0.12)] sm:left-auto sm:right-0">
-            <h2 class="font-semibold text-ink">How desktop automation works</h2>
-            <ol class="mt-3 space-y-2 text-stone-600">
-              <li>1. Prepare a job from a project, planning record or warrant record.</li>
-              <li>2. Review prepared details and linked documents.</li>
-              <li>3. Load the job in the desktop app.</li>
-              <li>4. The desktop app completes the portal workflow.</li>
-              <li>5. Completion or failure will appear here.</li>
-            </ol>
-          </div>
-        </details>
-      </div>
-      <p class="mt-3 max-w-4xl text-sm leading-6 text-stone-600">Use AI powered assitance to automate the Householder and Building Warrant applications.</p>
-      <p class="mt-1 text-xs text-stone-500">Open a prepared job directly in ArchitectPro Desktop.</p>
-      {projectId && <a class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-ink hover:text-moss" href="/automation-jobs">Show all desktop jobs <ArrowRight size={14} /></a>}
-    </div>
-    <a class="btn btn-primary inline-flex items-center gap-2 self-start lg:self-auto" href="/projects"><Plus size={17} />Create desktop job</a>
-  </div>
+<AppShell title="Desktop job history" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <header class="mb-6">
+    <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/settings">Back to settings</a>
+    <h1 class="mt-3 text-3xl font-semibold">Desktop job history</h1>
+    <p class="mt-2 text-sm text-stone-600">View current and previous desktop application runs.</p>
+  </header>
 
-  <section class="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-    {summaryCards.map(({ key, label, value, icon: Icon }) => (
-      <a data-job-group-link href={`#jobs-${key}`} class="panel rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
-        <div class="flex items-center justify-between gap-3">
-          <Icon size={18} className="text-stone-500" aria-hidden="true" />
-          <ChevronRight size={17} className="text-stone-400" />
-        </div>
-        <p class="mt-3 text-sm font-semibold text-stone-700">{label}</p>
-        <p class="mt-1 text-2xl font-semibold text-ink">{value}</p>
-      </a>
+  <nav aria-label="Desktop job history filters" class="mb-5 flex flex-wrap gap-2">
+    {tabs.map((tab) => (
+      <a
+        href={`/automation-jobs?view=${tab.value}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`}
+        aria-current={view === tab.value ? 'page' : undefined}
+        class:list={[
+          'rounded-md border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2',
+          view === tab.value
+            ? 'border-ink bg-ink text-white'
+            : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-ink',
+        ]}
+      >{tab.label}</a>
     ))}
-  </section>
+  </nav>
 
-  {jobs.length === 0 ? (
-    <section class="panel rounded-lg p-10 text-center">
-      <Monitor size={28} className="mx-auto text-stone-500" aria-hidden="true" />
-      <h2 class="mt-5 text-xl font-semibold">No desktop jobs prepared yet</h2>
-      <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-500">Prepare a job from a project when you are ready to complete a Planning, Householder or Building Warrant application in the desktop app.</p>
-      <a class="btn btn-primary mt-5" href="/projects">Go to projects</a>
-    </section>
-  ) : (
-    <div class="space-y-5">
-      {groups.map((group) => (
-        <details id={`jobs-${group.key}`} class="group panel scroll-mt-6 overflow-hidden rounded-lg" open={group.key === initiallyOpenGroup}>
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 border-b border-transparent px-5 py-4 transition hover:bg-stone-50 group-open:border-stone-100">
-            <div>
-              <h2 class="text-lg font-semibold">{group.title} <span class="text-stone-400">({group.jobs.length})</span></h2>
-              <p class="mt-1 text-sm text-stone-500">{group.description}</p>
-            </div>
-            <ChevronRight size={18} className="shrink-0 text-stone-400 transition group-open:rotate-90" aria-hidden="true" />
-          </summary>
+  <section class="panel overflow-hidden rounded-lg">
+    <div class="border-b border-stone-200 px-4 py-4 sm:px-5">
+      <h2 class="text-lg font-semibold">{tabs.find((tab) => tab.value === view)?.label}</h2>
+      <p class="mt-1 text-sm text-stone-500">{tabs.find((tab) => tab.value === view)?.description}</p>
+    </div>
 
-          {group.jobs.length ? group.jobs.map((job) => {
-            const data = snapshot(job);
-            const docs = documents(job);
-            const issues = readinessIssues(job);
-            const projectName = data.project?.name ?? job.project.name;
-            return (
-              <article class="border-b border-stone-100 p-5 last:border-b-0">
-                <div class="grid gap-5 xl:grid-cols-[minmax(280px,1.1fr)_minmax(260px,0.8fr)_minmax(260px,auto)] xl:items-center">
-                  <div class="flex min-w-0 gap-4">
-                    <FileText size={23} className="mt-0.5 shrink-0 text-stone-500" aria-hidden="true" />
-                    <div class="min-w-0">
-                      <h3 class="truncate text-lg font-semibold">{projectName}</h3>
-                      <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
-                        <span class="font-medium text-stone-700">{appTypeLabel(job.type)}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{sourceLabel(job.sourceType)}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{displayStatus(job.status)}</span>
-                      </p>
-                      <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
-                        <span>Created {formatDate(job.createdAt)}</span>
-                        <span>by {job.createdBy.name}</span>
-                        <span>{docs.length} document{docs.length === 1 ? '' : 's'}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="border-stone-200 text-sm xl:border-l xl:pl-5">
-                    {issues.length && job.status === AutomationJobStatus.DRAFT ? (
-                      <div>
-                        <p class="flex items-center gap-2 font-semibold text-amber-800"><AlertTriangle size={16} />Please review and resolve:</p>
-                        <ul class="mt-2 list-disc space-y-1 pl-5 text-stone-600">
-                          {issues.map((issue) => <li>{issue}</li>)}
-                        </ul>
-                      </div>
-                    ) : (
-                      <div>
-                        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-emerald-800">
-                          <CheckCircle2 size={16} />
-                          <span>Project snapshot prepared</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{docs.length} documents linked</span>
-                        </p>
-                        <p class="mt-2 text-stone-600">Next step: {nextStep(job)}</p>
-                      </div>
-                    )}
-                    {job.error && <p class="mt-2 font-semibold text-red-700">{job.error}</p>}
-                  </div>
-
-                  <div class="flex flex-wrap gap-2 xl:justify-end">
-                    <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.project.id}`}><FolderOpen size={16} />Open project</a>
-                    <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>Review application details</a>
-                    {job.status !== AutomationJobStatus.CANCELLED && job.status !== AutomationJobStatus.COMPLETED && (
-                      <form data-api-form data-action={`/api/automation-jobs/${job.id}`} data-method="PATCH" data-confirm="Cancel this desktop automation job?">
-                        <input type="hidden" name="status" value="CANCELLED" />
-                        <button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>
-                      </form>
-                    )}
-                    {job.status === AutomationJobStatus.READY && <ExistingAutomationJobButton client:load jobId={job.id} />}
-                  </div>
+    {jobs.length ? (
+      <div class="divide-y divide-stone-200">
+        {jobs.map((job) => {
+          const presentation = desktopAutomationPresentation(job.status);
+          const documentCount = automationJobDocumentCount(job);
+          const isAttention = presentation.kind === 'attention' || presentation.kind === 'failed';
+          const isProgress = presentation.kind === 'progress';
+          const isCompleted = presentation.kind === 'completed';
+          const isCancelled = presentation.kind === 'cancelled';
+          return (
+            <article class="px-4 py-5 sm:px-5">
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.6fr)_auto] lg:items-center">
+                <div class="min-w-0">
+                  <a class="block truncate text-lg font-semibold hover:underline" href={`/projects/${job.projectId}`}>{job.project.name}</a>
+                  <p class="mt-1 text-sm text-stone-600">
+                    {applicationLabel(job.type)}
+                    {job.project.internalReference ? ` / Ref ${job.project.internalReference}` : ''}
+                  </p>
+                  <p class="mt-2 text-xs text-stone-500">
+                    Updated {formatDate(updatedDate(job))}
+                    {documentCount > 0 ? ` / ${documentCount} document${documentCount === 1 ? '' : 's'}` : ''}
+                  </p>
                 </div>
 
-                <details class="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                  <summary class="btn btn-secondary inline-flex cursor-pointer list-none">View prepared details</summary>
-                  <div class="mt-3 rounded-lg border border-stone-200 bg-white p-4">
-                    <div class="grid gap-4 md:grid-cols-2">
-                      <section class="rounded-lg border border-stone-200 bg-white p-4">
-                        <h4 class="text-sm font-semibold">Project</h4>
-                        <dl class="mt-3 space-y-2 text-sm text-stone-600">
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Name</dt><dd>{projectName}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Reference</dt><dd>{valueOrDash(data.project?.internalReference ?? job.project.internalReference)}</dd></div>
-                          <div>
-                            <dt class="text-xs font-semibold uppercase text-stone-500">Stage/status</dt>
-                            <dd class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <span>{humanizeEnum(valueOrDash(data.project?.stage))}</span>
-                              <span class="h-1 w-1 rounded-full bg-stone-400" aria-hidden="true"></span>
-                              <span>{humanizeEnum(valueOrDash(data.project?.status))}</span>
-                            </dd>
-                          </div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Site address</dt><dd>{valueOrDash(projectAddress(data))}</dd></div>
-                        </dl>
-                      </section>
-                      <section class="rounded-lg border border-stone-200 bg-white p-4">
-                        <h4 class="text-sm font-semibold">Client / applicant</h4>
-                        <dl class="mt-3 space-y-2 text-sm text-stone-600">
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Name</dt><dd>{valueOrDash(data.client?.name)}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Email</dt><dd>{valueOrDash(data.client?.email)}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Phone</dt><dd>{valueOrDash(data.client?.phone)}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Address</dt><dd>{valueOrDash(data.client?.address)}</dd></div>
-                        </dl>
-                      </section>
-                      <section class="rounded-lg border border-stone-200 bg-white p-4">
-                        <h4 class="text-sm font-semibold">Application details</h4>
-                        <dl class="mt-3 space-y-2 text-sm text-stone-600">
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Type</dt><dd>{appTypeLabel(job.type)}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Source</dt><dd>{sourceLabel(job.sourceType)}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Planning status</dt><dd>{data.planningApplication ? humanizeEnum(data.planningApplication.status) : 'Not linked'}</dd></div>
-                          <div><dt class="text-xs font-semibold uppercase text-stone-500">Warrant status</dt><dd>{data.buildingWarrantApplication ? humanizeEnum(data.buildingWarrantApplication.status) : 'Not linked'}</dd></div>
-                        </dl>
-                      </section>
-                      <section class="rounded-lg border border-stone-200 bg-white p-4">
-                        <h4 class="text-sm font-semibold">Missing information</h4>
-                        {issues.length ? <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-stone-600">{issues.map((issue) => <li>{issue}</li>)}</ul> : <p class="mt-3 text-sm text-stone-600">No obvious missing information found.</p>}
-                      </section>
-                    </div>
-                    <section class="mt-4 rounded-lg border border-stone-200 bg-white p-4">
-                      <h4 class="text-sm font-semibold">Documents</h4>
-                      {docs.length ? <ul class="mt-3 divide-y divide-stone-100 text-sm">{docs.slice(0, 12).map((document) => (
-                        <li class="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span class="font-medium text-ink">{document.originalName}</span>
-                          <span class="flex flex-wrap items-center gap-x-2 gap-y-1 text-stone-500">
-                            <span>{humanizeEnum(valueOrDash(document.type))}</span>
-                            {document.revision && (
-                              <>
-                                <span class="h-1 w-1 rounded-full bg-stone-400" aria-hidden="true"></span>
-                                <span>Rev {document.revision}</span>
-                              </>
-                            )}
-                            <span class="h-1 w-1 rounded-full bg-stone-400" aria-hidden="true"></span>
-                            <span>{humanizeEnum(valueOrDash(document.status))}</span>
-                          </span>
-                        </li>
-                      ))}</ul> : <p class="mt-3 text-sm text-stone-600">No documents linked.</p>}
-                      {docs.length > 12 && <p class="mt-2 text-xs text-stone-500">Showing 12 of {docs.length} documents.</p>}
-                    </section>
-                    <details class="mt-4 rounded-lg border border-stone-200 bg-white p-4">
-                      <summary class="cursor-pointer text-sm font-semibold text-stone-700">Show technical JSON</summary>
-                      <div class="mt-3 grid gap-3 lg:grid-cols-2">
-                        <pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs text-stone-700">{JSON.stringify(redactedSnapshot(job.dataSnapshot), null, 2)}</pre>
-                        <pre class="max-h-80 overflow-auto rounded-md bg-stone-50 p-3 text-xs text-stone-700">{JSON.stringify(redactedSnapshot(job.documentSnapshot), null, 2)}</pre>
-                      </div>
-                    </details>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class:list={[
+                      'h-2 w-2 shrink-0 rounded-full',
+                      presentation.kind === 'failed' ? 'bg-red-700'
+                        : presentation.kind === 'attention' ? 'bg-amber-600'
+                          : presentation.kind === 'ready' || presentation.kind === 'completed' ? 'bg-moss'
+                            : 'bg-stone-500',
+                    ]} aria-hidden="true"></span>
+                    <p class="font-semibold">{presentation.label}</p>
                   </div>
-                </details>
-              </article>
-            );
-          }) : <div class="px-5 py-5 text-center text-sm text-stone-500">{group.empty}</div>}
-        </details>
-      ))}
-    </div>
-  )}
-</AppShell>
+                  <p class="mt-1 text-sm leading-6 text-stone-500">{presentation.description}</p>
+                </div>
 
-<script>
-  document.addEventListener('click', (event) => {
-    const link = event.target instanceof Element ? event.target.closest('[data-job-group-link]') : null;
-    if (!(link instanceof HTMLAnchorElement)) return;
-    const target = document.querySelector(link.hash);
-    if (!(target instanceof HTMLDetailsElement)) return;
-    target.open = true;
-  });
-</script>
+                <div class="flex flex-col items-start gap-2 lg:items-end">
+                  {job.status === AutomationJobStatus.READY && (
+                    <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop" />
+                  )}
+                  {isAttention && (
+                    <a class="btn btn-primary" href={`/automation-job/${job.id}`}>
+                      {presentation.kind === 'failed' ? 'Review issue' : 'Review application'}
+                    </a>
+                  )}
+                  {isProgress && <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>View status</a>}
+                  {isCompleted && <a class="btn btn-secondary" href={applicationHref(job)}>View application</a>}
+                  {!isCancelled && !isCompleted && (
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                      <a class="font-semibold text-stone-600 hover:text-ink" href={applicationHref(job)}>View application</a>
+                      <a class="font-semibold text-stone-600 hover:text-ink" href={`/projects/${job.projectId}`}>View project</a>
+                    </div>
+                  )}
+                  {isCancelled && <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/projects/${job.projectId}`}>View project</a>}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="px-5 py-12 text-center">
+        <h2 class="text-lg font-semibold">No {view === 'active' ? 'active desktop work' : view === 'attention' ? 'applications need attention' : 'desktop history yet'}</h2>
+        <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-stone-500">
+          Desktop preparation begins from a Project, Householder application or Building Warrant application.
+        </p>
+        <a class="btn btn-secondary mt-5" href="/projects">View projects</a>
+      </div>
+    )}
+  </section>
+</AppShell>

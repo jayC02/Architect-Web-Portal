@@ -178,7 +178,7 @@ function ActionWorkloadCard({ workload, range }: { workload: AnyRecord; range: n
     { label: 'Overdue deadlines', value: workload.overdueDeadlines ?? 0, className: 'bg-red-700', href: '/deadlines' },
     { label: 'Planning actions', value: workload.planningActions ?? 0, className: 'bg-amber-500', href: '/projects' },
     { label: 'Warrant actions', value: workload.warrantActions ?? 0, className: 'bg-amber-500', href: '/projects' },
-    { label: 'Automation ready', value: workload.automationReady ?? 0, className: 'bg-moss/80', href: '/automation-jobs?status=READY' },
+    { label: 'Automation ready', value: workload.automationReady ?? 0, className: 'bg-moss/80', href: '/projects' },
   ];
   return (
     <article className="panel rounded-lg p-5">
@@ -955,10 +955,14 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
   const canManage = data.role === 'OWNER' || data.role === 'ADMIN';
   return (
     <section className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <a href="/settings/integrations" className="panel rounded-lg p-5 hover:bg-stone-50">
           <p className="text-lg font-semibold">Integrations</p>
           <p className="mt-2 text-sm text-stone-500">Manage Google Calendar, Gmail and desktop access.</p>
+        </a>
+        <a href="/automation-jobs" className="panel rounded-lg p-5 hover:bg-stone-50">
+          <p className="text-lg font-semibold">Desktop job history</p>
+          <p className="mt-2 text-sm text-stone-500">View current and previous desktop application runs.</p>
         </a>
         <div className="panel rounded-lg p-5">
           <p className="text-lg font-semibold">Organisation</p>

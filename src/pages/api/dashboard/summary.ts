@@ -225,7 +225,7 @@ export const GET: APIRoute = (context) =>
         type: 'Automation ready',
         projectName: project.name,
         reason: `${project._count.automationJobs} job${project._count.automationJobs === 1 ? '' : 's'} ready`,
-        href: `/automation-jobs?projectId=${project.id}`,
+        href: `/projects/${project.id}`,
         tone: 'ready',
         priority: 5,
       })),

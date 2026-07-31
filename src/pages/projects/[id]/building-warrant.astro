@@ -1,11 +1,13 @@
 ---
-import { CompletionCertificateStatus, WarrantStatus, WarrantType } from '@prisma/client';
+import { AutomationJobType, CompletionCertificateStatus, WarrantStatus, WarrantType } from '@prisma/client';
+import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
 import AppShell from '@/components/layout/AppShell.astro';
 import LiveDataPanel from '@/components/live/LiveDataPanel';
 import { warrantDateFieldsForStatus } from '@/lib/application-record-fields';
 import { prisma } from '@/lib/db/prisma';
 import { humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { getDesktopAutomationContext } from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -19,7 +21,16 @@ if (!project) return Astro.redirect('/projects');
 const latestWarrant = await prisma.buildingWarrantApplication.findFirst({
   where: { projectId: project.id, organisationId: auth.organisation.id },
   orderBy: { updatedAt: 'desc' },
-  select: { warrantReference: true, status: true },
+  select: { id: true, warrantReference: true, status: true },
+});
+
+const desktopAutomation = await getDesktopAutomationContext({
+  organisationId: auth.organisation.id,
+  organisationName: auth.organisation.name,
+  projectId: project.id,
+  type: AutomationJobType.BUILDING_WARRANT,
+  applicationId: latestWarrant?.id,
+  createdBy: { id: auth.user.id, name: auth.user.name, email: auth.user.email },
 });
 
 const warrantDateLabels = {
@@ -29,7 +40,6 @@ const warrantDateLabels = {
   expiryDate: 'Expiry date',
 };
 const initialVisibleDates = warrantDateFieldsForStatus(WarrantStatus.NOT_STARTED);
-const hasKeyWarrantDetails = Boolean(latestWarrant?.warrantReference || (latestWarrant && latestWarrant.status !== WarrantStatus.NOT_STARTED));
 ---
 <AppShell title={`${project.name} building warrant`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
@@ -40,7 +50,7 @@ const hasKeyWarrantDetails = Boolean(latestWarrant?.warrantReference || (latestW
 
   <section class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
     <div class="space-y-6">
-      <form data-api-form data-warrant-record-form data-action={`/api/projects/${project.id}/building-warrant`} data-method="POST" class="panel rounded-lg p-5">
+      <form id="warrant-record-form" data-api-form data-warrant-record-form data-action={`/api/projects/${project.id}/building-warrant`} data-method="POST" class="panel scroll-mt-6 rounded-lg p-5">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 class="text-lg font-semibold">Add warrant record</h2>
@@ -84,16 +94,17 @@ const hasKeyWarrantDetails = Boolean(latestWarrant?.warrantReference || (latestW
       <LiveDataPanel client:load variant="warrants" endpoint={`/api/projects/${project.id}/building-warrant`} />
     </div>
 
-    <aside class="panel rounded-lg p-5">
-      <h2 class="text-lg font-semibold">Desktop automation</h2>
-      <p class="mt-2 text-sm text-stone-500">Prepare a building warrant automation job using this project's approved details and linked documents.</p>
-      {!hasKeyWarrantDetails && <p class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add the key details first for a better automation snapshot.</p>}
-      <form data-api-form data-action="/api/automation-jobs" data-method="POST" class="mt-4">
-        <input type="hidden" name="projectId" value={project.id} />
-        <input type="hidden" name="type" value="BUILDING_WARRANT" />
-        <button class="btn btn-secondary w-full">Prepare warrant automation</button>
-        <p data-form-status class="mt-3 text-sm text-stone-500"></p>
-      </form>
+    <aside id="desktop-automation" class="scroll-mt-6">
+      <DesktopAutomationStatus
+        projectId={project.id}
+        type={AutomationJobType.BUILDING_WARRANT}
+        applicationId={latestWarrant?.id}
+        applicationLabel="Building Warrant application"
+        manageHref="#warrant-record-form"
+        job={desktopAutomation.job}
+        preparationReady={desktopAutomation.preparationReady}
+        missingCount={desktopAutomation.missingCount}
+      />
     </aside>
   </section>
 

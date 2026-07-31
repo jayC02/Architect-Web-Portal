@@ -1,5 +1,7 @@
 ---
-import AutomationLaunchButton from '@/components/automation/AutomationLaunchButton';
+import { AutomationJobType } from '@prisma/client';
+import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
+import type { DesktopAutomationJob } from '@/server/services/desktop-automation-status.service';
 
 interface Props {
   id: string;
@@ -15,7 +17,9 @@ interface Props {
   projectId: string;
   applicationKind: 'PLANNING' | 'BUILDING_WARRANT';
   applicationId?: string;
-  actionLabel: string;
+  desktopJob?: DesktopAutomationJob | null;
+  desktopPreparationReady?: boolean;
+  desktopMissingCount?: number;
 }
 
 const {
@@ -32,7 +36,9 @@ const {
   projectId,
   applicationKind,
   applicationId,
-  actionLabel,
+  desktopJob,
+  desktopPreparationReady = false,
+  desktopMissingCount = 0,
 } = Astro.props;
 ---
 <section id={id} class="panel flex h-full scroll-mt-6 flex-col rounded-lg p-4 sm:p-5">
@@ -72,8 +78,15 @@ const {
   </dl>
 
   <footer class="mt-5 border-t border-stone-200 pt-4">
-    {applicationKind === 'PLANNING'
-      ? <AutomationLaunchButton client:load projectId={projectId} type="HOUSEHOLDER_PLANNING" planningApplicationId={applicationId} label={actionLabel} />
-      : <AutomationLaunchButton client:load projectId={projectId} type="BUILDING_WARRANT" buildingWarrantApplicationId={applicationId} label={actionLabel} />}
+    <DesktopAutomationStatus
+      projectId={projectId}
+      type={applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_PLANNING : AutomationJobType.BUILDING_WARRANT}
+      applicationId={applicationId}
+      applicationLabel={applicationKind === 'PLANNING' ? 'Householder application' : 'Building Warrant application'}
+      manageHref={manageHref}
+      job={desktopJob}
+      preparationReady={desktopPreparationReady}
+      missingCount={desktopMissingCount}
+    />
   </footer>
 </section>

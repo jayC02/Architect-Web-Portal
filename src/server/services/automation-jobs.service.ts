@@ -553,6 +553,55 @@ export const ensureAutomationApplicationRecord = async (
   return { planningApplicationId: created.id };
 };
 
+export const resolveAutomationApplicationRecord = async (
+  organisationId: string,
+  projectId: string,
+  type: AutomationJobType,
+  requested: {
+    planningApplicationId?: string;
+    buildingWarrantApplicationId?: string;
+  } = {},
+): Promise<{
+  planningApplicationId?: string;
+  buildingWarrantApplicationId?: string;
+}> => {
+  if (type === AutomationJobType.BUILDING_WARRANT) {
+    if (requested.planningApplicationId) {
+      throw new HttpError(400, 'A Planning application cannot be used for a Building Warrant desktop job.');
+    }
+    if (requested.buildingWarrantApplicationId) {
+      const application = await prisma.buildingWarrantApplication.findFirst({
+        where: {
+          id: requested.buildingWarrantApplicationId,
+          organisationId,
+          projectId,
+        },
+        select: { id: true },
+      });
+      if (!application) throw new HttpError(404, 'Building warrant application not found.');
+      return { buildingWarrantApplicationId: application.id };
+    }
+    return ensureAutomationApplicationRecord(organisationId, projectId, type);
+  }
+
+  if (requested.buildingWarrantApplicationId) {
+    throw new HttpError(400, 'A Building Warrant application cannot be used for a Planning desktop job.');
+  }
+  if (requested.planningApplicationId) {
+    const application = await prisma.planningApplication.findFirst({
+      where: {
+        id: requested.planningApplicationId,
+        organisationId,
+        projectId,
+      },
+      select: { id: true },
+    });
+    if (!application) throw new HttpError(404, 'Planning application not found.');
+    return { planningApplicationId: application.id };
+  }
+  return ensureAutomationApplicationRecord(organisationId, projectId, type);
+};
+
 export const currentAutomationSourceUpdatedAt = async (
   organisationId: string,
   projectId: string,

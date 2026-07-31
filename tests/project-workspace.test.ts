@@ -144,9 +144,10 @@ assert.match(newProjectPage, /data-field-error="email"/, 'inline client creation
 assert.match(newProjectPage, /data-field-error="phone"/, 'inline client creation renders phone validation beside the field');
 assert.match(projectsApi, /projectCreateSchema/, 'project creation uses the dedicated server-side create schema');
 assert.match(projectsApi, /redirectTo: `\/projects\/\$\{project\.id\}`/, 'new projects open directly in their workspace');
-assert.match(projectDetailPage, /actionLabel="Complete Householder"/, 'householder automation is immediately available from a new project');
-assert.match(projectDetailPage, /actionLabel="Complete Building Warrant"/, 'building warrant automation is immediately available from a new project');
+assert.match(projectDetailPage, /desktopJob=\{planningDesktop\.job\}/, 'project workspace shows the current Householder desktop status');
+assert.match(projectDetailPage, /desktopJob=\{warrantDesktop\.job\}/, 'project workspace shows the current Building Warrant desktop status separately');
 assert.equal((projectDetailPage.match(/<ApplicationSummaryCard/g) ?? []).length, 2, 'planning and warrant render the same summary component');
+assert.match(applicationSummaryCard, /DesktopAutomationStatus/, 'application cards share the contextual desktop status component');
 assert.match(applicationSummaryCard, /<dt class="label">Address<\/dt>/, 'shared application card shows address');
 assert.match(applicationSummaryCard, /<dt class="label">Client<\/dt>/, 'shared application card shows client');
 assert.match(applicationSummaryCard, /<dt class="label">Application type<\/dt>/, 'shared application card shows application type');
@@ -159,8 +160,9 @@ assert.doesNotMatch(projectDetailPage, /application ready to prepare/, 'missing 
 assert.doesNotMatch(projectDetailPage, />Add planning record</, 'project overview does not require a planning tracker before automation');
 assert.doesNotMatch(projectDetailPage, />Add warrant record</, 'project overview does not require a warrant tracker before automation');
 assert.doesNotMatch(appShell, /label: 'Documents'/, 'global Documents navigation is hidden while documents live inside projects');
-assert.match(appShell, /label: 'AI Automation'/, 'sidebar labels the automation workspace with the current product wording');
+assert.doesNotMatch(appShell, /label: 'AI Automation'/, 'desktop job internals are removed from primary navigation');
 assert.doesNotMatch(appShell, /label: 'Automation Jobs'/, 'sidebar no longer uses backend queue wording');
+assert.match(liveDataPanel, /Desktop job history/, 'desktop history remains available from Settings');
 assert.doesNotMatch(projectDetailPage, />View project files</, 'project document section does not show a redundant top-level project files button');
 assert.match(projectDetailPage, /See more files/, 'project document section has a see more route for larger document lists');
 assert.match(projectDetailPage, /\/api\/documents\/\$\{document\.id\}/, 'project document names open the secure document viewer');
@@ -171,9 +173,9 @@ assert.doesNotMatch(projectFilesPage, /Auto-sort project files/, 'project files 
 assert.match(projectFilesPage, /Edit file details/, 'project files manager lets users edit document metadata');
 assert.match(planningPage, /data-planning-record-form/, 'planning page uses simplified quick-create form');
 assert.match(planningPage, /Advanced details/, 'planning page keeps advanced details available');
-assert.match(planningPage, /Prepare a planning automation job using this project's approved details and linked documents/, 'planning automation copy is secondary and specific');
+assert.match(planningPage, /DesktopAutomationStatus/, 'planning page renders the shared contextual desktop status');
 assert.match(warrantPage, /data-warrant-record-form/, 'warrant page uses simplified quick-create form');
 assert.match(warrantPage, /Advanced details/, 'warrant page keeps advanced details available');
-assert.match(warrantPage, /Prepare a building warrant automation job using this project's approved details and linked documents/, 'warrant automation copy is secondary and specific');
+assert.match(warrantPage, /DesktopAutomationStatus/, 'warrant page renders the shared contextual desktop status');
 
 console.log('project workspace tests passed');

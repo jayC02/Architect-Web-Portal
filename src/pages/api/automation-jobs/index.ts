@@ -13,8 +13,9 @@ import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
 import {
   buildAutomationJobSnapshot,
-  ensureAutomationApplicationRecord,
+  resolveAutomationApplicationRecord,
 } from '@/server/services/automation-jobs.service';
+import { findReusableAutomationJob } from '@/server/services/desktop-automation-status.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -61,31 +62,22 @@ export const POST: APIRoute = (context) =>
     const { organisation, user } = await requireOrganisation(context);
     const body = await parseBody(context.request, automationJobCreateSchema);
     await requireProjectAccess(organisation.id, body.projectId);
-    const existing = await prisma.automationJob.findFirst({
-      where: {
-        organisationId: organisation.id,
-        projectId: body.projectId,
-        type: body.type,
-        status: {
-          in: [
-            AutomationJobStatus.DRAFT,
-            AutomationJobStatus.PREFLIGHT_REQUIRED,
-            AutomationJobStatus.NEEDS_INPUT,
-            AutomationJobStatus.READY,
-            AutomationJobStatus.STALE,
-          ],
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, title: true, status: true, type: true },
-    });
-    if (existing) return jsonResponse(200, { job: existing, redirectTo: `/automation-jobs?job=${existing.id}` });
-
-    const applicationRecord = await ensureAutomationApplicationRecord(
+    const applicationRecord = await resolveAutomationApplicationRecord(
       organisation.id,
       body.projectId,
       body.type,
+      body,
     );
+    const applicationId = applicationRecord.planningApplicationId
+      ?? applicationRecord.buildingWarrantApplicationId;
+    const existing = await findReusableAutomationJob({
+      organisationId: organisation.id,
+      projectId: body.projectId,
+      type: body.type,
+      applicationId,
+    });
+    if (existing) return jsonResponse(200, { job: existing, redirectTo: `/automation-job/${existing.id}` });
+
     const jobId = randomUUID();
     const snapshot = await buildAutomationJobSnapshot({
       jobId,
@@ -101,6 +93,18 @@ export const POST: APIRoute = (context) =>
       documentIds: body.documentIds,
       notes: body.notes,
     });
+    const preparedWhileBuilding = await findReusableAutomationJob({
+      organisationId: organisation.id,
+      projectId: body.projectId,
+      type: body.type,
+      applicationId,
+    });
+    if (preparedWhileBuilding) {
+      return jsonResponse(200, {
+        job: preparedWhileBuilding,
+        redirectTo: `/automation-job/${preparedWhileBuilding.id}`,
+      });
+    }
 
     const job = await prisma.automationJob.create({
       data: {
@@ -124,5 +128,5 @@ export const POST: APIRoute = (context) =>
       select: { id: true, title: true, status: true, type: true },
     });
 
-    return jsonResponse(201, { job, redirectTo: '/automation-jobs' });
+    return jsonResponse(201, { job, redirectTo: `/automation-job/${job.id}` });
   }, context);

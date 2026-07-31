@@ -762,23 +762,11 @@ export default function ApplicationDraftReview({
         return;
       }
 
-      const result = await apiJson<{
-        automationJobId: string;
-        redirectTo: string;
-      }>(`/api/application-drafts/${draft.id}/commit`, {
+      const result = await apiJson<{ redirectTo: string }>(`/api/application-drafts/${draft.id}/commit`, {
         method: 'POST',
-        body: JSON.stringify({ review, openDesktop: true }),
+        body: JSON.stringify({ review }),
       });
-      try {
-        const launch = await apiJson<{ launchUrl: string }>(
-          `/api/automation-jobs/${result.automationJobId}/launch`,
-          { method: 'POST', body: JSON.stringify({}) },
-        );
-        window.location.href = launch.launchUrl;
-        window.setTimeout(() => window.location.assign(result.redirectTo), 1400);
-      } catch {
-        window.location.assign(result.redirectTo);
-      }
+      window.location.assign(result.redirectTo);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The application could not be created.');
     } finally {
