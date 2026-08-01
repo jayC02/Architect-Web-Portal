@@ -67,7 +67,7 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
 <AppShell title="Complete Building Warrant details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <a href={`/projects/${application.projectId}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
-    <h1 class="mt-2 text-3xl font-semibold text-ink">Complete application details</h1>
+    <h1 class="mt-2 text-3xl font-semibold text-ink">Building Warrant application details</h1>
     <p class="mt-1 text-sm text-stone-500">Confirm the Building Warrant certifier details before sending this existing job to desktop.</p>
   </div>
 
@@ -85,7 +85,7 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
         <span class="label">Saved certifier profile</span>
         <select name="selectedCertifierPresetId" class="field">
           <option value="">No saved profile</option>
-          {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id}>{preset.displayName}</option>)}
+          {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id} data-registration-a={preset.registrationAPart1 ?? ''} data-registration-b={preset.registrationBPart1 ?? ''}>{preset.displayName}</option>)}
         </select>
       </label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -100,4 +100,19 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
       <dl class="mt-4 space-y-3 text-sm"><div><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div><dt class="text-stone-500">Application</dt><dd>Building Warrant</dd></div><div><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
     </aside>
   </div>
+  <script>
+    const profile = document.querySelector('select[name="selectedCertifierPresetId"]');
+    const registrationA = document.querySelector('select[name="registrationAPart1"]');
+    const registrationB = document.querySelector('select[name="registrationBPart1"]');
+    profile?.addEventListener('change', () => {
+      if (!(profile instanceof HTMLSelectElement)) return;
+      const option = profile.selectedOptions[0];
+      if (registrationA instanceof HTMLSelectElement && option?.dataset.registrationA) {
+        registrationA.value = option.dataset.registrationA;
+      }
+      if (registrationB instanceof HTMLSelectElement && option?.dataset.registrationB) {
+        registrationB.value = option.dataset.registrationB;
+      }
+    });
+  </script>
 </AppShell>

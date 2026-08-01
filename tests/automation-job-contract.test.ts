@@ -223,6 +223,14 @@ const certifierPreparationPageSource = readFileSync(
   new URL('../src/pages/building-warrant/[id]/preparation.astro', import.meta.url),
   'utf8',
 );
+const certifierSettingsSource = readFileSync(
+  new URL('../src/components/live/LiveDataPanel.tsx', import.meta.url),
+  'utf8',
+);
+const certifierPresetRouteSource = readFileSync(
+  new URL('../src/pages/api/settings/certifier-presets/[id].ts', import.meta.url),
+  'utf8',
+);
 for (const key of warrantConfirmationKeys) {
   assert.match(preparationPageSource, new RegExp(`name: '${key}'`));
   assert.match(preparationRouteSource, new RegExp(`${key}: value\\.${key}`));
@@ -233,6 +241,17 @@ assert.match(certifierDetailsRouteSource, /\.\.\.preparationData,[\s\S]*certifie
 assert.match(certifierDetailsRouteSource, /redirectTo: `\/projects\/\$\{application\.projectId\}`/, 'completion returns to the project');
 assert.match(certifierPreparationPageSource, /Registration number A Part 1/, 'the focused page shows registration A');
 assert.match(certifierPreparationPageSource, /Registration number B Part 1/, 'the focused page shows registration B');
+assert.equal(
+  (certifierPreparationPageSource.match(/CERTIFIER_REGISTRATION_PART1_CODES\.map/g) ?? []).length,
+  2,
+  'both registration fields use the one shared five-code constant',
+);
+assert.match(certifierSettingsSource, /data-method="PATCH"[\s\S]*Save profile/, 'saved certifier profiles can be edited');
+assert.match(certifierSettingsSource, /data-method="DELETE"[\s\S]*Delete profile/, 'saved certifier profiles can be deleted');
+assert.match(certifierSettingsSource, /Use as organisation default/, 'a reusable certifier can be selected as the organisation default');
+assert.match(certifierPresetRouteSource, /defaultCertifierPresetId: null/, 'unsetting a default profile clears the organisation default pointer');
+assert.match(certifierPresetRouteSource, /selectedCertifierPresetId: id/, 'deletion checks application references');
+assert.match(certifierPresetRouteSource, /organisationId: organisation\.id/, 'certifier profile edits and deletes remain organisation scoped');
 
 const sharedV2Fixture = JSON.parse(readFileSync(
   new URL('./fixtures/automation-job-v2-building-warrant.json', import.meta.url),

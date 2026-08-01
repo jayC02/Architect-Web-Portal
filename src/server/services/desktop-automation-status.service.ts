@@ -54,14 +54,77 @@ const objectValue = (value: unknown): Record<string, unknown> =>
 const stringValue = (value: unknown) =>
   typeof value === 'string' && value.trim() ? value.trim() : null;
 
-export const automationJobApplicationId = (job: Pick<DesktopAutomationJob, 'type' | 'dataSnapshot'>) => {
-  const snapshot = objectValue(job.dataSnapshot);
-  if (job.type === AutomationJobType.BUILDING_WARRANT) {
-    return stringValue(objectValue(snapshot.buildingWarrant).recordId)
-      ?? stringValue(objectValue(snapshot.buildingWarrantApplication).id);
+const planningTypes = new Set<AutomationJobType>([
+  AutomationJobType.HOUSEHOLDER_PLANNING,
+  AutomationJobType.PLANNING_APPLICATION,
+]);
+
+export type AutomationJobIdentity = {
+  jobId: string;
+  projectId: string;
+  applicationType: AutomationJobType;
+  applicationId: string;
+  snapshotVersion: 1 | 2;
+};
+
+export const resolveAutomationJobIdentity = (
+  job: Pick<DesktopAutomationJob, 'id' | 'projectId' | 'type' | 'dataSnapshot'>,
+): AutomationJobIdentity => {
+  if (job.type !== AutomationJobType.BUILDING_WARRANT && !planningTypes.has(job.type)) {
+    throw new Error('This desktop job is missing its application type and cannot be opened safely.');
   }
-  return stringValue(objectValue(snapshot.planning).recordId)
-    ?? stringValue(objectValue(snapshot.planningApplication).id);
+  const snapshot = objectValue(job.dataSnapshot);
+  const isV2 = snapshot.contractVersion === 'architectpro.automation-job' || snapshot.snapshotVersion === 2;
+  if (isV2) {
+    const metadata = objectValue(snapshot.metadata);
+    const snapshotType = stringValue(metadata.applicationType);
+    if (!snapshotType || snapshotType !== job.type) {
+      throw new Error('The portal job and application type do not match. Prepare the job again.');
+    }
+    if (stringValue(metadata.jobId) !== job.id || stringValue(metadata.projectId) !== job.projectId) {
+      throw new Error('The desktop job identity does not match its snapshot. Prepare the job again.');
+    }
+    const planningId = stringValue(objectValue(snapshot.planning).recordId);
+    const warrantId = stringValue(objectValue(snapshot.buildingWarrant).recordId);
+    const applicationId = job.type === AutomationJobType.BUILDING_WARRANT ? warrantId : planningId;
+    const conflictingId = job.type === AutomationJobType.BUILDING_WARRANT ? planningId : warrantId;
+    if (!applicationId || conflictingId) {
+      throw new Error('This desktop job is missing its exact application record and cannot be opened safely.');
+    }
+    return {
+      jobId: job.id,
+      projectId: job.projectId,
+      applicationType: job.type,
+      applicationId,
+      snapshotVersion: 2,
+    };
+  }
+
+  const planningId = stringValue(objectValue(snapshot.planningApplication).id);
+  const warrantId = stringValue(objectValue(snapshot.buildingWarrantApplication).id);
+  const snapshotProjectId = stringValue(objectValue(snapshot.project).id);
+  const applicationId = job.type === AutomationJobType.BUILDING_WARRANT ? warrantId : planningId;
+  const conflictingId = job.type === AutomationJobType.BUILDING_WARRANT ? planningId : warrantId;
+  if (!applicationId || conflictingId || (snapshotProjectId && snapshotProjectId !== job.projectId)) {
+    throw new Error('This legacy desktop job has ambiguous application identity and cannot be opened safely.');
+  }
+  return {
+    jobId: job.id,
+    projectId: job.projectId,
+    applicationType: job.type,
+    applicationId,
+    snapshotVersion: 1,
+  };
+};
+
+export const automationJobApplicationId = (
+  job: Pick<DesktopAutomationJob, 'id' | 'projectId' | 'type' | 'dataSnapshot'>,
+) => {
+  try {
+    return resolveAutomationJobIdentity(job).applicationId;
+  } catch {
+    return null;
+  }
 };
 
 export const automationJobDocumentCount = (
@@ -135,8 +198,8 @@ export const desktopAutomationPresentation = (status: AutomationJobStatus) => {
     return {
       kind: 'progress' as const,
       label: 'In progress in desktop',
-      description: 'ArchitectPro Desktop has claimed this application and is working through it.',
-      actionLabel: 'View status',
+      description: 'This unfinished application can be reopened in ArchitectPro Desktop.',
+      actionLabel: 'Resume in desktop',
     };
   }
   if (status === AutomationJobStatus.COMPLETED) {

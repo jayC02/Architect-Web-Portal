@@ -39,6 +39,10 @@ type SnapshotInput = {
     estimatedValue: number | null;
     currentUse: string | null;
     proposedUse: string | null;
+    certifier: {
+      registrationAPart1: string | null;
+      registrationBPart1: string | null;
+    } | null;
   } | null;
   documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus }>;
 };
@@ -117,6 +121,8 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
     requireValue('buildingWarrant.estimatedValue', snapshot.buildingWarrant?.estimatedValue, 'Enter the estimated value of work.');
     requireValue('buildingWarrant.currentUse', snapshot.buildingWarrant?.currentUse, 'Enter the current use of the building.');
     requireValue('buildingWarrant.proposedUse', snapshot.buildingWarrant?.proposedUse, 'Enter the proposed use of the building.');
+    requireValue('buildingWarrant.certifier.registrationAPart1', snapshot.buildingWarrant?.certifier?.registrationAPart1, 'Choose Registration number A Part 1.');
+    requireValue('buildingWarrant.certifier.registrationBPart1', snapshot.buildingWarrant?.certifier?.registrationBPart1, 'Choose Registration number B Part 1.');
   } else {
     if (!snapshot.planning || !meaningfulDescription(snapshot.planning.description)) {
       missing.push({

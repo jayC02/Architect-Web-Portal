@@ -1011,7 +1011,31 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
               {certifierPresets.length ? certifierPresets.map((preset: AnyRecord) => (
                 <div key={preset.id} className="py-3 first:pt-0 last:pb-0">
                   <p className="font-semibold">{preset.displayName}</p>
-                  <p className="mt-1 text-sm text-stone-500">{preset.certifierName || 'No certifier name'}{preset.isDefault ? ' · Default' : ''}</p>
+                  <p className="mt-1 text-sm text-stone-500">{preset.registrationAPart1 || 'A not set'} / {preset.registrationBPart1 || 'B not set'}{preset.isDefault ? ' - Default' : ''}</p>
+                  {canManage && (
+                    <details className="mt-2 rounded-md border border-stone-200 p-3">
+                      <summary className="cursor-pointer text-sm font-semibold">Edit profile</summary>
+                      <form data-api-form data-action={`/api/settings/certifier-presets/${preset.id}`} data-method="PATCH" data-redirect="reload" className="mt-3 grid gap-3">
+                        <label className="block"><span className="label">Profile name</span><input required name="displayName" defaultValue={preset.displayName} className="field" /></label>
+                        <label className="block"><span className="label">Scheme type</span><input name="schemeType" defaultValue={preset.schemeType ?? ''} className="field" /></label>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block"><span className="label">Registration A Part 1</span><select required name="registrationAPart1" defaultValue={preset.registrationAPart1 ?? ''} className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
+                          <label className="block"><span className="label">Registration B Part 1</span><select required name="registrationBPart1" defaultValue={preset.registrationBPart1 ?? ''} className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
+                          <label className="block"><span className="label">Registration A Part 2</span><input name="registrationAPart2" defaultValue={preset.registrationAPart2 ?? ''} className="field" /></label>
+                          <label className="block"><span className="label">Registration B Part 2</span><input name="registrationBPart2" defaultValue={preset.registrationBPart2 ?? ''} className="field" /></label>
+                        </div>
+                        <label className="block"><span className="label">Certifier name</span><input name="certifierName" defaultValue={preset.certifierName ?? ''} className="field" /></label>
+                        <label className="block"><span className="label">Approved body</span><input name="approvedBody" defaultValue={preset.approvedBody ?? ''} className="field" /></label>
+                        <label className="flex items-center gap-3 text-sm"><input type="checkbox" name="isDefault" defaultChecked={Boolean(preset.isDefault)} /> Use as organisation default</label>
+                        <button className="btn btn-primary justify-self-start">Save profile</button>
+                        <p data-form-status className="text-sm text-stone-500" />
+                      </form>
+                      <form data-api-form data-action={`/api/settings/certifier-presets/${preset.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Delete ${preset.displayName}?`} className="mt-3 border-t border-stone-200 pt-3">
+                        <button className="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete profile</button>
+                        <span data-form-status className="ml-3 text-sm text-stone-500" />
+                      </form>
+                    </details>
+                  )}
                 </div>
               )) : <p className="text-sm text-stone-500">No certifier presets saved.</p>}
             </div>
@@ -1022,9 +1046,9 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
               <label className="block"><span className="label">Preset name</span><input required name="displayName" className="field" /></label>
               <label className="block"><span className="label">Scheme type</span><input name="schemeType" className="field" /></label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block"><span className="label">Registration A prefix</span><select name="registrationAPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
+                <label className="block"><span className="label">Registration A prefix</span><select required name="registrationAPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
                 <label className="block"><span className="label">Registration A number</span><input name="registrationAPart2" className="field" /></label>
-                <label className="block"><span className="label">Registration B prefix</span><select name="registrationBPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
+                <label className="block"><span className="label">Registration B prefix</span><select required name="registrationBPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
                 <label className="block"><span className="label">Registration B number</span><input name="registrationBPart2" className="field" /></label>
               </div>
               <label className="block"><span className="label">Certifier name</span><input name="certifierName" className="field" /></label>

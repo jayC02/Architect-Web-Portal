@@ -54,7 +54,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       OR: [{ claimedDeviceId: null }, { claimedDeviceId: access.id }],
     },
     select: {
-      id: true, type: true, status: true, sourceType: true, title: true,
+      id: true, projectId: true, type: true, status: true, sourceType: true, title: true,
       payloadVersion: true, dataSnapshot: true, documentSnapshot: true,
       claimedAt: true, createdAt: true, updatedAt: true,
     },

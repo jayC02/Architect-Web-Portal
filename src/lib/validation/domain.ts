@@ -169,6 +169,10 @@ export const householderPreparationUpdateSchema = z.object({
   }
 });
 
+export const planningPreparationDetailsSchema = z.object({
+  jobId: z.string().trim().min(1).max(120),
+}).and(householderPreparationUpdateSchema);
+
 export const buildingWarrantPreparationUpdateSchema = z.object({
   description: optionalText(2000),
   estimatedValue: optionalNonNegativeMoney,

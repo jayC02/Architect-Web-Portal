@@ -4,6 +4,7 @@ import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import {
   automationJobApplicationId,
   desktopAutomationPresentation,
+  resolveAutomationJobIdentity,
   reusableAutomationJobStatuses,
   selectCurrentAutomationJob,
   type DesktopAutomationJob,
@@ -21,7 +22,14 @@ const makeJob = (
   type: AutomationJobType.BUILDING_WARRANT,
   status,
   dataSnapshot: {
+    contractVersion: 'architectpro.automation-job',
     snapshotVersion: 2,
+    metadata: {
+      jobId: id,
+      projectId: 'project-1',
+      applicationType: AutomationJobType.BUILDING_WARRANT,
+    },
+    planning: null,
     buildingWarrant: { recordId: applicationId },
   },
   documentSnapshot: { documents: [] },
@@ -84,6 +92,53 @@ const v1Job = makeJob(
 assert.equal(automationJobApplicationId(v1Job), 'legacy-warrant', 'Snapshot V1 application ids remain readable');
 assert.equal(automationJobApplicationId(newerReady), 'warrant-1', 'Snapshot V2 application ids remain readable');
 
+const planningJob = makeJob(
+  'planning',
+  AutomationJobStatus.READY,
+  'planning-1',
+  '2026-07-04T10:00:00.000Z',
+  {
+    type: AutomationJobType.PLANNING_APPLICATION,
+    dataSnapshot: {
+      contractVersion: 'architectpro.automation-job',
+      snapshotVersion: 2,
+      metadata: {
+        jobId: 'planning',
+        projectId: 'project-1',
+        applicationType: AutomationJobType.PLANNING_APPLICATION,
+      },
+      planning: { recordId: 'planning-1' },
+      buildingWarrant: null,
+    },
+  },
+);
+assert.deepEqual(resolveAutomationJobIdentity(planningJob), {
+  jobId: 'planning',
+  projectId: 'project-1',
+  applicationType: AutomationJobType.PLANNING_APPLICATION,
+  applicationId: 'planning-1',
+  snapshotVersion: 2,
+});
+assert.throws(
+  () => resolveAutomationJobIdentity({
+    ...planningJob,
+    type: AutomationJobType.BUILDING_WARRANT,
+  }),
+  /application type do not match/,
+  'a conflicting job and Snapshot type is blocked instead of falling back to Building Warrant',
+);
+assert.throws(
+  () => resolveAutomationJobIdentity({
+    ...planningJob,
+    dataSnapshot: {
+      ...(planningJob.dataSnapshot as Record<string, unknown>),
+      planning: null,
+    },
+  }),
+  /missing its exact application record/,
+  'a V2 Snapshot without the exact application record is blocked',
+);
+
 assert.ok(reusableAutomationJobStatuses.includes(AutomationJobStatus.READY));
 assert.ok(reusableAutomationJobStatuses.includes(AutomationJobStatus.NEEDS_INPUT));
 assert.ok(reusableAutomationJobStatuses.includes(AutomationJobStatus.CLAIMED));
@@ -94,6 +149,7 @@ assert.ok(!reusableAutomationJobStatuses.includes(AutomationJobStatus.CANCELLED 
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.READY).label, 'Ready to open');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.NEEDS_INPUT).label, 'Needs your attention');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).label, 'In progress in desktop');
+assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).actionLabel, 'Resume in desktop');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.COMPLETED).label, 'Completed');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.FAILED_FINAL).label, 'Could not complete');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.CANCELLED).label, 'Cancelled');
@@ -108,7 +164,12 @@ const commitRoute = fs.readFileSync('src/pages/api/application-drafts/[id]/commi
 const draftReview = fs.readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
 const preparationPage = fs.readFileSync('src/pages/automation-job/[id].astro', 'utf8');
 const warrantPreparationPage = fs.readFileSync('src/pages/building-warrant/[id]/preparation.astro', 'utf8');
+const planningPreparationPage = fs.readFileSync('src/pages/planning/[id]/preparation.astro', 'utf8');
+const planningCompletionRoute = fs.readFileSync('src/pages/api/planning/[id]/complete-details.ts', 'utf8');
 const legacyWarrantRoute = fs.readFileSync('src/pages/projects/[id]/building-warrant.astro', 'utf8');
+const legacyPlanningRoute = fs.readFileSync('src/pages/projects/[id]/planning.astro', 'utf8');
+const launchRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/launch.ts', 'utf8');
+const exchangeRoute = fs.readFileSync('src/pages/api/desktop/handoff/exchange.ts', 'utf8');
 
 assert.doesNotMatch(appShell, /AI Automation/, 'primary navigation does not expose the internal job system');
 assert.match(appShell, /New application/, 'the AI-first application entry remains in primary navigation');
@@ -121,10 +182,12 @@ assert.match(historyPage, /value: 'active'[\s\S]*value: 'attention'[\s\S]*value:
 assert.match(historyPage, /attentionStatuses\.includes\(status\)[\s\S]*AutomationJobStatus\.READY/, 'active history prioritises attention before ready and running work');
 
 assert.match(statusPanel, /desktopAutomationPresentation\(job\.status\)/, 'status panel uses the shared human-readable presentation');
-assert.match(statusPanel, /Review application/, 'needs-input work has one review action');
-assert.match(statusPanel, /buildingWarrantPreparationHref/, 'Building Warrant status actions use the exact application preparation route');
-assert.match(statusPanel, /Complete application details/, 'Building Warrant needs-input work uses clear completion wording');
-assert.match(statusPanel, /AutomationJobStatus\.CLAIMED[\s\S]*View status/, 'running work is shown as status rather than a new preparation');
+assert.match(statusPanel, /`\/building-warrant\/\$\{exactApplicationId\}\/preparation\?job=\$\{job\.id\}`/, 'Building Warrant status actions use the exact application and job route');
+assert.match(statusPanel, /`\/planning\/\$\{exactApplicationId\}\/preparation\?job=\$\{job\.id\}`/, 'Planning status actions use the exact application and job route');
+assert.match(statusPanel, /Complete Building Warrant details/, 'Building Warrant needs-input work uses specific wording');
+assert.match(statusPanel, /Complete Planning application details/, 'Planning needs-input work uses specific wording');
+assert.match(statusPanel, /AutomationJobStatus\.CLAIMED[\s\S]*Resume in desktop/, 'claimed work exposes Resume in desktop');
+assert.match(statusPanel, /AutomationJobStatus\.IN_PROGRESS[\s\S]*Resume in desktop/, 'in-progress work exposes Resume in desktop');
 assert.match(statusPanel, /ExistingAutomationJobButton/, 'ready work reuses the existing deep-link implementation');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
 
@@ -136,7 +199,20 @@ assert.match(commitRoute, /\/projects\/\$\{encodeURIComponent\(result\.projectId
 assert.match(commitRoute, /applicationPrepared=1/, 'AI-first commit displays a contextual success state');
 assert.doesNotMatch(draftReview, /\/api\/automation-jobs\/\$\{result\.automationJobId\}\/launch/, 'committing never launches desktop automation without another user action');
 assert.match(warrantPreparationPage, /automationJobApplicationId\(reusableJob\) !== application\.id/, 'focused preparation rejects a job for another application');
+assert.match(planningPreparationPage, /automationJobApplicationId\(candidate\) === application\.id/, 'Planning preparation selects only the exact application job');
+assert.match(planningPreparationPage, /Planning application details/, 'Planning has a distinct preparation page');
+assert.doesNotMatch(planningPreparationPage, /registrationAPart1|registrationBPart1|Certifier details/, 'Planning never renders Building Warrant certifier fields');
+assert.match(planningCompletionRoute, /automationJobApplicationId\(job\) !== application\.id/, 'Planning completion rejects the wrong job and application pairing');
+assert.match(planningCompletionRoute, /where: \{ id: job\.id \}/, 'Planning completion updates the same job');
+assert.doesNotMatch(planningCompletionRoute, /automationJob\.create/, 'Planning completion never creates a replacement job');
 assert.match(legacyWarrantRoute, /\/building-warrant\/\$\{application\.id\}\/preparation/, 'legacy tracker links redirect to the focused Building Warrant route');
+assert.match(legacyPlanningRoute, /\/planning\/\$\{application\.id\}\/preparation/, 'legacy Planning route redirects to focused preparation');
+assert.match(launchRoute, /AutomationJobStatus\.CLAIMED[\s\S]*AutomationJobStatus\.IN_PROGRESS/, 'launch accepts resumable claimed and in-progress states');
+assert.match(launchRoute, /claimedByUserId !== user\.id/, 'resume is limited to the user who claimed the job');
+assert.match(launchRoute, /claimedByUserId: user\.id/, 'first launch binds the handoff to the user who opened it');
+assert.match(exchangeRoute, /job\.status === AutomationJobStatus\.READY \? AutomationJobStatus\.CLAIMED : job\.status/, 'handoff exchange preserves resumable job state');
+assert.doesNotMatch(launchRoute, /automationJob\.create/, 'open and resume never create another job');
+assert.doesNotMatch(exchangeRoute, /automationJob\.create/, 'handoff exchange never creates another job');
 
 for (const requiredHiddenField of ['projectName', 'siteAddressLine1', 'siteTownCity', 'sitePostcode']) {
   assert.match(

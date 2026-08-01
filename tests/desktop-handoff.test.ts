@@ -33,10 +33,17 @@ assert.match(relaunchRoute, /desktopPortalOrigin\(context\.request\)/, 'relaunch
 assert.doesNotMatch(relaunchRoute, /context\.url\.origin/, 'relaunch links must not use an internal platform request origin');
 assert.match(relaunchRoute, /requireOrganisation\(context\)/, 'relaunching an existing job requires an organisation session');
 assert.match(relaunchRoute, /organisationId:\s*organisation\.id/, 'existing job relaunch is organisation scoped');
+assert.match(relaunchRoute, /resolveAutomationJobIdentity\(job\)/, 'launch validates the exact job, Project, type and application identity');
+assert.match(relaunchRoute, /claimedByUserId !== user\.id/, 'only the existing claimant can resume an unfinished job');
+assert.match(relaunchRoute, /claimedByUserId: user\.id/, 'a ready handoff is bound to the user who launches it');
+assert.match(relaunchRoute, /launchMode/, 'launch diagnostics distinguish open from resume');
+assert.doesNotMatch(relaunchRoute, /automationJob\.create/, 'reopening an existing job does not create a duplicate');
 assert.match(exchangeRoute, /handoffRedeemedAt:\s*null/, 'handoff exchange only accepts unused links');
 assert.match(exchangeRoute, /handoffExpiresAt:\s*\{ gt: now \}/, 'handoff exchange rejects expired links');
 assert.match(exchangeRoute, /automationJobId:\s*job\.id/, 'automatic desktop credentials are scoped to one job');
+assert.match(exchangeRoute, /desktopAccessToken\.updateMany\([\s\S]*automationJobId: job\.id[\s\S]*revokedAt: now/, 'resume revokes earlier credentials for the same job before issuing a replacement');
 assert.match(exchangeRoute, /handoffCodeHash:\s*null/, 'redeemed handoff codes are invalidated immediately');
+assert.match(exchangeRoute, /status:\s*job\.status === AutomationJobStatus\.READY \? AutomationJobStatus\.CLAIMED : job\.status/, 'resume preserves claimed or in-progress status');
 assert.match(tokenAuth, /assertDesktopJobAccess/, 'desktop API access can be restricted to the selected job');
 assert.match(tokenAuth, /createHash\('sha256'\)/, 'desktop access tokens must be stored as hashes');
 assert.doesNotMatch(desktopIntegration, /Copy this connection token|Connect device|clipboard/, 'settings must not ask users to copy connection codes');

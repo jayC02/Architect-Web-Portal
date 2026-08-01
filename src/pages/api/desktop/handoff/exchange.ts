@@ -15,6 +15,12 @@ import {
   desktopTokenPrefix,
 } from '@/server/auth/desktop-token';
 
+const exchangeableStatuses = [
+  AutomationJobStatus.READY,
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+];
+
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertRateLimit(context, rateLimitPolicies.desktop, 'desktop-handoff:exchange');
   const body = await parseBody(context.request, desktopHandoffExchangeSchema);
@@ -30,18 +36,29 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         handoffCodeHash: codeHash,
         handoffRedeemedAt: null,
         handoffExpiresAt: { gt: now },
-        status: AutomationJobStatus.READY,
+        status: { in: exchangeableStatuses },
       },
-      select: { id: true, organisationId: true, createdById: true },
+      select: {
+        id: true,
+        organisationId: true,
+        createdById: true,
+        claimedByUserId: true,
+        claimedAt: true,
+        status: true,
+      },
     });
     if (!job) {
       throw new HttpError(410, 'This desktop link has expired or has already been used. Return to the portal and open the job again.');
     }
 
+    await tx.desktopAccessToken.updateMany({
+      where: { automationJobId: job.id, revokedAt: null },
+      data: { revokedAt: now },
+    });
     const access = await tx.desktopAccessToken.create({
       data: {
         organisationId: job.organisationId,
-        userId: job.createdById,
+        userId: job.claimedByUserId ?? job.createdById,
         automationJobId: job.id,
         name: body.deviceName || 'ArchitectPro Desktop',
         tokenHash: desktopTokenHash(accessToken),
@@ -57,13 +74,13 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         handoffCodeHash: codeHash,
         handoffRedeemedAt: null,
         handoffExpiresAt: { gt: now },
-        status: AutomationJobStatus.READY,
+        status: job.status,
       },
       data: {
-        status: AutomationJobStatus.CLAIMED,
+        status: job.status === AutomationJobStatus.READY ? AutomationJobStatus.CLAIMED : job.status,
         claimedDeviceId: access.id,
-        claimedByUserId: job.createdById,
-        claimedAt: now,
+        claimedByUserId: job.claimedByUserId ?? job.createdById,
+        claimedAt: job.claimedAt ?? now,
         handoffCodeHash: null,
         handoffExpiresAt: null,
         handoffRedeemedAt: now,

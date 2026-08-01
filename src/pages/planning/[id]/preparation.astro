@@ -1,0 +1,75 @@
+---
+import { AutomationJobType } from '@prisma/client';
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { automationJobApplicationId, desktopAutomationJobSelect } from '@/server/services/desktop-automation-status.service';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/projects');
+
+const application = await prisma.planningApplication.findFirst({
+  where: { id, organisationId: auth.organisation.id },
+  include: { project: { include: { client: true, site: true } } },
+});
+if (!application) return Astro.redirect('/projects');
+
+const suppliedJobId = Astro.url.searchParams.get('job');
+const candidates = await prisma.automationJob.findMany({
+  where: {
+    organisationId: auth.organisation.id,
+    projectId: application.projectId,
+    type: { in: [AutomationJobType.HOUSEHOLDER_PLANNING, AutomationJobType.PLANNING_APPLICATION] },
+    ...(suppliedJobId ? { id: suppliedJobId } : {}),
+  },
+  select: desktopAutomationJobSelect,
+  orderBy: { updatedAt: 'desc' },
+  take: suppliedJobId ? 1 : 25,
+});
+const job = candidates.find((candidate) => automationJobApplicationId(candidate) === application.id);
+if (!job) return Astro.redirect(`/projects/${application.projectId}`);
+
+const preparation = application.preparationData && typeof application.preparationData === 'object' && !Array.isArray(application.preparationData)
+  ? application.preparationData as Record<string, unknown>
+  : {};
+const boolValue = (key: string, fallback = false) => typeof preparation[key] === 'boolean' ? preparation[key] as boolean : fallback;
+const numberValue = (key: string) => typeof preparation[key] === 'number' ? String(preparation[key]) : '';
+const address = [application.project.site?.addressLine1, application.project.site?.townCity, application.project.site?.postcode]
+  .filter(Boolean).join(', ') || application.project.siteAddress || 'Site address not recorded';
+const clientName = application.project.client?.name ?? 'Client not recorded';
+const documentCount = await prisma.projectDocument.count({
+  where: { organisationId: auth.organisation.id, projectId: application.projectId },
+});
+---
+<AppShell title="Planning application details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href={`/projects/${application.projectId}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
+    <h1 class="mt-2 text-3xl font-semibold text-ink">Planning application details</h1>
+    <p class="mt-1 text-sm text-stone-500">Complete the Planning-specific details for this existing desktop job.</p>
+  </div>
+
+  <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" class="panel rounded-lg p-5">
+      <input type="hidden" name="jobId" value={job.id} />
+      <h2 class="text-xl font-semibold">Planning questions</h2>
+      <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required minlength="12" maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>
+        <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label>
+        <label class="block"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!boolValue('newOrAlteredVehicleAccess')}>No</option><option value="true" selected={boolValue('newOrAlteredVehicleAccess')}>Yes</option></select></label>
+        <label class="block"><span class="label">Applicant is sole owner</span><select name="soleOwner" class="field"><option value="false" selected={!boolValue('soleOwner')}>No</option><option value="true" selected={boolValue('soleOwner')}>Yes</option></select></label>
+        <label class="block"><span class="label">Agricultural holding</span><select name="agriculturalHolding" class="field"><option value="false" selected={!boolValue('agriculturalHolding')}>No</option><option value="true" selected={boolValue('agriculturalHolding')}>Yes</option></select></label>
+        <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} class="field" /></label>
+        <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} class="field" /></label>
+      </div>
+      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
+    </form>
+
+    <aside class="panel rounded-lg p-5" aria-label="Planning application summary">
+      <h2 class="text-lg font-semibold">Application summary</h2>
+      <dl class="mt-4 space-y-3 text-sm"><div><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div><dt class="text-stone-500">Application</dt><dd>Planning</dd></div><div><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
+    </aside>
+  </div>
+</AppShell>

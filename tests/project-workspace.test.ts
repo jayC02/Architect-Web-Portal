@@ -49,6 +49,7 @@ const projectsApi = fs.readFileSync('src/pages/api/projects/index.ts', 'utf8');
 const projectDetailPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
 const planningPage = fs.readFileSync('src/pages/projects/[id]/planning.astro', 'utf8');
+const planningPreparationPage = fs.readFileSync('src/pages/planning/[id]/preparation.astro', 'utf8');
 const warrantPage = fs.readFileSync('src/pages/projects/[id]/building-warrant.astro', 'utf8');
 const appShell = fs.readFileSync('src/components/layout/AppShell.astro', 'utf8');
 const dashboardPage = fs.readFileSync('src/pages/dashboard.astro', 'utf8');
@@ -171,9 +172,10 @@ const projectFilesPage = fs.readFileSync('src/pages/projects/[id]/files.astro', 
 assert.match(projectFilesPage, /Project files/, 'project files page is a simple file manager');
 assert.doesNotMatch(projectFilesPage, /Auto-sort project files/, 'project files manager no longer duplicates the upload workflow');
 assert.match(projectFilesPage, /Edit file details/, 'project files manager lets users edit document metadata');
-assert.match(planningPage, /data-planning-record-form/, 'planning page uses simplified quick-create form');
-assert.match(planningPage, /Advanced details/, 'planning page keeps advanced details available');
-assert.match(planningPage, /DesktopAutomationStatus/, 'planning page renders the shared contextual desktop status');
+assert.match(planningPage, /\/planning\/\$\{application\.id\}\/preparation/, 'legacy Planning tracker redirects to the focused exact-application route');
+assert.match(planningPreparationPage, /Planning application details/, 'focused Planning preparation is distinct from Building Warrant');
+assert.match(planningPreparationPage, /organisationId: auth\.organisation\.id/, 'focused Planning preparation is organisation scoped');
+assert.doesNotMatch(planningPreparationPage, /registrationAPart1|registrationBPart1/, 'Planning preparation never renders certifier fields');
 assert.match(warrantPage, /\/building-warrant\/\$\{application\.id\}\/preparation/, 'legacy warrant tracker routes redirect to focused application preparation');
 assert.doesNotMatch(warrantPage, /data-warrant-record-form/, 'legacy warrant tracker does not reopen the generic project form');
 

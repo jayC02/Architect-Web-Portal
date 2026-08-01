@@ -1,136 +1,19 @@
 ---
-import { AutomationJobType, PlanningStatus } from '@prisma/client';
-import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
-import AppShell from '@/components/layout/AppShell.astro';
-import LiveDataPanel from '@/components/live/LiveDataPanel';
-import { planningDateFieldsForStatus } from '@/lib/application-record-fields';
 import { prisma } from '@/lib/db/prisma';
-import { humanizeEnum } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
-import { getDesktopAutomationContext } from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
-
 const project = await prisma.project.findFirst({
   where: { id: Astro.params.id, organisationId: auth.organisation.id },
-  select: { id: true, name: true },
+  select: { id: true },
 });
 if (!project) return Astro.redirect('/projects');
-
-const latestPlanning = await prisma.planningApplication.findFirst({
-  where: { projectId: project.id, organisationId: auth.organisation.id },
+const application = await prisma.planningApplication.findFirst({
+  where: { organisationId: auth.organisation.id, projectId: project.id },
   orderBy: { updatedAt: 'desc' },
-  select: { id: true, applicationReference: true, status: true },
+  select: { id: true },
 });
-
-const desktopAutomation = await getDesktopAutomationContext({
-  organisationId: auth.organisation.id,
-  organisationName: auth.organisation.name,
-  projectId: project.id,
-  type: AutomationJobType.HOUSEHOLDER_PLANNING,
-  matchingTypes: [AutomationJobType.HOUSEHOLDER_PLANNING, AutomationJobType.PLANNING_APPLICATION],
-  applicationId: latestPlanning?.id,
-  createdBy: { id: auth.user.id, name: auth.user.name, email: auth.user.email },
-});
-
-const planningDateLabels = {
-  submissionDate: 'Submission date',
-  validDate: 'Valid date',
-  decisionTargetDate: 'Decision target date',
-  decisionDate: 'Decision date',
-};
-const initialVisibleDates = planningDateFieldsForStatus(PlanningStatus.NOT_STARTED);
+if (application) return Astro.redirect(`/planning/${application.id}/preparation`);
+return Astro.redirect(`/projects/${project.id}`);
 ---
-<AppShell title={`${project.name} planning`} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-6">
-    <a href={`/projects/${project.id}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
-    <h1 class="mt-2 text-3xl font-semibold">Planning record</h1>
-    <p class="mt-1 text-sm text-stone-500">Add the core tracker details for {project.name}. Dates appear only when the status needs them.</p>
-  </div>
-
-  <section class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-    <div class="space-y-6">
-      <form id="planning-record-form" data-api-form data-planning-record-form data-action={`/api/projects/${project.id}/planning`} data-method="POST" class="panel scroll-mt-6 rounded-lg p-5">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold">Add planning record</h2>
-            <p class="mt-1 text-sm text-stone-500">Start with the reference, status and any useful notes. Add dates when the application moves forward.</p>
-          </div>
-          <span class="status-chip bg-stone-100 text-stone-600">Quick record</span>
-        </div>
-
-        <div class="mt-5 grid gap-4 md:grid-cols-2">
-          <label class="block md:col-span-2"><span class="label">Application reference</span><input name="applicationReference" class="field" placeholder="Planning reference, if known" /></label>
-          <label class="block"><span class="label">Status</span><select name="status" class="field" data-record-status>{Object.values(PlanningStatus).map((status) => <option value={status}>{humanizeEnum(status)}</option>)}</select></label>
-        </div>
-
-        <div class="mt-4 grid gap-4 md:grid-cols-2" data-date-fields>
-          {Object.entries(planningDateLabels).map(([field, label]) => (
-            <label class:list={['block', !initialVisibleDates.includes(field as never) && 'hidden']} data-date-field={field}>
-              <span class="label">{label}</span>
-              <input type="date" name={field} class="field" />
-            </label>
-          ))}
-        </div>
-
-        <label class="mt-4 block"><span class="label">Notes</span><textarea name="notes" rows="4" class="field" placeholder="Current position, client actions or portal notes"></textarea></label>
-
-        <details class="mt-4 rounded-lg border border-stone-200 bg-stone-50/60 p-3">
-          <summary class="cursor-pointer text-sm font-semibold text-stone-700">Advanced details</summary>
-          <div class="mt-4 grid gap-4">
-            <label class="block"><span class="label">Portal URL</span><input type="url" name="portalUrl" class="field" placeholder="https://..." /></label>
-            <p class="text-xs text-stone-500">Date values are preserved by the backend. Expand existing records below if you need to manually edit every saved planning date.</p>
-          </div>
-        </details>
-
-        <div class="mt-5 flex flex-wrap items-center gap-3">
-          <button class="btn btn-primary">Save planning record</button>
-          <p data-form-status class="text-sm text-stone-500"></p>
-        </div>
-      </form>
-
-      <LiveDataPanel client:load variant="planning" endpoint={`/api/projects/${project.id}/planning`} />
-    </div>
-
-    <aside id="desktop-automation" class="scroll-mt-6">
-      <DesktopAutomationStatus
-        projectId={project.id}
-        type={AutomationJobType.HOUSEHOLDER_PLANNING}
-        applicationId={latestPlanning?.id}
-        applicationLabel="Householder application"
-        manageHref="#planning-record-form"
-        job={desktopAutomation.job}
-        preparationReady={desktopAutomation.preparationReady}
-        missingCount={desktopAutomation.missingCount}
-      />
-    </aside>
-  </section>
-
-  <script>
-    const planningVisibility: Record<string, string[]> = {
-      NOT_STARTED: [],
-      DRAFTING: [],
-      SUBMITTED: ['submissionDate'],
-      VALIDATED: ['submissionDate', 'validDate', 'decisionTargetDate'],
-      IN_REVIEW: ['submissionDate', 'validDate', 'decisionTargetDate'],
-      FURTHER_INFORMATION_REQUESTED: ['submissionDate', 'validDate', 'decisionTargetDate'],
-      APPROVED: ['submissionDate', 'validDate', 'decisionDate'],
-      REFUSED: ['submissionDate', 'validDate', 'decisionDate'],
-      WITHDRAWN: [],
-      CLOSED: [],
-    };
-    const form = document.querySelector('[data-planning-record-form]');
-    const status = form?.querySelector('[data-record-status]');
-    const syncPlanningDates = () => {
-      if (!(status instanceof HTMLSelectElement)) return;
-      const visible = new Set(planningVisibility[status.value] || []);
-      form?.querySelectorAll('[data-date-field]').forEach((field) => {
-        if (!(field instanceof HTMLElement)) return;
-        field.classList.toggle('hidden', !visible.has(field.dataset.dateField || ''));
-      });
-    };
-    status?.addEventListener('change', syncPlanningDates);
-    syncPlanningDates();
-  </script>
-</AppShell>

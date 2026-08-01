@@ -28,16 +28,27 @@ export const PATCH: APIRoute = (context) =>
       soleOwner,
       agriculturalHolding,
     } = body;
-    const result = await prisma.planningApplication.updateMany({
+    const application = await prisma.planningApplication.findFirst({
       where: { id, organisationId: organisation.id },
+      select: { id: true, preparationData: true },
+    });
+    if (!application) throw new HttpError(404, 'Planning application not found.');
+    const previous = application.preparationData
+      && typeof application.preparationData === 'object'
+      && !Array.isArray(application.preparationData)
+      ? application.preparationData as Prisma.JsonObject
+      : {};
+    await prisma.planningApplication.update({
+      where: { id: application.id },
       data: {
         description,
         preparationData: {
+          ...previous,
           discussedWithPlanningAuthority,
           treesOnOrAdjacentToSite,
           newOrAlteredVehicleAccess,
-          currentParkingSpaces: newOrAlteredVehicleAccess ? currentParkingSpaces : undefined,
-          proposedParkingSpaces: newOrAlteredVehicleAccess ? proposedParkingSpaces : undefined,
+          currentParkingSpaces: newOrAlteredVehicleAccess ? currentParkingSpaces : null,
+          proposedParkingSpaces: newOrAlteredVehicleAccess ? proposedParkingSpaces : null,
           soleOwner,
           agriculturalHolding,
         } as Prisma.InputJsonValue,
@@ -45,7 +56,6 @@ export const PATCH: APIRoute = (context) =>
         preparedAt: new Date(),
       },
     });
-    if (!result.count) throw new HttpError(404, 'Planning application not found.');
     return jsonResponse(200, {
       ok: true,
       message: 'Application details saved. Prepare the job again to run preflight.',

@@ -38,6 +38,11 @@ export const PATCH: APIRoute = (context) =>
           where: { organisationId: organisation.id, isDefault: true },
           data: { isDefault: false },
         });
+      } else {
+        await tx.organisationDefaults.updateMany({
+          where: { organisationId: organisation.id, defaultCertifierPresetId: id },
+          data: { defaultCertifierPresetId: null },
+        });
       }
       const updated = await tx.organisationCertifierPreset.update({ where: { id }, data: body });
       if (body.isDefault) {
@@ -61,6 +66,17 @@ export const DELETE: APIRoute = (context) =>
       OrganisationRole.ADMIN,
     ]);
     const id = requireId(context);
+    const [applicationUse, defaultUse] = await Promise.all([
+      prisma.buildingWarrantApplication.count({
+        where: { organisationId: organisation.id, selectedCertifierPresetId: id },
+      }),
+      prisma.organisationDefaults.count({
+        where: { organisationId: organisation.id, defaultCertifierPresetId: id },
+      }),
+    ]);
+    if (applicationUse || defaultUse) {
+      throw new HttpError(409, 'This certifier profile is in use. Choose a different application and organisation default before deleting it.');
+    }
     const result = await prisma.organisationCertifierPreset.deleteMany({
       where: { id, organisationId: organisation.id },
     });

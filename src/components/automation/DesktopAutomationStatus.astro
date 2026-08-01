@@ -33,9 +33,15 @@ const {
 const presentation = job ? desktopAutomationPresentation(job.status) : null;
 const documentCount = job ? automationJobDocumentCount(job) : 0;
 const jobApplicationId = job ? automationJobApplicationId(job) : null;
-const buildingWarrantPreparationHref = type === AutomationJobType.BUILDING_WARRANT && (jobApplicationId ?? applicationId)
-  ? `/building-warrant/${jobApplicationId ?? applicationId}/preparation${job ? `?job=${job.id}` : ''}`
+const exactApplicationId = jobApplicationId ?? applicationId;
+const exactPreparationHref = exactApplicationId && job
+  ? type === AutomationJobType.BUILDING_WARRANT
+    ? `/building-warrant/${exactApplicationId}/preparation?job=${job.id}`
+    : `/planning/${exactApplicationId}/preparation?job=${job.id}`
   : manageHref;
+const preparationActionLabel = type === AutomationJobType.BUILDING_WARRANT
+  ? 'Complete Building Warrant details'
+  : 'Complete Planning application details';
 const canPrepare = !job || job.status === AutomationJobStatus.CANCELLED;
 const statusLabel = presentation?.label ?? (preparationReady ? 'Ready to prepare' : 'Needs your attention');
 const description = presentation?.description ?? (preparationReady
@@ -86,10 +92,10 @@ const failedStatuses = new Set<AutomationJobStatus>([
         <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop" />
       )}
       {job && attentionStatuses.has(job.status) && (
-        <a class="btn btn-primary" href={buildingWarrantPreparationHref}>{type === AutomationJobType.BUILDING_WARRANT ? 'Complete application details' : 'Review application'}</a>
+        <a class="btn btn-primary" href={exactPreparationHref}>{preparationActionLabel}</a>
       )}
       {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) && (
-        <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>View status</a>
+        <ExistingAutomationJobButton client:load jobId={job.id} label="Resume in desktop" />
       )}
       {job?.status === AutomationJobStatus.COMPLETED && (
         <a class="btn btn-secondary" href={manageHref}>View application</a>
@@ -108,7 +114,7 @@ const failedStatuses = new Set<AutomationJobStatus>([
         />
       )}
       {canPrepare && !preparationReady && (
-        <a class="btn btn-secondary" href={buildingWarrantPreparationHref}>Complete application details</a>
+        <a class="btn btn-secondary" href={exactPreparationHref}>{preparationActionLabel}</a>
       )}
       {job?.status === AutomationJobStatus.READY && (
         <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>
