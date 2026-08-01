@@ -9,9 +9,10 @@ type Props = {
   buildingWarrantApplicationId?: string;
   className?: string;
   label?: string;
+  destination?: 'job' | 'preparation';
 };
 
-export default function AutomationLaunchButton({ projectId, type, planningApplicationId, buildingWarrantApplicationId, className = '', label = 'Open in Automation App' }: Props) {
+export default function AutomationLaunchButton({ projectId, type, planningApplicationId, buildingWarrantApplicationId, className = '', label = 'Open in Automation App', destination = 'job' }: Props) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,11 +20,11 @@ export default function AutomationLaunchButton({ projectId, type, planningApplic
     setWorking(true);
     setError('');
     try {
-      const result = await apiRequest<{ redirectTo: string }>(`/api/projects/${projectId}/automation-jobs`, {
+      const result = await apiRequest<{ redirectTo: string; preparationRedirectTo: string }>(`/api/projects/${projectId}/automation-jobs`, {
         method: 'POST',
         json: { type, planningApplicationId, buildingWarrantApplicationId },
       });
-      window.location.assign(result.redirectTo);
+      window.location.assign(destination === 'preparation' ? result.preparationRedirectTo : result.redirectTo);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The desktop application could not be prepared.');
     } finally {

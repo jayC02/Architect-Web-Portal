@@ -114,7 +114,15 @@ const failedStatuses = new Set<AutomationJobStatus>([
         />
       )}
       {canPrepare && !preparationReady && (
-        <a class="btn btn-secondary" href={exactPreparationHref}>{preparationActionLabel}</a>
+        <AutomationLaunchButton
+          client:load
+          projectId={projectId}
+          type={type}
+          planningApplicationId={type === AutomationJobType.HOUSEHOLDER_PLANNING ? applicationId ?? undefined : undefined}
+          buildingWarrantApplicationId={type === AutomationJobType.BUILDING_WARRANT ? applicationId ?? undefined : undefined}
+          label={preparationActionLabel}
+          destination="preparation"
+        />
       )}
       {job?.status === AutomationJobStatus.READY && (
         <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>

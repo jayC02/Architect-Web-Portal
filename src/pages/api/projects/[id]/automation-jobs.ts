@@ -33,6 +33,10 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   );
   const applicationId = applicationRecord.planningApplicationId
     ?? applicationRecord.buildingWarrantApplicationId;
+  if (!applicationId) throw new HttpError(409, 'The exact application record could not be prepared.');
+  const preparationRedirectTo = (jobId: string) => body.type === 'BUILDING_WARRANT'
+    ? `/building-warrant/${encodeURIComponent(applicationId)}/preparation?job=${encodeURIComponent(jobId)}`
+    : `/planning/${encodeURIComponent(applicationId)}/preparation?job=${encodeURIComponent(jobId)}`;
   const existing = await findReusableAutomationJob({
     organisationId: organisation.id,
     projectId,
@@ -40,7 +44,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     applicationId,
   });
   if (existing) {
-    return jsonResponse(200, { job: existing, redirectTo: `/automation-job/${existing.id}` });
+    return jsonResponse(200, {
+      job: existing,
+      redirectTo: `/automation-job/${existing.id}`,
+      preparationRedirectTo: preparationRedirectTo(existing.id),
+    });
   }
 
   const jobId = randomUUID();
@@ -65,6 +73,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     return jsonResponse(200, {
       job: preparedWhileBuilding,
       redirectTo: `/automation-job/${preparedWhileBuilding.id}`,
+      preparationRedirectTo: preparationRedirectTo(preparedWhileBuilding.id),
     });
   }
   const job = await prisma.automationJob.create({
@@ -93,5 +102,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   return jsonResponse(201, {
     job,
     redirectTo: `/automation-job/${job.id}`,
+    preparationRedirectTo: preparationRedirectTo(job.id),
   });
 }, context);

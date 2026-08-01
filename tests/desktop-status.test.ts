@@ -158,6 +158,7 @@ const appShell = fs.readFileSync('src/components/layout/AppShell.astro', 'utf8')
 const settingsPanel = fs.readFileSync('src/components/live/LiveDataPanel.tsx', 'utf8');
 const historyPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
 const statusPanel = fs.readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
+const launchButton = fs.readFileSync('src/components/automation/AutomationLaunchButton.tsx', 'utf8');
 const projectRoute = fs.readFileSync('src/pages/api/projects/[id]/automation-jobs.ts', 'utf8');
 const globalRoute = fs.readFileSync('src/pages/api/automation-jobs/index.ts', 'utf8');
 const commitRoute = fs.readFileSync('src/pages/api/application-drafts/[id]/commit.ts', 'utf8');
@@ -186,6 +187,8 @@ assert.match(statusPanel, /`\/building-warrant\/\$\{exactApplicationId\}\/prepar
 assert.match(statusPanel, /`\/planning\/\$\{exactApplicationId\}\/preparation\?job=\$\{job\.id\}`/, 'Planning status actions use the exact application and job route');
 assert.match(statusPanel, /Complete Building Warrant details/, 'Building Warrant needs-input work uses specific wording');
 assert.match(statusPanel, /Complete Planning application details/, 'Planning needs-input work uses specific wording');
+assert.match(statusPanel, /canPrepare && !preparationReady[\s\S]*AutomationLaunchButton[\s\S]*destination="preparation"/, 'an application without a job creates one before opening focused preparation');
+assert.match(launchButton, /destination === 'preparation' \? result\.preparationRedirectTo : result\.redirectTo/, 'the preparation action follows the exact route returned for the created or reused job');
 assert.match(statusPanel, /AutomationJobStatus\.CLAIMED[\s\S]*Resume in desktop/, 'claimed work exposes Resume in desktop');
 assert.match(statusPanel, /AutomationJobStatus\.IN_PROGRESS[\s\S]*Resume in desktop/, 'in-progress work exposes Resume in desktop');
 assert.match(statusPanel, /ExistingAutomationJobButton/, 'ready work reuses the existing deep-link implementation');
@@ -195,6 +198,8 @@ for (const route of [projectRoute, globalRoute]) {
   assert.match(route, /findReusableAutomationJob/, 'contextual preparation reuses an existing active job');
   assert.match(route, /resolveAutomationApplicationRecord/, 'submitted application ids are revalidated in the active organisation');
 }
+assert.match(projectRoute, /preparationRedirectTo: preparationRedirectTo\(job\.id\)/, 'new jobs return their exact focused preparation route');
+assert.match(projectRoute, /preparationRedirectTo: preparationRedirectTo\(existing\.id\)/, 'reused jobs return their exact focused preparation route');
 assert.match(commitRoute, /\/projects\/\$\{encodeURIComponent\(result\.projectId\)\}/, 'AI-first commit returns to the resulting project');
 assert.match(commitRoute, /applicationPrepared=1/, 'AI-first commit displays a contextual success state');
 assert.doesNotMatch(draftReview, /\/api\/automation-jobs\/\$\{result\.automationJobId\}\/launch/, 'committing never launches desktop automation without another user action');
