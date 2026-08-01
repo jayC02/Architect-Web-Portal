@@ -70,7 +70,14 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   }
   addMissing(issues, 'application', 'application.description', 'Description of work', review.application.description && review.application.description.trim().length >= 12 ? review.application.description : null, 'Enter a specific description of the proposed work.');
   if (route === 'BUILDING_WARRANT') {
-    addMissing(issues, 'application', 'project.typeOfWorkKey', 'Type of work', review.project.typeOfWorkKey, 'Choose the Building Warrant type of work.');
+    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) {
+      issues.push({
+        key: 'application.typeOfWorkKeys',
+        section: 'application',
+        label: 'Type of work',
+        message: 'Choose at least one Building Warrant type of work.',
+      });
+    }
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
     addMissing(issues, 'application', 'application.proposedUse', 'Proposed use', review.application.proposedUse, 'Confirm the proposed use.');
     addMissing(issues, 'application', 'application.estimatedValue', 'Estimated value', review.application.estimatedValue, 'Enter the estimated value of work.');

@@ -37,13 +37,6 @@ type ApiErrorPayload = {
   details?: unknown;
 };
 
-const routeOptions: Option[] = [
-  { value: 'AUTO', label: 'Choose during review' },
-  { value: 'HOUSEHOLDER_PLANNING', label: 'Householder planning' },
-  { value: 'PLANNING_APPLICATION', label: 'Planning application' },
-  { value: 'BUILDING_WARRANT', label: 'Building Warrant' },
-];
-
 const buildingConfirmationQuestions = [
   ['applicantIsOwner', 'Is the applicant the legal owner?'],
   ['applicationIsStaged', 'Is the application staged?'],
@@ -82,7 +75,11 @@ const statusCopy: Record<string, string> = {
 };
 
 const routeLabel = (value: string | null) =>
-  routeOptions.find((option) => option.value === value)?.label ?? 'Not determined';
+  ({
+    HOUSEHOLDER_PLANNING: 'Householder planning',
+    PLANNING_APPLICATION: 'Planning application',
+    BUILDING_WARRANT: 'Building Warrant',
+  }[value ?? ''] ?? 'Being determined');
 
 const formatBytes = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -122,6 +119,15 @@ const emptyPerson = (): Person => ({
 
 const text = (value: string | number | null | undefined) =>
   value === null || value === undefined || String(value).trim() === '' ? 'Not found' : String(value);
+
+const reviewWithResolvedRoute = (draft: ApplicationDraftResponse): Review | null => {
+  const review = draft.review;
+  if (!review || review.selectedApplicationType !== 'AUTO') return review;
+  const suggested = draft.suggestedApplicationType && draft.suggestedApplicationType !== 'AUTO'
+    ? draft.suggestedApplicationType
+    : review.application.typeOfWorkKeys.length || review.project.typeOfWorkKey ? 'BUILDING_WARRANT' : null;
+  return suggested ? { ...review, selectedApplicationType: suggested } : review;
+};
 
 const personSummary = (person: Person) => {
   const name = person.displayName
@@ -420,6 +426,7 @@ const evidenceLabels: Record<string, string> = {
   name: 'Project name',
   internalReference: 'Internal reference',
   typeOfWorkKey: 'Type of work',
+  typeOfWorkKeys: 'Types of work',
   summary: 'Project summary',
   addressLine1: 'Address line 1',
   addressLine2: 'Address line 2',
@@ -593,16 +600,21 @@ export default function ApplicationDraftReview({
   typeOfWorkOptions,
   certifierPresets,
 }: Props) {
+  const resolvedInitialReview = reviewWithResolvedRoute(initialDraft);
   const [draft, setDraft] = useState(initialDraft);
-  const [review, setReview] = useState<Review | null>(initialDraft.review);
-  const [issues, setIssues] = useState(initialDraft.issues);
+  const [review, setReview] = useState<Review | null>(resolvedInitialReview);
+  const [issues, setIssues] = useState(
+    resolvedInitialReview && resolvedInitialReview !== initialDraft.review
+      ? evaluateClientApplicationDraftReadiness(resolvedInitialReview)
+      : initialDraft.issues,
+  );
   const [working, setWorking] = useState<'save' | 'commit' | 'analyse' | 'cancel' | 'files' | ''>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
-  const reviewRef = useRef<Review | null>(initialDraft.review);
+  const reviewRef = useRef<Review | null>(resolvedInitialReview);
   const autosaveTimer = useRef<number | null>(null);
   const autosaveInFlight = useRef<Promise<boolean> | null>(null);
   const lastSavedReview = useRef(initialDraft.review ? JSON.stringify(initialDraft.review) : '');
@@ -621,9 +633,14 @@ export default function ApplicationDraftReview({
 
   useEffect(() => {
     if (draft.review) {
-      reviewRef.current = draft.review;
-      setReview(draft.review);
+      const resolved = reviewWithResolvedRoute(draft);
+      reviewRef.current = resolved;
+      setReview(resolved);
       lastSavedReview.current = JSON.stringify(draft.review);
+      if (resolved && resolved !== draft.review) {
+        setIssues(evaluateClientApplicationDraftReadiness(resolved));
+        return;
+      }
     }
     setIssues(draft.issues);
   }, [draft]);
@@ -737,12 +754,6 @@ export default function ApplicationDraftReview({
       return {
         ...current,
         project,
-        ...(key === 'typeOfWorkKey' ? {
-          application: {
-            ...current.application,
-            presetKey: project.typeOfWorkKey,
-          },
-        } : {}),
       };
     });
   };
@@ -782,6 +793,22 @@ export default function ApplicationDraftReview({
       ...current,
       application: { ...current.application, [key]: value === '' ? null : value },
     }));
+  };
+  const toggleTypeOfWork = (value: Review['application']['typeOfWorkKeys'][number], checked: boolean) => {
+    applyReview((current) => {
+      const typeOfWorkKeys = checked
+        ? [...new Set([...current.application.typeOfWorkKeys, value])]
+        : current.application.typeOfWorkKeys.filter((key) => key !== value);
+      return {
+        ...current,
+        project: { ...current.project, typeOfWorkKey: typeOfWorkKeys[0] ?? null },
+        application: {
+          ...current.application,
+          typeOfWorkKeys,
+          presetKey: typeOfWorkKeys[0] ?? null,
+        },
+      };
+    }, true);
   };
   const updateConfirmation = (key: string, value: boolean | number | string | null) => {
     applyReview((current) => ({
@@ -987,24 +1014,6 @@ export default function ApplicationDraftReview({
     }
   };
 
-  const chooseRoute = (selectedRoute: string) => {
-    applyReview((current) => {
-      const confirmations = { ...current.confirmations };
-      if (hasRoute(selectedRoute, 'planning')) {
-        if (typeof confirmations.discussedWithPlanningAuthority !== 'boolean') confirmations.discussedWithPlanningAuthority = false;
-        if (typeof confirmations.treesOnOrAdjacentToSite !== 'boolean') confirmations.treesOnOrAdjacentToSite = false;
-        if (typeof confirmations.newOrAlteredVehicleAccess !== 'boolean') confirmations.newOrAlteredVehicleAccess = false;
-        if (!Object.hasOwn(confirmations, 'soleOwner')) confirmations.soleOwner = true;
-        if (!Object.hasOwn(confirmations, 'agriculturalHolding')) confirmations.agriculturalHolding = false;
-      }
-      return {
-        ...current,
-        selectedApplicationType: selectedRoute as Review['selectedApplicationType'],
-        confirmations,
-      };
-    }, true);
-  };
-
   const attentionCount = issues.length;
   const preparedCount = draft.prepared?.summary.preparedFieldCount ?? 0;
   const analysedCount = draft.prepared?.summary.analysedCount ?? draft.documents.length;
@@ -1134,33 +1143,6 @@ export default function ApplicationDraftReview({
               </>
             ) : null}
 
-            <label className="block">
-              <span className="label">Application route</span>
-              <select
-                value={review.selectedApplicationType}
-                onChange={(event) => chooseRoute(event.target.value)}
-                className={`field ${issueFor('selectedApplicationType') ? 'border-red-300 ring-2 ring-red-100' : ''}`}
-              >
-                {routeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              {issueFor('selectedApplicationType') ? <span className="mt-1 block text-xs text-red-700">{issueFor('selectedApplicationType')}</span> : null}
-            </label>
-
-            {building ? (
-              <label className="block">
-                <span className="label">Type of work</span>
-                <select
-                  value={review.project.typeOfWorkKey ?? ''}
-                  onChange={(event) => updateProject('typeOfWorkKey', event.target.value)}
-                  className={`field ${issueFor('project.typeOfWorkKey') ? 'border-red-300 ring-2 ring-red-100' : ''}`}
-                >
-                  <option value="">Choose type of work</option>
-                  {typeOfWorkOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-                {issueFor('project.typeOfWorkKey') ? <span className="mt-1 block text-xs text-red-700">{issueFor('project.typeOfWorkKey')}</span> : null}
-              </label>
-            ) : null}
-
             <label className="block lg:col-span-2">
               <span className="label">Description of work</span>
               <textarea
@@ -1176,6 +1158,24 @@ export default function ApplicationDraftReview({
 
             {building ? (
               <>
+                <fieldset className={`lg:col-span-2 ${issueFor('application.typeOfWorkKeys') ? 'rounded-md border border-red-300 p-3 ring-2 ring-red-100' : ''}`}>
+                  <legend className="label">Type of work</legend>
+                  <p className="mt-1 text-sm text-stone-500">Select every type that applies to this warrant.</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {typeOfWorkOptions.map((option) => (
+                      <label key={option.value} className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-medium text-ink">
+                        <input
+                          type="checkbox"
+                          checked={review.application.typeOfWorkKeys.includes(option.value as Review['application']['typeOfWorkKeys'][number])}
+                          onChange={(event) => toggleTypeOfWork(option.value as Review['application']['typeOfWorkKeys'][number], event.target.checked)}
+                          className="h-4 w-4 accent-[#526a4a]"
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {issueFor('application.typeOfWorkKeys') ? <span className="mt-2 block text-xs text-red-700">{issueFor('application.typeOfWorkKeys')}</span> : null}
+                </fieldset>
                 <Field
                   label="Current use"
                   value={review.application.currentUse}

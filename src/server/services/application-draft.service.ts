@@ -180,8 +180,10 @@ const inferApplicationType = (
   requested: ApplicationDraftType | null,
   notes: string | null,
   facts: Fact[],
+  typeOfWork: TypeOfWorkKey | null,
 ) => {
   if (requested && requested !== ApplicationDraftType.AUTO) return requested;
+  if (typeOfWork) return ApplicationDraftType.BUILDING_WARRANT;
   const context = [
     notes,
     ...facts
@@ -312,7 +314,7 @@ export const synthesisePreparedApplicationDraft = async (
   const rawTypeOfWork = suggestionFromFacts(facts, 'project.typeOfWork');
   const typeOfWork = explicitTypeOfWork(rawTypeOfWork.value)
     ?? explicitTypeOfWork(draft.notes);
-  const suggestedApplicationType = inferApplicationType(draft.selectedApplicationType, draft.notes, facts);
+  const suggestedApplicationType = inferApplicationType(draft.selectedApplicationType, draft.notes, facts, typeOfWork);
 
   const clientFields = {
     title: suggestionFromFacts(facts, 'applicant.title'),
@@ -502,6 +504,10 @@ const buildInitialReview = (
   if (existingReview.success) {
     return {
       ...existingReview.data,
+      selectedApplicationType:
+        existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
+          ? suggestedApplicationType
+          : existingReview.data.selectedApplicationType,
       documents: currentDocuments,
     };
   }
@@ -532,6 +538,7 @@ const buildInitialReview = (
       proposedUse: suggestionString(prepared.application, 'proposedUse'),
       estimatedValue: scalar(prepared.application.estimatedValue?.value),
       presetKey: typeOfWork,
+      typeOfWorkKeys: typeOfWork ? [typeOfWork] : [],
       selectedCertifierPresetId: defaults?.defaultCertifierPresetId ?? null,
     },
     confirmations: defaultConfirmations(requestedType),
@@ -633,7 +640,14 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
   );
 
   if (review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT) {
-    addMissing(issues, 'application', 'project.typeOfWorkKey', 'Type of work', review.project.typeOfWorkKey, 'Choose the Building Warrant type of work.');
+    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) {
+      issues.push({
+        key: 'application.typeOfWorkKeys',
+        section: 'application',
+        label: 'Type of work',
+        message: 'Choose at least one Building Warrant type of work.',
+      });
+    }
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
     addMissing(issues, 'application', 'application.proposedUse', 'Proposed use', review.application.proposedUse, 'Confirm the proposed use.');
     addMissing(issues, 'application', 'application.estimatedValue', 'Estimated value', review.application.estimatedValue, 'Enter the estimated value of work.');

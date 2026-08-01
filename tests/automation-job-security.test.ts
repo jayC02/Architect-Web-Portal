@@ -52,13 +52,13 @@ assert.match(service, /assertSafeAutomationSnapshot\(dataSnapshot\)/, 'snapshot 
 assert.doesNotMatch(service, /storageKey:\s*document\.storageKey|storageUrl:\s*document\.storageUrl/, 'snapshot service does not include raw storage references');
 assert.match(
   service,
-  /const presetKey = typeOfWorkKey\(project\.projectType\)/,
-  'the current project type of work controls the building warrant preset',
+  /normaliseTypeOfWorkKeys\([\s\S]*warrantPreparation\.typeOfWorkKeys/,
+  'the Building Warrant preparation data controls every selected type of work',
 );
-assert.doesNotMatch(
+assert.match(
   service,
-  /typeOfWorkKey\(warrant\?\.presetKey \?\? project\.projectType\)/,
-  'a stale warrant preset cannot override the current project type of work',
+  /warrant\?\.presetKey \?\? project\.projectType/,
+  'legacy warrant and project values remain a backward-compatible fallback',
 );
 
 assert.match(validation, /'storageKey'/, 'snapshot validation forbids storageKey fields');

@@ -156,6 +156,9 @@ export const applicationDraftReviewSchema = z.object({
       z.coerce.number().nonnegative().max(9_999_999_999.99).nullable(),
     ),
     presetKey: z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]).nullable(),
+    typeOfWorkKeys: z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]))
+      .max(TYPE_OF_WORK_KEYS.length)
+      .default([]),
     selectedCertifierPresetId: nullableText(120),
   }).strict(),
   confirmations: z.record(

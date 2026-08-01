@@ -86,6 +86,7 @@ const completeBuildingReview = applicationDraftReviewSchema.parse({
     proposedUse: 'Domestic dwelling',
     estimatedValue: 45_000,
     presetKey: 'domestic_alteration_extension',
+    typeOfWorkKeys: ['domestic_alteration_extension', 'demolition'],
     selectedCertifierPresetId: null,
   },
   confirmations: buildingConfirmations,
@@ -103,6 +104,11 @@ assert.deepEqual(
   evaluateApplicationDraftReadiness(completeBuildingReview),
   [],
   'a fully reviewed Building Warrant draft is ready to commit',
+);
+assert.deepEqual(
+  completeBuildingReview.application.typeOfWorkKeys,
+  ['domestic_alteration_extension', 'demolition'],
+  'Building Warrant review preserves every selected type of work',
 );
 
 const oneUnconfirmedBuildingAnswer = {
@@ -130,6 +136,7 @@ const householderReview = applicationDraftReviewSchema.parse({
     proposedUse: null,
     estimatedValue: null,
     presetKey: null,
+    typeOfWorkKeys: [],
   },
   confirmations: {
     discussedWithPlanningAuthority: false,

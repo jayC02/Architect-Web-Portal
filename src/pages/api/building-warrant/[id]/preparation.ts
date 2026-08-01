@@ -43,7 +43,7 @@ export const PATCH: APIRoute = (context) =>
       estimatedValue,
       currentUse,
       proposedUse,
-      presetKey,
+      typeOfWorkKeys,
       selectedCertifierPresetId,
       ...unusualAnswers
     } = body;
@@ -69,10 +69,11 @@ export const PATCH: APIRoute = (context) =>
         estimatedValue,
         currentUse,
         proposedUse,
-        presetKey,
+        presetKey: typeOfWorkKeys[0],
         selectedCertifierPresetId: selectedCertifierPresetId ?? null,
         preparationData: {
           ...existingPreparation,
+          typeOfWorkKeys,
           ...unusualAnswers,
           ...(preset ? {
             certifier: {

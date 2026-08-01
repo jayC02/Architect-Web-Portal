@@ -241,6 +241,8 @@ export const automationJobSnapshotV2Schema = z.object({
     recordId: nullableText,
     presetKey: typeOfWorkKeySchema,
     presetLabel: z.string().min(1),
+    typeOfWorkKeys: z.array(typeOfWorkKeySchema).min(1).max(4).optional(),
+    typeOfWorkLabels: z.array(z.string().min(1)).min(1).max(4).optional(),
     presetVersion: z.number().int().positive(),
     description: nullableText,
     estimatedValue: z.number().nonnegative().nullable(),

@@ -31,4 +31,25 @@ export const typeOfWorkLabel = (value: string | null | undefined): TypeOfWork =>
   TYPE_OF_WORK_DEFINITIONS.find((option) => option.key === typeOfWorkKey(value))?.label
   ?? 'Domestic alteration / extension';
 
+export const normaliseTypeOfWorkKeys = (
+  value: unknown,
+  fallback?: string | null,
+): TypeOfWorkKey[] => {
+  const values = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];
+  const keys = values.flatMap((entry) => {
+    const text = String(entry ?? '').trim();
+    if (!text) return [];
+    const normalised = text.toLowerCase();
+    const supported = TYPE_OF_WORK_DEFINITIONS.some(
+      (option) => option.key === normalised || option.label.toLowerCase() === normalised,
+    );
+    return supported ? [typeOfWorkKey(text)] : [];
+  });
+  if (!keys.length && fallback?.trim()) keys.push(typeOfWorkKey(fallback));
+  return [...new Set(keys)];
+};
+
+export const typeOfWorkLabels = (values: readonly TypeOfWorkKey[]): TypeOfWork[] =>
+  values.map((value) => typeOfWorkLabel(value));
+
 export const buildingWarrantProfileForTypeOfWork = typeOfWorkLabel;

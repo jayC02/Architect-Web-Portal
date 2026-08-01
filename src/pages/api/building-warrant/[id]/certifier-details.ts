@@ -76,6 +76,7 @@ export const POST: APIRoute = (context) =>
     await prisma.buildingWarrantApplication.update({
       where: { id: application.id },
       data: {
+        presetKey: body.typeOfWorkKeys[0],
         description: body.description,
         estimatedValue: body.estimatedValue,
         currentUse: body.currentUse,
@@ -83,6 +84,18 @@ export const POST: APIRoute = (context) =>
         selectedCertifierPresetId: preset?.id ?? null,
         preparationData: {
           ...preparationData,
+          typeOfWorkKeys: body.typeOfWorkKeys,
+          applicantIsOwner: body.applicantIsOwner,
+          applicationIsStaged: body.applicationIsStaged,
+          intendedLifeFiveYearsOrLess: body.intendedLifeFiveYearsOrLess,
+          fireAndRescueServiceEnforcingAuthority: body.fireAndRescueServiceEnforcingAuthority,
+          listedBuildingOrConservationArea: body.listedBuildingOrConservationArea,
+          otherHistoricalImportance: body.otherHistoricalImportance,
+          scottishMinistersRelaxationDirection: body.scottishMinistersRelaxationDirection,
+          dangerousBuildingNotice: body.dangerousBuildingNotice,
+          approvedCertifierOfConstruction: body.approvedCertifierOfConstruction,
+          coveredBySTAS: body.coveredBySTAS,
+          restrictPublicInspection: body.restrictPublicInspection,
           certifier: {
             ...jsonObject(preparationData.certifier),
             presetId: preset?.id ?? null,

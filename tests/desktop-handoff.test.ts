@@ -49,7 +49,8 @@ assert.match(tokenAuth, /createHash\('sha256'\)/, 'desktop access tokens must be
 assert.doesNotMatch(desktopIntegration, /Copy this connection token|Connect device|clipboard/, 'settings must not ask users to copy connection codes');
 assert.match(desktopIntegration, /No codes, passwords or device connection setup required/, 'settings explains automatic handoff');
 assert.match(automationJobService, /typeOfWorkKey:\s*typeOfWorkKey\(project\.projectType\)/, 'v2 snapshots carry a stable type-of-work key');
-assert.match(automationJobService, /const presetKey = typeOfWorkKey\(project\.projectType\)/, 'Building Warrant snapshots use the current project type of work');
+assert.match(automationJobService, /const typeOfWorkKeys = normaliseTypeOfWorkKeys/, 'Building Warrant snapshots carry every selected type of work');
+assert.match(automationJobService, /typeOfWorkLabels:\s*typeOfWorkLabels\(typeOfWorkKeys\)/, 'Building Warrant snapshots carry matching labels for every selection');
 assert.match(automationJobService, /const presetLabel = typeOfWorkLabel\(presetKey\)/, 'Building Warrant snapshots carry the matching preset label');
 assert.match(desktopCallbackRoute, /idempotencyKey/, 'desktop callbacks require an idempotency key');
 assert.match(desktopCallbackRoute, /AutomationJobEvent/, 'desktop callbacks are recorded in the audit event table');

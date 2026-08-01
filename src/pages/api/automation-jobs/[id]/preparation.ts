@@ -8,7 +8,7 @@ import {
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { typeOfWorkKey } from '@/lib/projects/type-of-work';
+import { TYPE_OF_WORK_KEYS, type TypeOfWorkKey } from '@/lib/projects/type-of-work';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
@@ -68,7 +68,7 @@ const preparationFormSchema = z.object({
   agentPostcode: optionalText(20),
   agentCountry: optionalText(100),
   description: z.string().trim().min(12).max(2000),
-  presetKey: optionalText(120),
+  typeOfWorkKeys: z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1).max(TYPE_OF_WORK_KEYS.length),
   estimatedValue: optionalMoney,
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
@@ -127,7 +127,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   if (!oldSnapshot.success) throw new HttpError(409, 'Legacy jobs cannot be edited on this preparation page.');
 
   const form = await context.request.formData();
-  const raw = Object.fromEntries(form.entries());
+  const raw = {
+    ...Object.fromEntries(form.entries()),
+    typeOfWorkKeys: form.getAll('typeOfWorkKeys').map(String),
+  };
   const parsed = preparationFormSchema.safeParse(raw);
   if (!parsed.success) {
     throw new HttpError(400, 'Check the highlighted application details.', parsed.error.flatten().fieldErrors);
@@ -200,7 +203,9 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       where: { id: job.projectId, organisationId: organisation.id },
       data: {
         name: value.projectName,
-        projectType: value.projectType ? typeOfWorkKey(value.projectType) : null,
+        projectType: job.type === AutomationJobType.BUILDING_WARRANT
+          ? value.typeOfWorkKeys[0]
+          : value.projectType ?? null,
         clientId: client.id,
         siteId: site.id,
         siteAddress: siteData.addressLine1,
@@ -225,13 +230,14 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       where: { id: recordId, organisationId: organisation.id, projectId: job.projectId },
       data: {
         description: value.description,
-        presetKey: value.presetKey ? typeOfWorkKey(value.presetKey) : typeOfWorkKey(value.projectType),
+        presetKey: value.typeOfWorkKeys[0],
         estimatedValue: value.estimatedValue,
         currentUse: value.currentUse,
         proposedUse: value.proposedUse,
         selectedCertifierPresetId: value.selectedCertifierPresetId,
         preparationData: {
           ...previous,
+          typeOfWorkKeys: value.typeOfWorkKeys,
           applicantIsOwner: value.applicantIsOwner,
           applicationIsStaged: value.applicationIsStaged,
           intendedLifeFiveYearsOrLess: value.intendedLifeFiveYearsOrLess,

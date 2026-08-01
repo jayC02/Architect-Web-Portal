@@ -109,6 +109,14 @@ const formBoolean = z.preprocess((value) => {
   if (value === false || value === 'false') return false;
   return value;
 }, z.boolean());
+const formCheckboxBoolean = z.preprocess(
+  (value) => value === true || value === 'true' || value === 'on',
+  z.boolean(),
+);
+const typeOfWorkKeysSchema = z.preprocess(
+  (value) => Array.isArray(value) ? value : value === undefined || value === null || value === '' ? [] : [value],
+  z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1, 'Choose at least one type of work.').max(TYPE_OF_WORK_KEYS.length),
+);
 const optionalNonNegativeInteger = z.preprocess(
   (value) => value === '' || value === null ? undefined : value,
   z.coerce.number().int().nonnegative().optional(),
@@ -178,7 +186,7 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
   estimatedValue: optionalNonNegativeMoney,
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
-  presetKey: z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]),
+  typeOfWorkKeys: typeOfWorkKeysSchema,
   selectedCertifierPresetId: optionalText(120),
   applicantIsOwner: formBoolean,
   applicationIsStaged: formBoolean,
@@ -195,6 +203,7 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
 
 export const buildingWarrantCertifierDetailsSchema = z.object({
   jobId: z.string().trim().min(1).max(120),
+  typeOfWorkKeys: typeOfWorkKeysSchema,
   description: z.string().trim().min(12, 'Enter a specific description of the Building Warrant work.').max(2000),
   estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),
   currentUse: z.string().trim().min(1, 'Enter the current use of the building.').max(160),
@@ -207,6 +216,17 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   registrationBPart1: certifierRegistrationPart1Schema,
   registrationBPart2: z.string().trim().min(1, 'Enter Registration number B Part 2.').max(80),
   approvedBody: z.string().trim().min(1, 'Enter the name of the approved body.').max(160),
+  applicantIsOwner: formCheckboxBoolean,
+  applicationIsStaged: formCheckboxBoolean,
+  intendedLifeFiveYearsOrLess: formCheckboxBoolean,
+  fireAndRescueServiceEnforcingAuthority: formCheckboxBoolean,
+  listedBuildingOrConservationArea: formCheckboxBoolean,
+  otherHistoricalImportance: formCheckboxBoolean,
+  scottishMinistersRelaxationDirection: formCheckboxBoolean,
+  dangerousBuildingNotice: formCheckboxBoolean,
+  approvedCertifierOfConstruction: formCheckboxBoolean,
+  coveredBySTAS: formCheckboxBoolean,
+  restrictPublicInspection: formCheckboxBoolean,
 });
 
 export const organisationDefaultsSchema = z.object({

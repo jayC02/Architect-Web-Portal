@@ -115,7 +115,13 @@ const planningAnswers = (review: ApplicationDraftReview) => ({
   agentOverride: agentSnapshotOverride(review.agent),
 });
 
+const selectedTypeOfWorkKeys = (review: ApplicationDraftReview) =>
+  review.application.typeOfWorkKeys.length
+    ? review.application.typeOfWorkKeys
+    : review.project.typeOfWorkKey ? [review.project.typeOfWorkKey] : [];
+
 const buildingWarrantAnswers = (review: ApplicationDraftReview) => ({
+  typeOfWorkKeys: selectedTypeOfWorkKeys(review),
   applicantIsOwner: review.confirmations.applicantIsOwner as boolean,
   applicationIsStaged: review.confirmations.applicationIsStaged as boolean,
   intendedLifeFiveYearsOrLess: review.confirmations.intendedLifeFiveYearsOrLess as boolean,
@@ -214,7 +220,7 @@ const resolvePermanentRecords = async (
       siteId,
       name: review.project.name!,
       internalReference: review.project.internalReference,
-      projectType: review.project.typeOfWorkKey,
+      projectType: selectedTypeOfWorkKeys(review)[0] ?? review.project.typeOfWorkKey,
       stage: projectStageFor(review.selectedApplicationType),
       localAuthority: review.site.localAuthority,
       siteAddress: [
@@ -387,7 +393,7 @@ export const commitApplicationDraft = async (
           organisationId: organisation.id,
           projectId: records.projectId,
           status: WarrantStatus.DRAFTING,
-          presetKey: review.project.typeOfWorkKey,
+          presetKey: selectedTypeOfWorkKeys(review)[0],
           description: review.application.description,
           estimatedValue: review.application.estimatedValue,
           currentUse: review.application.currentUse,

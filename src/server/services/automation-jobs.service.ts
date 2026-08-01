@@ -8,7 +8,12 @@ import {
   type ProjectDocument,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { typeOfWorkKey, typeOfWorkLabel } from '@/lib/projects/type-of-work';
+import {
+  normaliseTypeOfWorkKeys,
+  typeOfWorkKey,
+  typeOfWorkLabel,
+  typeOfWorkLabels,
+} from '@/lib/projects/type-of-work';
 import {
   assertSafeAutomationSnapshot,
   automationJobSnapshotV2Schema,
@@ -275,7 +280,11 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       ? warrantPreparation.agentOverride
       : planningPreparation.agentOverride,
   );
-  const presetKey = typeOfWorkKey(project.projectType);
+  const typeOfWorkKeys = normaliseTypeOfWorkKeys(
+    warrantPreparation.typeOfWorkKeys,
+    warrant?.presetKey ?? project.projectType ?? 'domestic_alteration_extension',
+  );
+  const presetKey = typeOfWorkKeys[0];
   const presetLabel = typeOfWorkLabel(presetKey);
   const selectedCertifier = warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
   const savedCertifier = jsonObject(warrantPreparation.certifier);
@@ -453,6 +462,8 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       recordId: warrant?.id ?? null,
       presetKey,
       presetLabel,
+      typeOfWorkKeys,
+      typeOfWorkLabels: typeOfWorkLabels(typeOfWorkKeys),
       presetVersion: warrant?.presetVersion ?? 1,
       description: warrant?.description ?? warrant?.notes ?? null,
       estimatedValue: warrant?.estimatedValue ? Number(warrant.estimatedValue) : null,
@@ -528,6 +539,9 @@ export const ensureAutomationApplicationRecord = async (
         organisationId,
         projectId,
         presetKey: typeOfWorkKey(project.projectType),
+        preparationData: {
+          typeOfWorkKeys: [typeOfWorkKey(project.projectType)],
+        },
         status: WarrantStatus.DRAFTING,
         preparedAt: new Date(),
       },

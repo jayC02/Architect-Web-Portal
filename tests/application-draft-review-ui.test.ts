@@ -50,7 +50,9 @@ assert.ok(evaluateClientApplicationDraftReadiness(duplicateLocationPlan).some((i
 assert.match(draftValidation, /clientAddressSameAsSite: z\.boolean\(\)\.default\(false\)/, 'address relationship is persisted in the existing draft JSON');
 assert.match(draftService, /soleOwner: true/, 'Planning and Householder sole-owner default is Yes');
 assert.match(draftService, /agriculturalHolding: false/, 'Planning and Householder agricultural-holding default is No');
-assert.match(reviewUi, /if \(!Object\.hasOwn\(confirmations, 'soleOwner'\)\) confirmations\.soleOwner = true/, 'route preparation never overwrites a saved answer');
+assert.doesNotMatch(reviewUi, />Application route</, 'application route is not shown inside Project creation');
+assert.match(reviewUi, /Select every type that applies to this warrant/, 'type of work is presented as a multi-select warrant detail');
+assert.match(reviewUi, /type="checkbox"[\s\S]*toggleTypeOfWork/, 'each warrant type can be selected independently');
 
 assert.match(reviewUi, /const acceptDocument/, 'review-required documents have a one-click accept handler');
 assert.match(reviewUi, /documentStatus: 'APPROVED'/, 'accepting marks the document reviewed');
