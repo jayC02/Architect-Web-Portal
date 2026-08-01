@@ -152,8 +152,20 @@ function Section({
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen || issueCount > 0);
+  const previousIssueCount = useRef(issueCount);
+
+  useEffect(() => {
+    if (issueCount > 0 && previousIssueCount.current === 0) setOpen(true);
+    previousIssueCount.current = issueCount;
+  }, [issueCount]);
+
   return (
-    <details className="review-section group panel rounded-lg" open={defaultOpen || issueCount > 0}>
+    <details
+      className="review-section group panel rounded-lg"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 marker:hidden">
         <span className="min-w-0">
           <span className="flex items-center gap-2">

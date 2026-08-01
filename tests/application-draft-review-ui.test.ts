@@ -63,6 +63,7 @@ assert.match(reviewUi, /Use a different applicant/, 'different applicant remains
 assert.match(reviewUi, /persistCurrentReview/, 'draft updates are autosaved');
 assert.match(reviewUi, /window\.setTimeout\(\(\) => void persistCurrentReview\(\), 600\)/, 'text updates are debounced');
 assert.match(reviewUi, /saveImmediately\.current/, 'discrete changes save immediately');
+assert.match(reviewUi, /previousIssueCount/, 'sections stay open when a field becomes valid while typing');
 assert.match(reviewUi, /Create Project/, 'one clear completion action remains');
 assert.doesNotMatch(reviewUi, /Save application draft|Create and open in desktop/, 'old competing actions are removed');
 assert.match(commitRoute, /redirectTo: `\/projects\//, 'commit still redirects to the resulting Project');
