@@ -278,6 +278,13 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const presetKey = typeOfWorkKey(project.projectType);
   const presetLabel = typeOfWorkLabel(presetKey);
   const selectedCertifier = warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
+  const savedCertifier = jsonObject(warrantPreparation.certifier);
+  // A snapshot gets a copied value even when the application has only selected a profile.
+  // Subsequent profile edits cannot change an already-built desktop handoff.
+  const savedRegistrationAPart1 = nullableString(savedCertifier.registrationAPart1) ?? selectedCertifier?.registrationAPart1 ?? null;
+  const savedRegistrationBPart1 = nullableString(savedCertifier.registrationBPart1) ?? selectedCertifier?.registrationBPart1 ?? null;
+  const savedCertifierValue = (key: string, fallback: string | null | undefined) =>
+    nullableString(savedCertifier[key]) ?? fallback ?? null;
   const sourceType = inferSourceType(input);
   const sourceUpdatedAt = maxDate([
     project.updatedAt,
@@ -454,16 +461,16 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       status: warrant?.status ?? null,
       warrantReference: warrant?.warrantReference ?? null,
       unusualAnswers: warrantAnswers,
-      certifier: selectedCertifier ? {
-        presetId: selectedCertifier.id,
-        displayName: selectedCertifier.displayName,
-        schemeType: selectedCertifier.schemeType,
-        registrationAPart1: selectedCertifier.registrationAPart1,
-        registrationAPart2: selectedCertifier.registrationAPart2,
-        registrationBPart1: selectedCertifier.registrationBPart1,
-        registrationBPart2: selectedCertifier.registrationBPart2,
-        certifierName: selectedCertifier.certifierName,
-        approvedBody: selectedCertifier.approvedBody,
+      certifier: savedRegistrationAPart1 && savedRegistrationBPart1 ? {
+        presetId: savedCertifierValue('presetId', selectedCertifier?.id),
+        displayName: savedCertifierValue('displayName', selectedCertifier?.displayName),
+        schemeType: savedCertifierValue('schemeType', selectedCertifier?.schemeType),
+        registrationAPart1: savedRegistrationAPart1,
+        registrationAPart2: savedCertifierValue('registrationAPart2', selectedCertifier?.registrationAPart2),
+        registrationBPart1: savedRegistrationBPart1,
+        registrationBPart2: savedCertifierValue('registrationBPart2', selectedCertifier?.registrationBPart2),
+        certifierName: savedCertifierValue('certifierName', selectedCertifier?.certifierName),
+        approvedBody: savedCertifierValue('approvedBody', selectedCertifier?.approvedBody),
       } : null,
       updatedAt: asIso(warrant?.updatedAt),
     },

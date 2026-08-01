@@ -262,8 +262,8 @@ export const automationJobSnapshotV2Schema = z.object({
       restrictPublicInspection: z.boolean(),
     }),
     certifier: z.object({
-      presetId: z.string().min(1),
-      displayName: z.string().min(1),
+      presetId: nullableText,
+      displayName: nullableText,
       schemeType: nullableText,
       registrationAPart1: nullableText,
       registrationAPart2: nullableText,

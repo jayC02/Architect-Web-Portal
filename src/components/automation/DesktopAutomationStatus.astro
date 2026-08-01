@@ -4,6 +4,7 @@ import AutomationLaunchButton, { ExistingAutomationJobButton } from '@/component
 import { formatDate } from '@/lib/format';
 import {
   automationJobDocumentCount,
+  automationJobApplicationId,
   desktopAutomationPresentation,
   type DesktopAutomationJob,
 } from '@/server/services/desktop-automation-status.service';
@@ -31,6 +32,10 @@ const {
 } = Astro.props;
 const presentation = job ? desktopAutomationPresentation(job.status) : null;
 const documentCount = job ? automationJobDocumentCount(job) : 0;
+const jobApplicationId = job ? automationJobApplicationId(job) : null;
+const buildingWarrantPreparationHref = type === AutomationJobType.BUILDING_WARRANT && (jobApplicationId ?? applicationId)
+  ? `/building-warrant/${jobApplicationId ?? applicationId}/preparation${job ? `?job=${job.id}` : ''}`
+  : manageHref;
 const canPrepare = !job || job.status === AutomationJobStatus.CANCELLED;
 const statusLabel = presentation?.label ?? (preparationReady ? 'Ready to prepare' : 'Needs your attention');
 const description = presentation?.description ?? (preparationReady
@@ -81,7 +86,7 @@ const failedStatuses = new Set<AutomationJobStatus>([
         <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop" />
       )}
       {job && attentionStatuses.has(job.status) && (
-        <a class="btn btn-primary" href={`/automation-job/${job.id}`}>Review application</a>
+        <a class="btn btn-primary" href={buildingWarrantPreparationHref}>{type === AutomationJobType.BUILDING_WARRANT ? 'Complete application details' : 'Review application'}</a>
       )}
       {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) && (
         <a class="btn btn-secondary" href={`/automation-job/${job.id}`}>View status</a>
@@ -103,7 +108,7 @@ const failedStatuses = new Set<AutomationJobStatus>([
         />
       )}
       {canPrepare && !preparationReady && (
-        <a class="btn btn-secondary" href={manageHref}>Complete application details</a>
+        <a class="btn btn-secondary" href={buildingWarrantPreparationHref}>Complete application details</a>
       )}
       {job?.status === AutomationJobStatus.READY && (
         <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>

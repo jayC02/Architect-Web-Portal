@@ -107,6 +107,8 @@ const globalRoute = fs.readFileSync('src/pages/api/automation-jobs/index.ts', 'u
 const commitRoute = fs.readFileSync('src/pages/api/application-drafts/[id]/commit.ts', 'utf8');
 const draftReview = fs.readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
 const preparationPage = fs.readFileSync('src/pages/automation-job/[id].astro', 'utf8');
+const warrantPreparationPage = fs.readFileSync('src/pages/building-warrant/[id]/preparation.astro', 'utf8');
+const legacyWarrantRoute = fs.readFileSync('src/pages/projects/[id]/building-warrant.astro', 'utf8');
 
 assert.doesNotMatch(appShell, /AI Automation/, 'primary navigation does not expose the internal job system');
 assert.match(appShell, /New application/, 'the AI-first application entry remains in primary navigation');
@@ -120,6 +122,8 @@ assert.match(historyPage, /attentionStatuses\.includes\(status\)[\s\S]*Automatio
 
 assert.match(statusPanel, /desktopAutomationPresentation\(job\.status\)/, 'status panel uses the shared human-readable presentation');
 assert.match(statusPanel, /Review application/, 'needs-input work has one review action');
+assert.match(statusPanel, /buildingWarrantPreparationHref/, 'Building Warrant status actions use the exact application preparation route');
+assert.match(statusPanel, /Complete application details/, 'Building Warrant needs-input work uses clear completion wording');
 assert.match(statusPanel, /AutomationJobStatus\.CLAIMED[\s\S]*View status/, 'running work is shown as status rather than a new preparation');
 assert.match(statusPanel, /ExistingAutomationJobButton/, 'ready work reuses the existing deep-link implementation');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
@@ -131,6 +135,8 @@ for (const route of [projectRoute, globalRoute]) {
 assert.match(commitRoute, /\/projects\/\$\{encodeURIComponent\(result\.projectId\)\}/, 'AI-first commit returns to the resulting project');
 assert.match(commitRoute, /applicationPrepared=1/, 'AI-first commit displays a contextual success state');
 assert.doesNotMatch(draftReview, /\/api\/automation-jobs\/\$\{result\.automationJobId\}\/launch/, 'committing never launches desktop automation without another user action');
+assert.match(warrantPreparationPage, /automationJobApplicationId\(reusableJob\) !== application\.id/, 'focused preparation rejects a job for another application');
+assert.match(legacyWarrantRoute, /\/building-warrant\/\$\{application\.id\}\/preparation/, 'legacy tracker links redirect to the focused Building Warrant route');
 
 for (const requiredHiddenField of ['projectName', 'siteAddressLine1', 'siteTownCity', 'sitePostcode']) {
   assert.match(

@@ -19,10 +19,21 @@ export const PATCH: APIRoute = (context) =>
     if (!id) throw new HttpError(400, 'Building warrant application id is required.');
     const body = await parseBody(context.request, buildingWarrantPreparationUpdateSchema);
 
+    let preset = null;
     if (body.selectedCertifierPresetId) {
-      const preset = await prisma.organisationCertifierPreset.findFirst({
+      preset = await prisma.organisationCertifierPreset.findFirst({
         where: { id: body.selectedCertifierPresetId, organisationId: organisation.id },
-        select: { id: true },
+        select: {
+          id: true,
+          displayName: true,
+          schemeType: true,
+          registrationAPart1: true,
+          registrationAPart2: true,
+          registrationBPart1: true,
+          registrationBPart2: true,
+          certifierName: true,
+          approvedBody: true,
+        },
       });
       if (!preset) throw new HttpError(400, 'The selected certifier is not available to this organisation.');
     }
@@ -36,8 +47,23 @@ export const PATCH: APIRoute = (context) =>
       selectedCertifierPresetId,
       ...unusualAnswers
     } = body;
-    const result = await prisma.buildingWarrantApplication.updateMany({
+    const application = await prisma.buildingWarrantApplication.findFirst({
       where: { id, organisationId: organisation.id },
+      select: { id: true, preparationData: true },
+    });
+    if (!application) throw new HttpError(404, 'Building warrant application not found.');
+    const existingPreparation = application.preparationData
+      && typeof application.preparationData === 'object'
+      && !Array.isArray(application.preparationData)
+      ? application.preparationData as Prisma.JsonObject
+      : {};
+    const existingCertifier = existingPreparation.certifier
+      && typeof existingPreparation.certifier === 'object'
+      && !Array.isArray(existingPreparation.certifier)
+      ? existingPreparation.certifier as Prisma.JsonObject
+      : {};
+    await prisma.buildingWarrantApplication.update({
+      where: { id: application.id },
       data: {
         description,
         estimatedValue,
@@ -45,12 +71,28 @@ export const PATCH: APIRoute = (context) =>
         proposedUse,
         presetKey,
         selectedCertifierPresetId: selectedCertifierPresetId ?? null,
-        preparationData: unusualAnswers as Prisma.InputJsonValue,
+        preparationData: {
+          ...existingPreparation,
+          ...unusualAnswers,
+          ...(preset ? {
+            certifier: {
+              ...existingCertifier,
+              presetId: preset.id,
+              displayName: preset.displayName,
+              schemeType: preset.schemeType,
+              registrationAPart1: preset.registrationAPart1,
+              registrationAPart2: preset.registrationAPart2,
+              registrationBPart1: preset.registrationBPart1,
+              registrationBPart2: preset.registrationBPart2,
+              certifierName: preset.certifierName,
+              approvedBody: preset.approvedBody,
+            },
+          } : {}),
+        } as Prisma.InputJsonValue,
         status: WarrantStatus.DRAFTING,
         preparedAt: new Date(),
       },
     });
-    if (!result.count) throw new HttpError(404, 'Building warrant application not found.');
     return jsonResponse(200, {
       ok: true,
       message: 'Application details saved. Prepare the job again to run preflight.',

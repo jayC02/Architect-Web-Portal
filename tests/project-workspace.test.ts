@@ -174,8 +174,7 @@ assert.match(projectFilesPage, /Edit file details/, 'project files manager lets 
 assert.match(planningPage, /data-planning-record-form/, 'planning page uses simplified quick-create form');
 assert.match(planningPage, /Advanced details/, 'planning page keeps advanced details available');
 assert.match(planningPage, /DesktopAutomationStatus/, 'planning page renders the shared contextual desktop status');
-assert.match(warrantPage, /data-warrant-record-form/, 'warrant page uses simplified quick-create form');
-assert.match(warrantPage, /Advanced details/, 'warrant page keeps advanced details available');
-assert.match(warrantPage, /DesktopAutomationStatus/, 'warrant page renders the shared contextual desktop status');
+assert.match(warrantPage, /\/building-warrant\/\$\{application\.id\}\/preparation/, 'legacy warrant tracker routes redirect to focused application preparation');
+assert.doesNotMatch(warrantPage, /data-warrant-record-form/, 'legacy warrant tracker does not reopen the generic project form');
 
 console.log('project workspace tests passed');

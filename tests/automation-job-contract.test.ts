@@ -18,9 +18,12 @@ import {
   automationJobSnapshotV2Schema,
 } from '../src/lib/validation/automation-job';
 import {
+  buildingWarrantCertifierDetailsSchema,
   buildingWarrantPreparationUpdateSchema,
+  certifierPresetSchema,
   householderPreparationUpdateSchema,
 } from '../src/lib/validation/domain';
+import { CERTIFIER_REGISTRATION_PART1_CODES } from '../src/lib/certifier-registration';
 import { assertAutomationJobTransition } from '../src/server/services/automation-lifecycle.service';
 
 const document = {
@@ -174,6 +177,22 @@ const warrantPreparation = buildingWarrantPreparationUpdateSchema.parse({
 assert.equal(warrantPreparation.estimatedValue, 35000);
 assert.equal(warrantPreparation.selectedCertifierPresetId, undefined);
 
+assert.deepEqual(CERTIFIER_REGISTRATION_PART1_CODES, ['BRE1', 'BRE2', 'RIA1', 'RIA2', 'SER1']);
+assert.doesNotThrow(() => buildingWarrantCertifierDetailsSchema.parse({
+  jobId: 'job_1',
+  registrationAPart1: 'BRE1',
+  registrationBPart1: 'SER1',
+}));
+assert.throws(() => buildingWarrantCertifierDetailsSchema.parse({
+  jobId: 'job_1',
+  registrationAPart1: 'INVALID',
+  registrationBPart1: 'SER1',
+}), /Invalid enum value/);
+assert.throws(() => certifierPresetSchema.parse({
+  displayName: 'Incorrect profile',
+  registrationAPart1: 'INVALID',
+}), /Invalid enum value/);
+
 const warrantConfirmationKeys = [
   'applicantIsOwner',
   'applicationIsStaged',
@@ -196,10 +215,24 @@ const preparationRouteSource = readFileSync(
   new URL('../src/pages/api/automation-jobs/[id]/preparation.ts', import.meta.url),
   'utf8',
 );
+const certifierDetailsRouteSource = readFileSync(
+  new URL('../src/pages/api/building-warrant/[id]/certifier-details.ts', import.meta.url),
+  'utf8',
+);
+const certifierPreparationPageSource = readFileSync(
+  new URL('../src/pages/building-warrant/[id]/preparation.astro', import.meta.url),
+  'utf8',
+);
 for (const key of warrantConfirmationKeys) {
   assert.match(preparationPageSource, new RegExp(`name: '${key}'`));
   assert.match(preparationRouteSource, new RegExp(`${key}: value\\.${key}`));
 }
+assert.match(certifierDetailsRouteSource, /organisationId: organisation\.id/, 'certifier updates are organisation scoped');
+assert.match(certifierDetailsRouteSource, /automationJobApplicationId\(job\) !== application\.id/, 'certifier updates verify the exact job and application pairing');
+assert.match(certifierDetailsRouteSource, /\.\.\.preparationData,[\s\S]*certifier:/, 'certifier values merge into existing application preparation data');
+assert.match(certifierDetailsRouteSource, /redirectTo: `\/projects\/\$\{application\.projectId\}`/, 'completion returns to the project');
+assert.match(certifierPreparationPageSource, /Registration number A Part 1/, 'the focused page shows registration A');
+assert.match(certifierPreparationPageSource, /Registration number B Part 1/, 'the focused page shows registration B');
 
 const sharedV2Fixture = JSON.parse(readFileSync(
   new URL('./fixtures/automation-job-v2-building-warrant.json', import.meta.url),

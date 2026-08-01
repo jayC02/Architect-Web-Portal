@@ -3,6 +3,7 @@ import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 import { clientIdentityLabel, clientStructuredAddress } from '@/lib/clients/display';
+import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 
 type Variant =
   | 'dashboard'
@@ -1021,9 +1022,9 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
               <label className="block"><span className="label">Preset name</span><input required name="displayName" className="field" /></label>
               <label className="block"><span className="label">Scheme type</span><input name="schemeType" className="field" /></label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block"><span className="label">Registration A prefix</span><input name="registrationAPart1" className="field" placeholder="SER1" /></label>
+                <label className="block"><span className="label">Registration A prefix</span><select name="registrationAPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
                 <label className="block"><span className="label">Registration A number</span><input name="registrationAPart2" className="field" /></label>
-                <label className="block"><span className="label">Registration B prefix</span><input name="registrationBPart1" className="field" /></label>
+                <label className="block"><span className="label">Registration B prefix</span><select name="registrationBPart1" className="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
                 <label className="block"><span className="label">Registration B number</span><input name="registrationBPart2" className="field" /></label>
               </div>
               <label className="block"><span className="label">Certifier name</span><input name="certifierName" className="field" /></label>

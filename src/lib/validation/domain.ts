@@ -23,6 +23,7 @@ import {
 } from '@/lib/projects/type-of-work';
 import { emptyToUndefined, optionalDate, optionalText, safeUrl } from '@/lib/validation/common';
 import { blankContactToUndefined, isValidUkPhone } from '@/lib/validation/client-contact';
+import { certifierRegistrationPart1Schema } from '@/lib/certifier-registration';
 
 export const clientSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -188,6 +189,13 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
   restrictPublicInspection: formBoolean,
 });
 
+export const buildingWarrantCertifierDetailsSchema = z.object({
+  jobId: z.string().trim().min(1).max(120),
+  selectedCertifierPresetId: optionalText(120),
+  registrationAPart1: certifierRegistrationPart1Schema,
+  registrationBPart1: certifierRegistrationPart1Schema,
+});
+
 export const organisationDefaultsSchema = z.object({
   practiceName: optionalText(160),
   agentFirstName: optionalText(100),
@@ -211,9 +219,9 @@ export const organisationDefaultsSchema = z.object({
 export const certifierPresetSchema = z.object({
   displayName: z.string().trim().min(1).max(160),
   schemeType: optionalText(120),
-  registrationAPart1: optionalText(20),
+  registrationAPart1: z.preprocess(emptyToUndefined, certifierRegistrationPart1Schema.optional()),
   registrationAPart2: optionalText(80),
-  registrationBPart1: optionalText(20),
+  registrationBPart1: z.preprocess(emptyToUndefined, certifierRegistrationPart1Schema.optional()),
   registrationBPart2: optionalText(80),
   certifierName: optionalText(160),
   approvedBody: optionalText(160),
