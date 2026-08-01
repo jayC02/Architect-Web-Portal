@@ -4,6 +4,7 @@ import AppShell from '@/components/layout/AppShell.astro';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 import { prisma } from '@/lib/db/prisma';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { automationJobApplicationId, findReusableAutomationJob } from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
@@ -57,7 +58,15 @@ const savedCertifier = preparation.certifier && typeof preparation.certifier ===
 const selectedPreset = application.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
 const savedValue = (key: string) => typeof savedCertifier[key] === 'string' ? savedCertifier[key] as string : null;
 const registrationAPart1 = savedValue('registrationAPart1') ?? selectedPreset?.registrationAPart1 ?? '';
+const registrationAPart2 = savedValue('registrationAPart2') ?? selectedPreset?.registrationAPart2 ?? '';
+const certifierName = savedValue('certifierName') ?? selectedPreset?.certifierName ?? '';
 const registrationBPart1 = savedValue('registrationBPart1') ?? selectedPreset?.registrationBPart1 ?? '';
+const registrationBPart2 = savedValue('registrationBPart2') ?? selectedPreset?.registrationBPart2 ?? '';
+const approvedBody = savedValue('approvedBody') ?? selectedPreset?.approvedBody ?? '';
+const schemeType = savedValue('schemeType') ?? selectedPreset?.schemeType ?? '';
+const parsedSnapshot = automationJobSnapshotV2Schema.safeParse(reusableJob.dataSnapshot);
+const remainingRequirements = parsedSnapshot.success ? parsedSnapshot.data.preflight.missing : [];
+const incompleteSave = Astro.url.searchParams.get('incomplete') === '1';
 const address = [application.project.site?.addressLine1, application.project.site?.townCity, application.project.site?.postcode]
   .filter(Boolean)
   .join(', ') || application.project.siteAddress || 'Site address not recorded';
@@ -68,16 +77,35 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
   <div class="mb-6">
     <a href={`/projects/${application.projectId}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
     <h1 class="mt-2 text-3xl font-semibold text-ink">Building Warrant application details</h1>
-    <p class="mt-1 text-sm text-stone-500">Confirm the Building Warrant certifier details before sending this existing job to desktop.</p>
+    <p class="mt-1 text-sm text-stone-500">Complete the warrant and certificate information required by the desktop application.</p>
   </div>
 
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
     <form data-api-form data-action={`/api/building-warrant/${application.id}/certifier-details`} data-method="POST" class="panel rounded-lg p-5">
       <input type="hidden" name="jobId" value={reusableJob.id} />
+      {incompleteSave && remainingRequirements.length > 0 && (
+        <div class="mb-5 border-l-4 border-amber-600 bg-amber-50 px-4 py-3" role="alert">
+          <p class="font-semibold text-amber-900">More information is still required</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+            {remainingRequirements.map((requirement) => <li>{requirement.message}</li>)}
+          </ul>
+        </div>
+      )}
+      <section aria-labelledby="warrant-details-heading">
+        <h2 id="warrant-details-heading" class="text-xl font-semibold">Warrant details</h2>
+        <p class="mt-1 text-sm text-stone-500">These details must be complete before the job can open in desktop.</p>
+        <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required minlength="12" maxlength="2000" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+          <label class="block"><span class="label">Estimated value of work</span><input required type="number" min="0.01" step="0.01" name="estimatedValue" value={application.estimatedValue ? String(application.estimatedValue) : ''} class="field" /></label>
+          <label class="block"><span class="label">Current use</span><input required maxlength="160" name="currentUse" value={application.currentUse ?? ''} class="field" /></label>
+          <label class="block"><span class="label">Proposed use</span><input required maxlength="160" name="proposedUse" value={application.proposedUse ?? ''} class="field" /></label>
+        </div>
+      </section>
+      <section class="mt-7 border-t border-stone-200 pt-6" aria-labelledby="certifier-details-heading">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 class="text-xl font-semibold">Certifier details</h2>
-          <p class="mt-1 text-sm text-stone-500">Choose a saved profile or enter the two registration prefixes for this application.</p>
+          <h2 id="certifier-details-heading" class="text-xl font-semibold">Certificate information</h2>
+          <p class="mt-1 text-sm text-stone-500">Choose a saved profile or enter the details shown on the desktop Certificates page.</p>
         </div>
         <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Manage saved certifiers</a>
       </div>
@@ -85,13 +113,19 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
         <span class="label">Saved certifier profile</span>
         <select name="selectedCertifierPresetId" class="field">
           <option value="">No saved profile</option>
-          {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id} data-registration-a={preset.registrationAPart1 ?? ''} data-registration-b={preset.registrationBPart1 ?? ''}>{preset.displayName}</option>)}
+          {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id} data-scheme-type={preset.schemeType ?? ''} data-registration-a-part1={preset.registrationAPart1 ?? ''} data-registration-a-part2={preset.registrationAPart2 ?? ''} data-certifier-name={preset.certifierName ?? ''} data-registration-b-part1={preset.registrationBPart1 ?? ''} data-registration-b-part2={preset.registrationBPart2 ?? ''} data-approved-body={preset.approvedBody ?? ''}>{preset.displayName}</option>)}
         </select>
       </label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="block"><span class="label">Scheme Type</span><input maxlength="120" name="schemeType" value={schemeType} class="field" /></label>
         <label class="block"><span class="label">Registration number A Part 1</span><select required name="registrationAPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationAPart1}>{code}</option>)}</select></label>
+        <label class="block"><span class="label">Registration number A Part 2</span><input required maxlength="80" name="registrationAPart2" value={registrationAPart2} class="field" /></label>
+        <label class="block"><span class="label">Name of Certifier</span><input required maxlength="160" name="certifierName" value={certifierName} class="field" /></label>
         <label class="block"><span class="label">Registration number B Part 1</span><select required name="registrationBPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationBPart1}>{code}</option>)}</select></label>
+        <label class="block"><span class="label">Registration number B Part 2</span><input required maxlength="80" name="registrationBPart2" value={registrationBPart2} class="field" /></label>
+        <label class="block"><span class="label">Name of Approved Body</span><input required maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
       </div>
+      </section>
       <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
 
@@ -102,16 +136,24 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
   </div>
   <script>
     const profile = document.querySelector('select[name="selectedCertifierPresetId"]');
-    const registrationA = document.querySelector('select[name="registrationAPart1"]');
-    const registrationB = document.querySelector('select[name="registrationBPart1"]');
+    const profileFields = {
+      schemeType: document.querySelector('[name="schemeType"]'),
+      registrationAPart1: document.querySelector('[name="registrationAPart1"]'),
+      registrationAPart2: document.querySelector('[name="registrationAPart2"]'),
+      certifierName: document.querySelector('[name="certifierName"]'),
+      registrationBPart1: document.querySelector('[name="registrationBPart1"]'),
+      registrationBPart2: document.querySelector('[name="registrationBPart2"]'),
+      approvedBody: document.querySelector('[name="approvedBody"]'),
+    };
     profile?.addEventListener('change', () => {
       if (!(profile instanceof HTMLSelectElement)) return;
       const option = profile.selectedOptions[0];
-      if (registrationA instanceof HTMLSelectElement && option?.dataset.registrationA) {
-        registrationA.value = option.dataset.registrationA;
-      }
-      if (registrationB instanceof HTMLSelectElement && option?.dataset.registrationB) {
-        registrationB.value = option.dataset.registrationB;
+      if (!option?.value) return;
+      for (const [key, field] of Object.entries(profileFields)) {
+        const value = option.dataset[key];
+        if ((field instanceof HTMLInputElement || field instanceof HTMLSelectElement) && value !== undefined) {
+          field.value = value;
+        }
       }
     });
   </script>

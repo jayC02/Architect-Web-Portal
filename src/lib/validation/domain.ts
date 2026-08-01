@@ -195,9 +195,18 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
 
 export const buildingWarrantCertifierDetailsSchema = z.object({
   jobId: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(12, 'Enter a specific description of the Building Warrant work.').max(2000),
+  estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),
+  currentUse: z.string().trim().min(1, 'Enter the current use of the building.').max(160),
+  proposedUse: z.string().trim().min(1, 'Enter the proposed use of the building.').max(160),
   selectedCertifierPresetId: optionalText(120),
+  schemeType: optionalText(120),
   registrationAPart1: certifierRegistrationPart1Schema,
+  registrationAPart2: z.string().trim().min(1, 'Enter Registration number A Part 2.').max(80),
+  certifierName: z.string().trim().min(1, 'Enter the name of the certifier.').max(160),
   registrationBPart1: certifierRegistrationPart1Schema,
+  registrationBPart2: z.string().trim().min(1, 'Enter Registration number B Part 2.').max(80),
+  approvedBody: z.string().trim().min(1, 'Enter the name of the approved body.').max(160),
 });
 
 export const organisationDefaultsSchema = z.object({

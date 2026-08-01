@@ -178,16 +178,29 @@ assert.equal(warrantPreparation.estimatedValue, 35000);
 assert.equal(warrantPreparation.selectedCertifierPresetId, undefined);
 
 assert.deepEqual(CERTIFIER_REGISTRATION_PART1_CODES, ['BRE1', 'BRE2', 'RIA1', 'RIA2', 'SER1']);
-assert.doesNotThrow(() => buildingWarrantCertifierDetailsSchema.parse({
+const completeWarrantDetails = {
   jobId: 'job_1',
+  description: 'Rear extension and internal alterations',
+  estimatedValue: '35000',
+  currentUse: 'Dwelling',
+  proposedUse: 'Dwelling',
+  schemeType: 'Approved scheme',
   registrationAPart1: 'BRE1',
+  registrationAPart2: 'A-12345',
+  certifierName: 'Casey Certifier',
   registrationBPart1: 'SER1',
-}));
+  registrationBPart2: 'B-67890',
+  approvedBody: 'Approved Certification Body',
+};
+assert.doesNotThrow(() => buildingWarrantCertifierDetailsSchema.parse(completeWarrantDetails));
 assert.throws(() => buildingWarrantCertifierDetailsSchema.parse({
-  jobId: 'job_1',
+  ...completeWarrantDetails,
   registrationAPart1: 'INVALID',
-  registrationBPart1: 'SER1',
 }), /Invalid enum value/);
+assert.throws(() => buildingWarrantCertifierDetailsSchema.parse({
+  ...completeWarrantDetails,
+  registrationAPart2: '',
+}), /Registration number A Part 2/);
 assert.throws(() => certifierPresetSchema.parse({
   displayName: 'Incorrect profile',
   registrationAPart1: 'INVALID',
@@ -231,6 +244,10 @@ const certifierPresetRouteSource = readFileSync(
   new URL('../src/pages/api/settings/certifier-presets/[id].ts', import.meta.url),
   'utf8',
 );
+const automationPreflightSource = readFileSync(
+  new URL('../src/server/services/automation-preflight.service.ts', import.meta.url),
+  'utf8',
+);
 for (const key of warrantConfirmationKeys) {
   assert.match(preparationPageSource, new RegExp(`name: '${key}'`));
   assert.match(preparationRouteSource, new RegExp(`${key}: value\\.${key}`));
@@ -238,9 +255,22 @@ for (const key of warrantConfirmationKeys) {
 assert.match(certifierDetailsRouteSource, /organisationId: organisation\.id/, 'certifier updates are organisation scoped');
 assert.match(certifierDetailsRouteSource, /automationJobApplicationId\(job\) !== application\.id/, 'certifier updates verify the exact job and application pairing');
 assert.match(certifierDetailsRouteSource, /\.\.\.preparationData,[\s\S]*certifier:/, 'certifier values merge into existing application preparation data');
-assert.match(certifierDetailsRouteSource, /redirectTo: `\/projects\/\$\{application\.projectId\}`/, 'completion returns to the project');
-assert.match(certifierPreparationPageSource, /Registration number A Part 1/, 'the focused page shows registration A');
-assert.match(certifierPreparationPageSource, /Registration number B Part 1/, 'the focused page shows registration B');
+for (const field of ['description', 'estimatedValue', 'currentUse', 'proposedUse']) {
+  assert.match(certifierDetailsRouteSource, new RegExp(`${field}: body\\.${field}`), `the focused route saves ${field}`);
+  assert.match(certifierPreparationPageSource, new RegExp(`name="${field}"`), `the focused page renders ${field}`);
+}
+for (const field of ['schemeType', 'registrationAPart1', 'registrationAPart2', 'certifierName', 'registrationBPart1', 'registrationBPart2', 'approvedBody']) {
+  assert.match(certifierPreparationPageSource, new RegExp(`name="${field}"`), `the focused page renders certificate field ${field}`);
+  assert.match(certifierDetailsRouteSource, new RegExp(`${field}: body\\.${field}`), `the focused route saves certificate field ${field}`);
+}
+for (const label of ['Scheme Type', 'Registration number A Part 1', 'Registration number A Part 2', 'Name of Certifier', 'Registration number B Part 1', 'Registration number B Part 2', 'Name of Approved Body']) {
+  assert.match(certifierPreparationPageSource, new RegExp(label), `the focused page shows ${label}`);
+}
+assert.match(certifierDetailsRouteSource, /status === AutomationJobStatus\.READY[\s\S]*`\/projects\/\$\{application\.projectId\}`[\s\S]*preparationRedirect/, 'only complete jobs return to the project; incomplete saves stay on the editable form');
+assert.match(certifierPreparationPageSource, /remainingRequirements[\s\S]*requirement\.message/, 'remaining preflight blockers are visible instead of causing a blind loop');
+for (const field of ['registrationAPart1', 'registrationAPart2', 'certifierName', 'registrationBPart1', 'registrationBPart2', 'approvedBody']) {
+  assert.match(automationPreflightSource, new RegExp(`certifier\\?\\.${field}`), `preflight requires desktop certificate field ${field}`);
+}
 assert.equal(
   (certifierPreparationPageSource.match(/CERTIFIER_REGISTRATION_PART1_CODES\.map/g) ?? []).length,
   2,

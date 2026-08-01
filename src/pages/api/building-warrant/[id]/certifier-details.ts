@@ -76,6 +76,10 @@ export const POST: APIRoute = (context) =>
     await prisma.buildingWarrantApplication.update({
       where: { id: application.id },
       data: {
+        description: body.description,
+        estimatedValue: body.estimatedValue,
+        currentUse: body.currentUse,
+        proposedUse: body.proposedUse,
         selectedCertifierPresetId: preset?.id ?? null,
         preparationData: {
           ...preparationData,
@@ -83,13 +87,13 @@ export const POST: APIRoute = (context) =>
             ...jsonObject(preparationData.certifier),
             presetId: preset?.id ?? null,
             displayName: preset?.displayName ?? null,
-            schemeType: preset?.schemeType ?? null,
+            schemeType: body.schemeType ?? null,
             registrationAPart1: body.registrationAPart1,
-            registrationAPart2: preset?.registrationAPart2 ?? null,
+            registrationAPart2: body.registrationAPart2,
+            certifierName: body.certifierName,
             registrationBPart1: body.registrationBPart1,
-            registrationBPart2: preset?.registrationBPart2 ?? null,
-            certifierName: preset?.certifierName ?? null,
-            approvedBody: preset?.approvedBody ?? null,
+            registrationBPart2: body.registrationBPart2,
+            approvedBody: body.approvedBody,
           },
         } as Prisma.InputJsonValue,
       },
@@ -127,10 +131,13 @@ export const POST: APIRoute = (context) =>
     });
     await persistApplicationPreparationDraft(job.id, organisation.id);
 
+    const preparationRedirect = `/building-warrant/${encodeURIComponent(application.id)}/preparation?job=${encodeURIComponent(job.id)}&incomplete=1`;
     return jsonResponse(200, {
       ok: true,
       status,
       preflight: snapshot.preflight,
-      redirectTo: `/projects/${application.projectId}`,
+      redirectTo: status === AutomationJobStatus.READY
+        ? `/projects/${application.projectId}`
+        : preparationRedirect,
     });
   }, context);

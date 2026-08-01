@@ -41,7 +41,11 @@ type SnapshotInput = {
     proposedUse: string | null;
     certifier: {
       registrationAPart1: string | null;
+      registrationAPart2: string | null;
+      certifierName: string | null;
       registrationBPart1: string | null;
+      registrationBPart2: string | null;
+      approvedBody: string | null;
     } | null;
   } | null;
   documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus }>;
@@ -122,7 +126,11 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
     requireValue('buildingWarrant.currentUse', snapshot.buildingWarrant?.currentUse, 'Enter the current use of the building.');
     requireValue('buildingWarrant.proposedUse', snapshot.buildingWarrant?.proposedUse, 'Enter the proposed use of the building.');
     requireValue('buildingWarrant.certifier.registrationAPart1', snapshot.buildingWarrant?.certifier?.registrationAPart1, 'Choose Registration number A Part 1.');
+    requireValue('buildingWarrant.certifier.registrationAPart2', snapshot.buildingWarrant?.certifier?.registrationAPart2, 'Enter Registration number A Part 2.');
+    requireValue('buildingWarrant.certifier.certifierName', snapshot.buildingWarrant?.certifier?.certifierName, 'Enter the name of the certifier.');
     requireValue('buildingWarrant.certifier.registrationBPart1', snapshot.buildingWarrant?.certifier?.registrationBPart1, 'Choose Registration number B Part 1.');
+    requireValue('buildingWarrant.certifier.registrationBPart2', snapshot.buildingWarrant?.certifier?.registrationBPart2, 'Enter Registration number B Part 2.');
+    requireValue('buildingWarrant.certifier.approvedBody', snapshot.buildingWarrant?.certifier?.approvedBody, 'Enter the name of the approved body.');
   } else {
     if (!snapshot.planning || !meaningfulDescription(snapshot.planning.description)) {
       missing.push({
