@@ -143,6 +143,7 @@ export const applicationDraftReviewSchema = z.object({
   clientMode: z.enum(['create', 'existing']).default('create'),
   existingClientId: nullableText(120),
   client: draftPersonSchema,
+  clientAddressSameAsSite: z.boolean().default(false),
   applicantDifferentFromClient: z.boolean().default(false),
   applicant: draftPersonSchema.optional(),
   agent: draftAgentSchema,

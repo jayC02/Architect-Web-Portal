@@ -9,9 +9,9 @@ import {
   FileText,
   LoaderCircle,
   RefreshCw,
-  Save,
   Trash2,
 } from 'lucide-react';
+import { evaluateClientApplicationDraftReadiness } from '@/lib/application-draft-readiness';
 import type { ApplicationDraftResponse } from '@/server/services/application-draft-view.service';
 
 type Review = NonNullable<ApplicationDraftResponse['review']>;
@@ -42,14 +42,6 @@ const routeOptions: Option[] = [
   { value: 'HOUSEHOLDER_PLANNING', label: 'Householder planning' },
   { value: 'PLANNING_APPLICATION', label: 'Planning application' },
   { value: 'BUILDING_WARRANT', label: 'Building Warrant' },
-];
-
-const documentStatusOptions: Option[] = [
-  { value: 'APPROVED', label: 'Reviewed' },
-  { value: 'IN_REVIEW', label: 'Needs review' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'SUPERSEDED', label: 'Superseded' },
-  { value: 'REJECTED', label: 'Exclude' },
 ];
 
 const buildingConfirmationQuestions = [
@@ -259,11 +251,13 @@ function PersonFields({
   onChange,
   issueFor,
   prefix,
+  showAddress = true,
 }: {
   person: Person;
   onChange: (key: keyof Person, value: string) => void;
   issueFor: (key: string) => string | undefined;
   prefix: 'client' | 'applicant';
+  showAddress?: boolean;
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -335,29 +329,33 @@ function PersonFields({
         required
       />
       <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
-      <Field
-        label="Address line 1"
-        value={person.addressLine1}
-        onChange={(value) => onChange('addressLine1', value)}
-        issue={issueFor(`${prefix}.addressLine1`)}
-        required
-      />
-      <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
-      <Field
-        label="Town or city"
-        value={person.townCity}
-        onChange={(value) => onChange('townCity', value)}
-        issue={issueFor(`${prefix}.townCity`)}
-        required
-      />
-      <Field
-        label="Postcode"
-        value={person.postcode}
-        onChange={(value) => onChange('postcode', value)}
-        issue={issueFor(`${prefix}.postcode`)}
-        required
-      />
-      <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
+      {showAddress ? (
+        <>
+          <Field
+            label="Address line 1"
+            value={person.addressLine1}
+            onChange={(value) => onChange('addressLine1', value)}
+            issue={issueFor(`${prefix}.addressLine1`)}
+            required
+          />
+          <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
+          <Field
+            label="Town or city"
+            value={person.townCity}
+            onChange={(value) => onChange('townCity', value)}
+            issue={issueFor(`${prefix}.townCity`)}
+            required
+          />
+          <Field
+            label="Postcode"
+            value={person.postcode}
+            onChange={(value) => onChange('postcode', value)}
+            issue={issueFor(`${prefix}.postcode`)}
+            required
+          />
+          <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -450,7 +448,7 @@ function EvidenceList({
       }>;
     }> | undefined;
     return Object.entries(fields ?? {})
-      .filter(([, field]) => (field.sources?.length ?? 0) > 0)
+      .filter(([key, field]) => key !== 'route' && (field.sources?.length ?? 0) > 0)
       .map(([key, field]) => ({ key: `${section}.${key}`, label: evidenceLabels[key] ?? key, sources: field.sources ?? [] }));
   });
   if (!entries.length) return null;
@@ -590,6 +588,14 @@ export default function ApplicationDraftReview({
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [showAllDocuments, setShowAllDocuments] = useState(false);
+  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const reviewRef = useRef<Review | null>(initialDraft.review);
+  const autosaveTimer = useRef<number | null>(null);
+  const autosaveInFlight = useRef<Promise<boolean> | null>(null);
+  const lastSavedReview = useRef(initialDraft.review ? JSON.stringify(initialDraft.review) : '');
+  const firstReviewRender = useRef(true);
+  const saveImmediately = useRef(false);
 
   const issueMap = useMemo(
     () => new Map(issues.map((issue) => [issue.key, issue.message])),
@@ -602,9 +608,74 @@ export default function ApplicationDraftReview({
   }, [issues]);
 
   useEffect(() => {
-    if (draft.review) setReview(draft.review);
+    if (draft.review) {
+      reviewRef.current = draft.review;
+      setReview(draft.review);
+      lastSavedReview.current = JSON.stringify(draft.review);
+    }
     setIssues(draft.issues);
   }, [draft]);
+
+  useEffect(() => () => {
+    if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+  }, []);
+
+  const persistCurrentReview = async (): Promise<boolean> => {
+    const current = reviewRef.current;
+    if (!current) return false;
+    if (autosaveInFlight.current) {
+      await autosaveInFlight.current;
+      return persistCurrentReview();
+    }
+    const snapshot = JSON.stringify(current);
+    if (snapshot === lastSavedReview.current) {
+      setSaveState('saved');
+      return true;
+    }
+    setSaveState('saving');
+    const request = (async () => {
+      try {
+        const payload = await apiJson<{
+          draft: ApplicationDraftResponse;
+          issues: ApplicationDraftResponse['issues'];
+        }>(`/api/application-drafts/${draft.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ review: current }),
+        });
+        if (JSON.stringify(reviewRef.current) === snapshot) {
+          lastSavedReview.current = snapshot;
+          setDraft(payload.draft);
+          setIssues(payload.issues);
+          setSaveState('saved');
+        }
+        return true;
+      } catch (requestError) {
+        if (JSON.stringify(reviewRef.current) === snapshot) {
+          setSaveState('failed');
+          setError(requestError instanceof Error ? requestError.message : 'Could not save changes.');
+        }
+        return false;
+      }
+    })();
+    autosaveInFlight.current = request;
+    const saved = await request;
+    autosaveInFlight.current = null;
+    return JSON.stringify(reviewRef.current) === snapshot ? saved : persistCurrentReview();
+  };
+
+  useEffect(() => {
+    if (firstReviewRender.current) {
+      firstReviewRender.current = false;
+      return;
+    }
+    if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+    if (saveImmediately.current) {
+      saveImmediately.current = false;
+      void persistCurrentReview();
+      return;
+    }
+    autosaveTimer.current = window.setTimeout(() => void persistCurrentReview(), 600);
+  }, [review]);
 
   if (
     draft.status === 'UPLOADING'
@@ -637,9 +708,19 @@ export default function ApplicationDraftReview({
     );
   }
 
+  const applyReview = (change: (current: Review) => Review, immediate = false) => {
+    const current = reviewRef.current;
+    if (!current) return;
+    const next = change(current);
+    reviewRef.current = next;
+    saveImmediately.current = immediate;
+    setReview(next);
+    setIssues(evaluateClientApplicationDraftReadiness(next));
+    setError('');
+  };
+
   const updateProject = (key: keyof Review['project'], value: string | null) => {
-    setReview((current) => {
-      if (!current) return current;
+    applyReview((current) => {
       const project = { ...current.project, [key]: value || null } as Review['project'];
       return {
         ...current,
@@ -654,14 +735,23 @@ export default function ApplicationDraftReview({
     });
   };
   const updateSite = (key: keyof Review['site'], value: string) => {
-    setReview((current) => current ? {
+    applyReview((current) => ({
       ...current,
       site: { ...current.site, [key]: value || null },
-    } : current);
+      ...(current.clientAddressSameAsSite ? {
+        client: {
+          ...current.client,
+          addressLine1: key === 'addressLine1' ? value || null : current.site.addressLine1,
+          addressLine2: key === 'addressLine2' ? value || null : current.site.addressLine2,
+          townCity: key === 'townCity' ? value || null : current.site.townCity,
+          postcode: key === 'postcode' ? value || null : current.site.postcode,
+          country: key === 'country' ? value || null : current.site.country,
+        },
+      } : {}),
+    }));
   };
   const updatePerson = (target: 'client' | 'applicant', key: keyof Person, value: string) => {
-    setReview((current) => {
-      if (!current) return current;
+    applyReview((current) => {
       const person = target === 'client' ? current.client : current.applicant ?? emptyPerson();
       return {
         ...current,
@@ -670,33 +760,53 @@ export default function ApplicationDraftReview({
     });
   };
   const updateAgent = (key: keyof Agent, value: string | boolean) => {
-    setReview((current) => current ? {
+    applyReview((current) => ({
       ...current,
       agent: { ...current.agent, [key]: typeof value === 'string' ? value || null : value },
-    } : current);
+    }));
   };
   const updateApplication = (key: keyof Review['application'], value: string | number | null) => {
-    setReview((current) => current ? {
+    applyReview((current) => ({
       ...current,
       application: { ...current.application, [key]: value === '' ? null : value },
-    } : current);
+    }));
   };
   const updateConfirmation = (key: string, value: boolean | number | string | null) => {
-    setReview((current) => current ? {
+    applyReview((current) => ({
       ...current,
       confirmations: { ...current.confirmations, [key]: value },
-    } : current);
+    }), true);
   };
   const updateDocument = (
     id: string,
     key: keyof Review['documents'][number],
     value: string | null,
   ) => {
-    setReview((current) => current ? {
+    applyReview((current) => ({
       ...current,
       documents: current.documents.map((document) =>
         document.id === id ? { ...document, [key]: value || null } : document),
-    } : current);
+    }), true);
+  };
+  const acceptDocument = (id: string) => {
+    applyReview((current) => ({
+      ...current,
+      documents: current.documents.map((document) => document.id === id ? {
+        ...document,
+        documentStatus: 'APPROVED',
+      } : document),
+    }), true);
+  };
+  const changeDocumentType = (id: string, documentType: string) => {
+    applyReview((current) => ({
+      ...current,
+      documents: current.documents.map((document) => document.id === id ? {
+        ...document,
+        documentType: documentType as Review['documents'][number]['documentType'],
+        documentStatus: 'APPROVED',
+      } : document),
+    }), true);
+    setEditingDocumentId(null);
   };
 
   const issueFor = (key: string) => issueMap.get(key);
@@ -704,67 +814,40 @@ export default function ApplicationDraftReview({
   const building = hasRoute(route, 'building');
   const planning = hasRoute(route, 'planning');
   const draftDocumentsById = new Map(draft.documents.map((document) => [document.id, document]));
+  const locationPlanCount = review.documents.filter((document) => String(document.documentType) === 'LOCATION_PLAN').length;
   const attentionDocumentIds = new Set(
     review.documents
       .filter((document) =>
         document.documentStatus === 'IN_REVIEW'
         || document.documentStatus === 'DRAFT'
-        || draftDocumentsById.get(document.id)?.needsManualReview)
+        || (locationPlanCount > 1 && String(document.documentType) === 'LOCATION_PLAN'))
       .map((document) => document.id),
   );
   const visibleDocuments = showAllDocuments || attentionDocumentIds.size === 0
     ? review.documents
     : review.documents.filter((document) => attentionDocumentIds.has(document.id));
-
-  const saveReview = async () => {
-    setWorking('save');
-    setError('');
-    setNotice('');
-    try {
-      const payload = await apiJson<{
-        draft: ApplicationDraftResponse;
-        issues: ApplicationDraftResponse['issues'];
-      }>(`/api/application-drafts/${draft.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ review }),
-      });
-      setDraft(payload.draft);
-      setIssues(payload.issues);
-      setNotice(payload.issues.length
-        ? `Draft saved. ${payload.issues.length} detail${payload.issues.length === 1 ? '' : 's'} still need attention.`
-        : 'Draft saved. The application is ready to create.');
-      return payload.issues;
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'The draft could not be saved.');
-      return null;
-    } finally {
-      setWorking('');
-    }
-  };
+  const siteAddressComplete = Boolean(review.site.addressLine1 && review.site.townCity && review.site.postcode);
+  const locationPlanConflict = locationPlanCount > 1;
 
   const commit = async () => {
     setWorking('commit');
     setError('');
     setNotice('');
     try {
-      const saved = await apiJson<{
-        draft: ApplicationDraftResponse;
-        issues: ApplicationDraftResponse['issues'];
-      }>(`/api/application-drafts/${draft.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ review }),
-      });
-      setDraft(saved.draft);
-      setIssues(saved.issues);
-      if (saved.issues.length) {
-        setError(`Review ${saved.issues.length} remaining detail${saved.issues.length === 1 ? '' : 's'} before creating the application.`);
+      const saved = await persistCurrentReview();
+      if (!saved) return;
+      const currentReview = reviewRef.current;
+      const currentIssues = currentReview ? evaluateClientApplicationDraftReadiness(currentReview) : [];
+      setIssues(currentIssues);
+      if (currentIssues.length || !currentReview) {
+        setError(`Review ${currentIssues.length} remaining detail${currentIssues.length === 1 ? '' : 's'} before creating the application.`);
         document.querySelector('[data-attention-summary]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
       const result = await apiJson<{ redirectTo: string }>(`/api/application-drafts/${draft.id}/commit`, {
         method: 'POST',
-        body: JSON.stringify({ review }),
+        body: JSON.stringify({ review: currentReview }),
       });
       window.location.assign(result.redirectTo);
     } catch (requestError) {
@@ -879,7 +962,13 @@ export default function ApplicationDraftReview({
         `/api/application-drafts/${draft.id}/documents/${document.id}`,
         { method: 'DELETE', body: JSON.stringify({}) },
       );
-      window.location.reload();
+      const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
+      setDraft(payload.draft);
+      reviewRef.current = payload.draft.review;
+      setReview(payload.draft.review);
+      setIssues(payload.draft.issues);
+      setNotice(`${document.originalFilename} was removed.`);
+      setWorking('');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The document could not be removed.');
       setWorking('');
@@ -887,22 +976,21 @@ export default function ApplicationDraftReview({
   };
 
   const chooseRoute = (selectedRoute: string) => {
-    setReview((current) => {
-      if (!current) return current;
+    applyReview((current) => {
       const confirmations = { ...current.confirmations };
       if (hasRoute(selectedRoute, 'planning')) {
         if (typeof confirmations.discussedWithPlanningAuthority !== 'boolean') confirmations.discussedWithPlanningAuthority = false;
         if (typeof confirmations.treesOnOrAdjacentToSite !== 'boolean') confirmations.treesOnOrAdjacentToSite = false;
         if (typeof confirmations.newOrAlteredVehicleAccess !== 'boolean') confirmations.newOrAlteredVehicleAccess = false;
-        if (!Object.hasOwn(confirmations, 'soleOwner')) confirmations.soleOwner = null;
-        if (!Object.hasOwn(confirmations, 'agriculturalHolding')) confirmations.agriculturalHolding = null;
+        if (!Object.hasOwn(confirmations, 'soleOwner')) confirmations.soleOwner = true;
+        if (!Object.hasOwn(confirmations, 'agriculturalHolding')) confirmations.agriculturalHolding = false;
       }
       return {
         ...current,
         selectedApplicationType: selectedRoute as Review['selectedApplicationType'],
         confirmations,
       };
-    });
+    }, true);
   };
 
   const attentionCount = issues.length;
@@ -924,7 +1012,7 @@ export default function ApplicationDraftReview({
               Architect Pro analysed {analysedCount} document{analysedCount === 1 ? '' : 's'} and prepared {preparedCount} application value{preparedCount === 1 ? '' : 's'}.
               {attentionCount > 0
                 ? ` ${attentionCount} detail${attentionCount === 1 ? '' : 's'} need your attention.`
-                : ' Everything required for record creation is ready.'}
+                : ' Ready to create project.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -942,8 +1030,8 @@ export default function ApplicationDraftReview({
 
       <section className="panel mb-5 grid gap-4 rounded-lg p-5 sm:grid-cols-4">
         <div>
-          <p className="label">Application route</p>
-          <p className="font-semibold">{routeLabel(review.selectedApplicationType)}</p>
+          <p className="label">Review</p>
+          <p className={`font-semibold ${attentionCount ? 'text-red-700' : 'text-[#3f6840]'}`}>{attentionCount ? 'Needs attention' : 'Complete'}</p>
         </div>
         <div>
           <p className="label">Documents</p>
@@ -987,7 +1075,7 @@ export default function ApplicationDraftReview({
 
       <div className="space-y-4">
         <Section
-          title="Project and application"
+          title="Project"
           summary={`${text(review.project.name)} | ${routeLabel(review.selectedApplicationType)}`}
           issueCount={(issuesBySection.get('project') ?? 0) + (issuesBySection.get('application') ?? 0)}
           defaultOpen
@@ -999,11 +1087,11 @@ export default function ApplicationDraftReview({
                 value={review.projectMode === 'existing' ? review.existingProjectId ?? '' : 'create'}
                 onChange={(event) => {
                   const value = event.target.value;
-                  setReview((current) => current ? {
+                  applyReview((current) => ({
                     ...current,
                     projectMode: value === 'create' ? 'create' : 'existing',
                     existingProjectId: value === 'create' ? null : value,
-                  } : current);
+                  }), true);
                 }}
                 className={`field ${issueFor('existingProjectId') ? 'border-red-300 ring-2 ring-red-100' : ''}`}
               >
@@ -1142,11 +1230,11 @@ export default function ApplicationDraftReview({
                   value={review.siteMode === 'existing' ? review.existingSiteId ?? '' : 'create'}
                   onChange={(event) => {
                     const value = event.target.value;
-                    setReview((current) => current ? {
+                    applyReview((current) => ({
                       ...current,
                       siteMode: value === 'create' ? 'create' : 'existing',
                       existingSiteId: value === 'create' ? null : value,
-                    } : current);
+                    }), true);
                   }}
                   className="field"
                 >
@@ -1186,11 +1274,12 @@ export default function ApplicationDraftReview({
                   value={review.clientMode === 'existing' ? review.existingClientId ?? '' : 'create'}
                   onChange={(event) => {
                     const value = event.target.value;
-                    setReview((current) => current ? {
+                    applyReview((current) => ({
                       ...current,
                       clientMode: value === 'create' ? 'create' : 'existing',
                       existingClientId: value === 'create' ? null : value,
-                    } : current);
+                      clientAddressSameAsSite: value === 'create' ? current.clientAddressSameAsSite : false,
+                    }), true);
                   }}
                   className="field"
                 >
@@ -1204,41 +1293,80 @@ export default function ApplicationDraftReview({
                 ) : null}
               </label>
 
+              <div className="border-t border-stone-200 pt-5">
+                <p className="text-sm font-semibold text-ink">Client is also the applicant</p>
+                {review.clientMode === 'create' ? (
+                  <label className="mt-3 flex items-center gap-3 text-sm font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={review.clientAddressSameAsSite}
+                      disabled={!siteAddressComplete}
+                      onChange={(event) => applyReview((current) => ({
+                        ...current,
+                        clientAddressSameAsSite: event.target.checked,
+                        client: event.target.checked ? {
+                          ...current.client,
+                          addressLine1: current.site.addressLine1,
+                          addressLine2: current.site.addressLine2,
+                          townCity: current.site.townCity,
+                          postcode: current.site.postcode,
+                          country: current.site.country,
+                        } : current.client,
+                      }), true)}
+                      className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
+                    />
+                    Client address is the same as the site address
+                  </label>
+                ) : (
+                  <p className="mt-2 text-sm text-stone-500">The selected client keeps their confirmed correspondence address.</p>
+                )}
+                {!siteAddressComplete && review.clientMode === 'create' ? <p className="mt-2 text-xs text-stone-500">Complete the site address before using it for the client.</p> : null}
+              </div>
+
               {review.clientMode === 'create' ? (
                 <PersonFields
                   person={review.client}
                   onChange={(key, value) => updatePerson('client', key, value)}
                   issueFor={issueFor}
                   prefix="client"
+                  showAddress={!review.clientAddressSameAsSite}
                 />
               ) : null}
 
               <div className="border-t border-stone-200 pt-5">
-                <label className="flex items-center gap-3 text-sm font-semibold">
-                  <input
-                    type="checkbox"
-                    checked={review.applicantDifferentFromClient}
-                    onChange={(event) => setReview((current) => current ? {
-                      ...current,
-                      applicantDifferentFromClient: event.target.checked,
-                      applicant: current.applicant ?? { ...current.client },
-                    } : current)}
-                    className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
-                  />
-                  The applicant is different from the client
-                </label>
                 {!review.applicantDifferentFromClient ? (
-                  <p className="mt-2 text-sm text-stone-500">The linked client will be used as the applicant. No duplicate entry is required.</p>
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-stone-600 hover:text-ink"
+                    onClick={() => applyReview((current) => ({
+                      ...current,
+                      applicantDifferentFromClient: true,
+                      applicant: current.applicant ?? { ...current.client },
+                    }), true)}
+                  >
+                    Use a different applicant
+                  </button>
                 ) : (
-                  <div className="mt-5">
-                    <h3 className="mb-4 text-sm font-semibold">Separate applicant details</h3>
-                    <PersonFields
-                      person={review.applicant ?? emptyPerson()}
-                      onChange={(key, value) => updatePerson('applicant', key, value)}
-                      issueFor={issueFor}
-                      prefix="applicant"
-                    />
-                  </div>
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold">Separate applicant details</h3>
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-stone-600 hover:text-ink"
+                        onClick={() => applyReview((current) => ({ ...current, applicantDifferentFromClient: false }), true)}
+                      >
+                        Use client as applicant
+                      </button>
+                    </div>
+                    <div className="mt-4">
+                      <PersonFields
+                        person={review.applicant ?? emptyPerson()}
+                        onChange={(key, value) => updatePerson('applicant', key, value)}
+                        issueFor={issueFor}
+                        prefix="applicant"
+                      />
+                    </div>
+                  </>
                 )}
               </div>
               <EvidenceList draftId={draft.id} prepared={draft.prepared} sections={['client']} />
@@ -1308,9 +1436,12 @@ export default function ApplicationDraftReview({
           <div className="overflow-hidden rounded-lg border border-stone-200">
             {visibleDocuments.map((document) => {
               const source = draftDocumentsById.get(document.id);
+              const needsReview = document.documentStatus === 'IN_REVIEW' || document.documentStatus === 'DRAFT';
+              const locationConflict = locationPlanConflict && String(document.documentType) === 'LOCATION_PLAN';
+              const category = documentTypes.find((option) => option.value === document.documentType)?.label ?? document.documentType;
               return (
-                <div key={document.id} className="border-b border-stone-100 p-4 last:border-b-0">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,0.8fr)_8rem_auto] lg:items-center">
+                <div key={document.id} className={`border-b border-stone-100 p-4 last:border-b-0 ${needsReview || locationConflict ? 'bg-amber-50/50' : ''}`}>
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.9fr)_auto] lg:items-center">
                     <div className="flex min-w-0 items-start gap-3">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-stone-500">
                         <FileText size={18} />
@@ -1324,26 +1455,46 @@ export default function ApplicationDraftReview({
                         </span>
                       </span>
                     </div>
-                    <label className="block">
-                      <span className="sr-only">Document type</span>
-                      <select
-                        value={document.documentType}
-                        onChange={(event) => updateDocument(document.id, 'documentType', event.target.value)}
-                        className="field"
-                      >
-                        {documentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="sr-only">Review status</span>
-                      <select
-                        value={document.documentStatus}
-                        onChange={(event) => updateDocument(document.id, 'documentStatus', event.target.value)}
-                        className={`field ${issueFor(`documents.${document.id}`) ? 'border-red-300 ring-2 ring-red-100' : ''}`}
-                      >
-                        {documentStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </label>
+                    <div>
+                      <p className="text-xs font-medium text-stone-500">{needsReview ? 'Suggested category' : 'Category'}</p>
+                      <p className="mt-1 text-sm font-semibold text-ink">{category}</p>
+                      {locationConflict ? (
+                        <div className="mt-3">
+                          <p className="text-xs text-amber-800">More than one document is marked as a Location Plan. Choose the current plan deliberately.</p>
+                          <label className="mt-2 block">
+                            <span className="sr-only">Choose category for {source?.originalFilename ?? 'document'}</span>
+                            <select
+                              value={document.documentType}
+                              onChange={(event) => changeDocumentType(document.id, event.target.value)}
+                              className="field"
+                            >
+                              {documentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                      ) : editingDocumentId === document.id ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <label className="min-w-[12rem] flex-1">
+                            <span className="sr-only">Change category for {source?.originalFilename ?? 'document'}</span>
+                            <select
+                              value={document.documentType}
+                              onChange={(event) => changeDocumentType(document.id, event.target.value)}
+                              className="field"
+                            >
+                              {documentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                          </label>
+                          <button type="button" className="text-sm font-semibold text-stone-600 hover:text-ink" onClick={() => setEditingDocumentId(null)}>Cancel</button>
+                        </div>
+                      ) : needsReview ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => acceptDocument(document.id)}>Accept</button>
+                          <button type="button" className="text-sm font-semibold text-stone-600 hover:text-ink" onClick={() => setEditingDocumentId(document.id)}>Change</button>
+                        </div>
+                      ) : (
+                        <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#3f6840]"><CheckCircle2 size={13} /> Reviewed</span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className="inline-flex h-9 w-9 items-center justify-center rounded-md text-stone-400 hover:bg-red-50 hover:text-red-700"
@@ -1453,20 +1604,19 @@ export default function ApplicationDraftReview({
             <p className={`font-semibold ${attentionCount ? 'text-red-700' : 'text-[#3f6840]'}`}>
               {attentionCount
                 ? `${attentionCount} detail${attentionCount === 1 ? '' : 's'} need attention`
-                : 'Ready to create'}
+                : 'Ready to create project'}
             </p>
             <p className="mt-1 text-xs text-stone-500">
-              Permanent records are created only after you approve this review.
+              Changes are saved automatically. Permanent records are created only after you approve this review.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" className="btn btn-secondary gap-2" onClick={() => void saveReview()} disabled={Boolean(working)}>
-              {working === 'save' ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-              Save application draft
-            </button>
+            <p className={`self-center text-sm ${saveState === 'failed' ? 'text-red-700' : 'text-stone-500'}`} role="status" aria-live="polite">
+              {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'failed' ? 'Could not save changes' : ''}
+            </p>
             <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working)}>
               {working === 'commit' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-              {working === 'commit' ? 'Creating application...' : 'Create and open in desktop'}
+              {working === 'commit' ? 'Creating project...' : 'Create Project'}
             </button>
           </div>
         </div>

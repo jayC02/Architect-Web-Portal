@@ -290,8 +290,8 @@ const defaultConfirmations = (type: ApplicationDraftType) => {
       newOrAlteredVehicleAccess: false,
       currentParkingSpaces: null,
       proposedParkingSpaces: null,
-      soleOwner: null,
-      agriculturalHolding: null,
+      soleOwner: true,
+      agriculturalHolding: false,
     };
   }
   return {};
@@ -464,6 +464,20 @@ const buildInitialReview = (
     : suggestedApplicationType ?? ApplicationDraftType.AUTO;
   const client = strongClient ? personFromClient(strongClient) : personFromPrepared(prepared.client);
   const site = strongSite ? siteFromRecord(strongSite) : siteFromPrepared(prepared);
+  const clientAddressSameAsSite = Boolean(
+    site.addressLine1
+    && site.townCity
+    && site.postcode
+    && (!strongClient || [client.addressLine1, client.townCity, client.postcode].every((value) => !value)),
+  );
+  const clientWithDefaultAddress = clientAddressSameAsSite ? {
+    ...client,
+    addressLine1: site.addressLine1,
+    addressLine2: site.addressLine2,
+    townCity: site.townCity,
+    postcode: site.postcode,
+    country: site.country,
+  } : client;
   const typeOfWork = explicitTypeOfWork(suggestionString(prepared.project, 'typeOfWorkKey'));
   const existingReview = applicationDraftReviewSchema.safeParse(draft.confirmedData);
   const currentDocuments = draft.documents.map((document) => {
@@ -507,7 +521,8 @@ const buildInitialReview = (
     site,
     clientMode: strongClient ? 'existing' : 'create',
     existingClientId: strongClient?.id ?? null,
-    client,
+    client: clientWithDefaultAddress,
+    clientAddressSameAsSite,
     applicantDifferentFromClient: false,
     applicant: client,
     agent: agentFromDefaults(defaults),
