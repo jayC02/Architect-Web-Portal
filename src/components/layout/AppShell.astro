@@ -1,8 +1,8 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
 import type { OrganisationRole } from '@prisma/client';
 import {
-  Building2,
   CalendarDays,
   CalendarClock,
   FilePlus2,
@@ -37,16 +37,13 @@ const nav = [
 const pathname = Astro.url.pathname;
 const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 ---
-<BaseLayout title={`${title} | Architect Web Portal`} noindex={true}>
+<BaseLayout title={`${title} | Architect Pro`} noindex={true}>
   <div class="min-h-screen bg-paper">
     <aside class="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-stone-200/80 bg-[#fbfaf6] lg:flex">
       <div class="px-5 py-5">
-        <a href="/dashboard" class="flex items-center gap-3 rounded-xl p-2 transition hover:bg-white">
-          <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-ink text-paper"><Building2 size={20} /></span>
-          <span class="min-w-0">
-            <span class="block truncate font-display text-base font-semibold text-ink">Architect Web Portal</span>
-            <span class="block truncate text-xs text-stone-500">{organisation.name}</span>
-          </span>
+        <a href="/dashboard" class="block rounded-md p-2 transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
+          <BrandLogo class="h-auto w-40 max-w-full" />
+          <span class="mt-1 block truncate text-xs text-stone-500">{organisation.name}</span>
         </a>
       </div>
       <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-2">
@@ -75,7 +72,9 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
     <div class="lg:pl-72">
       <header class="sticky top-0 z-20 border-b border-stone-200 bg-paper/95 px-4 py-3 backdrop-blur lg:hidden">
         <div class="flex items-center justify-between gap-3">
-          <a href="/dashboard" class="flex items-center gap-2 font-semibold"><Building2 size={18} /> Architect Web Portal</a>
+          <a href="/dashboard" class="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
+            <BrandLogo variant="mark" class="h-8 w-8" />
+          </a>
           <button data-logout class="btn btn-secondary gap-2"><LogOut size={16} /> Sign out</button>
         </div>
         <nav class="mt-3 flex gap-2 overflow-x-auto pb-1">

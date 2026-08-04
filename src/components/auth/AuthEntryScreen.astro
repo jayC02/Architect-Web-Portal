@@ -1,5 +1,6 @@
 ---
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
 
 interface Props {
   message?: string | null;
@@ -13,7 +14,7 @@ const { message = null, authError = null } = Astro.props;
   <div class="mx-auto grid min-h-screen w-full max-w-[1440px] lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.82fr)]">
     <section class="hidden border-r border-stone-200/90 px-12 py-10 lg:flex lg:flex-col xl:px-20 xl:py-14" aria-labelledby="product-statement">
       <a class="w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
-        Architect <span class="text-[#56634d]">Pro</span>
+        <BrandLogo class="h-auto w-44" />
       </a>
 
       <div class="my-auto w-full max-w-xl py-14">
@@ -57,7 +58,7 @@ const { message = null, authError = null } = Astro.props;
     <section class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20" aria-labelledby="sign-in-heading">
       <div class="w-full max-w-md">
         <a class="mb-7 block w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 lg:hidden" href="/" aria-label="Architect Pro home">
-          Architect <span class="text-[#56634d]">Pro</span>
+          <BrandLogo class="h-auto w-40" />
         </a>
 
         <form

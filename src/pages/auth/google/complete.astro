@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
 import { GOOGLE_SIGNUP_COOKIE } from '@/lib/auth/oauth';
 import { hashOpaqueToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
@@ -17,9 +18,10 @@ const pending = rawToken
   : null;
 const valid = Boolean(pending && pending.expiresAt.getTime() >= Date.now());
 ---
-<BaseLayout title="Create your practice | Architect Web Portal" noindex>
+<BaseLayout title="Create your practice | Architect Pro" noindex>
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
     <section class="panel mx-auto w-full max-w-md rounded-lg p-6">
+      <BrandLogo class="mb-6 h-auto w-36" />
       {valid && pending ? (
         <form data-api-form data-action="/api/auth/google/complete" data-method="POST" method="post" action="/api/auth/google/complete">
           <p class="mb-2 text-xs font-semibold uppercase text-stone-500">One final detail</p>

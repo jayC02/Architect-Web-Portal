@@ -1,0 +1,26 @@
+---
+interface Props {
+  variant?: 'full' | 'mark';
+  decorative?: boolean;
+  class?: string;
+}
+
+const {
+  variant = 'full',
+  decorative = false,
+  class: className = '',
+} = Astro.props;
+const asset = variant === 'mark'
+  ? { src: '/brand/architect-pro-mark.png', width: 512, height: 512 }
+  : { src: '/brand/architect-pro-logo.png', width: 800, height: 280 };
+---
+
+<img
+  src={asset.src}
+  width={asset.width}
+  height={asset.height}
+  alt={decorative ? '' : 'Architect Pro'}
+  class:list={['block object-contain', className]}
+  decoding="async"
+  draggable="false"
+/>

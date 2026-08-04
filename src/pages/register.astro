@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
 import { getSessionUser } from '@/lib/auth/session';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
@@ -12,11 +13,11 @@ if (await getSessionUser(Astro)) {
   return Astro.redirect('/dashboard');
 }
 ---
-<BaseLayout title="Register | Architect Web Portal">
+<BaseLayout title="Register | Architect Pro">
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
     <form data-api-form data-action="/api/auth/register" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/register" class="panel mx-auto w-full max-w-md rounded-lg p-6">
       <div class="mb-6">
-        <p class="mb-2 text-xs font-semibold uppercase text-stone-500">ArchitectPro</p>
+        <BrandLogo class="mb-6 h-auto w-36" />
         <h1 class="text-2xl font-semibold text-ink">Create practice workspace</h1>
         <p class="mt-1 text-sm text-stone-500">Start with an owner account and organisation.</p>
       </div>
