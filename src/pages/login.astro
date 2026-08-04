@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
+import AuthEntryScreen from '@/components/auth/AuthEntryScreen.astro';
 import { getSessionUser } from '@/lib/auth/session';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
 
@@ -20,35 +20,6 @@ const authError = Astro.url.searchParams.has('authError')
   ? 'Google sign-in could not be completed. Please try again.'
   : null;
 ---
-<BaseLayout title="Sign in | Architect Web Portal" noindex>
-  <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
-    <form data-api-form data-action="/api/auth/login" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/login" class="panel mx-auto w-full max-w-md rounded-lg p-6">
-      <div class="mb-6">
-        <p class="mb-2 text-xs font-semibold uppercase text-stone-500">ArchitectPro</p>
-        <h1 class="text-2xl font-semibold text-ink">Sign in</h1>
-        <p class="mt-1 text-sm text-stone-500">Open your project dashboard.</p>
-      </div>
-      {message && <p class="mb-5 border-l-2 border-stone-400 pl-3 text-sm leading-6 text-stone-600">{message}</p>}
-      {authError && <p class="mb-5 border-l-2 border-red-700 pl-3 text-sm leading-6 text-red-800">{authError}</p>}
-      <GoogleAuthButton label="Sign in with Google" />
-      <div class="my-5 flex items-center gap-3" aria-hidden="true">
-        <span class="h-px flex-1 bg-stone-200"></span>
-        <span class="text-xs uppercase text-stone-400">or use email</span>
-        <span class="h-px flex-1 bg-stone-200"></span>
-      </div>
-      <div class="space-y-4">
-        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" /></label>
-        <label class="block">
-          <span class="mb-1 flex items-center justify-between">
-            <span class="label mb-0">Password</span>
-            <a class="text-xs font-semibold text-stone-600 hover:text-ink" href="/forgot-password">Forgot password?</a>
-          </span>
-          <input required type="password" name="password" class="field" autocomplete="current-password" />
-        </label>
-      </div>
-      <button class="btn btn-primary mt-6 w-full">Sign in</button>
-      <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
-      <p class="mt-4 text-center text-sm text-stone-500">Need a workspace? <a class="font-semibold text-ink" href="/register">Register</a></p>
-    </form>
-  </main>
+<BaseLayout title="Sign in | Architect Pro" noindex>
+  <AuthEntryScreen {message} {authError} />
 </BaseLayout>

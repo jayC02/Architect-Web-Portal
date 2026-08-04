@@ -1,0 +1,117 @@
+---
+import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
+
+interface Props {
+  message?: string | null;
+  authError?: string | null;
+}
+
+const { message = null, authError = null } = Astro.props;
+---
+
+<main class="min-h-screen overflow-x-hidden bg-paper">
+  <div class="mx-auto grid min-h-screen w-full max-w-[1440px] lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.82fr)]">
+    <section class="hidden border-r border-stone-200/90 px-12 py-10 lg:flex lg:flex-col xl:px-20 xl:py-14" aria-labelledby="product-statement">
+      <a class="w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
+        Architect <span class="text-[#56634d]">Pro</span>
+      </a>
+
+      <div class="my-auto w-full max-w-xl py-14">
+        <p id="product-statement" class="max-w-lg text-3xl font-semibold leading-tight text-ink">
+          Projects, applications and desktop automation in one workspace.
+        </p>
+
+        <div class="mt-10 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_18px_48px_rgba(32,35,31,0.06)]" aria-hidden="true">
+          <div class="flex h-12 items-center border-b border-stone-200 px-5">
+            <span class="h-2 w-24 rounded-sm bg-stone-200"></span>
+            <span class="ml-auto h-7 w-7 rounded-md border border-stone-200 bg-stone-50"></span>
+          </div>
+          <div class="grid min-h-64 grid-cols-[120px_1fr]">
+            <div class="border-r border-stone-200 bg-stone-50/80 p-4">
+              <span class="block h-2 w-16 rounded-sm bg-moss/40"></span>
+              <span class="mt-6 block h-2 w-20 rounded-sm bg-stone-200"></span>
+              <span class="mt-5 block h-2 w-14 rounded-sm bg-stone-200"></span>
+              <span class="mt-5 block h-2 w-[4.5rem] rounded-sm bg-stone-200"></span>
+            </div>
+            <div class="p-6">
+              <span class="block h-3 w-36 rounded-sm bg-stone-300"></span>
+              <span class="mt-3 block h-2 w-52 max-w-full rounded-sm bg-stone-100"></span>
+              <div class="mt-8 grid grid-cols-2 gap-5 border-y border-stone-100 py-6">
+                <div>
+                  <span class="block h-2 w-16 rounded-sm bg-stone-200"></span>
+                  <span class="mt-3 block h-5 w-24 rounded-sm bg-stone-300"></span>
+                </div>
+                <div>
+                  <span class="block h-2 w-20 rounded-sm bg-stone-200"></span>
+                  <span class="mt-3 block h-5 w-16 rounded-sm bg-moss/40"></span>
+                </div>
+              </div>
+              <span class="mt-6 block h-2 w-full rounded-sm bg-stone-100"></span>
+              <span class="mt-4 block h-2 w-4/5 rounded-sm bg-stone-100"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-8 lg:px-12 xl:px-20" aria-labelledby="sign-in-heading">
+      <div class="w-full max-w-md">
+        <a class="mb-7 block w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 lg:hidden" href="/" aria-label="Architect Pro home">
+          Architect <span class="text-[#56634d]">Pro</span>
+        </a>
+
+        <form
+          data-api-form
+          data-field-errors
+          data-action="/api/auth/login"
+          data-method="POST"
+          data-redirect="/dashboard"
+          data-pending-message="Signing in..."
+          method="post"
+          action="/api/auth/login"
+          class="panel w-full rounded-lg p-6 sm:p-8"
+        >
+          <div class="mb-6">
+            <h1 id="sign-in-heading" class="text-2xl font-semibold text-ink">Sign in to Architect Pro</h1>
+            <p class="mt-2 text-sm text-stone-500">Access your practice workspace.</p>
+          </div>
+
+          {message && <p class="mb-5 border-l-2 border-moss pl-3 text-sm leading-6 text-stone-600" role="status">{message}</p>}
+          {authError && <p class="mb-5 border-l-2 border-red-700 pl-3 text-sm leading-6 text-red-800" role="alert">{authError}</p>}
+
+          <GoogleAuthButton />
+
+          <div class="my-5 flex items-center gap-3" aria-hidden="true">
+            <span class="h-px flex-1 bg-stone-200"></span>
+            <span class="text-xs font-semibold uppercase text-stone-500">or use email</span>
+            <span class="h-px flex-1 bg-stone-200"></span>
+          </div>
+
+          <div class="space-y-4">
+            <label class="block" for="sign-in-email">
+              <span class="label">Email</span>
+              <input id="sign-in-email" required type="email" name="email" class="field min-h-11" autocomplete="email" aria-describedby="sign-in-email-error" />
+              <span id="sign-in-email-error" data-field-error="email" class="mt-1 hidden text-sm text-red-700"></span>
+            </label>
+
+            <div>
+              <div class="mb-1 flex items-center justify-between gap-4">
+                <label class="label mb-0" for="sign-in-password">Password</label>
+                <a class="rounded-sm text-xs font-semibold text-stone-600 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/forgot-password">Forgot password?</a>
+              </div>
+              <input id="sign-in-password" required type="password" name="password" class="field min-h-11" autocomplete="current-password" aria-describedby="sign-in-password-error" />
+              <p id="sign-in-password-error" data-field-error="password" class="mt-1 hidden text-sm text-red-700"></p>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary mt-6 w-full">Sign in</button>
+          <p id="sign-in-status" data-form-status class="mt-4 text-center text-sm text-stone-500" role="status" aria-live="polite"></p>
+
+          <p class="mt-5 border-t border-stone-200 pt-5 text-center text-sm text-stone-500">
+            New practice? <a class="rounded-sm font-semibold text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/register">Create a workspace</a>
+          </p>
+        </form>
+      </div>
+    </section>
+  </div>
+</main>

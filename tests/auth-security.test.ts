@@ -76,6 +76,7 @@ const sessionService = readFileSync(resolve(root, 'src/lib/auth/session.ts'), 'u
 const landingPage = readFileSync(resolve(root, 'src/pages/index.astro'), 'utf8');
 const loginPage = readFileSync(resolve(root, 'src/pages/login.astro'), 'utf8');
 const registerPage = readFileSync(resolve(root, 'src/pages/register.astro'), 'utf8');
+const authEntryScreen = readFileSync(resolve(root, 'src/components/auth/AuthEntryScreen.astro'), 'utf8');
 
 assert.match(schema, /passwordHash String\?/);
 assert.match(schema, /model AuthProvider/);
@@ -98,8 +99,15 @@ assert.match(sessionService, /maxAge:/);
 assert.match(sessionService, /expiresAt: refreshedExpiresAt/);
 assert.match(landingPage, /getSessionUser\(Astro\)/);
 assert.match(landingPage, /Astro\.redirect\('\/dashboard'\)/);
+assert.match(landingPage, /AuthEntryScreen/);
 assert.match(loginPage, /getSessionUser\(Astro\)/);
+assert.match(loginPage, /AuthEntryScreen/);
 assert.match(registerPage, /getSessionUser\(Astro\)/);
+assert.match(authEntryScreen, /<GoogleAuthButton \/>/);
+assert.match(authEntryScreen, /data-action="\/api\/auth\/login"/);
+assert.match(authEntryScreen, /href="\/forgot-password"/);
+assert.match(authEntryScreen, /href="\/register"/);
+assert.doesNotMatch(authEntryScreen, /North Lane Extension/);
 
 const originalFetch = globalThis.fetch;
 let fetchCalls = 0;

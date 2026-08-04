@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { APPLICATION_UPLOAD_LIMITS } from '../src/lib/application-upload-limits';
+import {
+  createSingleFlight,
+  runUploadQueue,
+  uploadPackageProgress,
+  type ApplicationUploadState,
+} from '../src/lib/application-upload-queue';
 
 const read = (file: string) => fs.readFileSync(file, 'utf8');
 const createRoute = read('src/pages/api/application-drafts/index.ts');
@@ -51,12 +57,69 @@ assert.match(commit, /storageKey: document\.storageKey/, 'commit attaches the ex
 assert.doesNotMatch(commit, /saveUploadedDocument|readStoredDocumentBytes/, 'commit does not copy or re-upload a draft object');
 
 assert.doesNotMatch(newApplication, /FormData|XMLHttpRequest|request\.send/, 'the new application page does not build or submit a combined file package');
-assert.match(newApplication, /length: Math\.min\(3, files\.length\)/, 'browser direct uploads are capped at three concurrent workers');
+assert.match(newApplication, /createSingleFlight/, 'concurrent workers share one authoritative draft creation');
+assert.match(newApplication, /APPLICATION_UPLOAD_LIMITS\.uploadConcurrency/, 'the browser uses the central upload concurrency limit');
 assert.match(newApplication, /Could not upload.*completed uploads have been kept/, 'per-file failures keep successful files available');
 
 const syntheticPackage = Array.from({ length: 8 }, (_, index) => 1_900_000 + index * 1_000);
 const syntheticTotal = syntheticPackage.reduce((total, bytes) => total + bytes, 0);
 assert.ok(syntheticTotal > 14.3 * 1024 * 1024 && syntheticTotal < APPLICATION_UPLOAD_LIMITS.maxPackageBytes);
 assert.equal(syntheticPackage.length, 8, 'the reproduced package shape is covered without real customer PDFs');
+
+const files = Array.from({ length: 8 }, (_, index) => ({ id: `document-${index + 1}` }));
+const states = new Map<string, ApplicationUploadState>(files.map((file) => [file.id, 'Waiting']));
+let draftCreations = 0;
+let activeUploads = 0;
+let maximumActiveUploads = 0;
+const uploadCalls: string[] = [];
+const finalisationCalls: string[] = [];
+const ensureDraft = createSingleFlight(async () => {
+  draftCreations += 1;
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  return 'one-draft-for-all-files';
+});
+
+await runUploadQueue(files, 6, async (file) => {
+  assert.equal(await ensureDraft(), 'one-draft-for-all-files');
+  states.set(file.id, 'Uploading');
+  activeUploads += 1;
+  maximumActiveUploads = Math.max(maximumActiveUploads, activeUploads);
+  try {
+    uploadCalls.push(file.id);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    states.set(file.id, 'Finalising');
+    finalisationCalls.push(file.id);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    states.set(file.id, 'Waiting for analysis');
+  } finally {
+    activeUploads -= 1;
+  }
+});
+
+assert.equal(draftCreations, 1, 'parallel upload workers create exactly one application draft');
+assert.equal(uploadCalls.length, 8, 'all eight selected files are uploaded');
+assert.equal(new Set(uploadCalls).size, 8, 'concurrent callbacks retain every stable document row');
+assert.equal(finalisationCalls.length, 8, 'all eight uploaded files are finalised');
+assert.ok(maximumActiveUploads <= 6, 'the worker cap limits simultaneity without truncating the queue');
+assert.deepEqual(uploadPackageProgress(files, (file) => states.get(file.id)), {
+  total: 8,
+  finalised: 8,
+  failed: 0,
+  ready: true,
+}, 'the completed package reports 8/8');
+
+const partialStates = new Map<string, ApplicationUploadState>(
+  files.map((file, index) => [file.id, index < 6 ? 'Waiting for analysis' : 'Finalising']),
+);
+assert.equal(uploadPackageProgress(files, (file) => partialStates.get(file.id)).ready, false, 'six of eight finalised files cannot be analysed');
+partialStates.set(files[6].id, 'Waiting for analysis');
+partialStates.set(files[7].id, 'Could not upload');
+assert.equal(uploadPackageProgress(files, (file) => partialStates.get(file.id)).ready, false, 'one failed file prevents partial analysis');
+const withoutFailed = files.filter((file) => file.id !== files[7].id);
+assert.equal(uploadPackageProgress(withoutFailed, (file) => partialStates.get(file.id)).ready, true, 'removing a failed file recalculates readiness');
+
+assert.match(analysis, /include: \{ documents: \{ orderBy:/, 'analysis loads the authoritative draft document set from the database');
+assert.match(analysis, /total: draft\.documents\.length/, 'analysis progress uses the authoritative document total');
+assert.match(analysis, /uploadStatus !== ApplicationDraftDocumentUploadStatus\.READY/, 'analysis rejects unresolved uploads');
 
 console.log('application direct upload tests passed');

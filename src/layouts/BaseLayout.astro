@@ -90,7 +90,7 @@ const {
         const submitButtons = Array.from(form.querySelectorAll('button[type="submit"], button:not([type])'));
         if (form.hasAttribute('data-field-errors')) clearFieldErrors(form);
         if (status) {
-          status.textContent = 'Saving...';
+          status.textContent = form.dataset.pendingMessage || 'Saving...';
           status.setAttribute('role', 'status');
           status.classList.remove('text-red-700');
           status.classList.add('text-stone-500');

@@ -223,6 +223,14 @@ const formatDate = (date: Date) =>
 </AppShell>
 
 <script>
+  import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
+  import {
+    createSingleFlight,
+    runUploadQueue,
+    uploadPackageProgress,
+    type ApplicationUploadState,
+  } from '@/lib/application-upload-queue';
+
   const form = document.querySelector<HTMLFormElement>('[data-application-upload]');
   const input = document.querySelector<HTMLInputElement>('[data-file-input]');
   const folderInput = document.querySelector<HTMLInputElement>('[data-folder-input]');
@@ -242,7 +250,7 @@ const formatDate = (date: Date) =>
   let selectedFiles: File[] = [];
   let draftId: string | null = null;
   let uploading = false;
-  const fileStates = new Map<string, { state: string; documentId?: string; error?: string }>();
+  const fileStates = new Map<string, { state: ApplicationUploadState; documentId?: string; error?: string }>();
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -386,8 +394,7 @@ const formatDate = (date: Date) =>
     renderFiles();
   };
 
-  const ensureDraft = async () => {
-    if (draftId) return draftId;
+  const ensureDraft = createSingleFlight(async () => {
     const notes = form?.querySelector<HTMLTextAreaElement>('textarea[name="notes"]')?.value ?? '';
     const applicationType = form?.querySelector<HTMLSelectElement>('select[name="applicationType"]')?.value ?? 'AUTO';
     const payload = await api<{ draft: { id: string } }>('/api/application-drafts', {
@@ -395,8 +402,8 @@ const formatDate = (date: Date) =>
       applicationType,
     });
     draftId = payload.draft.id;
-    return draftId;
-  };
+    return payload.draft.id;
+  });
 
   const uploadFile = async (file: File) => {
     const key = fileKey(file);
@@ -462,14 +469,7 @@ const formatDate = (date: Date) =>
   };
 
   const uploadWithConcurrency = async (files: File[]) => {
-    let next = 0;
-    const workers = Array.from({ length: Math.min(3, files.length) }, async () => {
-      while (next < files.length) {
-        const index = next++;
-        await uploadFile(files[index]);
-      }
-    });
-    await Promise.all(workers);
+    await runUploadQueue(files, APPLICATION_UPLOAD_LIMITS.uploadConcurrency, uploadFile);
   };
 
   form?.addEventListener('submit', async (event) => {
@@ -488,7 +488,10 @@ const formatDate = (date: Date) =>
     updateProgress();
     await uploadWithConcurrency(selectedFiles.filter((file) => fileStates.get(fileKey(file))?.state !== 'Waiting for analysis'));
     uploading = false;
-    const completed = selectedFiles.every((file) => fileStates.get(fileKey(file))?.state === 'Waiting for analysis');
+    const completed = uploadPackageProgress(
+      selectedFiles,
+      (file) => fileStates.get(fileKey(file))?.state,
+    ).ready;
     if (completed && draftId) {
       if (progressMessage) progressMessage.textContent = 'Documents finalised. Preparing analysis...';
       window.location.assign(`/applications/${draftId}`);
