@@ -226,7 +226,9 @@ const formatDate = (date: Date) =>
   import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
   import {
     createSingleFlight,
+    retryTransientUpload,
     runUploadQueue,
+    UploadRequestError,
     uploadPackageProgress,
     type ApplicationUploadState,
   } from '@/lib/application-upload-queue';
@@ -251,6 +253,7 @@ const formatDate = (date: Date) =>
   let draftId: string | null = null;
   let uploading = false;
   const fileStates = new Map<string, { state: ApplicationUploadState; documentId?: string; error?: string }>();
+  const uploadsInFlight = new Set<string>();
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -289,7 +292,7 @@ const formatDate = (date: Date) =>
       remove.setAttribute('aria-label', `Remove ${file.name}`);
       remove.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
       remove.addEventListener('click', () => {
-        if (uploading) return;
+        if (uploading || uploadsInFlight.has(fileKey(file))) return;
         selectedFiles = selectedFiles.filter((candidate) => fileKey(candidate) !== fileKey(file));
         fileStates.delete(fileKey(file));
         renderFiles();
@@ -376,7 +379,7 @@ const formatDate = (date: Date) =>
       body: JSON.stringify(body),
     });
     const payload = await response.json().catch(() => ({})) as T & { error?: string };
-    if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
+    if (!response.ok) throw new UploadRequestError(payload.error || 'The request could not be completed.', response.status);
     return payload;
   };
 
@@ -407,13 +410,13 @@ const formatDate = (date: Date) =>
 
   const uploadFile = async (file: File) => {
     const key = fileKey(file);
-    if (fileStates.get(key)?.state === 'Waiting for analysis') return;
+    if (fileStates.get(key)?.state === 'Waiting for analysis' || uploadsInFlight.has(key)) return;
+    uploadsInFlight.add(key);
     fileStates.set(key, { state: 'Uploading' });
     updateProgress();
     try {
       const currentDraftId = await ensureDraft();
-      let complete = false;
-      for (let attempt = 0; attempt < 2 && !complete; attempt += 1) {
+      const documentId = await retryTransientUpload(async () => {
         const intent = await api<{
           document: { id: string; uploadStatus: string };
           upload: { url: string; token: string } | null;
@@ -424,24 +427,24 @@ const formatDate = (date: Date) =>
           size: file.size,
         });
         if (intent.storage.warning) showError('Document storage is nearly full.');
-        if (intent.storage.blocked) throw new Error('New uploads are temporarily unavailable because document storage is full.');
+        if (intent.storage.blocked) {
+          throw new UploadRequestError('New uploads are temporarily unavailable because document storage is full.', 507);
+        }
         if (intent.upload) {
           const response = await fetch(intent.upload.url, {
-            method: 'PUT',
-            headers: {
-              'content-type': file.type || 'application/pdf',
-              'x-upsert': 'false',
-            },
-            body: file,
-          });
+              method: 'PUT',
+              headers: {
+                'content-type': file.type || 'application/pdf',
+                'x-upsert': 'false',
+              },
+              body: file,
+            });
           if (!response.ok) {
             const uploadError = await response.text().catch(() => '');
             if (response.status === 409 || /already exists/i.test(uploadError)) {
               // The previous browser attempt may have reached Storage before its finalisation response was lost.
-            } else if (attempt === 0) {
-              continue;
             } else {
-              throw new Error('Could not upload this document.');
+              throw new UploadRequestError('Could not upload this document.', response.status);
             }
           }
         }
@@ -449,21 +452,27 @@ const formatDate = (date: Date) =>
         updateProgress();
         fileStates.set(key, { state: 'Finalising', documentId: intent.document.id });
         updateProgress();
-        try {
-          await api(`/api/application-drafts/${currentDraftId}/documents/${intent.document.id}/finalise`, {});
-        } catch {
-          fileStates.set(key, { state: 'Could not finalise', documentId: intent.document.id });
-          showError(`${file.name} was uploaded but could not be finalised. Try again.`);
-          return;
-        }
-        fileStates.set(key, { state: 'Waiting for analysis', documentId: intent.document.id });
-        complete = true;
-      }
+        await api(`/api/application-drafts/${currentDraftId}/documents/${intent.document.id}/finalise`, {});
+        return intent.document.id;
+      }, {
+        delayMs: 750,
+        onRetry: () => {
+          fileStates.set(key, { state: 'Retrying upload...' });
+          updateProgress();
+        },
+      });
+      fileStates.set(key, { state: 'Waiting for analysis', documentId });
+      const hasFailedFile = selectedFiles.some((candidate) => {
+        const state = fileStates.get(fileKey(candidate))?.state;
+        return state === 'Could not upload' || state === 'Could not finalise';
+      });
+      if (!hasFailedFile) errorBox?.classList.add('hidden');
     } catch (uploadError) {
       const message = uploadError instanceof Error ? uploadError.message : 'Could not upload this document.';
       fileStates.set(key, { state: 'Could not upload', error: message });
-      showError(`Could not upload ${file.name}. Your completed uploads have been kept.`);
+      showError(`Unable to upload document: ${file.name}. Your completed uploads have been kept.`);
     } finally {
+      uploadsInFlight.delete(key);
       updateProgress();
     }
   };

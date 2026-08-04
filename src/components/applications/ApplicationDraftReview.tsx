@@ -8,6 +8,7 @@ import {
   FilePlus2,
   FileText,
   LoaderCircle,
+  Pencil,
   RefreshCw,
   Trash2,
 } from 'lucide-react';
@@ -613,6 +614,7 @@ export default function ApplicationDraftReview({
   const [error, setError] = useState('');
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
+  const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const reviewRef = useRef<Review | null>(resolvedInitialReview);
   const autosaveTimer = useRef<number | null>(null);
@@ -620,6 +622,7 @@ export default function ApplicationDraftReview({
   const lastSavedReview = useRef(initialDraft.review ? JSON.stringify(initialDraft.review) : '');
   const firstReviewRender = useRef(true);
   const saveImmediately = useRef(false);
+  const categorySaveInFlight = useRef<string | null>(null);
 
   const issueMap = useMemo(
     () => new Map(issues.map((issue) => [issue.key, issue.message])),
@@ -836,7 +839,12 @@ export default function ApplicationDraftReview({
       } : document),
     }), true);
   };
-  const changeDocumentType = (id: string, documentType: string) => {
+  const changeDocumentType = async (id: string, documentType: string) => {
+    if (categorySaveInFlight.current) return;
+    const previousReview = reviewRef.current;
+    if (!previousReview) return;
+    categorySaveInFlight.current = id;
+    setSavingCategoryId(id);
     applyReview((current) => ({
       ...current,
       documents: current.documents.map((document) => document.id === id ? {
@@ -844,8 +852,17 @@ export default function ApplicationDraftReview({
         documentType: documentType as Review['documents'][number]['documentType'],
         documentStatus: 'APPROVED',
       } : document),
-    }), true);
-    setEditingDocumentId(null);
+    }));
+    const saved = await persistCurrentReview();
+    if (saved) {
+      setEditingDocumentId(null);
+    } else {
+      reviewRef.current = previousReview;
+      setReview(previousReview);
+      setIssues(evaluateClientApplicationDraftReadiness(previousReview));
+    }
+    categorySaveInFlight.current = null;
+    setSavingCategoryId(null);
   };
 
   const issueFor = (key: string) => issueMap.get(key);
@@ -1469,7 +1486,19 @@ export default function ApplicationDraftReview({
                     </div>
                     <div>
                       <p className="text-xs font-medium text-stone-500">{needsReview ? 'Suggested category' : 'Category'}</p>
-                      <p className="mt-1 text-sm font-semibold text-ink">{category}</p>
+                      {!needsReview && !locationConflict && editingDocumentId !== document.id ? (
+                        <button
+                          type="button"
+                          className="mt-1 inline-flex items-center gap-1.5 rounded-sm text-left text-sm font-semibold text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30"
+                          aria-label={`Change category for ${source?.originalFilename ?? 'document'}`}
+                          onClick={() => setEditingDocumentId(document.id)}
+                        >
+                          {category}
+                          <Pencil size={13} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-ink">{category}</p>
+                      )}
                       {locationConflict ? (
                         <div className="mt-3">
                           <p className="text-xs text-amber-800">More than one document is marked as a Location Plan. Choose the current plan deliberately.</p>
@@ -1477,7 +1506,8 @@ export default function ApplicationDraftReview({
                             <span className="sr-only">Choose category for {source?.originalFilename ?? 'document'}</span>
                             <select
                               value={document.documentType}
-                              onChange={(event) => changeDocumentType(document.id, event.target.value)}
+                              onChange={(event) => void changeDocumentType(document.id, event.target.value)}
+                              disabled={savingCategoryId === document.id}
                               className="field"
                             >
                               {documentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -1490,13 +1520,25 @@ export default function ApplicationDraftReview({
                             <span className="sr-only">Change category for {source?.originalFilename ?? 'document'}</span>
                             <select
                               value={document.documentType}
-                              onChange={(event) => changeDocumentType(document.id, event.target.value)}
+                              onChange={(event) => void changeDocumentType(document.id, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Escape' && savingCategoryId !== document.id) setEditingDocumentId(null);
+                              }}
+                              disabled={savingCategoryId === document.id}
+                              autoFocus
                               className="field"
                             >
                               {documentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                             </select>
                           </label>
-                          <button type="button" className="text-sm font-semibold text-stone-600 hover:text-ink" onClick={() => setEditingDocumentId(null)}>Cancel</button>
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-stone-600 hover:text-ink"
+                            disabled={savingCategoryId === document.id}
+                            onClick={() => setEditingDocumentId(null)}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       ) : needsReview ? (
                         <div className="mt-3 flex flex-wrap items-center gap-3">
