@@ -1,6 +1,6 @@
 ---
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
-import AiWorkflowPreview from '@/components/auth/AiWorkflowPreview';
+import ProductScreenshotShowcase from '@/components/auth/ProductScreenshotShowcase.astro';
 import BrandLogo from '@/components/brand/BrandLogo.astro';
 
 interface Props {
@@ -13,27 +13,7 @@ const { message = null, authError = null } = Astro.props;
 
 <main class="min-h-screen overflow-x-hidden bg-paper">
   <div class="mx-auto grid min-h-screen w-full max-w-[1440px] lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.82fr)]">
-    <section class="order-2 border-t border-stone-200/90 px-4 py-10 sm:px-8 lg:order-1 lg:flex lg:min-h-screen lg:flex-col lg:border-r lg:border-t-0 lg:px-12 xl:px-20 xl:py-14" aria-labelledby="product-statement">
-      <a class="hidden w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 lg:block" href="/" aria-label="Architect Pro home">
-        <BrandLogo class="h-auto w-44" />
-      </a>
-
-      <div class="my-auto w-full max-w-xl py-0 lg:py-10">
-        <p class="inline-flex rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-600">AI-powered practice automation</p>
-        <h1 id="product-statement" class="mt-4 max-w-lg text-2xl font-semibold leading-tight text-ink sm:text-3xl">
-          Projects, applications and AI-powered automation in one workspace.
-        </h1>
-        <p class="mt-3 max-w-xl text-sm leading-6 text-stone-600">
-          Upload project documents, review AI-generated suggestions and prepare planning and building warrant applications with less manual work.
-        </p>
-
-        <div class="mt-7">
-          <AiWorkflowPreview client:load />
-        </div>
-      </div>
-    </section>
-
-    <section class="order-1 flex min-h-screen items-center justify-center px-4 py-10 sm:px-8 lg:order-2 lg:px-12 xl:px-20" aria-labelledby="sign-in-heading">
+    <section class="flex min-h-screen items-center justify-center px-4 py-10 sm:px-8 lg:order-2 lg:px-12 xl:px-20" aria-labelledby="sign-in-heading">
       <div class="w-full max-w-md">
         <a class="mb-7 block w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 lg:hidden" href="/" aria-label="Architect Pro home">
           <BrandLogo class="h-auto w-40" />
@@ -48,7 +28,7 @@ const { message = null, authError = null } = Astro.props;
           data-pending-message="Signing in..."
           method="post"
           action="/api/auth/login"
-          class="panel w-full rounded-lg p-6 sm:p-8"
+          class="ap-enter-sign-in panel w-full rounded-lg p-6 sm:p-8"
         >
           <div class="mb-6">
             <h2 id="sign-in-heading" class="text-2xl font-semibold text-ink">Sign in to Architect Pro</h2>
@@ -92,5 +72,54 @@ const { message = null, authError = null } = Astro.props;
         </form>
       </div>
     </section>
+
+    <section class="border-t border-stone-200/90 px-4 py-10 sm:px-8 lg:order-1 lg:flex lg:min-h-screen lg:flex-col lg:border-r lg:border-t-0 lg:px-12 xl:px-20 xl:py-14" aria-labelledby="product-statement">
+      <a class="ap-enter-logo hidden w-fit rounded-sm text-xl font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 lg:block" href="/" aria-label="Architect Pro home">
+        <BrandLogo class="h-auto w-44" />
+      </a>
+
+      <div class="my-auto w-full max-w-2xl py-0 lg:py-8">
+        <div class="ap-enter-copy">
+          <p class="text-xs font-semibold text-moss">AI-powered document and application automation</p>
+          <h1 id="product-statement" class="mt-3 max-w-xl text-3xl font-semibold leading-tight text-ink sm:text-4xl">
+            Upload your project once. Let AI prepare the application.
+          </h1>
+          <p class="mt-3 max-w-xl text-sm leading-6 text-stone-600">
+            Store and organise every project document, then use Architect Pro AI to prepare planning permission and building warrant applications for review.
+          </p>
+        </div>
+
+        <div class="ap-enter-showcase mt-6">
+          <ProductScreenshotShowcase />
+        </div>
+      </div>
+    </section>
   </div>
 </main>
+
+<style>
+  @keyframes ap-enter {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .ap-enter-logo,
+  .ap-enter-copy,
+  .ap-enter-showcase,
+  .ap-enter-sign-in {
+    animation: ap-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .ap-enter-copy { animation-delay: 70ms; }
+  .ap-enter-showcase { animation-delay: 140ms; }
+  .ap-enter-sign-in { animation-delay: 110ms; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ap-enter-logo,
+    .ap-enter-copy,
+    .ap-enter-showcase,
+    .ap-enter-sign-in {
+      animation: none;
+    }
+  }
+</style>
