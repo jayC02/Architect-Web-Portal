@@ -3,7 +3,7 @@ import { ApplicationDraftStatus, DocumentType } from '@prisma/client';
 import ApplicationDraftReview from '@/components/applications/ApplicationDraftReview';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
-import { documentTypeLabel } from '@/lib/document-categories';
+import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { applicationDraftResponse } from '@/server/services/application-draft-view.service';
@@ -33,7 +33,7 @@ if (
 ) return Astro.redirect('/applications/new');
 
 const draft = applicationDraftResponse(draftRecord);
-const documentTypes = Object.values(DocumentType).map((value) => ({
+const documentTypes = preferredDocumentTypes.map((value) => ({
   value,
   label: documentTypeLabel(value),
 }));
