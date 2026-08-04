@@ -25,10 +25,10 @@ const valid = Boolean(pending && pending.expiresAt.getTime() >= Date.now());
       {valid && pending ? (
         <form data-api-form data-action="/api/auth/google/complete" data-method="POST" method="post" action="/api/auth/google/complete">
           <p class="mb-2 text-xs font-semibold uppercase text-stone-500">One final detail</p>
-          <h1 class="text-2xl font-semibold text-ink">Create your practice workspace</h1>
+          <h1 class="text-2xl font-semibold text-ink">Create your Workspace</h1>
           <p class="mt-2 text-sm leading-6 text-stone-500">Signed in as {pending.email}. Give your organisation a name to create its private workspace.</p>
           <label class="mt-6 block">
-            <span class="label">Practice name</span>
+            <span class="label">Organisation Name</span>
             <input required name="organisationName" minlength="2" maxlength="100" class="field" autocomplete="organization" autofocus />
           </label>
           <button class="btn btn-primary mt-6 w-full">Create workspace</button>
