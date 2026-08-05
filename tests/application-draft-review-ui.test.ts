@@ -38,6 +38,11 @@ const review = applicationDraftReviewSchema.parse({
 });
 
 assert.deepEqual(evaluateClientApplicationDraftReadiness(review), [], 'complete local review is ready immediately');
+const autoRouteReview = { ...review, selectedApplicationType: ApplicationDraftType.AUTO };
+assert.ok(
+  !evaluateClientApplicationDraftReadiness(autoRouteReview).some((issue) => issue.key === 'selectedApplicationType'),
+  'automatic application routing is not shown as a missing user field',
+);
 const missingName = { ...review, project: { ...review.project, name: null } };
 assert.ok(evaluateClientApplicationDraftReadiness(missingName).some((issue) => issue.key === 'project.name'));
 const restoredName = { ...missingName, project: { ...missingName.project, name: 'Restored project name' } };

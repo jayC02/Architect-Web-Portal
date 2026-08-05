@@ -105,6 +105,13 @@ assert.deepEqual(
   [],
   'a fully reviewed Building Warrant draft is ready to commit',
 );
+assert.ok(
+  !evaluateApplicationDraftReadiness({
+    ...completeBuildingReview,
+    selectedApplicationType: ApplicationDraftType.AUTO,
+  }).some((issue) => issue.key === 'selectedApplicationType'),
+  'automatic application routing is not a server-side readiness requirement',
+);
 assert.deepEqual(
   completeBuildingReview.application.typeOfWorkKeys,
   ['domestic_alteration_extension', 'demolition'],

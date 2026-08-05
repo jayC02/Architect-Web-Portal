@@ -574,15 +574,6 @@ const BUILDING_CONFIRMATIONS = [
 
 export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview): DraftReadinessIssue[] => {
   const issues: DraftReadinessIssue[] = [];
-  if (review.selectedApplicationType === ApplicationDraftType.AUTO) {
-    issues.push({
-      key: 'selectedApplicationType',
-      section: 'application',
-      label: 'Application route',
-      message: 'Choose Building Warrant or Planning / Householder.',
-    });
-  }
-
   if (review.projectMode === 'existing') {
     addMissing(issues, 'project', 'existingProjectId', 'Existing project', review.existingProjectId, 'Choose the existing project.');
   } else {

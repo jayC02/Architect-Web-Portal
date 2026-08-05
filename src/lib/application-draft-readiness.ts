@@ -35,7 +35,6 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   const route = String(review.selectedApplicationType);
   const planning = route === 'HOUSEHOLDER_PLANNING' || route === 'PLANNING_APPLICATION';
 
-  if (route === 'AUTO') issues.push({ key: 'selectedApplicationType', section: 'application', label: 'Application route', message: 'Choose Building Warrant or Planning / Householder.' });
   if (review.projectMode === 'existing') addMissing(issues, 'project', 'existingProjectId', 'Existing project', review.existingProjectId, 'Choose the existing project.');
   else addMissing(issues, 'project', 'project.name', 'Project name', review.project.name, 'Confirm a project name.');
 
