@@ -38,11 +38,11 @@ type CommitOrganisation = {
   name: string;
 };
 
-const applicationTypeToJobType = (type: ApplicationDraftType): AutomationJobType => {
+const applicationTypeToJobType = (type: ApplicationDraftType): AutomationJobType | null => {
   if (type === ApplicationDraftType.BUILDING_WARRANT) return AutomationJobType.BUILDING_WARRANT;
   if (type === ApplicationDraftType.PLANNING_APPLICATION) return AutomationJobType.PLANNING_APPLICATION;
   if (type === ApplicationDraftType.HOUSEHOLDER_PLANNING) return AutomationJobType.HOUSEHOLDER_PLANNING;
-  throw new HttpError(409, 'Choose an application route before creating the project.');
+  return null;
 };
 
 const projectStageFor = (type: ApplicationDraftType) =>
@@ -283,7 +283,7 @@ export const commitApplicationDraft = async (
 
   const jobType = applicationTypeToJobType(review.selectedApplicationType);
   const existingJobId = initialDraft.resultingAutomationJobId;
-  const jobId = existingJobId ?? randomUUID();
+  const jobId = jobType ? existingJobId ?? randomUUID() : null;
 
   const committedRecords = await prisma.$transaction(async (tx) => {
     const current = await tx.applicationDraft.findFirst({
@@ -296,7 +296,7 @@ export const commitApplicationDraft = async (
         projectId: current.resultingProjectId!,
         planningId: current.resultingPlanningId,
         warrantId: current.resultingWarrantId,
-        automationJobId: current.resultingAutomationJobId!,
+        automationJobId: current.resultingAutomationJobId,
       };
     }
     if (current.status === ApplicationDraftStatus.COMMITTING && current.resultingProjectId) {
@@ -304,7 +304,7 @@ export const commitApplicationDraft = async (
         projectId: current.resultingProjectId,
         planningId: current.resultingPlanningId,
         warrantId: current.resultingWarrantId,
-        automationJobId: current.resultingAutomationJobId ?? jobId,
+        automationJobId: current.resultingAutomationJobId,
       };
     }
     const locked = await tx.applicationDraft.updateMany({
@@ -387,7 +387,10 @@ export const commitApplicationDraft = async (
 
     let planningId: string | null = null;
     let warrantId: string | null = null;
-    if (review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT) {
+    if (
+      review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT
+      || review.selectedApplicationType === ApplicationDraftType.AUTO
+    ) {
       warrantId = (await tx.buildingWarrantApplication.create({
         data: {
           organisationId: organisation.id,
@@ -404,7 +407,12 @@ export const commitApplicationDraft = async (
         },
         select: { id: true },
       })).id;
-    } else {
+    }
+    if (
+      review.selectedApplicationType === ApplicationDraftType.PLANNING_APPLICATION
+      || review.selectedApplicationType === ApplicationDraftType.HOUSEHOLDER_PLANNING
+      || review.selectedApplicationType === ApplicationDraftType.AUTO
+    ) {
       planningId = (await tx.planningApplication.create({
         data: {
           organisationId: organisation.id,
@@ -469,62 +477,64 @@ export const commitApplicationDraft = async (
     };
   });
 
-  const snapshot = await buildAutomationJobSnapshot({
-    jobId: committedRecords.automationJobId,
-    organisationId: organisation.id,
-    organisationName: organisation.name,
-    projectId: committedRecords.projectId,
-    type: jobType,
-    createdBy: user,
-    sourceType: committedRecords.warrantId
-      ? AutomationJobSourceType.WARRANT_RECORD
-      : AutomationJobSourceType.PLANNING_RECORD,
-    planningApplicationId: committedRecords.planningId ?? undefined,
-    buildingWarrantApplicationId: committedRecords.warrantId ?? undefined,
-  });
-  await prisma.automationJob.upsert({
-    where: { id: committedRecords.automationJobId },
-    create: {
-      id: committedRecords.automationJobId,
+  if (jobType && committedRecords.automationJobId) {
+    const snapshot = await buildAutomationJobSnapshot({
+      jobId: committedRecords.automationJobId,
       organisationId: organisation.id,
+      organisationName: organisation.name,
       projectId: committedRecords.projectId,
       type: jobType,
-      status: snapshot.preflight.status === 'READY'
-        ? AutomationJobStatus.READY
-        : AutomationJobStatus.NEEDS_INPUT,
-      sourceType: snapshot.sourceType,
-      title: snapshot.title,
-      payloadVersion: 2,
-      snapshotHash: snapshot.snapshotHash,
-      sourceUpdatedAt: snapshot.sourceUpdatedAt,
-      preparedAt: new Date(),
-      reviewedAt: new Date(),
-      dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-      documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-      createdById: user.id,
-    },
-    update: {
-      type: jobType,
-      status: snapshot.preflight.status === 'READY'
-        ? AutomationJobStatus.READY
-        : AutomationJobStatus.NEEDS_INPUT,
-      sourceType: snapshot.sourceType,
-      title: snapshot.title,
-      payloadVersion: 2,
-      snapshotHash: snapshot.snapshotHash,
-      sourceUpdatedAt: snapshot.sourceUpdatedAt,
-      preparedAt: new Date(),
-      reviewedAt: new Date(),
-      dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-      documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-    },
-  });
-  await persistApplicationPreparationDraft(committedRecords.automationJobId, organisation.id);
+      createdBy: user,
+      sourceType: committedRecords.warrantId
+        ? AutomationJobSourceType.WARRANT_RECORD
+        : AutomationJobSourceType.PLANNING_RECORD,
+      planningApplicationId: committedRecords.planningId ?? undefined,
+      buildingWarrantApplicationId: committedRecords.warrantId ?? undefined,
+    });
+    await prisma.automationJob.upsert({
+      where: { id: committedRecords.automationJobId },
+      create: {
+        id: committedRecords.automationJobId,
+        organisationId: organisation.id,
+        projectId: committedRecords.projectId,
+        type: jobType,
+        status: snapshot.preflight.status === 'READY'
+          ? AutomationJobStatus.READY
+          : AutomationJobStatus.NEEDS_INPUT,
+        sourceType: snapshot.sourceType,
+        title: snapshot.title,
+        payloadVersion: 2,
+        snapshotHash: snapshot.snapshotHash,
+        sourceUpdatedAt: snapshot.sourceUpdatedAt,
+        preparedAt: new Date(),
+        reviewedAt: new Date(),
+        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+        createdById: user.id,
+      },
+      update: {
+        type: jobType,
+        status: snapshot.preflight.status === 'READY'
+          ? AutomationJobStatus.READY
+          : AutomationJobStatus.NEEDS_INPUT,
+        sourceType: snapshot.sourceType,
+        title: snapshot.title,
+        payloadVersion: 2,
+        snapshotHash: snapshot.snapshotHash,
+        sourceUpdatedAt: snapshot.sourceUpdatedAt,
+        preparedAt: new Date(),
+        reviewedAt: new Date(),
+        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+      },
+    });
+    await persistApplicationPreparationDraft(committedRecords.automationJobId, organisation.id);
+  }
   await prisma.applicationDraft.updateMany({
     where: {
       id: draftId,
       organisationId: organisation.id,
-      resultingAutomationJobId: committedRecords.automationJobId,
+      resultingProjectId: committedRecords.projectId,
     },
     data: {
       status: ApplicationDraftStatus.COMMITTED,

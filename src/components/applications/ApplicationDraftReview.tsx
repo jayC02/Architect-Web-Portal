@@ -75,13 +75,6 @@ const statusCopy: Record<string, string> = {
   EXPIRED: 'Expired',
 };
 
-const routeLabel = (value: string | null) =>
-  ({
-    HOUSEHOLDER_PLANNING: 'Householder planning',
-    PLANNING_APPLICATION: 'Planning application',
-    BUILDING_WARRANT: 'Building Warrant',
-  }[value ?? ''] ?? 'Being determined');
-
 const formatBytes = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -1114,7 +1107,7 @@ export default function ApplicationDraftReview({
       <div className="space-y-4">
         <Section
           title="Project"
-          summary={`${text(review.project.name)} | ${routeLabel(review.selectedApplicationType)}`}
+        summary={text(review.project.name)}
           issueCount={(issuesBySection.get('project') ?? 0) + (issuesBySection.get('application') ?? 0)}
           defaultOpen
         >

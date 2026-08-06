@@ -23,9 +23,17 @@ export const POST: APIRoute = (context) =>
       { id: user.id, name: user.name, email: user.email },
       input.review,
     );
-    const applicationSection = result.warrantId ? 'building-warrant' : 'planning';
+    const projectUrl = `/projects/${encodeURIComponent(result.projectId)}`;
+    const applicationSection = result.warrantId
+      ? 'building-warrant'
+      : result.planningId
+        ? 'planning'
+        : null;
+    const redirectTo = result.automationJobId && applicationSection
+      ? `${projectUrl}?applicationPrepared=1&job=${encodeURIComponent(result.automationJobId)}#${applicationSection}`
+      : projectUrl;
     return jsonResponse(result.created ? 201 : 200, {
       ...result,
-      redirectTo: `/projects/${encodeURIComponent(result.projectId)}?applicationPrepared=1&job=${encodeURIComponent(result.automationJobId)}#${applicationSection}`,
+      redirectTo,
     });
   }, context);
