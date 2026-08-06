@@ -84,6 +84,7 @@ export const projectSchema = z.object({
 export const projectCreateSchema = projectSchema
   .omit({ stage: true, status: true, siteAddress: true, projectType: true })
   .extend({
+    name: optionalText(160),
     projectType: z.preprocess(
       (value) => {
         const cleaned = emptyToUndefined(value);
@@ -241,6 +242,7 @@ export const organisationDefaultsSchema = z.object({
     blankContactToUndefined,
     z.string().trim().max(30).refine(isValidUkPhone, 'Enter a valid agent phone number.').optional(),
   ),
+  agentBuildingNumber: optionalText(40),
   agentAddressLine1: optionalText(160),
   agentAddressLine2: optionalText(160),
   agentTownCity: optionalText(100),

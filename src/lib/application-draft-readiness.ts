@@ -64,7 +64,7 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
     addMissing(issues, 'client', 'applicant.displayName', 'Applicant name', review.applicant?.displayName, 'Confirm the separate applicant name.');
     addMissing(issues, 'client', 'applicant.email', 'Applicant email', review.applicant?.email, 'Confirm the separate applicant email.');
   }
-  for (const [key, label] of [['practiceName', 'Practice name'], ['firstName', 'Agent first name'], ['lastName', 'Agent last name'], ['email', 'Agent email'], ['addressLine1', 'Agent address'], ['townCity', 'Agent town or city'], ['postcode', 'Agent postcode']] as const) {
+  for (const [key, label] of [['practiceName', 'Practice name'], ['firstName', 'Agent first name'], ['lastName', 'Agent last name'], ['email', 'Agent email'], ['buildingNumber', 'Agent building number'], ['addressLine1', 'Agent address'], ['townCity', 'Agent town or city'], ['postcode', 'Agent postcode']] as const) {
     addMissing(issues, 'agent', `agent.${key}`, label, review.agent[key], `Confirm the ${label.toLowerCase()}.`);
   }
   addMissing(issues, 'application', 'application.description', 'Description of work', review.application.description && review.application.description.trim().length >= 12 ? review.application.description : null, 'Enter a specific description of the proposed work.');

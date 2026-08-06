@@ -439,6 +439,7 @@ model OrganisationDefaults {
   agentLastName            String?
   agentEmail               String?
   agentPhone               String?
+  agentBuildingNumber      String?
   agentAddressLine1        String?
   agentAddressLine2        String?
   agentTownCity            String?

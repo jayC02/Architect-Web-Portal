@@ -11,6 +11,7 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import { findOrCreateCertifierProfile } from '@/server/services/certifier-presets.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 
@@ -55,22 +56,23 @@ export const POST: APIRoute = (context) =>
       throw new HttpError(404, 'This preparation job is not available for the selected Building Warrant application.');
     }
 
-    let preset = null;
+    let selectedPreset = null;
     if (body.selectedCertifierPresetId) {
-      preset = await prisma.organisationCertifierPreset.findFirst({
+      selectedPreset = await prisma.organisationCertifierPreset.findFirst({
         where: { id: body.selectedCertifierPresetId, organisationId: organisation.id },
-        select: {
-          id: true,
-          displayName: true,
-          schemeType: true,
-          registrationAPart2: true,
-          registrationBPart2: true,
-          certifierName: true,
-          approvedBody: true,
-        },
       });
-      if (!preset) throw new HttpError(400, 'The selected certifier is not available to this organisation.');
+      if (!selectedPreset) throw new HttpError(400, 'The selected certifier is not available to this organisation.');
     }
+
+    const preset = await findOrCreateCertifierProfile(prisma, organisation.id, {
+      schemeType: body.schemeType,
+      registrationAPart1: body.registrationAPart1,
+      registrationAPart2: body.registrationAPart2,
+      certifierName: body.certifierName,
+      registrationBPart1: body.registrationBPart1,
+      registrationBPart2: body.registrationBPart2,
+      approvedBody: body.approvedBody,
+    });
 
     const preparationData = jsonObject(application.preparationData);
     await prisma.buildingWarrantApplication.update({
@@ -81,7 +83,7 @@ export const POST: APIRoute = (context) =>
         estimatedValue: body.estimatedValue,
         currentUse: body.currentUse,
         proposedUse: body.proposedUse,
-        selectedCertifierPresetId: preset?.id ?? null,
+        selectedCertifierPresetId: preset.id,
         preparationData: {
           ...preparationData,
           typeOfWorkKeys: body.typeOfWorkKeys,
@@ -98,8 +100,8 @@ export const POST: APIRoute = (context) =>
           restrictPublicInspection: body.restrictPublicInspection,
           certifier: {
             ...jsonObject(preparationData.certifier),
-            presetId: preset?.id ?? null,
-            displayName: preset?.displayName ?? null,
+            presetId: preset.id,
+            displayName: preset.displayName,
             schemeType: body.schemeType ?? null,
             registrationAPart1: body.registrationAPart1,
             registrationAPart2: body.registrationAPart2,

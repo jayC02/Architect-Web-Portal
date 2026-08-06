@@ -182,6 +182,7 @@ export const automationJobSnapshotV2Schema = z.object({
       lastName: nullableText,
       email: nullableText,
       phone: nullableText,
+      buildingNumber: nullableText.default(null),
       address: structuredAddressSchema,
       source: z.enum(['ORGANISATION_DEFAULTS', 'APPLICATION_DRAFT']),
     }),

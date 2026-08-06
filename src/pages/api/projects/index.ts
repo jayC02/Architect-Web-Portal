@@ -6,7 +6,7 @@ import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { projectCreateSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
-import { jsonResponse } from '@/lib/utils/http';
+import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { resolveProjectLinks } from '@/server/services/project-data.service';
@@ -42,9 +42,12 @@ export const POST: APIRoute = (context) =>
     const { organisation } = await requireOrganisation(context);
     const body = await parseBody(context.request, projectCreateSchema);
     const links = await resolveProjectLinks(organisation.id, body.clientId, body.siteId);
+    const name = body.name?.trim() || links.derivedSite?.siteAddress;
+    if (!name) throw new HttpError(400, 'Choose a site or enter a project name.');
     const project = await prisma.project.create({
       data: {
         ...body,
+        name,
         clientId: links.clientId,
         siteId: links.siteId,
         siteAddress: links.derivedSite?.siteAddress,

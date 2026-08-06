@@ -22,7 +22,7 @@ const [clients, sites] = await Promise.all([
   <form data-api-form data-action="/api/projects" data-method="POST" class="panel grid gap-5 rounded-lg p-5 lg:grid-cols-2">
     <label class="block lg:col-span-2">
       <span class="label">Project name</span>
-      <input required name="name" class="field" />
+      <input name="name" class="field" placeholder="Defaults to the selected site address" />
     </label>
     <label class="block">
       <span class="label">Internal reference</span>
@@ -47,7 +47,10 @@ const [clients, sites] = await Promise.all([
       <span class="label">Linked site</span>
       <select name="siteId" class="field" data-site-select>
         <option value="">Not linked</option>
-        {sites.map((site) => <option value={site.id}>{site.addressLine1}, {site.postcode}</option>)}
+        {sites.map((site) => {
+          const projectName = [site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ');
+          return <option value={site.id} data-project-name={projectName}>{projectName}</option>;
+        })}
         <option value="__add_site__">+ Add a new site</option>
       </select>
     </label>
@@ -219,13 +222,19 @@ const [clients, sites] = await Promise.all([
         throw new Error(payload.error || `Could not save ${key}.`);
       }
       const record = payload[key];
+      const projectName = key === 'site'
+        ? [record.addressLine1, record.addressLine2, record.townCity, record.postcode].filter(Boolean).join(', ')
+        : '';
       const label = key === 'client'
         ? record.name
-        : `${record.addressLine1}, ${record.postcode}`;
+        : projectName;
       const addOption = select.querySelector(`option[value="__add_${key}__"]`);
       const option = new Option(label, record.id, true, true);
       select.insertBefore(option, addOption);
-      if (key === 'site') suggestProjectName(record.addressLine1);
+      if (key === 'site') {
+        option.dataset.projectName = projectName;
+        suggestProjectName(projectName);
+      }
       form.reset();
       dialog.close();
     } catch (error) {
@@ -256,16 +265,20 @@ const [clients, sites] = await Promise.all([
     document.querySelectorAll('[data-close-site]').forEach((button) => button.addEventListener('click', () => closeDialog(siteDialog)));
   }
 
-  const suggestProjectName = (addressLine1: string) => {
+  let lastSuggestedProjectName = '';
+  const suggestProjectName = (siteAddress: string) => {
     const projectName = document.querySelector<HTMLInputElement>('input[name="name"]');
-    if (projectName && !projectName.value.trim()) projectName.value = String(addressLine1 || '').trim();
+    const nextSuggestion = String(siteAddress || '').trim();
+    if (projectName && (!projectName.value.trim() || projectName.value === lastSuggestedProjectName)) {
+      projectName.value = nextSuggestion;
+      lastSuggestedProjectName = nextSuggestion;
+    }
   };
 
   if (siteSelect instanceof HTMLSelectElement) {
     siteSelect.addEventListener('change', () => {
       if (!siteSelect.value || siteSelect.value === '__add_site__') return;
-      const label = siteSelect.selectedOptions[0]?.textContent ?? '';
-      suggestProjectName(label.split(',')[0] ?? '');
+      suggestProjectName(siteSelect.selectedOptions[0]?.dataset.projectName ?? '');
     });
   }
 

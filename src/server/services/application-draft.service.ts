@@ -276,6 +276,7 @@ const agentFromDefaults = (defaults: OrganisationDefaults | null) => ({
   lastName: defaults?.agentLastName ?? null,
   email: defaults?.agentEmail ?? null,
   phone: defaults?.agentPhone ?? null,
+  buildingNumber: defaults?.agentBuildingNumber ?? null,
   addressLine1: defaults?.agentAddressLine1 ?? null,
   addressLine2: defaults?.agentAddressLine2 ?? null,
   townCity: defaults?.agentTownCity ?? null,
@@ -283,6 +284,12 @@ const agentFromDefaults = (defaults: OrganisationDefaults | null) => ({
   country: defaults?.agentCountry ?? 'United Kingdom',
   saveAsOrganisationDefault: false,
 });
+
+const formattedSiteProjectName = (...values: unknown[]) => values
+  .map((value) => scalar(value))
+  .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  .map((value) => value.trim())
+  .join(', ');
 
 const defaultConfirmations = (type: ApplicationDraftType) => {
   if (type === ApplicationDraftType.HOUSEHOLDER_PLANNING || type === ApplicationDraftType.PLANNING_APPLICATION) {
@@ -307,9 +314,22 @@ export const synthesisePreparedApplicationDraft = async (
   const facts = collectFacts(draft.documents);
   const reference = commonReference(draft.documents);
   const siteAddress = suggestionFromFacts(facts, 'site.addressLine1');
+  const siteAddressLine2 = suggestionFromFacts(facts, 'site.addressLine2');
+  const siteTownCity = suggestionFromFacts(facts, 'site.townCity');
+  const sitePostcode = suggestionFromFacts(facts, 'site.postcode');
   const projectTitle = suggestionFromFacts(facts, 'project.title');
-  const fallbackProjectName = scalar(projectTitle.value) === null && scalar(siteAddress.value) !== null
-    ? customSuggestion(siteAddress.value, siteAddress.sources, siteAddress.certainty)
+  const fullSiteAddress = formattedSiteProjectName(
+    siteAddress.value,
+    siteAddressLine2.value,
+    siteTownCity.value,
+    sitePostcode.value,
+  );
+  const fallbackProjectName = fullSiteAddress
+    ? customSuggestion(
+        fullSiteAddress,
+        [...siteAddress.sources, ...siteAddressLine2.sources, ...siteTownCity.sources, ...sitePostcode.sources],
+        siteAddress.certainty,
+      )
     : projectTitle;
   const rawTypeOfWork = suggestionFromFacts(facts, 'project.typeOfWork');
   const typeOfWork = explicitTypeOfWork(rawTypeOfWork.value)
@@ -341,6 +361,7 @@ export const synthesisePreparedApplicationDraft = async (
     lastName: defaultSuggestion(defaults?.agentLastName ?? null),
     email: defaultSuggestion(defaults?.agentEmail ?? null),
     phone: defaultSuggestion(defaults?.agentPhone ?? null),
+    buildingNumber: defaultSuggestion(defaults?.agentBuildingNumber ?? null),
     addressLine1: defaultSuggestion(defaults?.agentAddressLine1 ?? null),
     addressLine2: defaultSuggestion(defaults?.agentAddressLine2 ?? null),
     townCity: defaultSuggestion(defaults?.agentTownCity ?? null),
@@ -381,9 +402,9 @@ export const synthesisePreparedApplicationDraft = async (
     },
     site: {
       addressLine1: siteAddress,
-      addressLine2: suggestionFromFacts(facts, 'site.addressLine2'),
-      townCity: suggestionFromFacts(facts, 'site.townCity'),
-      postcode: suggestionFromFacts(facts, 'site.postcode'),
+      addressLine2: siteAddressLine2,
+      townCity: siteTownCity,
+      postcode: sitePostcode,
       country: defaultSuggestion('United Kingdom'),
       localAuthority: suggestionFromFacts(facts, 'site.localAuthority'),
     },

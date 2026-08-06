@@ -178,6 +178,7 @@ const suggestedClientName = currentApplicant
         <input type="hidden" name="agentLastName" value={suggestion('agent.lastName', defaults?.agentLastName)} />
         <input type="hidden" name="agentEmail" value={suggestion('agent.email', defaults?.agentEmail)} />
         <input type="hidden" name="agentPhone" value={suggestion('agent.phone', defaults?.agentPhone)} />
+        <input type="hidden" name="agentBuildingNumber" value={suggestion('agent.buildingNumber', defaults?.agentBuildingNumber)} />
         <input type="hidden" name="agentAddressLine1" value={suggestion('agent.addressLine1', defaults?.agentAddressLine1)} />
         <input type="hidden" name="agentAddressLine2" value={suggestion('agent.addressLine2', defaults?.agentAddressLine2)} />
         <input type="hidden" name="agentTownCity" value={suggestion('agent.townCity', defaults?.agentTownCity)} />
@@ -244,6 +245,7 @@ const suggestedClientName = currentApplicant
             <label class="block"><span class="label">Last name</span><input class="field" name="agentLastName" value={suggestion('agent.lastName', defaults?.agentLastName)} /></label>
             <label class="block"><span class="label">Email</span><input class="field" name="agentEmail" type="email" value={suggestion('agent.email', defaults?.agentEmail)} /></label>
             <label class="block"><span class="label">Phone</span><input class="field" name="agentPhone" value={suggestion('agent.phone', defaults?.agentPhone)} /></label>
+            <label class="block"><span class="label">Building number</span><input required class="field" name="agentBuildingNumber" value={suggestion('agent.buildingNumber', defaults?.agentBuildingNumber)} /></label>
             <label class="block md:col-span-2"><span class="label">Address line 1</span><input class="field" name="agentAddressLine1" value={suggestion('agent.addressLine1', defaults?.agentAddressLine1)} /></label>
             <label class="block"><span class="label">Address line 2</span><input class="field" name="agentAddressLine2" value={suggestion('agent.addressLine2', defaults?.agentAddressLine2)} /></label>
             <label class="block"><span class="label">Town or city</span><input class="field" name="agentTownCity" value={suggestion('agent.townCity', defaults?.agentTownCity)} /></label>

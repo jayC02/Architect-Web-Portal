@@ -103,6 +103,7 @@ export const draftAgentSchema = z.object({
     z.string().trim().email('Enter a valid agent email address.').max(160).nullable(),
   ),
   phone: nullableText(40),
+  buildingNumber: nullableText(40).default(null),
   addressLine1: nullableText(160),
   addressLine2: nullableText(160),
   townCity: nullableText(100),

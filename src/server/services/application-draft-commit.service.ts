@@ -90,6 +90,7 @@ const agentSnapshotOverride = (agent: ApplicationDraftReview['agent']) => ({
   lastName: agent.lastName,
   email: agent.email,
   phone: agent.phone,
+  buildingNumber: agent.buildingNumber,
   address: {
     addressLine1: agent.addressLine1,
     addressLine2: agent.addressLine2,
@@ -436,6 +437,7 @@ export const commitApplicationDraft = async (
           agentLastName: review.agent.lastName,
           agentEmail: review.agent.email,
           agentPhone: review.agent.phone,
+          agentBuildingNumber: review.agent.buildingNumber,
           agentAddressLine1: review.agent.addressLine1,
           agentAddressLine2: review.agent.addressLine2,
           agentTownCity: review.agent.townCity,
@@ -448,6 +450,7 @@ export const commitApplicationDraft = async (
           agentLastName: review.agent.lastName,
           agentEmail: review.agent.email,
           agentPhone: review.agent.phone,
+          agentBuildingNumber: review.agent.buildingNumber,
           agentAddressLine1: review.agent.addressLine1,
           agentAddressLine2: review.agent.addressLine2,
           agentTownCity: review.agent.townCity,

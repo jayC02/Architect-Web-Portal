@@ -14,6 +14,7 @@ type SnapshotInput = {
       firstName: string | null;
       lastName: string | null;
       email: string | null;
+      buildingNumber: string | null;
       address: { addressLine1: string | null; townCity: string | null; postcode: string | null };
     };
   };
@@ -67,6 +68,7 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   requireValue('organisation.agent.firstName', snapshot.organisation.agent.firstName, 'Add the normal agent first name in Organisation settings.');
   requireValue('organisation.agent.lastName', snapshot.organisation.agent.lastName, 'Add the normal agent last name in Organisation settings.');
   requireValue('organisation.agent.email', snapshot.organisation.agent.email, 'Add the normal agent email in Organisation settings.');
+  requireValue('organisation.agent.buildingNumber', snapshot.organisation.agent.buildingNumber, 'Add the required agent building number.');
   requireValue('organisation.agent.address.addressLine1', snapshot.organisation.agent.address.addressLine1, 'Add the agent address in Organisation settings.');
   requireValue('organisation.agent.address.townCity', snapshot.organisation.agent.address.townCity, 'Add the agent town or city in Organisation settings.');
   requireValue('organisation.agent.address.postcode', snapshot.organisation.agent.address.postcode, 'Add the agent postcode in Organisation settings.');

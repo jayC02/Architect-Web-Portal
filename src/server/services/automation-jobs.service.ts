@@ -75,6 +75,7 @@ type AgentOverride = {
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  buildingNumber: string | null;
   address: PersonOverride['address'];
 };
 
@@ -114,6 +115,7 @@ const parseAgentOverride = (value: unknown): AgentOverride | null => {
     lastName: nullableString(agent.lastName),
     email: nullableString(agent.email),
     phone: nullableString(agent.phone),
+    buildingNumber: nullableString(agent.buildingNumber),
     address: parseAddressOverride(agent.address),
   };
 };
@@ -410,6 +412,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
             lastName: agentOverride.lastName,
             email: agentOverride.email,
             phone: agentOverride.phone,
+            buildingNumber: agentOverride.buildingNumber,
             address: agentOverride.address,
             source: 'APPLICATION_DRAFT' as const,
           }
@@ -418,6 +421,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
             lastName: defaults?.agentLastName ?? null,
             email: defaults?.agentEmail ?? null,
             phone: defaults?.agentPhone ?? null,
+            buildingNumber: defaults?.agentBuildingNumber ?? null,
             address: {
               addressLine1: defaults?.agentAddressLine1 ?? null,
               addressLine2: defaults?.agentAddressLine2 ?? null,

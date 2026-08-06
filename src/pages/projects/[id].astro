@@ -216,6 +216,7 @@ const actionTone = {
         <p class="mt-2 text-sm text-stone-500">{siteSummary}</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <a class="btn btn-secondary" href="#project-details">Edit project details</a>
         <span class="status-chip bg-moss/10 text-moss">{humanizeEnum(project.stage)}</span>
         <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(project.status)}</span>
       </div>
@@ -247,16 +248,16 @@ const actionTone = {
 
   <section id="overview" class="scroll-mt-6">
     <div class="grid gap-4 lg:grid-cols-4">
-      <article class="panel rounded-lg p-4">
+      <a class="panel block rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink" href={project.client ? `/clients?edit=${project.client.id}` : '/clients'} aria-label={project.client ? `View or edit client ${project.client.name}` : 'Open clients'}>
         <p class="label">Client</p>
         <p class="font-semibold">{project.client?.name ?? 'Not linked'}</p>
         <p class="mt-1 truncate text-sm text-stone-500">{project.client?.email ?? 'No client email'}</p>
-      </article>
-      <article class="panel rounded-lg p-4">
+      </a>
+      <a class="panel block rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink" href={project.site ? `/sites?edit=${project.site.id}` : '/sites'} aria-label={project.site ? `View or edit site ${project.site.addressLine1}` : 'Open sites'}>
         <p class="label">Site</p>
         <p class="truncate font-semibold">{project.site?.addressLine1 ?? project.siteAddress ?? 'Not linked'}</p>
         <p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? 'No authority set'}</p>
-      </article>
+      </a>
       <article class={`rounded-lg border p-4 ${actionTone[nextAction.tone]}`}>
         <p class="text-xs font-semibold uppercase">Next action</p>
         <a href={nextAction.href} class="mt-2 block font-semibold hover:underline">{nextAction.label}</a>
@@ -281,6 +282,24 @@ const actionTone = {
       </div>
     </div>
   </section>
+
+  <details id="project-details" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
+    <summary class="cursor-pointer text-lg font-semibold">Edit project details</summary>
+    <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" class="mt-4">
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="block md:col-span-2"><span class="label">Project name</span><input required name="name" value={project.name} class="field" /></label>
+        <label class="block"><span class="label">Internal reference</span><input name="internalReference" value={project.internalReference ?? ''} class="field" /></label>
+        <label class="block"><span class="label">Project type</span><input name="projectType" value={project.projectType ?? ''} class="field" /></label>
+        <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
+        <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>
+        <label class="block"><span class="label">Client</span><select name="clientId" class="field"><option value="">Not linked</option>{clients.map((client) => <option value={client.id} selected={client.id === project.clientId}>{client.name}</option>)}</select></label>
+        <label class="block"><span class="label">Linked site</span><select name="siteId" class="field"><option value="">Not linked</option>{sites.map((site) => <option value={site.id} selected={site.id === project.siteId}>{site.addressLine1}, {site.postcode}</option>)}</select></label>
+        <label class="block"><span class="label">Local authority</span><input name="localAuthority" value={project.localAuthority ?? ''} class="field" /></label>
+        <label class="block"><span class="label">Manual site address</span><input name="siteAddress" value={project.siteAddress ?? ''} class="field" /></label>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save project details</button><span data-form-status class="text-sm text-stone-500"></span></div>
+    </form>
+  </details>
 
   <section id="documents" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -377,21 +396,7 @@ const actionTone = {
     <p class="mt-1 text-sm text-stone-500">Keep the client brief, useful email excerpts and manual source notes with the project.</p>
     <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" class="mt-4">
       <label class="block"><span class="label">Project notes</span><textarea name="notes" rows="6" class="field" placeholder="Client brief, source notes and important context">{project.notes ?? ''}</textarea></label>
-      <details class="mt-4 rounded-lg border border-stone-200 p-3">
-        <summary class="cursor-pointer text-sm font-semibold">Edit project details</summary>
-        <div class="mt-4 grid gap-4 md:grid-cols-2">
-          <label class="block md:col-span-2"><span class="label">Project name</span><input required name="name" value={project.name} class="field" /></label>
-          <label class="block"><span class="label">Internal reference</span><input name="internalReference" value={project.internalReference ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Project type</span><input name="projectType" value={project.projectType ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
-          <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>
-          <label class="block"><span class="label">Client</span><select name="clientId" class="field"><option value="">Not linked</option>{clients.map((client) => <option value={client.id} selected={client.id === project.clientId}>{client.name}</option>)}</select></label>
-          <label class="block"><span class="label">Linked site</span><select name="siteId" class="field"><option value="">Not linked</option>{sites.map((site) => <option value={site.id} selected={site.id === project.siteId}>{site.addressLine1}, {site.postcode}</option>)}</select></label>
-          <label class="block"><span class="label">Local authority</span><input name="localAuthority" value={project.localAuthority ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Manual site address</span><input name="siteAddress" value={project.siteAddress ?? ''} class="field" /></label>
-        </div>
-      </details>
-      <div class="mt-4 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save project</button><span data-form-status class="text-sm text-stone-500"></span></div>
+      <div class="mt-4 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save notes</button><span data-form-status class="text-sm text-stone-500"></span></div>
     </form>
     <details class="mt-5 border-t border-stone-100 pt-4"><summary class="cursor-pointer text-sm font-semibold text-red-700">Delete project</summary><p class="mt-3 text-sm text-stone-500">Deleting a project also removes its linked files, applications, deadlines and submission packages.</p><form data-api-form data-action={`/api/projects/${project.id}`} data-method="DELETE" data-redirect="/projects" data-confirm="Delete this project and its linked records?" class="mt-3"><button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete project</button><span data-form-status class="ml-3 text-sm text-stone-500"></span></form></details>
   </section>

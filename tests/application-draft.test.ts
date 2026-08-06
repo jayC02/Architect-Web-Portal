@@ -73,6 +73,7 @@ const completeBuildingReview = applicationDraftReviewSchema.parse({
     lastName: 'Chall',
     email: 'practice@example.com',
     phone: '0141 000 0000',
+    buildingNumber: '1',
     addressLine1: '1 Practice Street',
     addressLine2: null,
     townCity: 'Glasgow',

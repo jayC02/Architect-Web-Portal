@@ -29,7 +29,7 @@ const review = applicationDraftReviewSchema.parse({
   clientAddressSameAsSite: true,
   applicantDifferentFromClient: false,
   agent: {
-    practiceName: 'Example Practice', firstName: 'Agent', lastName: 'Example', email: 'agent@example.com', phone: null,
+    practiceName: 'Example Practice', firstName: 'Agent', lastName: 'Example', email: 'agent@example.com', phone: null, buildingNumber: '2',
     addressLine1: '2 Practice Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G2 2BB', country: 'United Kingdom', saveAsOrganisationDefault: false,
   },
   application: { description: 'A specific description of proposed work.', currentUse: null, proposedUse: null, estimatedValue: null, presetKey: null, selectedCertifierPresetId: null },

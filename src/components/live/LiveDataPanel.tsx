@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
@@ -390,6 +390,15 @@ function Clients({ data }: { data: AnyRecord }) {
   const clients = data.clients ?? [];
   const [query, setQuery] = useState('');
   const [drawer, setDrawer] = useState<{ mode: 'create' | 'view' | 'edit'; item?: AnyRecord } | null>(null);
+  const deepLinkHandled = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const requestedId = new URLSearchParams(window.location.search).get('edit');
+    const client = clients.find((item: AnyRecord) => item.id === requestedId);
+    if (client) setDrawer({ mode: 'edit', item: client });
+  }, [clients]);
 
   useEffect(() => {
     const closeOnSave = () => setDrawer(null);
@@ -445,6 +454,15 @@ function Sites({ data }: { data: AnyRecord }) {
   const sites = data.sites ?? [];
   const [query, setQuery] = useState('');
   const [drawer, setDrawer] = useState<{ mode: 'create' | 'view' | 'edit'; item?: AnyRecord } | null>(null);
+  const deepLinkHandled = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+    const requestedId = new URLSearchParams(window.location.search).get('edit');
+    const site = sites.find((item: AnyRecord) => item.id === requestedId);
+    if (site) setDrawer({ mode: 'edit', item: site });
+  }, [sites]);
 
   useEffect(() => {
     const closeOnSave = () => setDrawer(null);
@@ -985,6 +1003,7 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
             <label className="block"><span className="label">Agent email</span><input type="email" name="agentEmail" defaultValue={defaults.agentEmail ?? ''} className="field" disabled={!canManage} /></label>
             <label className="block"><span className="label">Agent phone</span><input name="agentPhone" defaultValue={defaults.agentPhone ?? ''} className="field" disabled={!canManage} /></label>
           </div>
+          <label className="block"><span className="label">Agent building number</span><input name="agentBuildingNumber" defaultValue={defaults.agentBuildingNumber ?? ''} className="field" disabled={!canManage} /></label>
           <label className="block"><span className="label">Address line 1</span><input name="agentAddressLine1" defaultValue={defaults.agentAddressLine1 ?? ''} className="field" disabled={!canManage} /></label>
           <label className="block"><span className="label">Address line 2</span><input name="agentAddressLine2" defaultValue={defaults.agentAddressLine2 ?? ''} className="field" disabled={!canManage} /></label>
           <div className="grid gap-4 sm:grid-cols-3">

@@ -1408,6 +1408,7 @@ export default function ApplicationDraftReview({
             <Field label="Last name" value={review.agent.lastName} onChange={(value) => updateAgent('lastName', value)} issue={issueFor('agent.lastName')} required />
             <Field label="Email" type="email" value={review.agent.email} onChange={(value) => updateAgent('email', value)} issue={issueFor('agent.email')} required />
             <Field label="Phone" type="tel" value={review.agent.phone} onChange={(value) => updateAgent('phone', value)} />
+            <Field label="Building number" value={review.agent.buildingNumber} onChange={(value) => updateAgent('buildingNumber', value)} issue={issueFor('agent.buildingNumber')} required />
             <Field label="Address line 1" value={review.agent.addressLine1} onChange={(value) => updateAgent('addressLine1', value)} issue={issueFor('agent.addressLine1')} required />
             <Field label="Address line 2" value={review.agent.addressLine2} onChange={(value) => updateAgent('addressLine2', value)} />
             <Field label="Town or city" value={review.agent.townCity} onChange={(value) => updateAgent('townCity', value)} issue={issueFor('agent.townCity')} required />
