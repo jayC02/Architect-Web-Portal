@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { AutomationJobStatus, AutomationJobType, PlanningStatus, type Prisma } from '@prisma/client';
+import { AutomationJobStatus, AutomationJobType, type Prisma } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -40,7 +40,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   });
   if (!application) throw new HttpError(404, 'Planning application not found.');
 
-  const job = await prisma.automationJob.findFirst({
+  const job = body.jobId ? await prisma.automationJob.findFirst({
     where: {
       id: body.jobId,
       organisationId: organisation.id,
@@ -49,13 +49,21 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       status: { in: refreshableStatuses },
     },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
-  });
-  if (!job || automationJobApplicationId(job) !== application.id) {
+  }) : null;
+  if (body.jobId && (!job || automationJobApplicationId(job) !== application.id)) {
     throw new HttpError(404, 'This preparation job is not available for the selected Planning application.');
   }
 
   const {
     jobId: _jobId,
+    applicationReference,
+    submissionDate,
+    validDate,
+    decisionTargetDate,
+    decisionDate,
+    status: applicationStatus,
+    portalUrl,
+    notes,
     description,
     discussedWithPlanningAuthority,
     treesOnOrAdjacentToSite,
@@ -68,6 +76,13 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   await prisma.planningApplication.update({
     where: { id: application.id },
     data: {
+      applicationReference,
+      submissionDate,
+      validDate,
+      decisionTargetDate,
+      decisionDate,
+      portalUrl,
+      notes,
       description,
       preparationData: {
         ...jsonObject(application.preparationData),
@@ -79,10 +94,14 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         soleOwner,
         agriculturalHolding,
       } as Prisma.InputJsonValue,
-      status: PlanningStatus.DRAFTING,
+      status: applicationStatus,
       preparedAt: new Date(),
     },
   });
+
+  if (!job) {
+    return jsonResponse(200, { ok: true, redirectTo: `/projects/${application.projectId}` });
+  }
 
   const previous = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
   const snapshot = await buildAutomationJobSnapshot({

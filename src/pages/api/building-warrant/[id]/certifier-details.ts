@@ -42,7 +42,7 @@ export const POST: APIRoute = (context) =>
     });
     if (!application) throw new HttpError(404, 'Building warrant application not found.');
 
-    const job = await prisma.automationJob.findFirst({
+    const job = body.jobId ? await prisma.automationJob.findFirst({
       where: {
         id: body.jobId,
         organisationId: organisation.id,
@@ -51,8 +51,8 @@ export const POST: APIRoute = (context) =>
         status: { in: refreshableStatuses },
       },
       include: { createdBy: { select: { id: true, name: true, email: true } } },
-    });
-    if (!job || automationJobApplicationId(job) !== application.id) {
+    }) : null;
+    if (body.jobId && (!job || automationJobApplicationId(job) !== application.id)) {
       throw new HttpError(404, 'This preparation job is not available for the selected Building Warrant application.');
     }
 
@@ -78,6 +78,16 @@ export const POST: APIRoute = (context) =>
     await prisma.buildingWarrantApplication.update({
       where: { id: application.id },
       data: {
+        warrantReference: body.warrantReference,
+        warrantType: body.warrantType,
+        submissionDate: body.submissionDate,
+        firstResponseTargetDate: body.firstResponseTargetDate,
+        grantedDate: body.grantedDate,
+        expiryDate: body.expiryDate,
+        completionCertificateStatus: body.completionCertificateStatus,
+        status: body.status,
+        portalUrl: body.portalUrl,
+        notes: body.notes,
         presetKey: body.typeOfWorkKeys[0],
         description: body.description,
         estimatedValue: body.estimatedValue,
@@ -113,6 +123,10 @@ export const POST: APIRoute = (context) =>
         } as Prisma.InputJsonValue,
       },
     });
+
+    if (!job) {
+      return jsonResponse(200, { ok: true, redirectTo: `/projects/${application.projectId}` });
+    }
 
     const previous = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
     const snapshot = await buildAutomationJobSnapshot({

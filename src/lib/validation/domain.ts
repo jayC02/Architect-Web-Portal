@@ -52,6 +52,7 @@ export const clientSchema = z.object({
   firstName: optionalText(100),
   lastName: optionalText(100),
   companyName: optionalText(160),
+  buildingNumber: optionalText(40),
   addressLine1: optionalText(160),
   addressLine2: optionalText(160),
   townCity: optionalText(100),
@@ -179,7 +180,15 @@ export const householderPreparationUpdateSchema = z.object({
 });
 
 export const planningPreparationDetailsSchema = z.object({
-  jobId: z.string().trim().min(1).max(120),
+  jobId: optionalText(120),
+  applicationReference: optionalText(120),
+  submissionDate: optionalDate,
+  validDate: optionalDate,
+  decisionTargetDate: optionalDate,
+  decisionDate: optionalDate,
+  status: z.nativeEnum(PlanningStatus).optional(),
+  portalUrl: safeUrl,
+  notes: optionalText(3000),
 }).and(householderPreparationUpdateSchema);
 
 export const buildingWarrantPreparationUpdateSchema = z.object({
@@ -203,7 +212,17 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
 });
 
 export const buildingWarrantCertifierDetailsSchema = z.object({
-  jobId: z.string().trim().min(1).max(120),
+  jobId: optionalText(120),
+  warrantReference: optionalText(120),
+  warrantType: z.nativeEnum(WarrantType).optional(),
+  submissionDate: optionalDate,
+  firstResponseTargetDate: optionalDate,
+  grantedDate: optionalDate,
+  expiryDate: optionalDate,
+  completionCertificateStatus: z.nativeEnum(CompletionCertificateStatus).optional(),
+  status: z.nativeEnum(WarrantStatus).optional(),
+  portalUrl: safeUrl,
+  notes: optionalText(3000),
   typeOfWorkKeys: typeOfWorkKeysSchema,
   description: z.string().trim().min(12, 'Enter a specific description of the Building Warrant work.').max(2000),
   estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),

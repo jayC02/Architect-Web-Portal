@@ -104,6 +104,7 @@ const emptyPerson = (): Person => ({
   companyName: null,
   email: null,
   phone: null,
+  buildingNumber: null,
   addressLine1: null,
   addressLine2: null,
   townCity: null,
@@ -294,11 +295,14 @@ function PersonFields({
       {person.clientType === 'INDIVIDUAL' ? (
         <>
           <label className="block">
-            <span className="label">Title</span>
+            <span className="label">Title <span aria-hidden="true">*</span></span>
             <select
               value={person.title ?? ''}
               onChange={(event) => onChange('title', event.target.value)}
               className={`field ${issueFor(`${prefix}.title`) ? 'border-red-300 ring-2 ring-red-100' : ''}`}
+              required
+              aria-invalid={Boolean(issueFor(`${prefix}.title`))}
+              aria-describedby={issueFor(`${prefix}.title`) ? `${prefix}-title-error` : undefined}
             >
               <option value="">Choose title</option>
               <option value="Mr">Mr</option>
@@ -307,6 +311,7 @@ function PersonFields({
               <option value="Ms">Ms</option>
               <option value="Other">Other</option>
             </select>
+            {issueFor(`${prefix}.title`) ? <p id={`${prefix}-title-error`} className="mt-1 text-xs text-red-700">{issueFor(`${prefix}.title`)}</p> : null}
           </label>
           <Field
             label="First name"
@@ -341,6 +346,13 @@ function PersonFields({
         required
       />
       <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
+      <Field
+        label="Building number"
+        value={person.buildingNumber}
+        onChange={(value) => onChange('buildingNumber', value)}
+        issue={issueFor(`${prefix}.buildingNumber`)}
+        required
+      />
       {showAddress ? (
         <>
           <Field

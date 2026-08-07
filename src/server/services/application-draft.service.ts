@@ -228,6 +228,7 @@ const personFromPrepared = (section: PreparedApplicationDraft['client']) => {
     companyName,
     email: suggestionString(section, 'email'),
     phone: suggestionString(section, 'phone'),
+    buildingNumber: suggestionString(section, 'buildingNumber'),
     addressLine1: suggestionString(section, 'addressLine1'),
     addressLine2: suggestionString(section, 'addressLine2'),
     townCity: suggestionString(section, 'townCity'),
@@ -245,12 +246,20 @@ const personFromClient = (client: Client) => ({
   companyName: client.companyName,
   email: client.email,
   phone: client.phone,
+  buildingNumber: client.buildingNumber,
   addressLine1: client.addressLine1 ?? client.address,
   addressLine2: client.addressLine2,
   townCity: client.townCity,
   postcode: client.postcode,
   country: client.country ?? 'United Kingdom',
 });
+
+const withDefaultIndividualTitle = (
+  person: ApplicationDraftReview['client'],
+): ApplicationDraftReview['client'] =>
+  person.clientType === 'INDIVIDUAL' && !person.title?.trim()
+    ? { ...person, title: 'Other' }
+    : person;
 
 const siteFromPrepared = (prepared: PreparedApplicationDraft) => ({
   addressLine1: suggestionString(prepared.site, 'addressLine1'),
@@ -337,7 +346,7 @@ export const synthesisePreparedApplicationDraft = async (
   const suggestedApplicationType = inferApplicationType(draft.selectedApplicationType, draft.notes, facts, typeOfWork);
 
   const clientFields = {
-    title: suggestionFromFacts(facts, 'applicant.title'),
+    title: suggestionFromFacts(facts, 'applicant.title', 'Other'),
     firstName: suggestionFromFacts(facts, 'applicant.firstName'),
     lastName: suggestionFromFacts(facts, 'applicant.lastName'),
     companyName: suggestionFromFacts(facts, 'applicant.companyName'),
@@ -485,7 +494,7 @@ const buildInitialReview = (
   const requestedType = draft.selectedApplicationType && draft.selectedApplicationType !== ApplicationDraftType.AUTO
     ? draft.selectedApplicationType
     : suggestedApplicationType ?? ApplicationDraftType.AUTO;
-  const client = strongClient ? personFromClient(strongClient) : personFromPrepared(prepared.client);
+  const client = withDefaultIndividualTitle(strongClient ? personFromClient(strongClient) : personFromPrepared(prepared.client));
   const site = strongSite ? siteFromRecord(strongSite) : siteFromPrepared(prepared);
   const clientAddressSameAsSite = Boolean(
     site.addressLine1
@@ -525,6 +534,8 @@ const buildInitialReview = (
   if (existingReview.success) {
     return {
       ...existingReview.data,
+      client: withDefaultIndividualTitle(existingReview.data.client),
+      applicant: withDefaultIndividualTitle(existingReview.data.applicant ?? existingReview.data.client),
       selectedApplicationType:
         existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
           ? suggestedApplicationType
@@ -622,6 +633,7 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
         addMissing(issues, 'client', 'client.companyName', 'Company name', review.client.companyName, 'Confirm the applicant company name.');
       }
       addMissing(issues, 'client', 'client.email', 'Applicant email', review.client.email, 'Confirm the applicant email.');
+      addMissing(issues, 'client', 'client.buildingNumber', 'Applicant building number', review.client.buildingNumber, 'Enter the applicant building number.');
       addMissing(issues, 'client', 'client.addressLine1', 'Applicant address', review.client.addressLine1, 'Confirm the applicant address.');
       addMissing(issues, 'client', 'client.townCity', 'Applicant town or city', review.client.townCity, 'Confirm the applicant town or city.');
       addMissing(issues, 'client', 'client.postcode', 'Applicant postcode', review.client.postcode, 'Confirm the applicant postcode.');
@@ -632,12 +644,14 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     const applicant = review.applicant;
     addMissing(issues, 'client', 'applicant.displayName', 'Applicant name', applicant?.displayName, 'Confirm the separate applicant name.');
     addMissing(issues, 'client', 'applicant.email', 'Applicant email', applicant?.email, 'Confirm the separate applicant email.');
+    addMissing(issues, 'client', 'applicant.buildingNumber', 'Applicant building number', applicant?.buildingNumber, 'Enter the applicant building number.');
   }
 
   addMissing(issues, 'agent', 'agent.practiceName', 'Practice name', review.agent.practiceName, 'Confirm the normal practice name.');
   addMissing(issues, 'agent', 'agent.firstName', 'Agent first name', review.agent.firstName, 'Confirm the agent first name.');
   addMissing(issues, 'agent', 'agent.lastName', 'Agent last name', review.agent.lastName, 'Confirm the agent last name.');
   addMissing(issues, 'agent', 'agent.email', 'Agent email', review.agent.email, 'Confirm the agent email.');
+  addMissing(issues, 'agent', 'agent.buildingNumber', 'Agent building number', review.agent.buildingNumber, 'Enter the agent building number.');
   addMissing(issues, 'agent', 'agent.addressLine1', 'Agent address', review.agent.addressLine1, 'Confirm the agent address.');
   addMissing(issues, 'agent', 'agent.townCity', 'Agent town or city', review.agent.townCity, 'Confirm the agent town or city.');
   addMissing(issues, 'agent', 'agent.postcode', 'Agent postcode', review.agent.postcode, 'Confirm the agent postcode.');

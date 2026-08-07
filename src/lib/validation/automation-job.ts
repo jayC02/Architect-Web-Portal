@@ -217,6 +217,7 @@ export const automationJobSnapshotV2Schema = z.object({
     companyName: nullableText,
     email: nullableText,
     phone: nullableText,
+    buildingNumber: nullableText.default(null),
     address: structuredAddressSchema,
     applicantIsOwner: z.boolean().nullable(),
     source: z.enum(['CLIENT', 'MISSING', 'APPLICATION_DRAFT']),

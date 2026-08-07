@@ -75,6 +75,7 @@ const personSnapshotOverride = (
   companyName: person.companyName,
   email: person.email,
   phone: person.phone,
+  buildingNumber: person.buildingNumber,
   address: {
     addressLine1: person.addressLine1,
     addressLine2: person.addressLine2,
@@ -195,6 +196,7 @@ const resolvePermanentRecords = async (
       firstName: review.client.firstName,
       lastName: review.client.lastName,
       companyName: review.client.companyName,
+      buildingNumber: review.client.buildingNumber,
       addressLine1: review.client.addressLine1,
       addressLine2: review.client.addressLine2,
       townCity: review.client.townCity,

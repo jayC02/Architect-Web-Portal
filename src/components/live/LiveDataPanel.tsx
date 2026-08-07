@@ -661,6 +661,10 @@ function ClientForm({ client, onClose }: { client?: AnyRecord; onClose: () => vo
         </p>
       </label>
       <label className="block">
+        <span className="label">Building number</span>
+        <input name="buildingNumber" maxLength={40} defaultValue={client?.buildingNumber ?? ''} className="field" />
+      </label>
+      <label className="block">
         <span className="label">Address line 1</span>
         <input name="addressLine1" defaultValue={client?.addressLine1 ?? ''} className="field" />
       </label>

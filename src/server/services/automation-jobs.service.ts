@@ -60,6 +60,7 @@ type PersonOverride = {
   companyName: string | null;
   email: string | null;
   phone: string | null;
+  buildingNumber: string | null;
   address: {
     addressLine1: string | null;
     addressLine2: string | null;
@@ -102,6 +103,7 @@ const parsePersonOverride = (value: unknown): PersonOverride | null => {
     companyName: nullableString(person.companyName),
     email: nullableString(person.email),
     phone: nullableString(person.phone),
+    buildingNumber: nullableString(person.buildingNumber),
     address: parseAddressOverride(person.address),
   };
 };
@@ -360,6 +362,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         companyName: project.client.companyName,
         email: project.client.email,
         phone: project.client.phone,
+        buildingNumber: project.client.buildingNumber,
         address: {
           addressLine1: project.client.addressLine1 ?? project.client.address,
           addressLine2: project.client.addressLine2,
@@ -381,6 +384,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         companyName: null,
         email: null,
         phone: null,
+        buildingNumber: null,
         address: { addressLine1: null, addressLine2: null, townCity: null, postcode: null, country: null },
         applicantIsOwner: applicantOwner,
         source: 'MISSING' as const,

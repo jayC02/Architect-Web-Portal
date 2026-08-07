@@ -416,6 +416,7 @@ model Client {
   firstName      String?
   lastName       String?
   companyName    String?
+  buildingNumber String?
   addressLine1   String?
   addressLine2   String?
   townCity       String?
