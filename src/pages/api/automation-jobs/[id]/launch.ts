@@ -1,10 +1,11 @@
 export const prerender = false;
 
-import { AutomationJobStatus } from '@prisma/client';
+import { AutomationJobStatus, type Prisma } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
+import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import {
@@ -15,7 +16,10 @@ import {
   desktopHandoffExpiry,
 } from '@/server/auth/desktop-token';
 import { requireOrganisation } from '@/server/permissions/authz';
-import { currentAutomationSourceUpdatedAt } from '@/server/services/automation-jobs.service';
+import {
+  buildAutomationJobSnapshot,
+  currentAutomationSourceUpdatedAt,
+} from '@/server/services/automation-jobs.service';
 import { resolveAutomationJobIdentity } from '@/server/services/desktop-automation-status.service';
 
 const launchableStatuses = [
@@ -38,10 +42,13 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       projectId: true,
       type: true,
       status: true,
+      sourceType: true,
       claimedByUserId: true,
       payloadVersion: true,
       sourceUpdatedAt: true,
       dataSnapshot: true,
+      createdAt: true,
+      createdBy: { select: { id: true, name: true, email: true } },
     },
   });
   if (!job) throw new HttpError(409, 'This automation job cannot be opened or resumed.');
@@ -75,11 +82,45 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       job.dataSnapshot,
     );
     if (!currentSource || !job.sourceUpdatedAt || currentSource > job.sourceUpdatedAt) {
-      await prisma.automationJob.updateMany({
-        where: { id: job.id, organisationId: organisation.id, status: AutomationJobStatus.READY },
-        data: { status: AutomationJobStatus.STALE },
+      const previous = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
+      if (!previous.success) {
+        throw new HttpError(409, 'This prepared application is not compatible with snapshot v2. Prepare a new job.');
+      }
+      const refreshed = await buildAutomationJobSnapshot({
+        jobId: job.id,
+        organisationId: organisation.id,
+        organisationName: organisation.name,
+        projectId: job.projectId,
+        type: job.type,
+        createdBy: job.createdBy,
+        createdAt: job.createdAt,
+        sourceType: job.sourceType,
+        planningApplicationId: previous.data.planning?.recordId ?? undefined,
+        buildingWarrantApplicationId: previous.data.buildingWarrant?.recordId ?? undefined,
+        documentIds: previous.data.documents.map((document) => document.id),
       });
-      throw new HttpError(409, 'Project information changed after this application was prepared. Prepare an updated job before opening the desktop app.');
+      const refreshedStatus = refreshed.preflight.status === 'READY'
+        ? AutomationJobStatus.READY
+        : AutomationJobStatus.NEEDS_INPUT;
+      const refresh = await prisma.automationJob.updateMany({
+        where: { id: job.id, organisationId: organisation.id, status: AutomationJobStatus.READY },
+        data: {
+          title: refreshed.title,
+          status: refreshedStatus,
+          sourceType: refreshed.sourceType,
+          payloadVersion: 2,
+          snapshotHash: refreshed.snapshotHash,
+          sourceUpdatedAt: refreshed.sourceUpdatedAt,
+          preparedAt: new Date(),
+          dataSnapshot: refreshed.dataSnapshot as Prisma.InputJsonValue,
+          documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
+          error: null,
+        },
+      });
+      if (!refresh.count) throw new HttpError(409, 'This automation job changed while its latest details were being prepared. Retry safely.');
+      if (refreshedStatus !== AutomationJobStatus.READY) {
+        throw new HttpError(409, 'Project information was refreshed, but required application details now need attention before desktop can open.');
+      }
     }
   }
 

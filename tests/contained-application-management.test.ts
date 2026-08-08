@@ -13,6 +13,7 @@ const source = (path: string) => readFileSync(new URL(`../${path}`, import.meta.
 const client = clientSchema.parse({ name: 'Test Client', buildingNumber: '147' });
 assert.equal(client.buildingNumber, '147', 'client editing accepts and preserves Building Number');
 assert.match(source('src/components/live/LiveDataPanel.tsx'), /name="buildingNumber"[\s\S]*client\?\.buildingNumber/, 'the existing client form loads and saves Building Number');
+assert.match(source('src/pages/api/clients/index.ts'), /companyName: true,\s+buildingNumber: true,/, 'the Clients API returns the saved Building Number when reopening the editor');
 assert.ok(existsSync(new URL('../prisma/migrations/20260807120000_client_building_number/migration.sql', import.meta.url)), 'the intended nullable Client field has a migration');
 
 const fixture = JSON.parse(source('tests/fixtures/automation-job-v2-building-warrant.json'));

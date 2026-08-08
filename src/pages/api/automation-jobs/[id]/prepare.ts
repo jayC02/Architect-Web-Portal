@@ -16,6 +16,7 @@ const refreshableStatuses = [
   AutomationJobStatus.DRAFT,
   AutomationJobStatus.PREFLIGHT_REQUIRED,
   AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.READY,
   AutomationJobStatus.STALE,
   AutomationJobStatus.FAILED_RETRYABLE,
   AutomationJobStatus.FAILED,
@@ -35,7 +36,7 @@ export const POST: APIRoute = (context) =>
         createdBy: { select: { id: true, name: true, email: true } },
       },
     });
-    if (!job) throw new HttpError(409, 'Only draft, incomplete, stale or retryable jobs can be prepared again.');
+    if (!job) throw new HttpError(409, 'Only unstarted, incomplete, stale or retryable jobs can be prepared again.');
 
     const previous = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
     const snapshot = await buildAutomationJobSnapshot({

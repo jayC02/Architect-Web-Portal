@@ -27,6 +27,7 @@ export const GET: APIRoute = (context) =>
           firstName: true,
           lastName: true,
           companyName: true,
+          buildingNumber: true,
           addressLine1: true,
           addressLine2: true,
           townCity: true,
