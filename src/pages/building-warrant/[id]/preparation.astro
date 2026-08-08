@@ -1,5 +1,5 @@
 ---
-import { AutomationJobType, CompletionCertificateStatus, WarrantStatus, WarrantType } from '@prisma/client';
+import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 import { prisma } from '@/lib/db/prisma';
@@ -90,8 +90,6 @@ const address = [application.project.site?.addressLine1, application.project.sit
   .join(', ') || application.project.siteAddress || 'Site address not recorded';
 const clientName = application.project.client?.name ?? 'Client not recorded';
 const documentCount = await prisma.projectDocument.count({ where: { organisationId: auth.organisation.id, projectId: application.projectId } });
-const dateValue = (value: Date | null) => value ? value.toISOString().slice(0, 10) : '';
-const optionLabel = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 ---
 <AppShell title="Complete Building Warrant details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
@@ -111,23 +109,7 @@ const optionLabel = (value: string) => value.toLowerCase().replaceAll('_', ' ').
           </ul>
         </div>
       )}
-      <section aria-labelledby="warrant-record-heading">
-        <h2 id="warrant-record-heading" class="text-xl font-semibold">Application record</h2>
-        <p class="mt-1 text-sm text-stone-500">Update the full Building Warrant record after creation.</p>
-        <div class="mt-5 grid gap-4 sm:grid-cols-2">
-          <label class="block"><span class="label">Warrant reference</span><input name="warrantReference" maxlength="120" value={application.warrantReference ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Warrant type</span><select name="warrantType" class="field">{Object.values(WarrantType).map((value) => <option value={value} selected={value === application.warrantType}>{optionLabel(value)}</option>)}</select></label>
-          <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(WarrantStatus).map((value) => <option value={value} selected={value === application.status}>{optionLabel(value)}</option>)}</select></label>
-          <label class="block"><span class="label">Completion certificate status</span><select name="completionCertificateStatus" class="field">{Object.values(CompletionCertificateStatus).map((value) => <option value={value} selected={value === application.completionCertificateStatus}>{optionLabel(value)}</option>)}</select></label>
-          <label class="block"><span class="label">Submission date</span><input type="date" name="submissionDate" value={dateValue(application.submissionDate)} class="field" /></label>
-          <label class="block"><span class="label">First response target date</span><input type="date" name="firstResponseTargetDate" value={dateValue(application.firstResponseTargetDate)} class="field" /></label>
-          <label class="block"><span class="label">Granted date</span><input type="date" name="grantedDate" value={dateValue(application.grantedDate)} class="field" /></label>
-          <label class="block"><span class="label">Expiry date</span><input type="date" name="expiryDate" value={dateValue(application.expiryDate)} class="field" /></label>
-        </div>
-        <label class="mt-4 block"><span class="label">Portal URL</span><input type="url" name="portalUrl" value={application.portalUrl ?? ''} class="field" /></label>
-        <label class="mt-4 block"><span class="label">Notes</span><textarea maxlength="3000" name="notes" rows="3" class="field">{application.notes ?? ''}</textarea></label>
-      </section>
-      <section class="mt-7 border-t border-stone-200 pt-6" aria-labelledby="warrant-details-heading">
+      <section aria-labelledby="warrant-details-heading">
         <h2 id="warrant-details-heading" class="text-xl font-semibold">Warrant details</h2>
         <p class="mt-1 text-sm text-stone-500">These details must be complete before the job can open in desktop.</p>
         <fieldset class="mt-5">
