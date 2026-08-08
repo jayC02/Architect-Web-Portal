@@ -52,9 +52,8 @@ type SnapshotInput = {
   documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus }>;
 };
 
-const genericDescription = /^(building works?|proposed works?|householder application|planning application|test|n\/?a)$/i;
 const meaningfulDescription = (value: string | null) =>
-  Boolean(value && value.trim().length >= 12 && !genericDescription.test(value.trim()));
+  Boolean(value?.trim());
 
 export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   const missing: Issue[] = [];
@@ -120,7 +119,7 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
       missing.push({
         code: 'missing_building_warrant_description',
         field: 'buildingWarrant.description',
-        message: 'Enter a specific description of the Building Warrant work.',
+        message: 'Enter a description of the Building Warrant work.',
         severity: 'error',
       });
     }
@@ -138,7 +137,7 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
       missing.push({
         code: 'missing_planning_description',
         field: 'planning.description',
-        message: 'Enter a specific description of the proposed work.',
+        message: 'Enter a description of the proposed work.',
         severity: 'error',
       });
     }

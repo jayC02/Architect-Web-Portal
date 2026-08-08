@@ -22,6 +22,7 @@ import {
   type ApplicationDraftReview,
   type PreparedApplicationDraft,
 } from '@/lib/validation/application-draft';
+import { BUILDING_WARRANT_CONFIRMATION_DEFAULTS } from '@/lib/validation/domain';
 import { documentFactSchema } from '@/lib/validation/document-intelligence';
 import { HttpError } from '@/lib/utils/http';
 import {
@@ -300,7 +301,12 @@ const formattedSiteProjectName = (...values: unknown[]) => values
   .map((value) => value.trim())
   .join(', ');
 
-const defaultConfirmations = (type: ApplicationDraftType) => {
+const defaultConfirmations = (
+  type: ApplicationDraftType,
+): ApplicationDraftReview['confirmations'] => {
+  if (type === ApplicationDraftType.BUILDING_WARRANT) {
+    return { ...BUILDING_WARRANT_CONFIRMATION_DEFAULTS };
+  }
   if (type === ApplicationDraftType.HOUSEHOLDER_PLANNING || type === ApplicationDraftType.PLANNING_APPLICATION) {
     return {
       discussedWithPlanningAuthority: false,
@@ -313,6 +319,23 @@ const defaultConfirmations = (type: ApplicationDraftType) => {
     };
   }
   return {};
+};
+
+export const mergeApplicationDraftConfirmationDefaults = (
+  type: ApplicationDraftType,
+  confirmations: ApplicationDraftReview['confirmations'],
+): ApplicationDraftReview['confirmations'] => {
+  const retainedConfirmations = Object.fromEntries(
+    Object.entries(confirmations).filter(([, value]) => (
+      value !== null
+      && value !== undefined
+      && !(typeof value === 'string' && value.trim() === '')
+    )),
+  ) as ApplicationDraftReview['confirmations'];
+  return {
+    ...defaultConfirmations(type),
+    ...retainedConfirmations,
+  };
 };
 
 export const synthesisePreparedApplicationDraft = async (
@@ -532,14 +555,19 @@ const buildInitialReview = (
   });
 
   if (existingReview.success) {
+    const selectedApplicationType =
+      existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
+        ? suggestedApplicationType
+        : existingReview.data.selectedApplicationType;
     return {
       ...existingReview.data,
       client: withDefaultIndividualTitle(existingReview.data.client),
       applicant: withDefaultIndividualTitle(existingReview.data.applicant ?? existingReview.data.client),
-      selectedApplicationType:
-        existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
-          ? suggestedApplicationType
-          : existingReview.data.selectedApplicationType,
+      selectedApplicationType,
+      confirmations: mergeApplicationDraftConfirmationDefaults(
+        selectedApplicationType,
+        existingReview.data.confirmations,
+      ),
       documents: currentDocuments,
     };
   }
@@ -573,7 +601,7 @@ const buildInitialReview = (
       typeOfWorkKeys: typeOfWork ? [typeOfWork] : [],
       selectedCertifierPresetId: defaults?.defaultCertifierPresetId ?? null,
     },
-    confirmations: defaultConfirmations(requestedType),
+    confirmations: mergeApplicationDraftConfirmationDefaults(requestedType, {}),
     documents: currentDocuments,
   });
 };
@@ -661,8 +689,8 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     'application',
     'application.description',
     'Description of work',
-    review.application.description && review.application.description.trim().length >= 12 ? review.application.description : null,
-    'Enter a specific description of the proposed work.',
+    review.application.description?.trim(),
+    'Enter a description of the proposed work.',
   );
 
   if (review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT) {

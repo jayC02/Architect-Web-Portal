@@ -70,7 +70,7 @@ const documentCount = await prisma.projectDocument.count({
       </section>
       <section class="mt-7 border-t border-stone-200 pt-6" aria-labelledby="planning-questions-heading">
       <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
-      <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required minlength="12" maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+      <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>
         <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label>

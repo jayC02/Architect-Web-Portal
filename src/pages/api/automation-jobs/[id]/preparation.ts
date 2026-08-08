@@ -68,7 +68,7 @@ const preparationFormSchema = z.object({
   agentTownCity: optionalText(100),
   agentPostcode: optionalText(20),
   agentCountry: optionalText(100),
-  description: z.string().trim().min(12).max(2000),
+  description: z.string().trim().min(1).max(2000),
   typeOfWorkKeys: z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1).max(TYPE_OF_WORK_KEYS.length),
   estimatedValue: optionalMoney,
   currentUse: optionalText(160),

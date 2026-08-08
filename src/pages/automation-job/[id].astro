@@ -258,7 +258,7 @@ const suggestedClientName = currentApplicant
           <h2 class="text-lg font-semibold">Proposed application</h2>
           <p class="mt-1 text-sm text-stone-600">Review the prepared description before it is sent to the desktop app.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
-            <label class="block md:col-span-2"><span class="label">Description of work</span><textarea class="field" name="description" rows="4" required minlength="12">{suggestion('application.descriptionOfWork', snapshot.buildingWarrant?.description ?? snapshot.planning?.description)}</textarea>{fieldNote('application.descriptionOfWork') && <a class="mt-1 block text-xs text-emerald-700 hover:underline" href={`/api/documents/${fieldSource('application.descriptionOfWork')?.documentId}`} target="_blank" rel="noopener">{fieldNote('application.descriptionOfWork')}</a>}</label>
+            <label class="block md:col-span-2"><span class="label">Description of work</span><textarea class="field" name="description" rows="4" required>{suggestion('application.descriptionOfWork', snapshot.buildingWarrant?.description ?? snapshot.planning?.description)}</textarea>{fieldNote('application.descriptionOfWork') && <a class="mt-1 block text-xs text-emerald-700 hover:underline" href={`/api/documents/${fieldSource('application.descriptionOfWork')?.documentId}`} target="_blank" rel="noopener">{fieldNote('application.descriptionOfWork')}</a>}</label>
             {snapshot.buildingWarrant && <>
               <fieldset class="md:col-span-2">
                 <legend class="label">Type of work</legend>

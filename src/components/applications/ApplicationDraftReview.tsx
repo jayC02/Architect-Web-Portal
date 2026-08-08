@@ -273,113 +273,74 @@ function PersonFields({
   showAddress?: boolean;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <label className="block">
-        <span className="label">Client type</span>
-        <select
-          value={person.clientType}
-          onChange={(event) => onChange('clientType', event.target.value)}
-          className="field"
-        >
-          <option value="INDIVIDUAL">Individual</option>
-          <option value="ORGANISATION">Organisation</option>
-        </select>
-      </label>
-      <Field
-        label="Display name"
-        value={person.displayName}
-        onChange={(value) => onChange('displayName', value)}
-        issue={issueFor(`${prefix}.displayName`)}
-        required
-      />
-      {person.clientType === 'INDIVIDUAL' ? (
-        <>
+    <div className="space-y-5">
+      <section aria-labelledby={`${prefix}-identity-heading`}>
+        <h4 id={`${prefix}-identity-heading`} className="mb-3 text-sm font-semibold text-ink">Identity and contact</h4>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block">
-            <span className="label">Title <span aria-hidden="true">*</span></span>
+            <span className="label">{prefix === 'client' ? 'Client' : 'Applicant'} type</span>
             <select
-              value={person.title ?? ''}
-              onChange={(event) => onChange('title', event.target.value)}
-              className={`field ${issueFor(`${prefix}.title`) ? 'border-red-300 ring-2 ring-red-100' : ''}`}
-              required
-              aria-invalid={Boolean(issueFor(`${prefix}.title`))}
-              aria-describedby={issueFor(`${prefix}.title`) ? `${prefix}-title-error` : undefined}
+              value={person.clientType}
+              onChange={(event) => onChange('clientType', event.target.value)}
+              className="field"
             >
-              <option value="">Choose title</option>
-              <option value="Mr">Mr</option>
-              <option value="Mrs">Mrs</option>
-              <option value="Miss">Miss</option>
-              <option value="Ms">Ms</option>
-              <option value="Other">Other</option>
+              <option value="INDIVIDUAL">Individual</option>
+              <option value="ORGANISATION">Organisation</option>
             </select>
-            {issueFor(`${prefix}.title`) ? <p id={`${prefix}-title-error`} className="mt-1 text-xs text-red-700">{issueFor(`${prefix}.title`)}</p> : null}
           </label>
           <Field
-            label="First name"
-            value={person.firstName}
-            onChange={(value) => onChange('firstName', value)}
-            issue={issueFor(`${prefix}.firstName`)}
+            label="Display name"
+            value={person.displayName}
+            onChange={(value) => onChange('displayName', value)}
+            issue={issueFor(`${prefix}.displayName`)}
             required
           />
-          <Field
-            label="Last name"
-            value={person.lastName}
-            onChange={(value) => onChange('lastName', value)}
-            issue={issueFor(`${prefix}.lastName`)}
-            required
-          />
-        </>
-      ) : (
-        <Field
-          label="Company name"
-          value={person.companyName}
-          onChange={(value) => onChange('companyName', value)}
-          issue={issueFor(`${prefix}.companyName`)}
-          required
-        />
-      )}
-      <Field
-        label="Email"
-        type="email"
-        value={person.email}
-        onChange={(value) => onChange('email', value)}
-        issue={issueFor(`${prefix}.email`)}
-        required
-      />
-      <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
-      <Field
-        label="Building number"
-        value={person.buildingNumber}
-        onChange={(value) => onChange('buildingNumber', value)}
-        issue={issueFor(`${prefix}.buildingNumber`)}
-        required
-      />
-      {showAddress ? (
-        <>
-          <Field
-            label="Address line 1"
-            value={person.addressLine1}
-            onChange={(value) => onChange('addressLine1', value)}
-            issue={issueFor(`${prefix}.addressLine1`)}
-            required
-          />
-          <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
-          <Field
-            label="Town or city"
-            value={person.townCity}
-            onChange={(value) => onChange('townCity', value)}
-            issue={issueFor(`${prefix}.townCity`)}
-            required
-          />
-          <Field
-            label="Postcode"
-            value={person.postcode}
-            onChange={(value) => onChange('postcode', value)}
-            issue={issueFor(`${prefix}.postcode`)}
-            required
-          />
-          <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
-        </>
-      ) : null}
+          {person.clientType === 'INDIVIDUAL' ? (
+            <>
+              <label className="block">
+                <span className="label">Title <span aria-hidden="true">*</span></span>
+                <select
+                  value={person.title ?? ''}
+                  onChange={(event) => onChange('title', event.target.value)}
+                  className={`field ${issueFor(`${prefix}.title`) ? 'border-red-300 ring-2 ring-red-100' : ''}`}
+                  required
+                  aria-invalid={Boolean(issueFor(`${prefix}.title`))}
+                  aria-describedby={issueFor(`${prefix}.title`) ? `${prefix}-title-error` : undefined}
+                >
+                  <option value="">Choose title</option>
+                  <option value="Mr">Mr</option>
+                  <option value="Mrs">Mrs</option>
+                  <option value="Miss">Miss</option>
+                  <option value="Ms">Ms</option>
+                  <option value="Other">Other</option>
+                </select>
+                {issueFor(`${prefix}.title`) ? <p id={`${prefix}-title-error`} className="mt-1 text-xs text-red-700">{issueFor(`${prefix}.title`)}</p> : null}
+              </label>
+              <Field label="First name" value={person.firstName} onChange={(value) => onChange('firstName', value)} issue={issueFor(`${prefix}.firstName`)} required />
+              <Field label="Last name" value={person.lastName} onChange={(value) => onChange('lastName', value)} issue={issueFor(`${prefix}.lastName`)} required />
+            </>
+          ) : (
+            <Field label="Company name" value={person.companyName} onChange={(value) => onChange('companyName', value)} issue={issueFor(`${prefix}.companyName`)} required />
+          )}
+          <Field label="Email" type="email" value={person.email} onChange={(value) => onChange('email', value)} issue={issueFor(`${prefix}.email`)} required />
+          <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
+        </div>
+      </section>
+      <section aria-labelledby={`${prefix}-address-heading`}>
+        <h4 id={`${prefix}-address-heading`} className="mb-3 text-sm font-semibold text-ink">Address details</h4>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Building number" value={person.buildingNumber} onChange={(value) => onChange('buildingNumber', value)} issue={issueFor(`${prefix}.buildingNumber`)} required />
+          {showAddress ? (
+            <>
+              <Field label="Address line 1" value={person.addressLine1} onChange={(value) => onChange('addressLine1', value)} issue={issueFor(`${prefix}.addressLine1`)} required />
+              <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
+              <Field label="Town or city" value={person.townCity} onChange={(value) => onChange('townCity', value)} issue={issueFor(`${prefix}.townCity`)} required />
+              <Field label="Postcode" value={person.postcode} onChange={(value) => onChange('postcode', value)} issue={issueFor(`${prefix}.postcode`)} required />
+              <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
+            </>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -1301,36 +1262,26 @@ export default function ApplicationDraftReview({
               : personSummary(review.client)}
             issueCount={issuesBySection.get('client') ?? 0}
           >
-            <div className="space-y-5">
-              <label className="block">
-                <span className="label">Existing match</span>
-                <select
-                  value={review.clientMode === 'existing' ? review.existingClientId ?? '' : 'create'}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    applyReview((current) => ({
-                      ...current,
-                      clientMode: value === 'create' ? 'create' : 'existing',
-                      existingClientId: value === 'create' ? null : value,
-                      clientAddressSameAsSite: value === 'create' ? current.clientAddressSameAsSite : false,
-                    }), true);
-                  }}
-                  className="field"
-                >
-                  <option value="create">Create a new client from the prepared details</option>
-                  {draft.prepared?.matches.clients.map((match) => (
-                    <option key={match.id} value={match.id}>{match.label} ({match.strength} match)</option>
-                  ))}
-                </select>
-                {draft.prepared?.matches.clients.some((match) => match.strength === 'possible') ? (
-                  <p className="mt-2 text-xs text-stone-500">Possible matches require your choice. Architect Pro never matches on surname alone.</p>
-                ) : null}
-              </label>
-
-              <div className="border-t border-stone-200 pt-5">
-                <p className="text-sm font-semibold text-ink">Client is also the applicant</p>
+            <div className="space-y-6">
+              <section aria-labelledby="client-relationship-heading">
+                <h3 id="client-relationship-heading" className="text-sm font-semibold text-ink">Client and applicant relationship</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-ink">
+                    <input
+                      type="checkbox"
+                      checked={!review.applicantDifferentFromClient}
+                      aria-label={review.applicantDifferentFromClient ? 'Use client as applicant' : 'Use a different applicant'}
+                      onChange={(event) => applyReview((current) => ({
+                        ...current,
+                        applicantDifferentFromClient: !event.target.checked,
+                        applicant: event.target.checked ? current.applicant : current.applicant ?? { ...current.client },
+                      }), true)}
+                      className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
+                    />
+                    Client is also the applicant
+                  </label>
                 {review.clientMode === 'create' ? (
-                  <label className="mt-3 flex items-center gap-3 text-sm font-semibold">
+                  <label className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-ink">
                     <input
                       type="checkbox"
                       checked={review.clientAddressSameAsSite}
@@ -1352,9 +1303,37 @@ export default function ApplicationDraftReview({
                     Client address is the same as the site address
                   </label>
                 ) : (
-                  <p className="mt-2 text-sm text-stone-500">The selected client keeps their confirmed correspondence address.</p>
+                  <p className="flex min-h-11 items-center rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-500">The selected client keeps their saved address.</p>
                 )}
+                </div>
                 {!siteAddressComplete && review.clientMode === 'create' ? <p className="mt-2 text-xs text-stone-500">Complete the site address before using it for the client.</p> : null}
+              </section>
+
+              <div className="rounded-md border border-stone-200 bg-stone-50 p-4">
+                <label className="block">
+                  <span className="label">Prepared client or existing client</span>
+                  <select
+                    value={review.clientMode === 'existing' ? review.existingClientId ?? '' : 'create'}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      applyReview((current) => ({
+                        ...current,
+                        clientMode: value === 'create' ? 'create' : 'existing',
+                        existingClientId: value === 'create' ? null : value,
+                        clientAddressSameAsSite: value === 'create' ? current.clientAddressSameAsSite : false,
+                      }), true);
+                    }}
+                    className="field bg-white"
+                  >
+                    <option value="create">Use the prepared client details</option>
+                    {draft.prepared?.matches.clients.map((match) => (
+                      <option key={match.id} value={match.id}>{match.label} ({match.strength} match)</option>
+                    ))}
+                  </select>
+                  {draft.prepared?.matches.clients.some((match) => match.strength === 'possible') ? (
+                    <p className="mt-2 text-xs text-stone-500">Possible matches require your choice. Architect Pro never matches on surname alone.</p>
+                  ) : null}
+                </label>
               </div>
 
               {review.clientMode === 'create' ? (
@@ -1367,43 +1346,17 @@ export default function ApplicationDraftReview({
                 />
               ) : null}
 
-              <div className="border-t border-stone-200 pt-5">
-                {!review.applicantDifferentFromClient ? (
-                  <button
-                    type="button"
-                    className="text-sm font-semibold text-stone-600 hover:text-ink"
-                    onClick={() => applyReview((current) => ({
-                      ...current,
-                      applicantDifferentFromClient: true,
-                      applicant: current.applicant ?? { ...current.client },
-                    }), true)}
-                  >
-                    Use a different applicant
-                  </button>
-                ) : (
-                  <>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold">Separate applicant details</h3>
-                      <button
-                        type="button"
-                        className="text-sm font-semibold text-stone-600 hover:text-ink"
-                        onClick={() => applyReview((current) => ({ ...current, applicantDifferentFromClient: false }), true)}
-                      >
-                        Use client as applicant
-                      </button>
-                    </div>
-                    <div className="mt-4">
-                      <PersonFields
-                        person={review.applicant ?? emptyPerson()}
-                        onChange={(key, value) => updatePerson('applicant', key, value)}
-                        issueFor={issueFor}
-                        prefix="applicant"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-              <EvidenceList draftId={draft.id} prepared={draft.prepared} sections={['client']} />
+              {review.applicantDifferentFromClient ? (
+                <section aria-labelledby="separate-applicant-heading">
+                  <h3 id="separate-applicant-heading" className="mb-3 text-sm font-semibold text-ink">Separate applicant details</h3>
+                  <PersonFields
+                    person={review.applicant ?? emptyPerson()}
+                    onChange={(key, value) => updatePerson('applicant', key, value)}
+                    issueFor={issueFor}
+                    prefix="applicant"
+                  />
+                </section>
+              ) : null}
             </div>
           </Section>
         ) : null}
@@ -1590,13 +1543,11 @@ export default function ApplicationDraftReview({
           <Section
             title="Confirmations"
             summary={issuesBySection.get('confirmations')
-              ? 'Legal or conditional answers require your confirmation'
-              : 'Route-specific questions confirmed'}
+              ? 'Some declarations need your answer'
+              : 'Application declarations prepared'}
             issueCount={issuesBySection.get('confirmations') ?? 0}
           >
-            <div className="mb-5 rounded-md border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
-              These answers control legal or conditional portal branches. Architect Pro will not confirm them on your behalf.
-            </div>
+            <p className="mb-4 text-sm text-stone-500">Review the prepared application declarations and change any answer that differs for this project.</p>
             <div className="grid gap-4 lg:grid-cols-2">
               {building
                 ? buildingConfirmationQuestions.map(([key, label]) => (

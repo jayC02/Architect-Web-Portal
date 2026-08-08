@@ -142,6 +142,10 @@ export const buildingWarrantPreparationSchema = z.object({
   restrictPublicInspection: yesNoAnswer,
 });
 
+export const BUILDING_WARRANT_CONFIRMATION_DEFAULTS = Object.freeze(
+  buildingWarrantPreparationSchema.parse({}),
+);
+
 export const householderPreparationSchema = z.object({
   discussedWithPlanningAuthority: yesNoAnswer,
   treesOnOrAdjacentToSite: yesNoAnswer,
@@ -224,7 +228,7 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   portalUrl: safeUrl,
   notes: optionalText(3000),
   typeOfWorkKeys: typeOfWorkKeysSchema,
-  description: z.string().trim().min(12, 'Enter a specific description of the Building Warrant work.').max(2000),
+  description: z.string().trim().min(1, 'Enter a description of the Building Warrant work.').max(2000),
   estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),
   currentUse: z.string().trim().min(1, 'Enter the current use of the building.').max(160),
   proposedUse: z.string().trim().min(1, 'Enter the proposed use of the building.').max(160),
