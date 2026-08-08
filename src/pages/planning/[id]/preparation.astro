@@ -2,6 +2,7 @@
 import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
+import { resolveSoleOwner } from '@/lib/planning-preparation-defaults';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { automationJobApplicationId, desktopAutomationJobSelect } from '@/server/services/desktop-automation-status.service';
 
@@ -34,6 +35,7 @@ const preparation = application.preparationData && typeof application.preparatio
   ? application.preparationData as Record<string, unknown>
   : {};
 const boolValue = (key: string, fallback = false) => typeof preparation[key] === 'boolean' ? preparation[key] as boolean : fallback;
+const soleOwner = resolveSoleOwner(preparation.soleOwner);
 const numberValue = (key: string) => typeof preparation[key] === 'number' ? String(preparation[key]) : '';
 const address = [application.project.site?.addressLine1, application.project.site?.townCity, application.project.site?.postcode]
   .filter(Boolean).join(', ') || application.project.siteAddress || 'Site address not recorded';
@@ -59,7 +61,7 @@ const documentCount = await prisma.projectDocument.count({
         <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>
         <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label>
         <label class="block"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!boolValue('newOrAlteredVehicleAccess')}>No</option><option value="true" selected={boolValue('newOrAlteredVehicleAccess')}>Yes</option></select></label>
-        <label class="block"><span class="label">Applicant is sole owner</span><select name="soleOwner" class="field"><option value="false" selected={!boolValue('soleOwner')}>No</option><option value="true" selected={boolValue('soleOwner')}>Yes</option></select></label>
+        <label class="block"><span class="label">Applicant is sole owner</span><select name="soleOwner" class="field"><option value="false" selected={!soleOwner}>No</option><option value="true" selected={soleOwner}>Yes</option></select></label>
         <label class="block"><span class="label">Agricultural holding</span><select name="agriculturalHolding" class="field"><option value="false" selected={!boolValue('agriculturalHolding')}>No</option><option value="true" selected={boolValue('agriculturalHolding')}>Yes</option></select></label>
         <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} class="field" /></label>
         <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} class="field" /></label>
