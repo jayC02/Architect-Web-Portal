@@ -1,5 +1,5 @@
 ---
-import { AutomationJobType, PlanningStatus } from '@prisma/client';
+import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -35,8 +35,6 @@ const preparation = application.preparationData && typeof application.preparatio
   : {};
 const boolValue = (key: string, fallback = false) => typeof preparation[key] === 'boolean' ? preparation[key] as boolean : fallback;
 const numberValue = (key: string) => typeof preparation[key] === 'number' ? String(preparation[key]) : '';
-const dateValue = (value: Date | null) => value ? value.toISOString().slice(0, 10) : '';
-const optionLabel = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const address = [application.project.site?.addressLine1, application.project.site?.townCity, application.project.site?.postcode]
   .filter(Boolean).join(', ') || application.project.siteAddress || 'Site address not recorded';
 const clientName = application.project.client?.name ?? 'Client not recorded';
@@ -54,21 +52,7 @@ const documentCount = await prisma.projectDocument.count({
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
     <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" class="panel rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
-      <section aria-labelledby="planning-record-heading">
-        <h2 id="planning-record-heading" class="text-xl font-semibold">Application record</h2>
-        <p class="mt-1 text-sm text-stone-500">Update the full Planning record after creation.</p>
-        <div class="mt-5 grid gap-4 sm:grid-cols-2">
-          <label class="block"><span class="label">Application reference</span><input name="applicationReference" maxlength="120" value={application.applicationReference ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(PlanningStatus).map((status) => <option value={status} selected={status === application.status}>{optionLabel(status)}</option>)}</select></label>
-          <label class="block"><span class="label">Submission date</span><input type="date" name="submissionDate" value={dateValue(application.submissionDate)} class="field" /></label>
-          <label class="block"><span class="label">Valid date</span><input type="date" name="validDate" value={dateValue(application.validDate)} class="field" /></label>
-          <label class="block"><span class="label">Decision target date</span><input type="date" name="decisionTargetDate" value={dateValue(application.decisionTargetDate)} class="field" /></label>
-          <label class="block"><span class="label">Decision date</span><input type="date" name="decisionDate" value={dateValue(application.decisionDate)} class="field" /></label>
-        </div>
-        <label class="mt-4 block"><span class="label">Portal URL</span><input type="url" name="portalUrl" value={application.portalUrl ?? ''} class="field" /></label>
-        <label class="mt-4 block"><span class="label">Notes</span><textarea maxlength="3000" name="notes" rows="3" class="field">{application.notes ?? ''}</textarea></label>
-      </section>
-      <section class="mt-7 border-t border-stone-200 pt-6" aria-labelledby="planning-questions-heading">
+      <section aria-labelledby="planning-questions-heading">
       <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
       <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
