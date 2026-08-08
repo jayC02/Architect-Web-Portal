@@ -20,7 +20,7 @@ assert.match(projectPage, /`\/clients\?edit=\$\{project\.client\.id\}`/, 'Client
 assert.match(projectPage, /`\/sites\?edit=\$\{project\.site\.id\}`/, 'Site opens its existing editable record');
 assert.match(directories, /new URLSearchParams\(window\.location\.search\)\.get\('edit'\)/, 'directory drawers accept record edit links');
 assert.ok(
-  projectPage.indexOf('href="#project-details"') < projectPage.indexOf('id="overview"'),
+  projectPage.indexOf('data-project-edit-toggle') < projectPage.indexOf('id="overview"'),
   'Edit project details is immediately available above the project overview',
 );
 

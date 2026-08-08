@@ -7,9 +7,11 @@ import {
   ProjectStage,
   ProjectStatus,
 } from '@prisma/client';
+import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, FileText, Inbox, MapPin, Pencil, Upload, UserRound, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
 import { prisma } from '@/lib/db/prisma';
+import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -32,7 +34,7 @@ const [
   clients,
   sites,
   documentStats,
-  recentDocuments,
+  projectDocuments,
   planningApplications,
   warrantApplications,
   deadlines,
@@ -57,8 +59,7 @@ const [
   prisma.projectDocument.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
     orderBy: { createdAt: 'desc' },
-    take: 5,
-    select: { id: true, originalName: true, type: true, status: true, revision: true, sizeBytes: true, createdAt: true },
+    select: { id: true, originalName: true, type: true, status: true, revision: true, notes: true, sizeBytes: true, createdAt: true },
   }),
   prisma.planningApplication.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
@@ -196,30 +197,17 @@ const preparedContext = [planningDesktop, warrantDesktop]
   .find((context) => context.job?.id === preparedJobId);
 const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') === '1' && preparedContext?.job;
 
-const actionTone = {
-  neutral: 'bg-stone-100 text-stone-700 border-stone-200',
-  info: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  warning: 'bg-amber-50 text-amber-800 border-amber-200',
-  danger: 'bg-red-50 text-red-800 border-red-200',
-};
-
 ---
 <AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <header class="mb-5">
-    <a href="/projects" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to projects</a>
-    <div class="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+  <header class="mb-6">
+    <a href="/projects" class="inline-flex items-center gap-1.5 text-sm font-semibold text-moss hover:text-ink"><ArrowLeft size={15} aria-hidden="true" />Back to projects</a>
+    <div class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
-          <h1 class="truncate text-3xl font-semibold">{project.name}</h1>
-          {project.internalReference && <span class="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-600">{project.internalReference}</span>}
-        </div>
-        <p class="mt-2 text-sm text-stone-500">{siteSummary}</p>
+        <h1 class="break-words text-3xl font-semibold leading-tight text-ink sm:text-4xl">{project.name}</h1>
+        <p class="mt-2 text-base leading-6 text-stone-500">{siteSummary}</p>
+        {project.internalReference && <p class="mt-1 text-xs font-semibold text-stone-400">Reference {project.internalReference}</p>}
       </div>
-      <div class="flex flex-wrap gap-2">
-        <a class="btn btn-secondary" href="#project-details">Edit project details</a>
-        <span class="status-chip bg-moss/10 text-moss">{humanizeEnum(project.stage)}</span>
-        <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(project.status)}</span>
-      </div>
+      <button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button>
     </div>
   </header>
 
@@ -234,7 +222,7 @@ const actionTone = {
     </section>
   )}
 
-  <nav aria-label="Project sections" class="panel mb-6 flex gap-1 overflow-x-auto rounded-lg p-1.5">
+  <nav aria-label="Project sections" class="mb-6 flex gap-7 overflow-x-auto border-b border-stone-200">
     {[
       ['Overview', '#overview'],
       ['Documents', '#documents'],
@@ -243,127 +231,173 @@ const actionTone = {
       ['Deadlines', '#deadlines'],
       ['Email Activity', '#email-activity'],
       ['Notes', '#notes'],
-    ].map(([label, href]) => <a href={href} class="shrink-0 rounded-md px-3 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink">{label}</a>)}
+    ].map(([label, href], index) => <a href={href} aria-current={index === 0 ? 'page' : undefined} class:list={['shrink-0 border-b-2 px-0.5 pb-3 pt-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', index === 0 ? 'border-moss text-ink' : 'border-transparent text-stone-600 hover:border-stone-300 hover:text-ink']}>{label}</a>)}
   </nav>
 
   <section id="overview" class="scroll-mt-6">
-    <div class="grid gap-4 lg:grid-cols-4">
-      <a class="panel block rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink" href={project.client ? `/clients?edit=${project.client.id}` : '/clients'} aria-label={project.client ? `View or edit client ${project.client.name}` : 'Open clients'}>
-        <p class="label">Client</p>
-        <p class="font-semibold">{project.client?.name ?? 'Not linked'}</p>
-        <p class="mt-1 truncate text-sm text-stone-500">{project.client?.email ?? 'No client email'}</p>
+    <div class="grid overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_28px_rgba(32,35,31,0.035)] sm:grid-cols-2 xl:grid-cols-4">
+      <a class="group flex min-h-28 gap-3 border-b border-stone-200 p-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/30 sm:border-r xl:border-b-0" href={project.client ? `/clients?edit=${project.client.id}` : '/clients'} aria-label={project.client ? `View or edit client ${project.client.name}` : 'Open clients'}>
+        <UserRound size={19} className="mt-0.5 shrink-0 text-stone-500 transition group-hover:text-moss" aria-hidden="true" />
+        <div class="min-w-0"><p class="label">Client</p><p class="truncate font-semibold text-ink">{project.client?.name ?? 'Not linked'}</p><p class="mt-1 truncate text-sm text-stone-500">{project.client?.email ?? 'No client email'}</p></div>
       </a>
-      <a class="panel block rounded-lg p-4 transition hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink" href={project.site ? `/sites?edit=${project.site.id}` : '/sites'} aria-label={project.site ? `View or edit site ${project.site.addressLine1}` : 'Open sites'}>
-        <p class="label">Site</p>
-        <p class="truncate font-semibold">{project.site?.addressLine1 ?? project.siteAddress ?? 'Not linked'}</p>
-        <p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? 'No authority set'}</p>
+      <a class="group flex min-h-28 gap-3 border-b border-stone-200 p-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/30 xl:border-b-0 xl:border-r" href={project.site ? `/sites?edit=${project.site.id}` : '/sites'} aria-label={project.site ? `View or edit site ${project.site.addressLine1}` : 'Open sites'}>
+        <MapPin size={19} className="mt-0.5 shrink-0 text-stone-500 transition group-hover:text-moss" aria-hidden="true" />
+        <div class="min-w-0"><p class="label">Site</p><p class="break-words font-semibold text-ink">{project.site?.addressLine1 ?? project.siteAddress ?? 'Not linked'}</p><p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? 'No authority set'}</p></div>
       </a>
-      <article class={`rounded-lg border p-4 ${actionTone[nextAction.tone]}`}>
-        <p class="text-xs font-semibold uppercase">Next action</p>
-        <a href={nextAction.href} class="mt-2 block font-semibold hover:underline">{nextAction.label}</a>
-        <p class="mt-1 text-xs opacity-75">Based on current project records</p>
+      <article class="flex min-h-28 gap-3 border-b border-stone-200 bg-moss/[0.055] p-4 sm:border-r xl:border-b-0">
+        <CircleCheck size={19} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
+        <div class="min-w-0"><p class="mb-1 text-xs font-semibold uppercase text-moss">Next action</p><a href={nextAction.href} class="block font-semibold text-ink hover:underline">{nextAction.label}</a><p class="mt-1 text-xs leading-5 text-moss/80">Based on current project records</p></div>
       </article>
-      <article class="panel rounded-lg p-4">
-        <p class="label">Next deadline</p>
-        {nextDeadline ? <><p class="truncate font-semibold">{nextDeadline.title}</p><p class="mt-1 text-sm text-stone-500">{formatDate(nextDeadline.dueDate)}</p></> : <p class="font-semibold text-stone-500">None scheduled</p>}
+      <article class="flex min-h-28 gap-3 p-4">
+        <CalendarDays size={19} className="mt-0.5 shrink-0 text-stone-500" aria-hidden="true" />
+        <div class="min-w-0"><p class="label">Next deadline</p>{nextDeadline ? <><p class="truncate font-semibold text-ink">{nextDeadline.title}</p><p class="mt-1 text-sm text-stone-500">{formatDate(nextDeadline.dueDate)}</p></> : <p class="font-semibold text-stone-500">None scheduled</p>}</div>
       </article>
     </div>
+  </section>
 
-  <details id="project-details" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
-    <summary class="cursor-pointer text-lg font-semibold">Edit project details</summary>
-    <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" class="mt-4">
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="block md:col-span-2"><span class="label">Project name</span><input required name="name" value={project.name} class="field" /></label>
-        <label class="block"><span class="label">Internal reference</span><input name="internalReference" value={project.internalReference ?? ''} class="field" /></label>
-        <label class="block"><span class="label">Project type</span><input name="projectType" value={project.projectType ?? ''} class="field" /></label>
-        <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
-        <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>
-        <label class="block"><span class="label">Client</span><select name="clientId" class="field"><option value="">Not linked</option>{clients.map((client) => <option value={client.id} selected={client.id === project.clientId}>{client.name}</option>)}</select></label>
-        <label class="block"><span class="label">Linked site</span><select name="siteId" class="field"><option value="">Not linked</option>{sites.map((site) => <option value={site.id} selected={site.id === project.siteId}>{site.addressLine1}, {site.postcode}</option>)}</select></label>
-        <label class="block"><span class="label">Local authority</span><input name="localAuthority" value={project.localAuthority ?? ''} class="field" /></label>
-        <label class="block"><span class="label">Manual site address</span><input name="siteAddress" value={project.siteAddress ?? ''} class="field" /></label>
+  <section aria-labelledby="applications-heading" class="mt-8">
+    <div class="mb-4">
+      <h2 id="applications-heading" class="text-2xl font-semibold leading-8 text-ink">Applications</h2>
+      <p class="mt-1 text-sm text-stone-500">Your active applications</p>
+    </div>
+    <div class="grid items-stretch gap-5 lg:grid-cols-2">
+      <ApplicationSummaryCard
+        id="planning"
+        title="Planning"
+        subtitle="Latest planning application"
+        manageHref={`/projects/${project.id}/planning`}
+        address={siteSummary}
+        clientName={project.client?.name ?? 'Not linked'}
+        applicationType="Householder"
+        status={applicationStatus(latestPlanning?.status)}
+        documentCount={planningDocumentCount}
+        reference={latestPlanning?.applicationReference ?? 'Not assigned'}
+        projectId={project.id}
+        applicationKind="PLANNING"
+        applicationId={latestPlanning?.id}
+        desktopJob={planningDesktop.job}
+        desktopPreparationReady={planningDesktop.preparationReady}
+        desktopMissingCount={planningDesktop.missingCount}
+      />
+      <ApplicationSummaryCard
+        id="building-warrant"
+        title="Building Warrant"
+        subtitle="Latest building warrant application"
+        manageHref={`/projects/${project.id}/building-warrant`}
+        address={siteSummary}
+        clientName={project.client?.name ?? 'Not linked'}
+        applicationType="Building Warrant"
+        status={applicationStatus(latestWarrant?.status)}
+        documentCount={warrantDocumentCount}
+        reference={latestWarrant?.warrantReference ?? 'Not assigned'}
+        projectId={project.id}
+        applicationKind="BUILDING_WARRANT"
+        applicationId={latestWarrant?.id}
+        desktopJob={warrantDesktop.job}
+        desktopPreparationReady={warrantDesktop.preparationReady}
+        desktopMissingCount={warrantDesktop.missingCount}
+      />
+    </div>
+  </section>
+
+  <div id="project-details" data-project-edit-panel hidden class="fixed inset-0 z-50">
+    <button type="button" data-project-edit-close aria-label="Close project details" class="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]"></button>
+    <aside role="dialog" aria-modal="true" aria-labelledby="project-edit-title" class="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col border-l border-stone-200 bg-white shadow-2xl">
+      <div class="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
+        <div>
+          <h2 id="project-edit-title" class="text-xl font-semibold text-ink">Edit project details</h2>
+          <p class="mt-2 text-sm leading-6 text-stone-500">Update this project record and its linked client or site.</p>
+        </div>
+        <button type="button" data-project-edit-close class="rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30" aria-label="Close project details"><X size={18} aria-hidden="true" /></button>
       </div>
-      <div class="mt-4 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save project details</button><span data-form-status class="text-sm text-stone-500"></span></div>
-    </form>
-  </details>
+      <div class="flex-1 overflow-y-auto p-5 sm:p-6">
+        <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-4">
+          <label class="block"><span class="label">Project name</span><input required name="name" value={project.name} class="field" /></label>
+          <label class="block"><span class="label">Internal reference</span><input name="internalReference" value={project.internalReference ?? ''} class="field" /></label>
+          <label class="block"><span class="label">Project type</span><input name="projectType" value={project.projectType ?? ''} class="field" /></label>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
+            <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>
+          </div>
+          <label class="block"><span class="label">Client</span><select name="clientId" class="field"><option value="">Not linked</option>{clients.map((client) => <option value={client.id} selected={client.id === project.clientId}>{client.name}</option>)}</select></label>
+          <label class="block"><span class="label">Linked site</span><select name="siteId" class="field"><option value="">Not linked</option>{sites.map((site) => <option value={site.id} selected={site.id === project.siteId}>{site.addressLine1}, {site.postcode}</option>)}</select></label>
+          <label class="block"><span class="label">Local authority</span><input name="localAuthority" value={project.localAuthority ?? ''} class="field" /></label>
+          <label class="block"><span class="label">Manual site address</span><input name="siteAddress" value={project.siteAddress ?? ''} class="field" /></label>
+          <div class="mt-2 grid gap-2">
+            <button class="btn btn-primary w-full">Save project details</button>
+            <button type="button" data-project-edit-close class="btn btn-secondary w-full">Cancel</button>
+            <span data-form-status class="text-sm text-stone-500" aria-live="polite"></span>
+          </div>
+        </form>
+      </div>
+    </aside>
+  </div>
 
-  <section id="documents" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
+  <section id="documents" class="panel mt-8 scroll-mt-24 rounded-lg p-4 sm:p-5">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 class="text-xl font-semibold">Documents</h2>
-        <p class="mt-1 text-sm text-stone-500">{documentCount} document{documentCount === 1 ? '' : 's'} &middot; {documentReviewCount} needing review</p>
+        <h2 class="text-2xl font-semibold leading-8 text-ink">Documents</h2>
+        <p class="mt-1 text-sm text-stone-500">{documentCount} document{documentCount === 1 ? '' : 's'}</p>
       </div>
-      <a class="btn btn-primary" href={`/documents/upload?projectId=${project.id}`}>Upload documents</a>
+      <div class="flex flex-wrap items-center gap-2">
+        {projectDocuments.length > 0 && <button type="button" data-document-edit-toggle aria-controls="document-editor" aria-expanded="false" class="btn btn-secondary gap-2 px-3 py-2 text-sm"><Pencil size={14} aria-hidden="true" /><span data-document-edit-label>Edit</span></button>}
+        <a class="btn btn-primary gap-2" href={`/documents/upload?projectId=${project.id}`}><Upload size={15} aria-hidden="true" />Upload documents</a>
+      </div>
     </div>
     {locationPlanCount === 0 && <a href={`/documents/upload?projectId=${project.id}`} class="mt-4 block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100">Location plan missing</a>}
-    {recentDocuments.length ? (
-      <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
-        {recentDocuments.map((document) => (
-          <div class="group flex flex-col gap-3 px-4 py-3 transition hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
-            <div class="min-w-0">
-              <a href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer" class="block truncate font-semibold hover:underline">{document.originalName}</a>
-              <p class="mt-1 text-xs text-stone-500">{humanizeEnum(document.type)} &middot; {document.revision ? `Rev ${document.revision}` : 'No revision'} &middot; {formatBytes(document.sizeBytes)}</p>
-            </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <span class="status-chip bg-stone-100 text-stone-700">{humanizeEnum(document.status)}</span>
-              <form data-api-form data-action={`/api/documents/${document.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Remove ${document.originalName} from this project?`}>
-                <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-lg leading-none text-stone-500 opacity-100 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 sm:opacity-0 sm:group-hover:opacity-100" aria-label={`Remove ${document.originalName}`}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+    {projectDocuments.length ? (
+      <>
+        <div data-document-view class="mt-4 overflow-hidden rounded-lg border border-stone-200">
+          <div class="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_100px_110px_36px] gap-4 border-b border-stone-200 bg-stone-50/70 px-4 py-2.5 text-xs font-semibold uppercase text-stone-500 md:grid">
+            <span>Name</span><span>Type / version</span><span>Size</span><span>Status</span><span class="sr-only">Actions</span>
+          </div>
+          <div id="project-document-list" class="divide-y divide-stone-100">
+          {projectDocuments.map((document, index) => (
+            <div data-document-extra={index >= 3 ? '' : undefined} class:list={['group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition hover:bg-stone-50 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_100px_110px_36px] md:gap-4', index >= 3 && 'hidden']}>
+              <div class="flex min-w-0 items-center gap-3">
+                <FileText size={17} className="shrink-0 text-red-500" aria-hidden="true" />
+                <div class="min-w-0"><a href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer" class="block truncate text-sm font-semibold text-ink hover:underline">{document.originalName}</a><p class="mt-1 text-xs text-stone-500 md:hidden">{documentTypeLabel(document.type)} &middot; {document.revision ? `Rev ${document.revision}` : 'No version'} &middot; {formatBytes(document.sizeBytes)}</p></div>
+              </div>
+              <p class="hidden truncate text-sm text-stone-600 md:block">{documentTypeLabel(document.type)} &middot; {document.revision ? `Rev ${document.revision}` : 'No version'}</p>
+              <p class="hidden text-sm text-stone-600 md:block">{formatBytes(document.sizeBytes)}</p>
+              <span class:list={['justify-self-end rounded px-2 py-1 text-xs font-semibold md:justify-self-start', document.status === DocumentStatus.APPROVED ? 'bg-moss/10 text-moss' : 'bg-stone-100 text-stone-700']}>{humanizeEnum(document.status)}</span>
+              <form class="col-start-2 justify-self-end md:col-auto md:justify-self-auto" data-api-form data-action={`/api/documents/${document.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Remove ${document.originalName} from this project?`}>
+                <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-400 opacity-100 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 md:opacity-0 md:group-hover:opacity-100" aria-label={`Remove ${document.originalName}`}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
               </form>
             </div>
+          ))}
           </div>
-        ))}
-        {documentCount > recentDocuments.length && <div class="px-4 py-3"><a href={`/projects/${project.id}/files`} class="btn btn-secondary w-full sm:w-auto">See more files</a></div>}
-      </div>
+          {projectDocuments.length > 3 && <button type="button" data-documents-expand aria-controls="project-document-list" aria-expanded="false" class="flex w-full items-center justify-center gap-2 border-t border-stone-200 px-4 py-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-50 hover:text-moss"><span data-documents-expand-label>View all {documentCount} documents</span><ChevronDown data-documents-expand-icon size={16} className="transition-transform" aria-hidden="true" /></button>}
+        </div>
+        <div id="document-editor" data-document-editor hidden class="mt-4 overflow-hidden rounded-lg border border-stone-200">
+          <div class="hidden grid-cols-[minmax(180px,1.6fr)_minmax(150px,1fr)_100px_145px_minmax(160px,1.2fr)_90px] gap-3 border-b border-stone-200 bg-stone-50/70 px-4 py-2.5 text-xs font-semibold uppercase text-stone-500 lg:grid">
+            <span>Document</span><span>Type</span><span>Version</span><span>Status</span><span>Notes</span><span class="sr-only">Save</span>
+          </div>
+          <div class="divide-y divide-stone-100">
+            {projectDocuments.map((document) => (
+              <form data-document-editor-row data-api-form data-action={`/api/documents/${document.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(180px,1.6fr)_minmax(150px,1fr)_100px_145px_minmax(160px,1.2fr)_90px] lg:items-end">
+                <div class="min-w-0 self-center"><a href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer" class="block truncate text-sm font-semibold text-ink hover:underline">{document.originalName}</a><p class="mt-1 text-xs text-stone-500">{formatBytes(document.sizeBytes)}</p></div>
+                <label class="block"><span class="label lg:sr-only">Document type</span><select name="type" class="field">{preferredDocumentTypes.map((type) => <option value={type} selected={type === document.type}>{documentTypeLabel(type)}</option>)}</select></label>
+                <label class="block"><span class="label lg:sr-only">Version</span><input name="revision" value={document.revision ?? ''} class="field" placeholder="None" /></label>
+                <label class="block"><span class="label lg:sr-only">Status</span><select name="status" class="field">{Object.values(DocumentStatus).map((status) => <option value={status} selected={status === document.status}>{humanizeEnum(status)}</option>)}</select></label>
+                <label class="block"><span class="label lg:sr-only">Notes</span><input name="notes" value={document.notes ?? ''} class="field" placeholder="Optional" /></label>
+                <div class="flex items-center gap-2 lg:flex-col lg:items-stretch"><button type="submit" class="btn btn-secondary justify-center px-3 py-2 text-sm">Save</button><span data-form-status class="text-xs text-stone-500" aria-live="polite"></span></div>
+              </form>
+            ))}
+          </div>
+        </div>
+      </>
     ) : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No documents uploaded yet</p><p class="mt-1 text-sm text-stone-500">Upload drawings, specifications or supporting files for this project.</p></div>}
   </section>
 
-  <div class="mt-6 grid items-stretch gap-6 xl:grid-cols-2">
-    <ApplicationSummaryCard
-      id="planning"
-      title="Planning"
-      subtitle="Latest planning application"
-      manageHref={`/projects/${project.id}/planning`}
-      address={siteSummary}
-      clientName={project.client?.name ?? 'Not linked'}
-      applicationType="Householder"
-      status={applicationStatus(latestPlanning?.status)}
-      documentCount={planningDocumentCount}
-      reference={latestPlanning?.applicationReference ?? 'Not assigned'}
-      projectId={project.id}
-      applicationKind="PLANNING"
-      applicationId={latestPlanning?.id}
-      desktopJob={planningDesktop.job}
-      desktopPreparationReady={planningDesktop.preparationReady}
-      desktopMissingCount={planningDesktop.missingCount}
-    />
-    <ApplicationSummaryCard
-      id="building-warrant"
-      title="Building Warrant"
-      subtitle="Latest building warrant application"
-      manageHref={`/projects/${project.id}/building-warrant`}
-      address={siteSummary}
-      clientName={project.client?.name ?? 'Not linked'}
-      applicationType="Building Warrant"
-      status={applicationStatus(latestWarrant?.status)}
-      documentCount={warrantDocumentCount}
-      reference={latestWarrant?.warrantReference ?? 'Not assigned'}
-      projectId={project.id}
-      applicationKind="BUILDING_WARRANT"
-      applicationId={latestWarrant?.id}
-      desktopJob={warrantDesktop.job}
-      desktopPreparationReady={warrantDesktop.preparationReady}
-      desktopMissingCount={warrantDesktop.missingCount}
-    />
-  </div>
-
-  <section id="deadlines" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-xl font-semibold">Deadlines</h2><p class="mt-1 text-sm text-stone-500">{activeDeadlines.length} upcoming &middot; {overdueCount} overdue &middot; {completedDeadlines.length} completed</p></div><a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add or manage deadlines</a></div>
-    {activeDeadlines.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">{activeDeadlines.slice(0, 6).map((deadline) => <a href={`/deadlines?projectId=${project.id}`} class="flex flex-col gap-2 px-4 py-3 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"><div><p class="font-semibold">{deadline.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(deadline.type)} &middot; {humanizeEnum(deadline.priority)}</p></div><span class={`status-chip ${isProjectDateOverdue(deadline.dueDate) ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-700'}`}>{formatDate(deadline.dueDate)}</span></a>)}</div> : <div class="mt-4 rounded-lg border border-dashed border-stone-300 p-6 text-center"><p class="font-semibold">No deadlines added yet</p><p class="mt-1 text-sm text-stone-500">Add an internal task or statutory date for this project.</p></div>}
+  <section id="deadlines" class="panel mt-6 scroll-mt-24 rounded-lg p-4 sm:p-5">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-2xl font-semibold leading-8 text-ink">Deadlines</h2><p class="mt-1 text-sm text-stone-500">{activeDeadlines.length} upcoming &middot; {overdueCount} overdue &middot; {completedDeadlines.length} completed</p></div><a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add or manage deadlines</a></div>
+    {activeDeadlines.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">{activeDeadlines.slice(0, 6).map((deadline) => <a href={`/deadlines?projectId=${project.id}`} class="flex flex-col gap-2 px-4 py-3 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"><div><p class="font-semibold">{deadline.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(deadline.type)} &middot; {humanizeEnum(deadline.priority)}</p></div><span class={`status-chip ${isProjectDateOverdue(deadline.dueDate) ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-700'}`}>{formatDate(deadline.dueDate)}</span></a>)}</div> : <div class="mt-4 flex min-h-28 items-center justify-center gap-4 rounded-lg border border-dashed border-stone-300 px-5 py-6 text-left"><CalendarDays size={25} className="shrink-0 text-stone-400" aria-hidden="true" /><div><p class="font-semibold">No deadlines added yet</p><p class="mt-1 text-sm text-stone-500">Add an internal task or statutory date for this project.</p></div></div>}
   </section>
 
-  <section id="email-activity" class="panel mt-6 scroll-mt-6 overflow-hidden rounded-lg">
-    <div class="flex flex-col gap-3 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
-      <div><h2 class="text-xl font-semibold">Email activity</h2><p class="mt-1 text-sm text-stone-500">Confirmed project updates detected from the connected Gmail account.</p></div>
+  <section id="email-activity" class="panel mt-6 scroll-mt-24 overflow-hidden rounded-lg">
+    <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
+      <div><h2 class="text-2xl font-semibold leading-8 text-ink">Email activity</h2><p class="mt-1 text-sm text-stone-500">Confirmed project updates detected from the connected Gmail account.</p></div>
       <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/email-updates">Review email updates</a>
     </div>
     {recentEmailActivity.length ? <div class="divide-y divide-stone-200">
@@ -374,16 +408,61 @@ const actionTone = {
         </div>
         <p class="mt-2 text-xs text-stone-500">From {activity.trackedEmail.sender} &middot; {activity.appliedAutomatically ? 'Applied automatically' : `Reviewed by ${activity.reviewedBy?.name ?? 'an organisation member'}`}</p>
       </article>)}
-    </div> : <div class="px-4 py-8 text-center sm:px-5"><p class="font-semibold">No email-derived updates yet</p><p class="mt-1 text-sm text-stone-500">Confirmed application and deadline changes will appear here after Gmail sync.</p></div>}
+    </div> : <div class="mx-4 mb-4 flex min-h-24 items-center justify-center gap-4 rounded-lg border border-stone-200 px-5 py-6 text-left sm:mx-5 sm:mb-5"><Inbox size={25} className="shrink-0 text-stone-400" aria-hidden="true" /><div><p class="font-semibold">No email-derived updates yet</p><p class="mt-1 text-sm text-stone-500">Confirmed application and deadline changes will appear here after Gmail sync.</p></div></div>}
   </section>
 
-  <section id="notes" class="panel mt-6 scroll-mt-6 rounded-lg p-4">
-    <h2 class="text-xl font-semibold">Notes</h2>
+  <section id="notes" class="panel mt-6 scroll-mt-24 rounded-lg p-4 sm:p-5">
+    <h2 class="text-2xl font-semibold leading-8 text-ink">Notes</h2>
     <p class="mt-1 text-sm text-stone-500">Keep the client brief, useful email excerpts and manual source notes with the project.</p>
     <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" class="mt-4">
-      <label class="block"><span class="label">Project notes</span><textarea name="notes" rows="6" class="field" placeholder="Client brief, source notes and important context">{project.notes ?? ''}</textarea></label>
+      <label class="block"><span class="sr-only">Project notes</span><textarea name="notes" rows="4" class="field" placeholder="Client brief, source notes and important context">{project.notes ?? ''}</textarea></label>
       <div class="mt-4 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save notes</button><span data-form-status class="text-sm text-stone-500"></span></div>
     </form>
-    <details class="mt-5 border-t border-stone-100 pt-4"><summary class="cursor-pointer text-sm font-semibold text-red-700">Delete project</summary><p class="mt-3 text-sm text-stone-500">Deleting a project also removes its linked files, applications, deadlines and submission packages.</p><form data-api-form data-action={`/api/projects/${project.id}`} data-method="DELETE" data-redirect="/projects" data-confirm="Delete this project and its linked records?" class="mt-3"><button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete project</button><span data-form-status class="ml-3 text-sm text-stone-500"></span></form></details>
   </section>
+
+  <details class="mt-8 border-t border-stone-200 pt-5"><summary class="cursor-pointer text-sm font-semibold text-red-700">Delete project</summary><p class="mt-3 text-sm text-stone-500">Deleting a project also removes its linked files, applications, deadlines and submission packages.</p><form data-api-form data-action={`/api/projects/${project.id}`} data-method="DELETE" data-redirect="/projects" data-confirm="Delete this project and its linked records?" class="mt-3"><button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete project</button><span data-form-status class="ml-3 text-sm text-stone-500"></span></form></details>
+
+  <script>
+    const editToggle = document.querySelector('[data-project-edit-toggle]');
+    const editPanel = document.querySelector('[data-project-edit-panel]');
+    const setProjectEditOpen = (open: boolean) => {
+      if (!(editPanel instanceof HTMLElement)) return;
+      editPanel.hidden = !open;
+      editToggle?.setAttribute('aria-expanded', String(open));
+      document.documentElement.classList.toggle('overflow-hidden', open);
+      if (open) window.setTimeout(() => editPanel.querySelector('input')?.focus(), 100);
+      else if (editToggle instanceof HTMLElement) editToggle.focus();
+    };
+    editToggle?.addEventListener('click', () => setProjectEditOpen(true));
+    editPanel?.querySelectorAll('[data-project-edit-close]').forEach((button) => button.addEventListener('click', () => setProjectEditOpen(false)));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && editPanel instanceof HTMLElement && !editPanel.hidden) setProjectEditOpen(false);
+    });
+
+    const documentsExpand = document.querySelector('[data-documents-expand]');
+    const extraDocuments = [...document.querySelectorAll('[data-document-extra]')];
+    documentsExpand?.addEventListener('click', () => {
+      if (!(documentsExpand instanceof HTMLButtonElement)) return;
+      const expanded = documentsExpand.getAttribute('aria-expanded') !== 'true';
+      documentsExpand.setAttribute('aria-expanded', String(expanded));
+      extraDocuments.forEach((row) => row.classList.toggle('hidden', !expanded));
+      const label = documentsExpand.querySelector('[data-documents-expand-label]');
+      if (label) label.textContent = expanded ? 'Show fewer documents' : `View all ${extraDocuments.length + 3} documents`;
+      documentsExpand.querySelector('[data-documents-expand-icon]')?.classList.toggle('rotate-180', expanded);
+    });
+
+    const documentEditToggle = document.querySelector('[data-document-edit-toggle]');
+    const documentView = document.querySelector('[data-document-view]');
+    const documentEditor = document.querySelector('[data-document-editor]');
+    documentEditToggle?.addEventListener('click', () => {
+      if (!(documentEditToggle instanceof HTMLButtonElement) || !(documentEditor instanceof HTMLElement) || !(documentView instanceof HTMLElement)) return;
+      const editing = documentEditToggle.getAttribute('aria-expanded') !== 'true';
+      documentEditToggle.setAttribute('aria-expanded', String(editing));
+      documentView.hidden = editing;
+      documentEditor.hidden = !editing;
+      const label = documentEditToggle.querySelector('[data-document-edit-label]');
+      if (label) label.textContent = editing ? 'Done' : 'Edit';
+      if (editing) documentEditor.querySelector('select')?.focus();
+    });
+  </script>
 </AppShell>
