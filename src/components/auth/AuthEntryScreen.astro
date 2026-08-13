@@ -2,6 +2,7 @@
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
 import ProductScreenshotShowcase from '@/components/auth/ProductScreenshotShowcase.astro';
 import BrandLogo from '@/components/brand/BrandLogo.astro';
+import PublicFooter from '@/components/layout/PublicFooter.astro';
 
 interface Props {
   message?: string | null;
@@ -70,6 +71,7 @@ const { message = null, authError = null } = Astro.props;
             New practice? <a class="rounded-sm font-semibold text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/register">Create a workspace</a>
           </p>
         </form>
+        <PublicFooter />
       </div>
     </section>
 

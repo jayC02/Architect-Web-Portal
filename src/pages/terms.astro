@@ -1,0 +1,71 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
+import PublicFooter from '@/components/layout/PublicFooter.astro';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+---
+<BaseLayout
+  title="Terms of Use | Architect Pro"
+  description="Terms for using the Architect Pro practice workspace."
+>
+  <main class="min-h-screen bg-paper px-4 py-10 sm:px-8 lg:px-12">
+    <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col">
+      <header class="flex items-center justify-between gap-4">
+        <a class="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
+          <BrandLogo class="h-auto w-40" />
+        </a>
+        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/login">Sign in</a>
+      </header>
+
+      <article class="panel my-10 rounded-lg p-6 sm:p-10">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Architect Pro</p>
+        <h1 class="mt-3 text-3xl font-semibold text-ink">Terms of Use</h1>
+        <p class="mt-3 text-sm text-stone-500">Last updated: 13 August 2026</p>
+
+        <div class="mt-8 space-y-7 text-sm leading-7 text-stone-600">
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Using Architect Pro</h2>
+            <p class="mt-2">Architect Pro is a practice workspace for organising project information and preparing planning and building warrant materials for review. You may use it only for lawful business purposes and in accordance with these terms.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Your account</h2>
+            <p class="mt-2">You are responsible for keeping your sign-in details secure and for the activity carried out through your account. You must provide accurate information and tell your organisation administrator promptly if you believe your account has been misused.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Your content and responsibilities</h2>
+            <p class="mt-2">You retain responsibility for the documents and information you upload. You must have the necessary rights and permissions to use that content, and you must not upload unlawful, harmful or malicious material. Architect Pro outputs are aids for professional review and do not replace your own checks, decisions or statutory responsibilities.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Service availability</h2>
+            <p class="mt-2">We aim to keep Architect Pro available and secure, but the service may occasionally be changed, suspended or unavailable for maintenance, updates or reasons outside our reasonable control. We may suspend access where necessary to protect the service or its users.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Third-party services</h2>
+            <p class="mt-2">Architect Pro may use third-party services, including Google sign-in. Your use of those services may also be subject to their own terms and privacy policies.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Changes and contact</h2>
+            <p class="mt-2">We may update these terms when the service changes. We will publish the updated version on this page. If you have a question about these terms, please contact your Architect Pro organisation administrator.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Governing law</h2>
+            <p class="mt-2">These terms are governed by the laws of Scotland. The courts of Scotland will have exclusive jurisdiction, subject to any rights you have under applicable law.</p>
+          </section>
+        </div>
+      </article>
+
+      <div class="mt-auto">
+        <PublicFooter />
+      </div>
+    </div>
+  </main>
+</BaseLayout>

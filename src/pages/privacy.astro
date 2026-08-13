@@ -1,0 +1,66 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
+import PublicFooter from '@/components/layout/PublicFooter.astro';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+---
+<BaseLayout
+  title="Privacy Policy | Architect Pro"
+  description="How Architect Pro collects and uses personal information."
+>
+  <main class="min-h-screen bg-paper px-4 py-10 sm:px-8 lg:px-12">
+    <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col">
+      <header class="flex items-center justify-between gap-4">
+        <a class="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
+          <BrandLogo class="h-auto w-40" />
+        </a>
+        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/login">Sign in</a>
+      </header>
+
+      <article class="panel my-10 rounded-lg p-6 sm:p-10">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Architect Pro</p>
+        <h1 class="mt-3 text-3xl font-semibold text-ink">Privacy Policy</h1>
+        <p class="mt-3 text-sm text-stone-500">Last updated: 13 August 2026</p>
+
+        <div class="mt-8 space-y-7 text-sm leading-7 text-stone-600">
+          <section>
+            <h2 class="text-lg font-semibold text-ink">What this policy covers</h2>
+            <p class="mt-2">This policy explains how Architect Pro collects, uses and protects information when you use our website and practice workspace.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Information we use</h2>
+            <p class="mt-2">We use information you provide to create and manage your account, including your name, email address, organisation details and project information. If you sign in with Google, Google provides the account details needed to create or access your Architect Pro account. We do not receive or store your Google password.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">How we use it</h2>
+            <p class="mt-2">We use your information to provide, secure and improve Architect Pro, respond to support requests, communicate important service information and meet legal obligations. We do not sell your personal information or use it for unrelated advertising.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Sharing and retention</h2>
+            <p class="mt-2">We share information only with service providers that help us operate Architect Pro, or where the law requires it. We keep information while your account is active and for as long as reasonably necessary for security, legal and record-keeping purposes.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Your choices</h2>
+            <p class="mt-2">You may ask us to access, correct or delete your personal information, subject to legal requirements. To make a request, please contact the person who invited you to Architect Pro or your organisation administrator.</p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">Contact</h2>
+            <p class="mt-2">For privacy questions or concerns, please contact your Architect Pro organisation administrator.</p>
+          </section>
+        </div>
+      </article>
+
+      <div class="mt-auto">
+        <PublicFooter />
+      </div>
+    </div>
+  </main>
+</BaseLayout>
