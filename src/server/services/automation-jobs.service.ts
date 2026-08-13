@@ -313,9 +313,9 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const site = project.site
     ? {
         id: project.site.id,
-        displayName: project.site.addressLine1,
+        displayName: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
         address: {
-          addressLine1: project.site.addressLine1,
+          addressLine1: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
           addressLine2: project.site.addressLine2,
           townCity: project.site.townCity,
           postcode: project.site.postcode,

@@ -39,6 +39,7 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   else addMissing(issues, 'project', 'project.name', 'Project name', review.project.name, 'Confirm a project name.');
 
   if (review.projectMode !== 'existing') {
+    addMissing(issues, 'site', 'site.buildingNumber', 'Site building number', review.site.buildingNumber, 'Enter the site building number.');
     if (review.siteMode === 'existing') addMissing(issues, 'site', 'existingSiteId', 'Existing site', review.existingSiteId, 'Choose the matching site.');
     else {
       addMissing(issues, 'site', 'site.addressLine1', 'Site address', review.site.addressLine1, 'Confirm the site address.');
@@ -55,6 +56,7 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
         addMissing(issues, 'client', 'client.lastName', 'Applicant last name', review.client.lastName, 'Confirm the applicant last name.');
       } else addMissing(issues, 'client', 'client.companyName', 'Company name', review.client.companyName, 'Confirm the applicant company name.');
       addMissing(issues, 'client', 'client.email', 'Applicant email', review.client.email, 'Confirm the applicant email.');
+      addMissing(issues, 'client', 'client.buildingNumber', 'Applicant building number', review.client.buildingNumber, 'Enter the applicant building number.');
       addMissing(issues, 'client', 'client.addressLine1', 'Applicant address', review.client.addressLine1, 'Confirm the applicant address.');
       addMissing(issues, 'client', 'client.townCity', 'Applicant town or city', review.client.townCity, 'Confirm the applicant town or city.');
       addMissing(issues, 'client', 'client.postcode', 'Applicant postcode', review.client.postcode, 'Confirm the applicant postcode.');
@@ -63,6 +65,7 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   if (review.applicantDifferentFromClient) {
     addMissing(issues, 'client', 'applicant.displayName', 'Applicant name', review.applicant?.displayName, 'Confirm the separate applicant name.');
     addMissing(issues, 'client', 'applicant.email', 'Applicant email', review.applicant?.email, 'Confirm the separate applicant email.');
+    addMissing(issues, 'client', 'applicant.buildingNumber', 'Applicant building number', review.applicant?.buildingNumber, 'Enter the applicant building number.');
   }
   for (const [key, label] of [['practiceName', 'Practice name'], ['firstName', 'Agent first name'], ['lastName', 'Agent last name'], ['email', 'Agent email'], ['buildingNumber', 'Agent building number'], ['addressLine1', 'Agent address'], ['townCity', 'Agent town or city'], ['postcode', 'Agent postcode']] as const) {
     addMissing(issues, 'agent', `agent.${key}`, label, review.agent[key], `Confirm the ${label.toLowerCase()}.`);

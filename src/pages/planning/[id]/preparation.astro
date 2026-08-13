@@ -1,5 +1,5 @@
 ---
-import { AutomationJobType } from '@prisma/client';
+import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
 import { resolveSoleOwner } from '@/lib/planning-preparation-defaults';
@@ -29,7 +29,19 @@ const candidates = await prisma.automationJob.findMany({
   orderBy: { updatedAt: 'desc' },
   take: suppliedJobId ? 1 : 25,
 });
-const job = candidates.find((candidate) => automationJobApplicationId(candidate) === application.id);
+const editableJobStatuses = new Set<AutomationJobStatus>([
+  AutomationJobStatus.DRAFT,
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.READY,
+  AutomationJobStatus.STALE,
+  AutomationJobStatus.FAILED_RETRYABLE,
+  AutomationJobStatus.FAILED,
+]);
+const job = candidates.find((candidate) =>
+  editableJobStatuses.has(candidate.status)
+  && automationJobApplicationId(candidate) === application.id,
+);
 
 const preparation = application.preparationData && typeof application.preparationData === 'object' && !Array.isArray(application.preparationData)
   ? application.preparationData as Record<string, unknown>

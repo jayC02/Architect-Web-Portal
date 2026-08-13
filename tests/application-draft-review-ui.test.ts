@@ -18,13 +18,13 @@ const review = applicationDraftReviewSchema.parse({
   siteMode: 'create',
   existingSiteId: null,
   site: {
-    addressLine1: '1 Example Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom', localAuthority: 'Glasgow City Council',
+    buildingNumber: '1', addressLine1: 'Example Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom', localAuthority: 'Glasgow City Council',
   },
   clientMode: 'create',
   existingClientId: null,
   client: {
     clientType: 'INDIVIDUAL', displayName: 'Alex Example', title: 'Ms', firstName: 'Alex', lastName: 'Example', companyName: null,
-    email: 'alex@example.com', phone: null, addressLine1: '1 Example Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom',
+    email: 'alex@example.com', phone: null, buildingNumber: '1', addressLine1: 'Example Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom',
   },
   clientAddressSameAsSite: true,
   applicantDifferentFromClient: false,
@@ -66,6 +66,9 @@ assert.match(reviewUi, />Change</, 'review-required rows expose Change');
 assert.match(reviewUi, />Cancel</, 'category changes can be cancelled');
 assert.match(reviewUi, /More than one document is marked as a Location Plan/, 'Location Plan conflicts explain the required manual choice');
 assert.match(reviewUi, /clientAddressSameAsSite/, 'same-as-site address flow is visible');
+assert.match(reviewUi, /withSiteAddress[\s\S]*buildingNumber: site\.buildingNumber/, 'same-as-site copies the structured Site building number');
+assert.match(reviewUi, /showAddress \? <section[\s\S]*Address details/, 'same-as-site hides the duplicate Client address section');
+assert.match(reviewUi, /label="Building number"[\s\S]*review\.site\.buildingNumber/, 'Site asks for the building number once');
 assert.match(reviewUi, /Use a different applicant/, 'different applicant remains a secondary action');
 assert.match(reviewUi, /persistCurrentReview/, 'draft updates are autosaved');
 assert.match(reviewUi, /window\.setTimeout\(\(\) => void persistCurrentReview\(\), 600\)/, 'text updates are debounced');

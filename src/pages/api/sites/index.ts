@@ -18,6 +18,7 @@ export const GET: APIRoute = (context) =>
         where: { organisationId: organisation.id },
         select: {
           id: true,
+          buildingNumber: true,
           addressLine1: true,
           addressLine2: true,
           townCity: true,

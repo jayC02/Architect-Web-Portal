@@ -263,6 +263,7 @@ const withDefaultIndividualTitle = (
     : person;
 
 const siteFromPrepared = (prepared: PreparedApplicationDraft) => ({
+  buildingNumber: suggestionString(prepared.site, 'buildingNumber'),
   addressLine1: suggestionString(prepared.site, 'addressLine1'),
   addressLine2: suggestionString(prepared.site, 'addressLine2'),
   townCity: suggestionString(prepared.site, 'townCity'),
@@ -272,6 +273,7 @@ const siteFromPrepared = (prepared: PreparedApplicationDraft) => ({
 });
 
 const siteFromRecord = (site: Site) => ({
+  buildingNumber: site.buildingNumber,
   addressLine1: site.addressLine1,
   addressLine2: site.addressLine2,
   townCity: site.townCity,
@@ -527,6 +529,7 @@ const buildInitialReview = (
   );
   const clientWithDefaultAddress = clientAddressSameAsSite ? {
     ...client,
+    buildingNumber: site.buildingNumber,
     addressLine1: site.addressLine1,
     addressLine2: site.addressLine2,
     townCity: site.townCity,
@@ -559,10 +562,23 @@ const buildInitialReview = (
       existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
         ? suggestedApplicationType
         : existingReview.data.selectedApplicationType;
+    const confirmedClient = existingReview.data.clientAddressSameAsSite ? {
+      ...existingReview.data.client,
+      buildingNumber: existingReview.data.site.buildingNumber,
+      addressLine1: existingReview.data.site.addressLine1,
+      addressLine2: existingReview.data.site.addressLine2,
+      townCity: existingReview.data.site.townCity,
+      postcode: existingReview.data.site.postcode,
+      country: existingReview.data.site.country,
+    } : existingReview.data.client;
     return {
       ...existingReview.data,
-      client: withDefaultIndividualTitle(existingReview.data.client),
-      applicant: withDefaultIndividualTitle(existingReview.data.applicant ?? existingReview.data.client),
+      client: withDefaultIndividualTitle(confirmedClient),
+      applicant: withDefaultIndividualTitle(
+        existingReview.data.applicantDifferentFromClient
+          ? existingReview.data.applicant ?? confirmedClient
+          : confirmedClient,
+      ),
       selectedApplicationType,
       confirmations: mergeApplicationDraftConfirmationDefaults(
         selectedApplicationType,
@@ -590,7 +606,7 @@ const buildInitialReview = (
     client: clientWithDefaultAddress,
     clientAddressSameAsSite,
     applicantDifferentFromClient: false,
-    applicant: client,
+    applicant: clientWithDefaultAddress,
     agent: agentFromDefaults(defaults),
     application: {
       description: suggestionString(prepared.application, 'description'),
@@ -641,6 +657,7 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
   }
 
   if (review.projectMode !== 'existing') {
+    addMissing(issues, 'site', 'site.buildingNumber', 'Site building number', review.site.buildingNumber, 'Enter the site building number.');
     if (review.siteMode === 'existing') {
       addMissing(issues, 'site', 'existingSiteId', 'Existing site', review.existingSiteId, 'Choose the matching site.');
     } else {

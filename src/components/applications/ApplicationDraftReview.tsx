@@ -132,8 +132,18 @@ const personSummary = (person: Person) => {
 };
 
 const siteSummary = (site: Review['site']) =>
-  [site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ')
+  [site.buildingNumber, site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ')
   || 'Address needs attention';
+
+const withSiteAddress = (person: Person, site: Review['site']): Person => ({
+  ...person,
+  buildingNumber: site.buildingNumber,
+  addressLine1: site.addressLine1,
+  addressLine2: site.addressLine2,
+  townCity: site.townCity,
+  postcode: site.postcode,
+  country: site.country,
+});
 
 const hasRoute = (route: string, kind: 'building' | 'planning') =>
   kind === 'building'
@@ -326,21 +336,17 @@ function PersonFields({
           <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
         </div>
       </section>
-      <section aria-labelledby={`${prefix}-address-heading`}>
+      {showAddress ? <section aria-labelledby={`${prefix}-address-heading`}>
         <h4 id={`${prefix}-address-heading`} className="mb-3 text-sm font-semibold text-ink">Address details</h4>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Building number" value={person.buildingNumber} onChange={(value) => onChange('buildingNumber', value)} issue={issueFor(`${prefix}.buildingNumber`)} required />
-          {showAddress ? (
-            <>
-              <Field label="Address line 1" value={person.addressLine1} onChange={(value) => onChange('addressLine1', value)} issue={issueFor(`${prefix}.addressLine1`)} required />
-              <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
-              <Field label="Town or city" value={person.townCity} onChange={(value) => onChange('townCity', value)} issue={issueFor(`${prefix}.townCity`)} required />
-              <Field label="Postcode" value={person.postcode} onChange={(value) => onChange('postcode', value)} issue={issueFor(`${prefix}.postcode`)} required />
-              <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
-            </>
-          ) : null}
+          <Field label="Address line 1" value={person.addressLine1} onChange={(value) => onChange('addressLine1', value)} issue={issueFor(`${prefix}.addressLine1`)} required />
+          <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
+          <Field label="Town or city" value={person.townCity} onChange={(value) => onChange('townCity', value)} issue={issueFor(`${prefix}.townCity`)} required />
+          <Field label="Postcode" value={person.postcode} onChange={(value) => onChange('postcode', value)} issue={issueFor(`${prefix}.postcode`)} required />
+          <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
         </div>
-      </section>
+      </section> : null}
     </div>
   );
 }
@@ -727,20 +733,20 @@ export default function ApplicationDraftReview({
     });
   };
   const updateSite = (key: keyof Review['site'], value: string) => {
-    applyReview((current) => ({
-      ...current,
-      site: { ...current.site, [key]: value || null },
-      ...(current.clientAddressSameAsSite ? {
-        client: {
-          ...current.client,
-          addressLine1: key === 'addressLine1' ? value || null : current.site.addressLine1,
-          addressLine2: key === 'addressLine2' ? value || null : current.site.addressLine2,
-          townCity: key === 'townCity' ? value || null : current.site.townCity,
-          postcode: key === 'postcode' ? value || null : current.site.postcode,
-          country: key === 'country' ? value || null : current.site.country,
-        },
-      } : {}),
-    }));
+    applyReview((current) => {
+      const site = { ...current.site, [key]: value || null };
+      const client = current.clientAddressSameAsSite
+        ? withSiteAddress(current.client, site)
+        : current.client;
+      return {
+        ...current,
+        site,
+        client,
+        applicant: current.applicantDifferentFromClient
+          ? current.applicant
+          : client,
+      };
+    });
   };
   const updatePerson = (target: 'client' | 'applicant', key: keyof Person, value: string) => {
     applyReview((current) => {
@@ -848,7 +854,7 @@ export default function ApplicationDraftReview({
   const visibleDocuments = showAllDocuments || attentionDocumentIds.size === 0
     ? review.documents
     : review.documents.filter((document) => attentionDocumentIds.has(document.id));
-  const siteAddressComplete = Boolean(review.site.addressLine1 && review.site.townCity && review.site.postcode);
+  const siteAddressComplete = Boolean(review.site.buildingNumber && review.site.addressLine1 && review.site.townCity && review.site.postcode);
   const locationPlanConflict = locationPlanCount > 1;
 
   const commit = async () => {
@@ -1239,6 +1245,7 @@ export default function ApplicationDraftReview({
                   ))}
                 </select>
               </label>
+              <Field label="Building number" value={review.site.buildingNumber} onChange={(value) => updateSite('buildingNumber', value)} issue={issueFor('site.buildingNumber')} required />
               {review.siteMode === 'create' ? (
                 <>
                   <Field label="Address line 1" value={review.site.addressLine1} onChange={(value) => updateSite('addressLine1', value)} issue={issueFor('site.addressLine1')} required />
@@ -1289,14 +1296,12 @@ export default function ApplicationDraftReview({
                       onChange={(event) => applyReview((current) => ({
                         ...current,
                         clientAddressSameAsSite: event.target.checked,
-                        client: event.target.checked ? {
-                          ...current.client,
-                          addressLine1: current.site.addressLine1,
-                          addressLine2: current.site.addressLine2,
-                          townCity: current.site.townCity,
-                          postcode: current.site.postcode,
-                          country: current.site.country,
-                        } : current.client,
+                        client: event.target.checked
+                          ? withSiteAddress(current.client, current.site)
+                          : current.client,
+                        applicant: event.target.checked && !current.applicantDifferentFromClient
+                          ? withSiteAddress(current.applicant ?? current.client, current.site)
+                          : current.applicant,
                       }), true)}
                       className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
                     />

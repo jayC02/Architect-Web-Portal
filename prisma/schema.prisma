@@ -483,6 +483,7 @@ model OrganisationCertifierPreset {
 model Site {
   id             String   @id @default(cuid())
   organisationId String
+  buildingNumber String?
   addressLine1   String
   addressLine2   String?
   townCity       String

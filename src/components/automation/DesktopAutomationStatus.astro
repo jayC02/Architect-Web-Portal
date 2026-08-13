@@ -1,6 +1,9 @@
 ---
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
-import AutomationLaunchButton, { ExistingAutomationJobButton } from '@/components/automation/AutomationLaunchButton';
+import AutomationLaunchButton, {
+  ExistingAutomationJobButton,
+  RestartAutomationJobButton,
+} from '@/components/automation/AutomationLaunchButton';
 import { formatDate } from '@/lib/format';
 import {
   automationJobDocumentCount,
@@ -63,6 +66,16 @@ const failedStatuses = new Set<AutomationJobStatus>([
   AutomationJobStatus.FAILED_RETRYABLE,
   AutomationJobStatus.FAILED_FINAL,
 ]);
+const startedStatuses = new Set<AutomationJobStatus>([
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+  AutomationJobStatus.NEEDS_REVIEW,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+  AutomationJobStatus.COMPLETED,
+  AutomationJobStatus.FAILED_RETRYABLE,
+  AutomationJobStatus.FAILED_FINAL,
+  AutomationJobStatus.FAILED,
+]);
 ---
 <section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -102,6 +115,9 @@ const failedStatuses = new Set<AutomationJobStatus>([
       )}
       {job && failedStatuses.has(job.status) && (
         <a class="btn btn-primary" href={`/automation-job/${job.id}`}>Review issue</a>
+      )}
+      {job && startedStatuses.has(job.status) && (
+        <RestartAutomationJobButton client:load jobId={job.id} />
       )}
       {canPrepare && preparationReady && (
         <AutomationLaunchButton

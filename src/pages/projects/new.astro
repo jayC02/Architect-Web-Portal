@@ -48,7 +48,7 @@ const [clients, sites] = await Promise.all([
       <select name="siteId" class="field" data-site-select>
         <option value="">Not linked</option>
         {sites.map((site) => {
-          const projectName = [site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ');
+          const projectName = [site.buildingNumber, site.addressLine1, site.addressLine2, site.townCity, site.postcode].filter(Boolean).join(', ');
           return <option value={site.id} data-project-name={projectName}>{projectName}</option>;
         })}
         <option value="__add_site__">+ Add a new site</option>
@@ -147,6 +147,7 @@ const [clients, sites] = await Promise.all([
           <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
+      <label class="block"><span class="label">Building number</span><input required name="buildingNumber" maxlength="40" class="field" /></label>
       <label class="block"><span class="label">Address line 1</span><input required name="addressLine1" class="field" /></label>
       <label class="block"><span class="label">Address line 2</span><input name="addressLine2" class="field" /></label>
       <div class="grid gap-4 sm:grid-cols-2">

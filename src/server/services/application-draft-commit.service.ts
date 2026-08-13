@@ -205,17 +205,24 @@ const resolvePermanentRecords = async (
     },
     select: { id: true },
   })).id;
-  const siteId = selected.site?.id ?? (await tx.site.create({
-    data: {
-      organisationId,
-      addressLine1: review.site.addressLine1!,
-      addressLine2: review.site.addressLine2,
-      townCity: review.site.townCity!,
-      postcode: review.site.postcode!,
-      localAuthority: review.site.localAuthority,
-    },
-    select: { id: true },
-  })).id;
+  const siteId = selected.site
+    ? (await tx.site.update({
+        where: { id: selected.site.id },
+        data: { buildingNumber: review.site.buildingNumber },
+        select: { id: true },
+      })).id
+    : (await tx.site.create({
+        data: {
+          organisationId,
+          buildingNumber: review.site.buildingNumber,
+          addressLine1: review.site.addressLine1!,
+          addressLine2: review.site.addressLine2,
+          townCity: review.site.townCity!,
+          postcode: review.site.postcode!,
+          localAuthority: review.site.localAuthority,
+        },
+        select: { id: true },
+      })).id;
   const project = await tx.project.create({
     data: {
       organisationId,
@@ -227,6 +234,7 @@ const resolvePermanentRecords = async (
       stage: projectStageFor(review.selectedApplicationType),
       localAuthority: review.site.localAuthority,
       siteAddress: [
+        review.site.buildingNumber,
         review.site.addressLine1,
         review.site.addressLine2,
         review.site.townCity,

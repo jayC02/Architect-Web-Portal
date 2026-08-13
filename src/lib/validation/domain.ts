@@ -61,6 +61,7 @@ export const clientSchema = z.object({
 });
 
 export const siteSchema = z.object({
+  buildingNumber: optionalText(40),
   addressLine1: z.string().trim().min(1).max(160),
   addressLine2: optionalText(160),
   townCity: z.string().trim().min(1).max(100),

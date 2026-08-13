@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, LoaderCircle } from 'lucide-react';
+import { ExternalLink, LoaderCircle, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 
 type Props = {
@@ -65,6 +65,36 @@ export function ExistingAutomationJobButton({ jobId, label = 'Open in desktop ap
       <button type="button" className="btn btn-primary gap-2" disabled={working} onClick={() => void open()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
         {working ? 'Opening...' : label}
+      </button>
+      {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+export function RestartAutomationJobButton({ jobId }: { jobId: string }) {
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+
+  const restart = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      const result = await apiRequest<{ preparationRedirectTo: string }>(`/api/automation-jobs/${jobId}/restart`, {
+        method: 'POST',
+      });
+      window.location.assign(result.preparationRedirectTo);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Desktop automation could not be restarted.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div>
+      <button type="button" className="btn btn-secondary gap-2" disabled={working} onClick={() => void restart()}>
+        {working ? <LoaderCircle size={16} className="animate-spin" /> : <RotateCcw size={16} />}
+        {working ? 'Preparing again...' : 'Restart desktop automation'}
       </button>
       {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
     </div>

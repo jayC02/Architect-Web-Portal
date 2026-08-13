@@ -175,7 +175,7 @@ const nextAction = getProjectNextAction({
 });
 
 const siteSummary = project.site
-  ? [project.site.addressLine1, project.site.townCity, project.site.postcode].filter(Boolean).join(', ')
+  ? [project.site.buildingNumber, project.site.addressLine1, project.site.townCity, project.site.postcode].filter(Boolean).join(', ')
   : project.siteAddress ?? 'No site address linked';
 const activeDeadlines = deadlines.filter((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED);
 const completedDeadlines = deadlines.filter((deadline) => deadline.status === DeadlineStatus.COMPLETED);
@@ -242,7 +242,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
       </a>
       <a class="group flex min-h-28 gap-3 border-b border-stone-200 p-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/30 xl:border-b-0 xl:border-r" href={project.site ? `/sites?edit=${project.site.id}` : '/sites'} aria-label={project.site ? `View or edit site ${project.site.addressLine1}` : 'Open sites'}>
         <MapPin size={19} className="mt-0.5 shrink-0 text-stone-500 transition group-hover:text-moss" aria-hidden="true" />
-        <div class="min-w-0"><p class="label">Site</p><p class="break-words font-semibold text-ink">{project.site?.addressLine1 ?? project.siteAddress ?? 'Not linked'}</p><p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? 'No authority set'}</p></div>
+        <div class="min-w-0"><p class="label">Site</p><p class="break-words font-semibold text-ink">{project.site ? [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' ') : project.siteAddress ?? 'Not linked'}</p><p class="mt-1 text-sm text-stone-500">{project.site?.postcode ?? project.localAuthority ?? 'No authority set'}</p></div>
       </a>
       <article class="flex min-h-28 gap-3 border-b border-stone-200 bg-moss/[0.055] p-4 sm:border-r xl:border-b-0">
         <CircleCheck size={19} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />

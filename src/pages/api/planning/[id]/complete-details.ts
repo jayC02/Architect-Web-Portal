@@ -40,7 +40,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   });
   if (!application) throw new HttpError(404, 'Planning application not found.');
 
-  const job = body.jobId ? await prisma.automationJob.findFirst({
+  let job = body.jobId ? await prisma.automationJob.findFirst({
     where: {
       id: body.jobId,
       organisationId: organisation.id,
@@ -50,8 +50,8 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
     include: { createdBy: { select: { id: true, name: true, email: true } } },
   }) : null;
-  if (body.jobId && (!job || automationJobApplicationId(job) !== application.id)) {
-    throw new HttpError(404, 'This preparation job is not available for the selected Planning application.');
+  if (job && automationJobApplicationId(job) !== application.id) {
+    job = null;
   }
 
   const {

@@ -135,6 +135,7 @@ export const applicationDraftReviewSchema = z.object({
   siteMode: z.enum(['create', 'existing']).default('create'),
   existingSiteId: nullableText(120),
   site: z.object({
+    buildingNumber: nullableText(40).default(null),
     addressLine1: nullableText(160),
     addressLine2: nullableText(160),
     townCity: nullableText(100),
