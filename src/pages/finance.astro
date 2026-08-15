@@ -1,0 +1,77 @@
+---
+import { AlertTriangle, ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
+import AppShell from '@/components/layout/AppShell.astro';
+import { loadFinanceDashboard } from '@/lib/xero/finance';
+import { formatDate } from '@/lib/format';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+if (!['OWNER', 'ADMIN'].includes(auth.membership.role)) return Astro.redirect('/dashboard');
+
+const finance = await loadFinanceDashboard(auth.organisation.id);
+const money = (value: string | number | null | undefined, currency = 'GBP') => value == null
+  ? 'Not available'
+  : new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(Number(value));
+const metricValues = (values: Record<string, string>) => Object.entries(values);
+const baseCurrency = finance?.connection.baseCurrency ?? 'GBP';
+const baseMonthly = finance?.monthly.map((row) => ({
+  ...row,
+  invoicedValue: Number(row.invoiced[baseCurrency] ?? 0),
+  paidValue: Number(row.paid[baseCurrency] ?? 0),
+})) ?? [];
+const chartMax = Math.max(1, ...baseMonthly.flatMap((row) => [row.invoicedValue, row.paidValue]));
+const ageEntries = finance ? [
+  ['Current', finance.ageTotals.current],
+  ['1–30 days', finance.ageTotals.days1To30],
+  ['31–60 days', finance.ageTotals.days31To60],
+  ['61–90 days', finance.ageTotals.days61To90],
+  ['91+ days', finance.ageTotals.days91Plus],
+] : [];
+const ageMax = Math.max(1, ...ageEntries.map(([, value]) => Number(value)));
+const metricCards = finance ? [
+  { label: 'Invoiced this month', values: finance.metrics.invoicedThisMonth, description: 'Sales invoices dated this month' },
+  { label: 'Paid this month', values: finance.metrics.paidThisMonth, description: 'Authorised invoice payments received' },
+  { label: 'Outstanding', values: finance.metrics.outstanding, description: 'Unpaid and part-paid authorised invoices' },
+  { label: 'Overdue', values: finance.metrics.overdue, description: 'Outstanding after the due date' },
+] : [];
+---
+<AppShell title="Finance" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <header class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Xero finance</p>
+      <h1 class="mt-2 text-4xl font-semibold text-ink">Finance</h1>
+      <p class="mt-2 text-sm text-stone-500">Operational and accounting visibility from locally cached, read-only Xero data.</p>
+    </div>
+    {finance && <form data-api-form data-action="/api/integrations/xero/sync" data-method="POST" data-redirect="reload"><button class="btn btn-primary gap-2"><RefreshCw size={16} />Sync now</button></form>}
+  </header>
+
+  {!finance ? (
+    <section class="panel rounded-lg p-8 text-center"><h2 class="text-xl font-semibold">Connect Xero to view finance</h2><p class="mt-2 text-sm text-stone-500">An organisation owner or admin can connect the practice’s Xero organisation.</p><a class="btn btn-primary mt-5" href="/settings/integrations">Open integrations</a></section>
+  ) : (
+    <>
+      <section class="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div><span class="font-semibold text-ink">{finance.connection.xeroTenantName}</span><span class="ml-2 text-stone-500">Base currency {baseCurrency}</span></div>
+        <p class="flex items-center gap-2 text-stone-500"><Clock3 size={15} />Last successful sync {finance.connection.lastSyncedAt ? formatDate(finance.connection.lastSyncedAt) : 'not completed'}</p>
+      </section>
+      {finance.connection.lastSyncError && <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertTriangle size={16} className="mr-2 inline" />{finance.connection.lastSyncError}</div>}
+
+      <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {metricCards.map((card) => (
+          <article class="panel rounded-lg p-5"><p class="label">{card.label}</p><div class="mt-2 space-y-1">{metricValues(card.values).length ? metricValues(card.values).map(([currency, value]) => <p class="text-2xl font-semibold">{money(value, currency)}</p>) : <p class="text-2xl font-semibold">{money(0, baseCurrency)}</p>}</div><p class="mt-2 text-xs leading-5 text-stone-500">{card.description}</p></article>
+        ))}
+        <article class="panel rounded-lg border-l-4 border-l-moss p-5"><p class="label">Revenue YTD</p><p class="mt-2 text-2xl font-semibold">{money(finance.profitAndLoss?.revenue, finance.profitAndLoss?.currency ?? baseCurrency)}</p><p class="mt-2 text-xs leading-5 text-stone-500">From Xero Profit & Loss · {finance.profitAndLoss?.periodStart ? `${formatDate(finance.profitAndLoss.periodStart)} to ${formatDate(finance.profitAndLoss.periodEnd)}` : 'report not synced'}</p></article>
+        <article class="panel rounded-lg border-l-4 border-l-ink p-5"><p class="label">Net profit YTD</p><p class="mt-2 text-2xl font-semibold">{money(finance.profitAndLoss?.netProfit, finance.profitAndLoss?.currency ?? baseCurrency)}</p><p class="mt-2 text-xs leading-5 text-stone-500">Accounting result from Xero Profit & Loss</p></article>
+      </section>
+
+      <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <section class="panel rounded-lg p-5"><div><h2 class="text-xl font-semibold">Monthly invoiced vs paid</h2><p class="mt-1 text-sm text-stone-500">Last 12 months · {baseCurrency}</p></div><div class="mt-6 flex h-52 items-end gap-2" aria-label="Monthly invoiced versus paid chart">{baseMonthly.map((row) => <div class="flex min-w-0 flex-1 flex-col items-center gap-2"><div class="flex h-40 w-full items-end justify-center gap-1"><span class="w-2.5 rounded-t bg-ink" style={`height:${Math.max(2, row.invoicedValue / chartMax * 100)}%`} title={`Invoiced ${money(row.invoicedValue, baseCurrency)}`}></span><span class="w-2.5 rounded-t bg-moss" style={`height:${Math.max(2, row.paidValue / chartMax * 100)}%`} title={`Paid ${money(row.paidValue, baseCurrency)}`}></span></div><span class="text-[10px] text-stone-500">{new Date(`${row.month}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short' })}</span></div>)}</div><div class="mt-4 flex gap-4 text-xs text-stone-500"><span><i class="mr-1 inline-block h-2 w-2 bg-ink"></i>Invoiced</span><span><i class="mr-1 inline-block h-2 w-2 bg-moss"></i>Paid</span></div></section>
+        <section class="panel rounded-lg p-5"><h2 class="text-xl font-semibold">Outstanding age</h2><p class="mt-1 text-sm text-stone-500">Xero Aged Receivables · {baseCurrency}</p><div class="mt-5 space-y-4">{ageEntries.map(([label, value]) => <div><div class="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span class="font-semibold">{money(value, baseCurrency)}</span></div><div class="h-2 overflow-hidden rounded bg-stone-100"><div class="h-full bg-moss" style={`width:${Number(value) / ageMax * 100}%`}></div></div></div>)}</div></section>
+      </div>
+
+      <section class="panel mt-6 overflow-hidden rounded-lg"><div class="border-b border-stone-200 px-5 py-4"><h2 class="text-xl font-semibold">Outstanding invoices</h2><p class="mt-1 text-sm text-stone-500">Current debtors, linked clients and projects.</p></div>{finance.debtors.length ? <div class="overflow-x-auto"><table class="w-full min-w-[980px]"><thead class="table-head"><tr><th class="px-5 py-3">Contact / invoice</th><th class="px-5 py-3">Architect Pro</th><th class="px-5 py-3">Due</th><th class="px-5 py-3">Outstanding</th><th class="px-5 py-3">Status</th><th class="px-5 py-3 text-right">Xero</th></tr></thead><tbody>{finance.debtors.map((invoice) => <tr class="border-t border-stone-100"><td class="px-5 py-4"><p class="font-semibold">{invoice.contactName}</p><p class="mt-1 text-xs text-stone-500">{invoice.invoiceNumber ?? 'No invoice number'}</p></td><td class="px-5 py-4 text-sm"><p>{invoice.client?.name ?? 'Client not linked'}</p><p class="mt-1 text-xs text-stone-500">{invoice.project?.name ?? 'Project not linked'}</p></td><td class="px-5 py-4 text-sm">{invoice.dueDate ? formatDate(invoice.dueDate) : 'Not set'}</td><td class="px-5 py-4 font-semibold">{money(invoice.amountDue, invoice.currency)}</td><td class="px-5 py-4"><span class:list={['status-chip', invoice.daysOverdue > 0 ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-700']}>{invoice.daysOverdue > 0 ? `${invoice.daysOverdue} days overdue` : 'Current'}</span></td><td class="px-5 py-4 text-right">{invoice.xeroUrl && <a class="inline-flex items-center gap-1 text-sm font-semibold text-moss hover:text-ink" href={invoice.xeroUrl} target="_blank" rel="noreferrer">View <ArrowUpRight size={14} /></a>}</td></tr>)}</tbody></table></div> : <p class="px-5 py-10 text-center text-sm text-stone-500">No outstanding authorised sales invoices.</p>}</section>
+
+      <section class="panel mt-6 rounded-lg p-5"><h2 class="text-xl font-semibold">Top clients by invoiced value</h2><p class="mt-1 text-sm text-stone-500">Synced authorised and paid sales invoices.</p><div class="mt-4 divide-y divide-stone-100">{finance.topClients.map((client, index) => <div class="flex items-center justify-between gap-4 py-3"><p><span class="mr-3 text-xs text-stone-400">{index + 1}</span><span class="font-semibold">{client.name}</span></p><p class="font-semibold">{money(client.value, client.currency)}</p></div>)}</div></section>
+    </>
+  )}
+</AppShell>

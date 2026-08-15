@@ -1,0 +1,37 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { getPendingTenantSelection } from '@/lib/xero/oauth';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+if (!['OWNER', 'ADMIN'].includes(auth.membership.role)) return Astro.redirect('/settings/integrations');
+
+let tenants: Array<{ tenantId: string; tenantName: string; tenantType?: string }> = [];
+try {
+  tenants = (await getPendingTenantSelection(Astro as never, auth.organisation.id, auth.user.id)).tenants;
+} catch {
+  return Astro.redirect('/settings/integrations?xero=error&message=Xero%20organisation%20selection%20expired.');
+}
+---
+<AppShell title="Choose Xero organisation" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mx-auto max-w-2xl">
+    <a href="/settings/integrations" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to integrations</a>
+    <section class="panel mt-5 overflow-hidden rounded-lg">
+      <div class="border-b border-stone-200 p-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Xero connection</p>
+        <h1 class="mt-2 text-3xl font-semibold">Choose your Xero organisation</h1>
+        <p class="mt-2 text-sm leading-6 text-stone-600">Select the one Xero organisation that belongs to {auth.organisation.name}. This choice controls which financial records are synced.</p>
+      </div>
+      <form method="post" action="/api/integrations/xero/select-tenant" class="space-y-3 p-6">
+        {tenants.map((tenant, index) => (
+          <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-stone-200 p-4 hover:border-moss">
+            <input required type="radio" name="tenantId" value={tenant.tenantId} checked={index === 0} class="mt-1" />
+            <span><span class="block font-semibold text-ink">{tenant.tenantName}</span><span class="mt-1 block text-xs text-stone-500">{tenant.tenantType ?? 'Organisation'}</span></span>
+          </label>
+        ))}
+        <button class="btn btn-primary mt-5 w-full">Connect selected organisation</button>
+      </form>
+    </section>
+  </div>
+</AppShell>

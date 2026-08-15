@@ -12,7 +12,7 @@ import { requireOrganisation } from '@/server/permissions/authz';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
-    const { organisation } = await requireOrganisation(context);
+    const { organisation, membership } = await requireOrganisation(context);
     const clients = await withPerf('api.clients.list', () =>
       prisma.client.findMany({
         where: { organisationId: organisation.id },
@@ -39,7 +39,7 @@ export const GET: APIRoute = (context) =>
         take: 100,
       }),
     );
-    return jsonResponse(200, { clients });
+    return jsonResponse(200, { clients, canViewFinance: ['OWNER', 'ADMIN'].includes(membership.role) });
   }, context);
 
 export const POST: APIRoute = (context) =>

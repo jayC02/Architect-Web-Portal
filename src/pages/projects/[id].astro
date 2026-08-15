@@ -6,8 +6,9 @@ import {
   DocumentType,
   ProjectStage,
   ProjectStatus,
+  Prisma,
 } from '@prisma/client';
-import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, FileText, Inbox, MapPin, Pencil, Upload, UserRound, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, ExternalLink, FileText, Inbox, MapPin, Pencil, Upload, UserRound, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
 import { prisma } from '@/lib/db/prisma';
@@ -15,6 +16,7 @@ import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-catego
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { xeroInvoiceDeepLink } from '@/lib/xero/mapping';
 import {
   desktopAutomationJobSelect,
   getDesktopAutomationContext,
@@ -102,6 +104,46 @@ const [
     },
   }),
 ]);
+
+const canViewFinance = ['OWNER', 'ADMIN'].includes(auth.membership.role);
+const projectFinance = canViewFinance ? await (async () => {
+  const connection = await prisma.xeroConnection.findUnique({ where: { organisationId: auth.organisation.id } });
+  if (!connection) return null;
+  const clientLink = project.clientId ? await prisma.xeroClientLink.findUnique({ where: { clientId: project.clientId } }) : null;
+  const [links, candidates] = await Promise.all([
+    prisma.xeroProjectInvoiceLink.findMany({
+      where: { organisationId: auth.organisation.id, projectId: project.id },
+      include: { invoice: true },
+      orderBy: { linkedAt: 'desc' },
+    }),
+    prisma.xeroInvoiceSnapshot.findMany({
+      where: {
+        organisationId: auth.organisation.id,
+        invoiceType: 'ACCREC',
+        ...(clientLink ? { xeroContactId: clientLink.xeroContactId } : {}),
+        projectLinks: { none: {} },
+      },
+      orderBy: { invoiceDate: 'desc' },
+      take: 100,
+    }),
+  ]);
+  const totals = links.reduce((result, link) => {
+    const currency = link.invoice.currency;
+    const current = result.get(currency) ?? { invoiced: new Prisma.Decimal(0), paid: new Prisma.Decimal(0), outstanding: new Prisma.Decimal(0), overdue: new Prisma.Decimal(0) };
+    if (['AUTHORISED', 'PAID'].includes(link.invoice.status)) {
+      current.invoiced = current.invoiced.plus(link.invoice.total);
+      current.paid = current.paid.plus(link.invoice.amountPaid);
+      current.outstanding = current.outstanding.plus(link.invoice.amountDue);
+      if (link.invoice.dueDate && link.invoice.dueDate < new Date() && link.invoice.amountDue.greaterThan(0)) current.overdue = current.overdue.plus(link.invoice.amountDue);
+    }
+    result.set(currency, current);
+    return result;
+  }, new Map<string, { invoiced: Prisma.Decimal; paid: Prisma.Decimal; outstanding: Prisma.Decimal; overdue: Prisma.Decimal }>());
+  return { connection, links, candidates, clientLink, totals };
+})() : null;
+
+const projectMoney = (value: Prisma.Decimal | string | number, currency: string) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(Number(value));
 
 const documentCount = documentStats.reduce((total, group) => total + group._count._all, 0);
 const documentReviewCount = documentStats
@@ -229,6 +271,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
       ['Planning', '#planning'],
       ['Building Warrant', '#building-warrant'],
       ['Deadlines', '#deadlines'],
+      ...(canViewFinance ? [['Finance', '#finance']] : []),
       ['Email Activity', '#email-activity'],
       ['Notes', '#notes'],
     ].map(([label, href], index) => <a href={href} aria-current={index === 0 ? 'page' : undefined} class:list={['shrink-0 border-b-2 px-0.5 pb-3 pt-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', index === 0 ? 'border-moss text-ink' : 'border-transparent text-stone-600 hover:border-stone-300 hover:text-ink']}>{label}</a>)}
@@ -299,6 +342,26 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
       />
     </div>
   </section>
+
+  {canViewFinance && (
+    <section id="finance" class="panel mt-8 scroll-mt-24 overflow-hidden rounded-lg">
+      <div class="flex flex-col gap-3 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+        <div class="flex gap-3"><CircleDollarSign size={22} className="mt-0.5 text-moss" /><div><h2 class="text-2xl font-semibold text-ink">Finance</h2><p class="mt-1 text-sm text-stone-500">Existing Xero invoices linked locally to this project.</p></div></div>
+        <a class="text-sm font-semibold text-moss hover:text-ink" href="/finance">Open finance dashboard</a>
+      </div>
+      {!projectFinance ? <div class="px-5 py-8 text-center"><p class="font-semibold">Xero is not connected</p><a class="btn btn-secondary mt-4" href="/settings/integrations">Open integrations</a></div> : <>
+        {projectFinance.totals.size > 0 && <div class="grid gap-px bg-stone-200 sm:grid-cols-4">{[...projectFinance.totals.entries()].flatMap(([currency, totals]) => [
+          ['Invoiced', totals.invoiced], ['Paid', totals.paid], ['Outstanding', totals.outstanding], ['Overdue', totals.overdue],
+        ].map(([label, value]) => <div class="bg-white p-4"><p class="label">{label} ({currency})</p><p class="mt-2 font-semibold">{projectMoney(value as Prisma.Decimal, currency)}</p></div>))}</div>}
+        {projectFinance.links.length ? <div class="divide-y divide-stone-100">{projectFinance.links.map((link) => <article class="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_repeat(4,minmax(90px,0.45fr))_auto] lg:items-center"><div><p class="font-semibold">{link.invoice.invoiceNumber ?? 'Xero invoice'}</p><p class="mt-1 text-xs text-stone-500">{link.invoice.invoiceDate ? formatDate(link.invoice.invoiceDate) : 'No invoice date'}</p></div><div><p class="label">Due</p><p class="text-sm">{link.invoice.dueDate ? formatDate(link.invoice.dueDate) : 'Not set'}</p></div><div><p class="label">Total</p><p class="text-sm font-semibold">{projectMoney(link.invoice.total, link.invoice.currency)}</p></div><div><p class="label">Paid</p><p class="text-sm">{projectMoney(link.invoice.amountPaid, link.invoice.currency)}</p></div><div><p class="label">Outstanding</p><p class="text-sm">{projectMoney(link.invoice.amountDue, link.invoice.currency)}</p></div><div class="flex gap-2">{xeroInvoiceDeepLink(projectFinance.connection.xeroShortCode, link.xeroInvoiceId) && <a class="btn btn-secondary min-h-9 px-3" href={xeroInvoiceDeepLink(projectFinance.connection.xeroShortCode, link.xeroInvoiceId)!} target="_blank" rel="noreferrer" aria-label="View invoice in Xero"><ExternalLink size={14} /></a>}<form data-api-form data-action={`/api/finance/projects/${project.id}/invoices/${link.xeroInvoiceId}`} data-method="DELETE" data-redirect="reload"><button class="btn btn-secondary min-h-9 px-3">Unlink</button></form></div></article>)}</div> : <p class="px-5 py-6 text-sm text-stone-500">No Xero invoices linked to this project yet.</p>}
+        <form data-api-form data-action={`/api/finance/projects/${project.id}/invoices`} data-method="POST" data-redirect="reload" class="grid gap-3 border-t border-stone-200 bg-stone-50/60 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:px-5">
+          <label><span class="label">Link existing Xero invoice</span><select required name="xeroInvoiceId" class="field"><option value="">Select invoice</option>{projectFinance.candidates.map((invoice) => <option value={invoice.xeroInvoiceId}>{invoice.invoiceNumber ?? 'No number'} · {invoice.reference ?? 'No reference'} · {projectMoney(invoice.total, invoice.currency)} · {humanizeEnum(invoice.status)}</option>)}</select></label>
+          <button class="btn btn-primary self-end" disabled={!projectFinance.candidates.length}>Link invoice</button>
+          {!projectFinance.clientLink && <p class="text-xs text-stone-500 sm:col-span-2">Link the project client to a Xero contact to narrow this picker automatically.</p>}
+        </form>
+      </>}
+    </section>
+  )}
 
   <div id="project-details" data-project-edit-panel hidden class="fixed inset-0 z-50">
     <button type="button" data-project-edit-close aria-label="Close project details" class="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]"></button>

@@ -2,6 +2,7 @@
 import AppShell from '@/components/layout/AppShell.astro';
 import GoogleCalendarIntegration from '@/components/integrations/GoogleCalendarIntegration';
 import DesktopAccessIntegration from '@/components/integrations/DesktopAccessIntegration';
+import XeroIntegration from '@/components/integrations/XeroIntegration';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
@@ -12,9 +13,12 @@ if (!auth) return Astro.redirect('/login');
   <div class="mb-6">
     <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
     <h1 class="mt-2 text-3xl font-semibold">Integrations</h1>
-    <p class="mt-1 text-sm text-stone-500">Connect the practice calendar and keep project deadlines aligned automatically.</p>
+    <p class="mt-1 text-sm text-stone-500">Connect practice services and keep operational records aligned.</p>
   </div>
+  {['OWNER', 'ADMIN'].includes(auth.membership.role) && <XeroIntegration client:load />}
+  <div class="mt-5">
   <GoogleCalendarIntegration client:load />
+  </div>
   <div class="mt-5">
     <DesktopAccessIntegration client:load />
   </div>

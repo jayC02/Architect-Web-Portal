@@ -161,6 +161,20 @@ enum CalendarConnectionStatus {
   PAUSED
 }
 
+enum XeroConnectionStatus {
+  IDLE
+  SYNCING
+  CONNECTED
+  ERROR
+  RECONNECT_REQUIRED
+  DISCONNECTED
+}
+
+enum XeroReportType {
+  PROFIT_AND_LOSS
+  AGED_RECEIVABLES
+}
+
 enum GmailMatchStatus {
   UNMATCHED
   MATCHED
@@ -279,14 +293,17 @@ model User {
   authProviders            AuthProvider[]
   passwordResetTokens      PasswordResetToken[]
   organisationLinks        OrganisationMember[]
-  uploadedDocuments        ProjectDocument[]       @relation("DocumentUploadedBy")
-  documentSortBatches      DocumentSortBatch[]     @relation("DocumentSortBatchCreatedBy")
-  createdPackages          SubmissionPackage[]     @relation("PackageCreatedBy")
-  createdAutomationJobs    AutomationJob[]         @relation("AutomationJobCreatedBy")
-  claimedAutomationJobs    AutomationJob[]         @relation("AutomationJobClaimedBy")
+  uploadedDocuments        ProjectDocument[]        @relation("DocumentUploadedBy")
+  documentSortBatches      DocumentSortBatch[]      @relation("DocumentSortBatchCreatedBy")
+  createdPackages          SubmissionPackage[]      @relation("PackageCreatedBy")
+  createdAutomationJobs    AutomationJob[]          @relation("AutomationJobCreatedBy")
+  claimedAutomationJobs    AutomationJob[]          @relation("AutomationJobClaimedBy")
   desktopAccessTokens      DesktopAccessToken[]
-  createdApplicationDrafts ApplicationDraft[]      @relation("ApplicationDraftCreatedBy")
-  reviewedGmailSuggestions GmailUpdateSuggestion[] @relation("GmailSuggestionReviewedBy")
+  createdApplicationDrafts ApplicationDraft[]       @relation("ApplicationDraftCreatedBy")
+  reviewedGmailSuggestions GmailUpdateSuggestion[]  @relation("GmailSuggestionReviewedBy")
+  xeroOAuthStates          XeroOAuthState[]
+  xeroClientLinks          XeroClientLink[]         @relation("XeroClientLinkCreatedBy")
+  xeroProjectInvoiceLinks  XeroProjectInvoiceLink[] @relation("XeroProjectInvoiceLinkCreatedBy")
 
   @@index([email])
   @@index([createdAt])
@@ -383,6 +400,15 @@ model Organisation {
   certifierPresets     OrganisationCertifierPreset[]
   automationJobEvents  AutomationJobEvent[]
   applicationDrafts    ApplicationDraft[]
+  xeroConnections      XeroConnection[]
+  xeroOAuthStates      XeroOAuthState[]
+  xeroContacts         XeroContactSnapshot[]
+  xeroClientLinks      XeroClientLink[]
+  xeroInvoices         XeroInvoiceSnapshot[]
+  xeroPayments         XeroPaymentSnapshot[]
+  xeroProjectLinks     XeroProjectInvoiceLink[]
+  xeroReports          XeroReportSnapshot[]
+  xeroAgedReceivables  XeroAgedReceivableSnapshot[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -425,8 +451,9 @@ model Client {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   projects     Project[]
+  xeroLink     XeroClientLink?
 
   @@index([organisationId, name])
   @@index([organisationId, updatedAt])
@@ -528,6 +555,7 @@ model Project {
   automationJobs       AutomationJob[]
   trackedEmails        TrackedEmail[]
   gmailSuggestions     GmailUpdateSuggestion[]
+  xeroInvoiceLinks     XeroProjectInvoiceLink[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
@@ -537,36 +565,36 @@ model Project {
 }
 
 model ProjectDocument {
-  id             String              @id @default(cuid())
-  organisationId String
-  projectId      String
-  uploadedById   String
-  fileName       String
-  originalName   String
-  storageUrl     String
-  storageKey     String?
-  mimeType       String
-  sizeBytes      Int
-  type           DocumentType        @default(OTHER)
-  revision       String?
-  status         DocumentStatus      @default(DRAFT)
-  drawingNumber  String?
-  drawingTitle   String?
-  sortSource     DocumentSortSource?
-  sortConfidence Float?
-  sortReason     String?
-  fileHash       String?
-  analysisVersion String?
-  analysisProvider String?
-  analysisModel  String?
+  id                    String              @id @default(cuid())
+  organisationId        String
+  projectId             String
+  uploadedById          String
+  fileName              String
+  originalName          String
+  storageUrl            String
+  storageKey            String?
+  mimeType              String
+  sizeBytes             Int
+  type                  DocumentType        @default(OTHER)
+  revision              String?
+  status                DocumentStatus      @default(DRAFT)
+  drawingNumber         String?
+  drawingTitle          String?
+  sortSource            DocumentSortSource?
+  sortConfidence        Float?
+  sortReason            String?
+  fileHash              String?
+  analysisVersion       String?
+  analysisProvider      String?
+  analysisModel         String?
   analysisPromptVersion String?
   analysisSchemaVersion String?
-  analysisStatus String?
-  analysisResult Json?
-  analysedAt     DateTime?
-  notes          String?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  analysisStatus        String?
+  analysisResult        Json?
+  analysedAt            DateTime?
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   organisation          Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project               Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -633,28 +661,28 @@ model DocumentSortBatchItem {
 }
 
 model ApplicationDraft {
-  id                          String                 @id @default(cuid())
-  organisationId              String
-  createdById                 String
-  status                      ApplicationDraftStatus @default(UPLOADING)
-  notes                       String?
-  suggestedApplicationType    ApplicationDraftType?
-  selectedApplicationType     ApplicationDraftType?
-  preparedData                Json?
-  confirmedData               Json?
-  unresolvedQuestions         Json?
-  analysisSummary             Json?
-  expiresAt                   DateTime
-  committedAt                 DateTime?
-  resultingProjectId          String?
-  resultingPlanningId         String?
-  resultingWarrantId          String?
-  resultingAutomationJobId    String?
-  createdAt                   DateTime               @default(now())
-  updatedAt                   DateTime               @updatedAt
+  id                       String                 @id @default(cuid())
+  organisationId           String
+  createdById              String
+  status                   ApplicationDraftStatus @default(UPLOADING)
+  notes                    String?
+  suggestedApplicationType ApplicationDraftType?
+  selectedApplicationType  ApplicationDraftType?
+  preparedData             Json?
+  confirmedData            Json?
+  unresolvedQuestions      Json?
+  analysisSummary          Json?
+  expiresAt                DateTime
+  committedAt              DateTime?
+  resultingProjectId       String?
+  resultingPlanningId      String?
+  resultingWarrantId       String?
+  resultingAutomationJobId String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
-  organisation Organisation              @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  createdBy    User                      @relation("ApplicationDraftCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  organisation Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User                       @relation("ApplicationDraftCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   documents    ApplicationDraftDocument[]
 
   @@index([organisationId, status, updatedAt])
@@ -664,19 +692,19 @@ model ApplicationDraft {
 }
 
 model ApplicationDraftDocument {
-  id                    String                         @id @default(cuid())
+  id                    String                               @id @default(cuid())
   draftId               String
   originalFilename      String
   fileName              String
   storageKey            String
   mimeType              String
   sizeBytes             Int
-  sha256                 String?
-  clientSha256           String?
-  uploadIntentKey        String
-  uploadStatus           ApplicationDraftDocumentUploadStatus @default(UPLOADING)
-  finalisedAt            DateTime?
-  analysisStatus        ApplicationDraftDocumentStatus @default(PENDING)
+  sha256                String?
+  clientSha256          String?
+  uploadIntentKey       String
+  uploadStatus          ApplicationDraftDocumentUploadStatus @default(UPLOADING)
+  finalisedAt           DateTime?
+  analysisStatus        ApplicationDraftDocumentStatus       @default(PENDING)
   analysisVersion       String?
   analysisProvider      String?
   analysisModel         String?
@@ -684,8 +712,8 @@ model ApplicationDraftDocument {
   analysisSchemaVersion String?
   analysisResult        Json?
   analysisError         String?
-  documentType          DocumentType                   @default(OTHER)
-  documentStatus        DocumentStatus                 @default(IN_REVIEW)
+  documentType          DocumentType                         @default(OTHER)
+  documentStatus        DocumentStatus                       @default(IN_REVIEW)
   revision              String?
   drawingNumber         String?
   drawingTitle          String?
@@ -693,51 +721,51 @@ model ApplicationDraftDocument {
   confidence            Float?
   classificationReason  String?
   committedDocumentId   String?
-  createdAt             DateTime                       @default(now())
-  updatedAt             DateTime                       @updatedAt
+  createdAt             DateTime                             @default(now())
+  updatedAt             DateTime                             @updatedAt
 
   draft ApplicationDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
 
+  @@unique([draftId, uploadIntentKey])
   @@index([draftId, createdAt])
   @@index([draftId, analysisStatus])
   @@index([draftId, uploadStatus, createdAt])
-  @@unique([draftId, uploadIntentKey])
   @@index([sha256, analysisVersion, analysisProvider, analysisModel])
   @@index([committedDocumentId])
 }
 
 model AutomationJob {
-  id                String                  @id @default(cuid())
-  organisationId    String
-  projectId         String
-  type              AutomationJobType
-  status            AutomationJobStatus     @default(DRAFT)
-  sourceType        AutomationJobSourceType @default(PROJECT)
-  title             String
-  dataSnapshot      Json
-  documentSnapshot  Json
-  resultSummary     String?
-  error             String?
-  payloadVersion    Int                     @default(1)
-  snapshotHash      String?
-  sourceUpdatedAt   DateTime?
-  preparedAt        DateTime?
-  reviewedAt        DateTime?
-  resultData        Json?
-  lastCheckpoint    String?
-  preparationDraft  Json?
+  id                   String                  @id @default(cuid())
+  organisationId       String
+  projectId            String
+  type                 AutomationJobType
+  status               AutomationJobStatus     @default(DRAFT)
+  sourceType           AutomationJobSourceType @default(PROJECT)
+  title                String
+  dataSnapshot         Json
+  documentSnapshot     Json
+  resultSummary        String?
+  error                String?
+  payloadVersion       Int                     @default(1)
+  snapshotHash         String?
+  sourceUpdatedAt      DateTime?
+  preparedAt           DateTime?
+  reviewedAt           DateTime?
+  resultData           Json?
+  lastCheckpoint       String?
+  preparationDraft     Json?
   preparationDraftHash String?
-  preparationDraftAt DateTime?
-  createdById       String
-  claimedByUserId   String?
-  claimedDeviceId   String?
-  handoffCodeHash   String?                 @unique
-  handoffExpiresAt  DateTime?
-  handoffRedeemedAt DateTime?
-  claimedAt         DateTime?
-  completedAt       DateTime?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  preparationDraftAt   DateTime?
+  createdById          String
+  claimedByUserId      String?
+  claimedDeviceId      String?
+  handoffCodeHash      String?                 @unique
+  handoffExpiresAt     DateTime?
+  handoffRedeemedAt    DateTime?
+  claimedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
   organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -923,6 +951,243 @@ model CalendarConnection {
 
   @@unique([organisationId, provider])
   @@index([organisationId, status])
+}
+
+model XeroConnection {
+  id                    String               @id @default(cuid())
+  organisationId        String
+  xeroConnectionId      String
+  xeroTenantId          String
+  xeroTenantName        String
+  xeroShortCode         String?
+  baseCurrency          String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  accessTokenExpiresAt  DateTime
+  grantedScopes         String
+  status                XeroConnectionStatus @default(IDLE)
+  connectedAt           DateTime             @default(now())
+  lastSyncedAt          DateTime?
+  syncStartedAt         DateTime?
+  contactsLastSyncedAt  DateTime?
+  invoicesLastSyncedAt  DateTime?
+  paymentsLastSyncedAt  DateTime?
+  reportsLastSyncedAt   DateTime?
+  lastSyncError         String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  organisation        Organisation                 @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  contacts            XeroContactSnapshot[]
+  clientLinks         XeroClientLink[]
+  invoices            XeroInvoiceSnapshot[]
+  payments            XeroPaymentSnapshot[]
+  projectInvoiceLinks XeroProjectInvoiceLink[]
+  reports             XeroReportSnapshot[]
+  agedReceivables     XeroAgedReceivableSnapshot[]
+
+  @@unique([organisationId])
+  @@unique([xeroConnectionId])
+  @@unique([organisationId, xeroTenantId])
+  @@index([organisationId, status])
+  @@index([xeroTenantId])
+}
+
+model XeroOAuthState {
+  id                           String    @id @default(cuid())
+  organisationId               String
+  userId                       String
+  stateHash                    String    @unique
+  expiresAt                    DateTime
+  consumedAt                   DateTime?
+  selectionTokenHash           String?   @unique
+  selectionExpiresAt           DateTime?
+  pendingAccessTokenEncrypted  String?
+  pendingRefreshTokenEncrypted String?
+  pendingAccessTokenExpiresAt  DateTime?
+  pendingGrantedScopes         String?
+  pendingTenants               Json?
+  createdAt                    DateTime  @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, userId, expiresAt])
+  @@index([selectionExpiresAt])
+}
+
+model XeroContactSnapshot {
+  id             String    @id @default(cuid())
+  organisationId String
+  connectionId   String
+  xeroContactId  String
+  name           String
+  firstName      String?
+  lastName       String?
+  email          String?
+  accountNumber  String?
+  contactStatus  String?
+  isCustomer     Boolean   @default(false)
+  xeroUpdatedAt  DateTime?
+  syncedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  clientLinks  XeroClientLink[]
+
+  @@unique([connectionId, xeroContactId])
+  @@index([organisationId, name])
+  @@index([organisationId, email])
+  @@index([organisationId, isCustomer])
+}
+
+model XeroClientLink {
+  id             String   @id @default(cuid())
+  organisationId String
+  connectionId   String
+  clientId       String   @unique
+  xeroContactId  String
+  linkedByUserId String
+  linkedAt       DateTime @default(now())
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  xeroContact  XeroContactSnapshot @relation(fields: [connectionId, xeroContactId], references: [connectionId, xeroContactId], onDelete: Cascade)
+  linkedBy     User                @relation("XeroClientLinkCreatedBy", fields: [linkedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([connectionId, xeroContactId])
+  @@index([organisationId, linkedAt])
+  @@index([linkedByUserId])
+}
+
+model XeroInvoiceSnapshot {
+  id             String    @id @default(cuid())
+  organisationId String
+  connectionId   String
+  xeroInvoiceId  String
+  xeroContactId  String
+  invoiceNumber  String?
+  reference      String?
+  status         String
+  invoiceType    String
+  currency       String
+  invoiceDate    DateTime?
+  dueDate        DateTime?
+  subtotal       Decimal   @db.Decimal(18, 2)
+  totalTax       Decimal   @db.Decimal(18, 2)
+  total          Decimal   @db.Decimal(18, 2)
+  amountPaid     Decimal   @db.Decimal(18, 2)
+  amountDue      Decimal   @db.Decimal(18, 2)
+  xeroUpdatedAt  DateTime?
+  syncedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation             @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection           @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  payments     XeroPaymentSnapshot[]
+  projectLinks XeroProjectInvoiceLink[]
+
+  @@unique([connectionId, xeroInvoiceId])
+  @@index([organisationId, status, dueDate])
+  @@index([organisationId, xeroContactId])
+  @@index([organisationId, invoiceDate])
+}
+
+model XeroPaymentSnapshot {
+  id             String    @id @default(cuid())
+  organisationId String
+  connectionId   String
+  xeroPaymentId  String
+  xeroInvoiceId  String?
+  paymentDate    DateTime?
+  amount         Decimal   @db.Decimal(18, 2)
+  currency       String
+  status         String?
+  xeroUpdatedAt  DateTime?
+  syncedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  invoice      XeroInvoiceSnapshot? @relation(fields: [connectionId, xeroInvoiceId], references: [connectionId, xeroInvoiceId], onDelete: Restrict)
+
+  @@unique([connectionId, xeroPaymentId])
+  @@index([organisationId, paymentDate])
+  @@index([organisationId, xeroInvoiceId])
+}
+
+model XeroProjectInvoiceLink {
+  id             String   @id @default(cuid())
+  organisationId String
+  connectionId   String
+  projectId      String
+  xeroInvoiceId  String
+  linkedByUserId String
+  linkedAt       DateTime @default(now())
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoice      XeroInvoiceSnapshot @relation(fields: [connectionId, xeroInvoiceId], references: [connectionId, xeroInvoiceId], onDelete: Cascade)
+  linkedBy     User                @relation("XeroProjectInvoiceLinkCreatedBy", fields: [linkedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, xeroInvoiceId])
+  @@unique([connectionId, xeroInvoiceId])
+  @@index([organisationId, projectId])
+  @@index([linkedByUserId])
+}
+
+model XeroReportSnapshot {
+  id              String         @id @default(cuid())
+  organisationId  String
+  connectionId    String
+  reportType      XeroReportType
+  periodStart     DateTime?
+  periodEnd       DateTime
+  currency        String?
+  revenue         Decimal?       @db.Decimal(18, 2)
+  netProfit       Decimal?       @db.Decimal(18, 2)
+  summary         Json?
+  reportUpdatedAt DateTime?
+  syncedAt        DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, reportType, periodEnd])
+  @@index([organisationId, reportType, periodEnd])
+}
+
+model XeroAgedReceivableSnapshot {
+  id             String   @id @default(cuid())
+  organisationId String
+  connectionId   String
+  xeroContactId  String
+  reportDate     DateTime
+  currentAmount  Decimal  @db.Decimal(18, 2)
+  days1To30      Decimal  @db.Decimal(18, 2)
+  days31To60     Decimal  @db.Decimal(18, 2)
+  days61To90     Decimal  @db.Decimal(18, 2)
+  days91Plus     Decimal  @db.Decimal(18, 2)
+  total          Decimal  @db.Decimal(18, 2)
+  summary        Json?
+  syncedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, xeroContactId])
+  @@index([organisationId, reportDate])
+  @@index([organisationId, total])
 }
 
 model TrackedEmail {

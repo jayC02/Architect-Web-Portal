@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '@/lib/api/http';
-import { AlertTriangle, ArrowRight, Mail, MapPin, Phone, Plus, Search, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ExternalLink, Link2, Mail, MapPin, Phone, Plus, Search, Unlink, X } from 'lucide-react';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 import { clientIdentityLabel, clientStructuredAddress } from '@/lib/clients/display';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
@@ -445,7 +445,7 @@ function Clients({ data }: { data: AnyRecord }) {
       )}
 
       {clients.length > 0 && !filteredClients.length && <EmptyState>No clients match your search.</EmptyState>}
-      {drawer && <ClientDrawer drawer={drawer} onClose={() => setDrawer(null)} onEdit={(client) => setDrawer({ mode: 'edit', item: client })} />}
+      {drawer && <ClientDrawer drawer={drawer} canViewFinance={Boolean(data.canViewFinance)} onClose={() => setDrawer(null)} onEdit={(client) => setDrawer({ mode: 'edit', item: client })} />}
     </section>
   );
 }
@@ -586,12 +586,12 @@ function DirectoryDrawer({ title, description, onClose, children }: { title: str
   );
 }
 
-function ClientDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; onClose: () => void; onEdit: (client: AnyRecord) => void }) {
+function ClientDrawer({ drawer, canViewFinance, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; canViewFinance: boolean; onClose: () => void; onEdit: (client: AnyRecord) => void }) {
   if (drawer.mode === 'view' && drawer.item) {
     const client = drawer.item;
     const identity = clientIdentityLabel(client);
     const address = clientStructuredAddress(client);
-    return <DirectoryDrawer title={client.name} description="Client profile linked into project records." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Client" value={identity || 'Individual'} /><DetailRow label="Email" value={client.email || 'No email'} /><DetailRow label="Phone" value={client.phone || 'No phone'} /><DetailRow label="Address" value={address} /><DetailRow label="Projects" value={`${client._count?.projects ?? 0} project${(client._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={client.notes || 'No notes'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(client)}>Edit client</button></div></DirectoryDrawer>;
+    return <DirectoryDrawer title={client.name} description="Client profile linked into project records." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Client" value={identity || 'Individual'} /><DetailRow label="Email" value={client.email || 'No email'} /><DetailRow label="Phone" value={client.phone || 'No phone'} /><DetailRow label="Address" value={address} /><DetailRow label="Projects" value={`${client._count?.projects ?? 0} project${(client._count?.projects ?? 0) === 1 ? '' : 's'}`} /><DetailRow label="Notes" value={client.notes || 'No notes'} />{canViewFinance && <ClientFinancePanel clientId={client.id} />}<button type="button" className="btn btn-primary w-full" onClick={() => onEdit(client)}>Edit client</button></div></DirectoryDrawer>;
   }
   const client = drawer.item;
   const editing = drawer.mode === 'edit';
@@ -702,6 +702,30 @@ function SiteDrawer({ drawer, onClose, onEdit }: { drawer: { mode: 'create' | 'v
 function SiteForm({ site, onClose }: { site?: AnyRecord; onClose: () => void }) {
   const editing = Boolean(site?.id);
   return <form data-api-form data-action={editing ? `/api/sites/${site?.id}` : '/api/sites'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><label className="block"><span className="label">Building number</span><input required name="buildingNumber" maxLength={40} defaultValue={site?.buildingNumber ?? ''} className="field" placeholder="Enter building number" /></label><label className="block"><span className="label">Address line 1</span><input required name="addressLine1" defaultValue={site?.addressLine1 ?? ''} className="field" placeholder="Enter street or address line 1" /></label><label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={site?.addressLine2 ?? ''} className="field" placeholder="Enter address line 2" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Town/city</span><input required name="townCity" defaultValue={site?.townCity ?? ''} className="field" placeholder="Town or city" /></label><label className="block"><span className="label">Postcode</span><input required name="postcode" defaultValue={site?.postcode ?? ''} className="field" placeholder="Postcode" /></label></div><label className="block"><span className="label">Local authority</span><input name="localAuthority" defaultValue={site?.localAuthority ?? ''} className="field" placeholder="Local authority" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={site?.notes ?? ''} className="field" placeholder="Add any notes about this site" /></label><button className="btn btn-primary w-full">Save site</button><button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
+}
+
+function ClientFinancePanel({ clientId }: { clientId: string }) {
+  const [data, setData] = useState<AnyRecord | null>(null);
+  const [query, setQuery] = useState('');
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setError('');
+    try { setData(await apiRequest(`/api/finance/clients/${clientId}`)); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to load client finance.'); }
+  }, [clientId]);
+  useEffect(() => { void load(); }, [load]);
+  if (error && !data) return <div role="alert" className="border-t border-stone-200 pt-5 text-red-700">{error}</div>;
+  if (!data) return <div className="border-t border-stone-200 pt-5 text-stone-500">Loading finance...</div>;
+  if (!data.connected) return <div className="border-t border-stone-200 pt-5"><p className="font-semibold text-ink">Finance</p><p className="mt-1 text-stone-500">Connect Xero in Settings to link this client.</p></div>;
+  const contacts = (data.contacts ?? []).filter((contact: AnyRecord) => [contact.name, contact.email, contact.accountNumber].some((value) => String(value ?? '').toLowerCase().includes(query.toLowerCase())));
+  const mutate = async (method: 'POST' | 'DELETE', xeroContactId?: string) => {
+    setWorking(true); setError('');
+    try { await apiRequest(`/api/finance/clients/${clientId}`, { method, body: method === 'POST' ? JSON.stringify({ xeroContactId }) : undefined }); await load(); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Finance link could not be changed.'); }
+    finally { setWorking(false); }
+  };
+  return <section className="border-t border-stone-200 pt-5"><div className="flex items-center justify-between gap-3"><p className="font-semibold text-ink">Finance</p>{data.link?.xeroUrl && <a href={data.link.xeroUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-moss">View in Xero <ExternalLink size={13} aria-hidden="true" /></a>}</div>{error && <p role="alert" className="mt-2 text-red-700">{error}</p>}{data.link ? <div className="mt-3 space-y-3"><p><span className="text-stone-500">Xero contact</span><span className="block font-semibold">{data.link.name}</span></p>{Object.entries(data.link.totals ?? {}).map(([currency, totals]: [string, any]) => <div key={currency} className="grid grid-cols-2 gap-2 rounded-lg bg-stone-50 p-3"><DetailRow label={`Invoiced (${currency})`} value={Number(totals.invoiced).toLocaleString('en-GB', { style: 'currency', currency })} /><DetailRow label="Outstanding" value={Number(totals.outstanding).toLocaleString('en-GB', { style: 'currency', currency })} /><DetailRow label="Paid" value={Number(totals.paid).toLocaleString('en-GB', { style: 'currency', currency })} /><DetailRow label="Overdue" value={Number(totals.overdue).toLocaleString('en-GB', { style: 'currency', currency })} /></div>)}<button type="button" disabled={working} className="btn btn-secondary w-full gap-2" onClick={() => void mutate('DELETE')}><Unlink size={15} aria-hidden="true" />Unlink Xero contact</button></div> : <div className="mt-3"><p className="text-stone-500">Link Xero contact</p>{data.suggestions?.length > 0 && <p className="mt-2 text-xs text-moss">{data.suggestions.length} exact name or email suggestion{data.suggestions.length === 1 ? '' : 's'}</p>}<label className="mt-3 block"><span className="sr-only">Search synced Xero contacts</span><input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search synced Xero contacts" /></label><div className="mt-2 max-h-52 space-y-2 overflow-y-auto">{contacts.slice(0, 30).map((contact: AnyRecord) => <button key={contact.xeroContactId} type="button" disabled={working} onClick={() => void mutate('POST', contact.xeroContactId)} className="flex w-full items-center justify-between gap-3 rounded-md border border-stone-200 p-3 text-left hover:border-moss"><span><span className="block font-semibold">{contact.name}</span><span className="text-xs text-stone-500">{contact.email || contact.accountNumber || 'No secondary detail'}</span></span><Link2 size={15} aria-hidden="true" /></button>)}</div></div>}</section>;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
