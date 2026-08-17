@@ -6,6 +6,7 @@ import {
   AutomationJobStatus,
   AutomationJobType,
   DocumentSortSource,
+  LifecycleEventSource,
   PlanningStatus,
   Prisma,
   ProjectStage,
@@ -26,6 +27,8 @@ import {
   getApplicationDraftForOrganisation,
 } from '@/server/services/application-draft.service';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import { emitProjectCreatedLifecycleEvent } from '@/server/services/lifecycle-events.service';
+import { drainWorkflowEffectsBestEffort } from '@/server/services/workflow-effects.service';
 
 type CommitUser = {
   id: string;
@@ -182,6 +185,9 @@ const resolvePermanentRecords = async (
       clientId: selected.project.clientId,
       siteId: selected.project.siteId,
       projectId: selected.project.id,
+      projectCreated: false,
+      projectName: selected.project.name,
+      projectCreatedAt: selected.project.createdAt,
     };
   }
 
@@ -243,9 +249,16 @@ const resolvePermanentRecords = async (
       status: ProjectStatus.ACTIVE,
       notes: review.project.summary,
     },
-    select: { id: true },
+    select: { id: true, name: true, createdAt: true },
   });
-  return { clientId, siteId, projectId: project.id };
+  return {
+    clientId,
+    siteId,
+    projectId: project.id,
+    projectCreated: true,
+    projectName: project.name,
+    projectCreatedAt: project.createdAt,
+  };
 };
 
 const ensureReviewedDocumentsMatch = (
@@ -308,6 +321,7 @@ export const commitApplicationDraft = async (
         planningId: current.resultingPlanningId,
         warrantId: current.resultingWarrantId,
         automationJobId: current.resultingAutomationJobId,
+        lifecycleEventId: null,
       };
     }
     if (current.status === ApplicationDraftStatus.COMMITTING && current.resultingProjectId) {
@@ -316,6 +330,7 @@ export const commitApplicationDraft = async (
         planningId: current.resultingPlanningId,
         warrantId: current.resultingWarrantId,
         automationJobId: current.resultingAutomationJobId,
+        lifecycleEventId: null,
       };
     }
     const locked = await tx.applicationDraft.updateMany({
@@ -339,6 +354,18 @@ export const commitApplicationDraft = async (
     if (!locked.count) throw new HttpError(409, 'This application draft is already being created.');
 
     const records = await resolvePermanentRecords(tx, organisation.id, review);
+    const lifecycleEvent = records.projectCreated
+      ? await emitProjectCreatedLifecycleEvent(tx, {
+          organisationId: organisation.id,
+          project: {
+            id: records.projectId,
+            name: records.projectName,
+            createdAt: records.projectCreatedAt,
+          },
+          source: LifecycleEventSource.APPLICATION_DRAFT,
+          actorUserId: user.id,
+        })
+      : null;
     const reviewById = new Map(review.documents.map((document) => [document.id, document]));
     for (const document of current.documents) {
       const reviewed = reviewById.get(document.id)!;
@@ -487,6 +514,7 @@ export const commitApplicationDraft = async (
       planningId,
       warrantId,
       automationJobId: jobId,
+      lifecycleEventId: lifecycleEvent?.id ?? null,
     };
   });
 
@@ -555,9 +583,18 @@ export const commitApplicationDraft = async (
       unresolvedQuestions: [],
     },
   });
+  if (committedRecords.lifecycleEventId) {
+    await drainWorkflowEffectsBestEffort({
+      organisationId: organisation.id,
+      lifecycleEventId: committedRecords.lifecycleEventId,
+    });
+  }
 
   return {
     created: true,
-    ...committedRecords,
+    projectId: committedRecords.projectId,
+    planningId: committedRecords.planningId,
+    warrantId: committedRecords.warrantId,
+    automationJobId: committedRecords.automationJobId,
   };
 };

@@ -70,6 +70,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   if (!id) throw new HttpError(400, 'Automation job id is required.');
   assertDesktopJobAccess(access, id);
   const body = await parseBody(context.request, desktopJobStatusSchema);
+  if (body.jobId !== id) throw new HttpError(400, 'Desktop callback job id does not match the requested job.');
   const outcome = await prisma.$transaction(async (tx) => {
     const job = await tx.automationJob.findFirst({
       where: {
@@ -84,7 +85,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     const duplicate = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "AutomationJobEvent"
-      WHERE "idempotencyKey" = ${body.idempotencyKey}
+      WHERE "idempotencyKey" = ${body.callbackId}
       LIMIT 1
     `);
     if (duplicate.length) return { duplicate: true, status: job.status };
@@ -92,6 +93,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     assertAutomationJobTransition(job.status, body.status);
     const eventPayload = JSON.stringify({
       status: body.status,
+      version: body.version,
+      jobId: body.jobId,
+      callbackId: body.callbackId,
+      occurredAt: body.occurredAt,
       eventType: body.eventType,
       lastCheckpoint: body.lastCheckpoint ?? null,
       resultSummary: body.resultSummary ?? null,
@@ -105,7 +110,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
           ${randomUUID()},
           ${access.organisationId},
           ${id},
-          ${body.idempotencyKey},
+          ${body.callbackId},
           ${body.eventType},
           CAST(${eventPayload} AS JSONB)
         )
@@ -121,7 +126,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       data: {
         status: body.status,
         resultSummary: body.resultSummary ?? undefined,
-        resultData: body.result ? (body.result as Prisma.InputJsonValue) : undefined,
+        resultData: body.result ? ({ ...body.result, occurredAt: body.occurredAt } as Prisma.InputJsonValue) : undefined,
         lastCheckpoint: body.lastCheckpoint ?? undefined,
         error: (
           body.status === AutomationJobStatus.FAILED_RETRYABLE

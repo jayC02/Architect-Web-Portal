@@ -281,6 +281,60 @@ enum ApplicationDraftDocumentStatus {
   FAILED
 }
 
+enum LifecycleAggregateType {
+  PROJECT
+}
+
+enum LifecycleEventType {
+  PROJECT_CREATED
+}
+
+enum LifecycleEventSource {
+  MANUAL_PROJECT
+  APPLICATION_DRAFT
+}
+
+enum LifecycleActorType {
+  USER
+  SYSTEM
+}
+
+enum WorkflowEffectStatus {
+  PENDING
+  PROCESSING
+  RETRYABLE
+  COMPLETED
+  FAILED_FINAL
+}
+
+enum ActionItemKind {
+  DOCUMENT_REVIEW
+}
+
+enum ActionItemPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionItemStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ProjectActivityEventType {
+  PROJECT_CREATED
+}
+
+enum ProjectActivityVisibility {
+  STANDARD
+}
+
+enum WorkflowTargetKey {
+  PROJECT_DOCUMENT_REVIEW
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -304,6 +358,8 @@ model User {
   xeroOAuthStates          XeroOAuthState[]
   xeroClientLinks          XeroClientLink[]         @relation("XeroClientLinkCreatedBy")
   xeroProjectInvoiceLinks  XeroProjectInvoiceLink[] @relation("XeroProjectInvoiceLinkCreatedBy")
+  lifecycleEvents          LifecycleEvent[]         @relation("LifecycleEventActor")
+  projectActivities        ProjectActivity[]        @relation("ProjectActivityActor")
 
   @@index([email])
   @@index([createdAt])
@@ -409,6 +465,11 @@ model Organisation {
   xeroProjectLinks     XeroProjectInvoiceLink[]
   xeroReports          XeroReportSnapshot[]
   xeroAgedReceivables  XeroAgedReceivableSnapshot[]
+  lifecycleEvents      LifecycleEvent[]
+  workflowEffects      WorkflowEffect[]
+  actionItems          ActionItem[]
+  projectActivities    ProjectActivity[]
+  workflowTargets      WorkflowTarget[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -556,12 +617,140 @@ model Project {
   trackedEmails        TrackedEmail[]
   gmailSuggestions     GmailUpdateSuggestion[]
   xeroInvoiceLinks     XeroProjectInvoiceLink[]
+  lifecycleEvents      LifecycleEvent[]
+  actionItems          ActionItem[]
+  activities           ProjectActivity[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
   @@index([organisationId, stage])
   @@index([organisationId, clientId])
   @@index([organisationId, siteId])
+}
+
+model LifecycleEvent {
+  id             String                 @id @default(cuid())
+  organisationId String
+  projectId      String
+  aggregateType  LifecycleAggregateType
+  aggregateId    String
+  eventType      LifecycleEventType
+  schemaVersion  Int                    @default(1)
+  payload        Json
+  source         LifecycleEventSource
+  actorType      LifecycleActorType
+  actorUserId    String?
+  occurredAt     DateTime
+  dispatchedAt   DateTime?
+  idempotencyKey String
+  createdAt      DateTime               @default(now())
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actorUser    User?             @relation("LifecycleEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  effects      WorkflowEffect[]
+  actionItems  ActionItem[]
+  activities   ProjectActivity[]
+
+  @@unique([organisationId, idempotencyKey])
+  @@index([organisationId, dispatchedAt, createdAt])
+  @@index([organisationId, projectId, occurredAt])
+  @@index([aggregateType, aggregateId, occurredAt])
+  @@index([actorUserId])
+}
+
+model WorkflowEffect {
+  id               String               @id @default(cuid())
+  organisationId   String
+  lifecycleEventId String
+  handlerKey       String
+  status           WorkflowEffectStatus @default(PENDING)
+  attempts         Int                  @default(0)
+  availableAt      DateTime             @default(now())
+  leaseOwner       String?
+  leaseExpiresAt   DateTime?
+  lastError        String?
+  completedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lifecycleEvent LifecycleEvent @relation(fields: [lifecycleEventId], references: [id], onDelete: Cascade)
+
+  @@unique([lifecycleEventId, handlerKey])
+  @@index([organisationId, status, availableAt])
+  @@index([status, availableAt, leaseExpiresAt])
+  @@index([leaseOwner, leaseExpiresAt])
+}
+
+model ActionItem {
+  id                     String             @id @default(cuid())
+  organisationId         String
+  projectId              String
+  sourceLifecycleEventId String
+  kind                   ActionItemKind
+  title                  String
+  summary                String?
+  actionUrl              String
+  priority               ActionItemPriority @default(MEDIUM)
+  status                 ActionItemStatus   @default(OPEN)
+  availableAt            DateTime           @default(now())
+  dueAt                  DateTime?
+  resolvedAt             DateTime?
+  dedupeKey              String
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceLifecycleEvent LifecycleEvent @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, dedupeKey])
+  @@index([organisationId, status, priority, availableAt])
+  @@index([organisationId, projectId, status])
+  @@index([sourceLifecycleEventId])
+}
+
+model ProjectActivity {
+  id                     String                    @id @default(cuid())
+  organisationId         String
+  projectId              String
+  sourceLifecycleEventId String
+  eventType              ProjectActivityEventType
+  summary                String
+  actorType              LifecycleActorType
+  actorUserId            String?
+  sourceType             String
+  sourceId               String
+  visibility             ProjectActivityVisibility @default(STANDARD)
+  occurredAt             DateTime
+  idempotencyKey         String
+  createdAt              DateTime                  @default(now())
+
+  organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceLifecycleEvent LifecycleEvent @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
+  actorUser            User?          @relation("ProjectActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([organisationId, idempotencyKey])
+  @@index([organisationId, projectId, occurredAt])
+  @@index([sourceLifecycleEventId])
+  @@index([actorUserId])
+}
+
+model WorkflowTarget {
+  id             String            @id @default(cuid())
+  organisationId String
+  key            WorkflowTargetKey
+  enabled        Boolean           @default(true)
+  offsetDays     Int               @default(3)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, key])
+  @@index([organisationId, enabled])
 }
 
 model ProjectDocument {
@@ -1295,6 +1484,7 @@ model SyncedCalendarEvent {
   deadlineId           String?
   provider             CalendarProvider
   providerEventId      String?
+  syncKey              String?          @unique
   title                String
   startsAt             DateTime
   endsAt               DateTime?

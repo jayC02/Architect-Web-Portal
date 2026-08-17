@@ -9,7 +9,9 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation } from '@/server/permissions/authz';
+import { createProjectWithLifecycle } from '@/server/services/project-creation.service';
 import { resolveProjectLinks } from '@/server/services/project-data.service';
+import { drainWorkflowEffectsBestEffort } from '@/server/services/workflow-effects.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -39,12 +41,12 @@ export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
     assertAllowedOrigin(context.request);
     assertRateLimit(context, rateLimitPolicies.mutation, 'projects:create');
-    const { organisation } = await requireOrganisation(context);
+    const { organisation, user } = await requireOrganisation(context);
     const body = await parseBody(context.request, projectCreateSchema);
     const links = await resolveProjectLinks(organisation.id, body.clientId, body.siteId);
     const name = body.name?.trim() || links.derivedSite?.siteAddress;
     if (!name) throw new HttpError(400, 'Choose a site or enter a project name.');
-    const project = await prisma.project.create({
+    const { project, lifecycleEventId } = await createProjectWithLifecycle({
       data: {
         ...body,
         name,
@@ -54,6 +56,11 @@ export const POST: APIRoute = (context) =>
         localAuthority: links.derivedSite?.localAuthority,
         organisationId: organisation.id,
       },
+      actorUserId: user.id,
+    });
+    await drainWorkflowEffectsBestEffort({
+      organisationId: organisation.id,
+      lifecycleEventId,
     });
     return jsonResponse(201, { project, redirectTo: `/projects/${project.id}` });
   }, context);

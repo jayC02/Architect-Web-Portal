@@ -290,6 +290,12 @@ const activeDeadlineStatuses: DeadlineStatus[] = [
   DeadlineStatus.OVERDUE,
 ];
 
+export const googleDeadlineSyncKey = (organisationId: string, deadlineId: string) =>
+  `${organisationId}:GOOGLE:${deadlineId}`;
+
+export const googleDeadlineEventId = (organisationId: string, deadlineId: string) =>
+  `ap${crypto.createHash('sha256').update(`${organisationId}:${deadlineId}`).digest('hex')}`;
+
 const markConnectionFailure = async (connectionId: string, error: unknown) => {
   const message = error instanceof Error ? error.message.slice(0, 500) : 'Google Calendar sync failed.';
   await prisma.calendarConnection.updateMany({
@@ -307,6 +313,7 @@ const deleteGoogleEvent = async (accessToken: string, providerEventId: string) =
 };
 
 const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken: string, deadline: NonNullable<DeadlineForSync>) => {
+  const syncKey = googleDeadlineSyncKey(deadline.organisationId, deadline.id);
   const existing = await prisma.syncedCalendarEvent.findFirst({
     where: {
       organisationId: deadline.organisationId,
@@ -340,17 +347,28 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
     }
   }
   if (!googleEvent) {
-    googleEvent = await googleRequest<GoogleEventResponse>(accessToken, '/calendars/primary/events', {
-      method: 'POST',
-      body: JSON.stringify(eventBody),
-    });
+    const deterministicEventId = googleDeadlineEventId(deadline.organisationId, deadline.id);
+    try {
+      googleEvent = await googleRequest<GoogleEventResponse>(accessToken, '/calendars/primary/events', {
+        method: 'POST',
+        body: JSON.stringify({ id: deterministicEventId, ...eventBody }),
+      });
+    } catch (error) {
+      if ((error as HttpError & { googleStatus?: number }).googleStatus !== 409) throw error;
+      googleEvent = await googleRequest<GoogleEventResponse>(
+        accessToken,
+        `/calendars/primary/events/${encodeURIComponent(deterministicEventId)}`,
+        { method: 'PUT', body: JSON.stringify(eventBody) },
+      );
+    }
   }
   if (!googleEvent.id) throw new HttpError(502, 'Google Calendar did not return an event id.');
 
   await prisma.syncedCalendarEvent.upsert({
-    where: existing ? { id: existing.id } : { id: '__new_google_calendar_event__' },
+    where: existing ? { id: existing.id } : { syncKey },
     update: {
       calendarConnectionId: connection.id,
+      syncKey,
       providerEventId: googleEvent.id,
       title: deadline.title,
       startsAt: deadline.dueDate,
@@ -363,6 +381,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
       calendarConnectionId: connection.id,
       deadlineId: deadline.id,
       provider: CalendarProvider.GOOGLE,
+      syncKey,
       providerEventId: googleEvent.id,
       title: deadline.title,
       startsAt: deadline.dueDate,

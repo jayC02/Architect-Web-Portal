@@ -21,7 +21,20 @@ export const desktopHandoffExchangeSchema = z.object({
   deviceName: z.string().trim().min(1).max(120).optional(),
 });
 
+export const DESKTOP_CALLBACK_CONTRACT_VERSION = 1 as const;
+
+const desktopCallbackTimingsSchema = z.object({
+  totalSeconds: z.number().finite().nonnegative().max(86_400).optional(),
+  stageDurationsSeconds: z.record(z.number().finite().nonnegative().max(86_400)).default({}),
+}).strict();
+
 export const desktopJobStatusSchema = z.object({
+  version: z.literal(DESKTOP_CALLBACK_CONTRACT_VERSION, {
+    errorMap: () => ({ message: `Unsupported desktop callback version. Expected ${DESKTOP_CALLBACK_CONTRACT_VERSION}.` }),
+  }),
+  jobId: z.string().trim().min(8).max(120),
+  callbackId: z.string().uuid(),
+  occurredAt: z.string().datetime({ offset: true }),
   status: z.enum([
     AutomationJobStatus.IN_PROGRESS,
     AutomationJobStatus.AWAITING_PORTAL_REVIEW,
@@ -29,7 +42,6 @@ export const desktopJobStatusSchema = z.object({
     AutomationJobStatus.FAILED_FINAL,
     AutomationJobStatus.CANCELLED,
   ]),
-  idempotencyKey: z.string().trim().min(16).max(120),
   eventType: z.enum(['started', 'checkpoint', 'result']),
   lastCheckpoint: z.string().trim().min(1).max(100).optional(),
   resultSummary: z.string().trim().max(1000).optional(),
@@ -51,6 +63,6 @@ export const desktopJobStatusSchema = z.object({
     safeRetryPoint: z.string().trim().max(100).nullable().optional(),
     errorCode: z.string().trim().max(80).nullable().optional(),
     errorSummary: z.string().trim().max(500).nullable().optional(),
-    occurredAt: z.string().datetime(),
-  }).optional(),
-});
+    timings: desktopCallbackTimingsSchema.optional(),
+  }).strict().optional(),
+}).strict();

@@ -1,5 +1,6 @@
 ﻿---
 import {
+  ActionItemStatus,
   AutomationJobType,
   DeadlineStatus,
   DocumentStatus,
@@ -42,6 +43,8 @@ const [
   deadlines,
   automationJobs,
   recentEmailActivity,
+  actionItems,
+  projectActivities,
 ] = await Promise.all([
   prisma.client.findMany({
     where: { organisationId: auth.organisation.id },
@@ -102,6 +105,23 @@ const [
       reviewedBy: { select: { name: true } },
       trackedEmail: { select: { sender: true, subject: true } },
     },
+  }),
+  prisma.actionItem.findMany({
+    where: {
+      organisationId: auth.organisation.id,
+      projectId: project.id,
+      status: ActionItemStatus.OPEN,
+      availableAt: { lte: new Date() },
+    },
+    orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
+    take: 5,
+    select: { id: true, title: true, summary: true, actionUrl: true, priority: true, dueAt: true },
+  }),
+  prisma.projectActivity.findMany({
+    where: { organisationId: auth.organisation.id, projectId: project.id },
+    orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+    take: 8,
+    select: { id: true, summary: true, occurredAt: true, actorUser: { select: { name: true } } },
   }),
 ]);
 
@@ -267,6 +287,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   <nav aria-label="Project sections" class="mb-6 flex gap-7 overflow-x-auto border-b border-stone-200">
     {[
       ['Overview', '#overview'],
+      ['Attention', '#attention'],
+      ['Activity', '#project-activity'],
       ['Documents', '#documents'],
       ['Planning', '#planning'],
       ['Building Warrant', '#building-warrant'],
@@ -297,6 +319,34 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
       </article>
     </div>
   </section>
+
+  <div class="mt-6 grid gap-5 lg:grid-cols-2">
+    <section id="attention" class="panel scroll-mt-24 rounded-lg p-4 sm:p-5">
+      <div class="flex items-start gap-3">
+        <Inbox size={20} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
+        <div><h2 class="text-xl font-semibold text-ink">Needs your attention</h2><p class="mt-1 text-sm text-stone-500">Project work Architect Pro is tracking.</p></div>
+      </div>
+      {actionItems.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
+        {actionItems.map((item) => <a href={item.actionUrl} class="block px-4 py-3 transition hover:bg-stone-50">
+          <div class="flex items-start justify-between gap-3"><p class="font-semibold text-ink">{item.title}</p>{item.dueAt && <time class="shrink-0 text-xs text-stone-500">{formatDate(item.dueAt)}</time>}</div>
+          {item.summary && <p class="mt-1 text-sm leading-5 text-stone-500">{item.summary}</p>}
+        </a>)}
+      </div> : <p class="mt-4 rounded-lg border border-dashed border-stone-300 px-4 py-5 text-center text-sm text-stone-500">No tracked actions need attention.</p>}
+    </section>
+
+    <section id="project-activity" class="panel scroll-mt-24 rounded-lg p-4 sm:p-5">
+      <div class="flex items-start gap-3">
+        <CircleCheck size={20} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
+        <div><h2 class="text-xl font-semibold text-ink">Recent activity</h2><p class="mt-1 text-sm text-stone-500">Concise project lifecycle history.</p></div>
+      </div>
+      {projectActivities.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
+        {projectActivities.map((activity) => <article class="flex items-start justify-between gap-3 px-4 py-3">
+          <div><p class="font-semibold text-ink">{activity.summary}</p>{activity.actorUser && <p class="mt-1 text-xs text-stone-500">By {activity.actorUser.name}</p>}</div>
+          <time class="shrink-0 text-xs text-stone-500">{formatDate(activity.occurredAt)}</time>
+        </article>)}
+      </div> : <p class="mt-4 rounded-lg border border-dashed border-stone-300 px-4 py-5 text-center text-sm text-stone-500">No lifecycle activity recorded yet.</p>}
+    </section>
+  </div>
 
   <section aria-labelledby="applications-heading" class="mt-8">
     <div class="mb-4">

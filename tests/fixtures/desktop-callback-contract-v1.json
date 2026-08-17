@@ -1,0 +1,150 @@
+[
+  {
+    "name": "fee_handoff",
+    "runnerResult": {
+      "outcome": "user_action_required",
+      "jobId": "job_contract_123456",
+      "applicationType": "HOUSEHOLDER_PLANNING",
+      "message": "Complete the fee in the browser.",
+      "lastStage": "fee",
+      "timings": {
+        "overall": 48.5,
+        "snapshot_validation": 0.5,
+        "workflow": 48.0
+      },
+      "errorCode": null
+    },
+    "callback": {
+      "version": 1,
+      "jobId": "job_contract_123456",
+      "callbackId": "11111111-1111-4111-8111-111111111111",
+      "occurredAt": "2026-08-17T09:00:00+00:00",
+      "status": "AWAITING_PORTAL_REVIEW",
+      "eventType": "result",
+      "resultSummary": "Complete the fee in the browser.",
+      "lastCheckpoint": "fee",
+      "result": {
+        "outcome": "awaiting_user_portal_review",
+        "lastCompletedStep": null,
+        "currentSection": "fee",
+        "warnings": [],
+        "userActionRequired": "Complete the fee in the browser.",
+        "safeRetryPoint": null,
+        "errorCode": null,
+        "errorSummary": null,
+        "timings": {
+          "totalSeconds": 48.5,
+          "stageDurationsSeconds": {
+            "snapshot_validation": 0.5,
+            "workflow": 48.0
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "successful_final_review",
+    "runnerResult": {
+      "outcome": "success",
+      "jobId": "job_contract_123456",
+      "applicationType": "BUILDING_WARRANT",
+      "message": "Application prepared successfully",
+      "lastStage": "workflow",
+      "timings": { "overall": 30.25 },
+      "errorCode": null
+    },
+    "callback": {
+      "version": 1,
+      "jobId": "job_contract_123456",
+      "callbackId": "22222222-2222-4222-8222-222222222222",
+      "occurredAt": "2026-08-17T09:05:00+00:00",
+      "status": "AWAITING_PORTAL_REVIEW",
+      "eventType": "result",
+      "resultSummary": "Application prepared successfully",
+      "lastCheckpoint": "workflow",
+      "result": {
+        "outcome": "completed_to_final_review",
+        "lastCompletedStep": "workflow",
+        "currentSection": "final_review",
+        "warnings": [],
+        "userActionRequired": "Review the government portal form before submitting.",
+        "safeRetryPoint": null,
+        "errorCode": null,
+        "errorSummary": null,
+        "timings": {
+          "totalSeconds": 30.25,
+          "stageDurationsSeconds": {}
+        }
+      }
+    }
+  },
+  {
+    "name": "retryable_failure",
+    "runnerResult": {
+      "outcome": "failure",
+      "jobId": "job_contract_123456",
+      "applicationType": "BUILDING_WARRANT",
+      "message": "The portal took too long to confirm the current step.",
+      "lastStage": "documents",
+      "timings": { "overall": 75.0, "workflow": 74.0 },
+      "errorCode": "PORTAL_TIMEOUT"
+    },
+    "callback": {
+      "version": 1,
+      "jobId": "job_contract_123456",
+      "callbackId": "33333333-3333-4333-8333-333333333333",
+      "occurredAt": "2026-08-17T09:10:00+00:00",
+      "status": "FAILED_RETRYABLE",
+      "eventType": "result",
+      "resultSummary": "The portal took too long to confirm the current step.",
+      "error": "The portal took too long to confirm the current step.",
+      "lastCheckpoint": "documents",
+      "result": {
+        "outcome": "failed_retryable",
+        "lastCompletedStep": null,
+        "currentSection": "documents",
+        "warnings": [],
+        "userActionRequired": "Review the desktop activity, then prepare a retry.",
+        "safeRetryPoint": "documents",
+        "errorCode": "PORTAL_TIMEOUT",
+        "errorSummary": "The portal took too long to confirm the current step.",
+        "timings": {
+          "totalSeconds": 75.0,
+          "stageDurationsSeconds": { "workflow": 74.0 }
+        }
+      }
+    }
+  },
+  {
+    "name": "cancelled",
+    "runnerResult": {
+      "outcome": "cancelled",
+      "jobId": "job_contract_123456",
+      "applicationType": "HOUSEHOLDER_PLANNING",
+      "message": "Automation cancelled",
+      "lastStage": "proposal",
+      "timings": {},
+      "errorCode": null
+    },
+    "callback": {
+      "version": 1,
+      "jobId": "job_contract_123456",
+      "callbackId": "44444444-4444-4444-8444-444444444444",
+      "occurredAt": "2026-08-17T09:15:00+00:00",
+      "status": "CANCELLED",
+      "eventType": "result",
+      "resultSummary": "Automation cancelled",
+      "lastCheckpoint": "proposal",
+      "result": {
+        "outcome": "cancelled",
+        "lastCompletedStep": null,
+        "currentSection": "proposal",
+        "warnings": [],
+        "userActionRequired": null,
+        "safeRetryPoint": "proposal",
+        "errorCode": null,
+        "errorSummary": null
+      }
+    }
+  }
+]
