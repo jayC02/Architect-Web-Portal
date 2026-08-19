@@ -1,0 +1,56 @@
+---
+import { Prisma } from '@prisma/client';
+import { CircleDollarSign, ExternalLink } from 'lucide-react';
+import { formatDate, humanizeEnum } from '@/lib/format';
+import { xeroInvoiceDeepLink } from '@/lib/xero/mapping';
+
+type Milestone = { id: string; label: string; amount: Prisma.Decimal; currency: string; state: string; triggerEventType: string | null; lastError: string | null; invoiceDescription: string };
+type FeePlan = { name: string; currency: string; milestones: Milestone[] };
+type FeeTemplate = { id: string; name: string; version: number };
+type Invoice = { invoiceNumber: string | null; dueDate: Date | null; total: Prisma.Decimal; amountPaid: Prisma.Decimal; amountDue: Prisma.Decimal; currency: string };
+type InvoiceLink = { xeroInvoiceId: string; invoice: Invoice };
+type InvoiceCandidate = { xeroInvoiceId: string; invoiceNumber: string | null; reference: string | null; total: Prisma.Decimal; currency: string };
+type MoneyTotals = { invoiced: Prisma.Decimal; paid: Prisma.Decimal; outstanding: Prisma.Decimal; overdue: Prisma.Decimal };
+type ProjectFinance = { connection: { xeroShortCode: string | null }; links: InvoiceLink[]; candidates: InvoiceCandidate[]; clientLink: unknown; totals: Map<string, MoneyTotals> };
+interface Props { projectId: string; projectFeePlan: FeePlan | null; feePlanTemplates: FeeTemplate[]; projectFinance: ProjectFinance | null; agreedFeeTotal: Prisma.Decimal | null }
+const { projectId, projectFeePlan, feePlanTemplates, projectFinance, agreedFeeTotal } = Astro.props as Props;
+const money = (value: Prisma.Decimal | string | number, currency: string) => {
+  const amount = Number(value);
+  const showPence = !Number.isInteger(amount);
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: showPence ? 2 : 0, maximumFractionDigits: showPence ? 2 : 0 }).format(amount);
+};
+const statusFor = (state: string) => ({
+  PENDING: ['Pending', 'bg-stone-100 text-stone-700'],
+  ELIGIBLE: ['Ready to invoice', 'bg-amber-100 text-amber-900'],
+  DRAFT_CREATING: ['Creating draft', 'bg-blue-50 text-blue-800'],
+  DRAFT_CREATED: ['Draft created', 'bg-emerald-50 text-emerald-800'],
+  WAIVED: ['Waived', 'bg-stone-100 text-stone-500'],
+  FAILED: ['Needs attention', 'bg-red-50 text-red-800'],
+}[state] ?? [humanizeEnum(state), 'bg-stone-100 text-stone-700']);
+const currency = projectFeePlan?.currency ?? 'GBP';
+const totals = projectFinance?.totals.get(currency) ?? { invoiced: 0, paid: 0, outstanding: 0, overdue: 0 };
+---
+<section id="fees" class="panel mt-8 scroll-mt-24 overflow-hidden rounded-lg">
+  <header class="flex flex-col gap-3 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+    <div class="flex gap-3"><CircleDollarSign size={22} className="mt-0.5 shrink-0 text-moss" /><div><h2 class="text-2xl font-semibold text-ink">Fees agreed</h2><p class="mt-1 text-sm text-stone-500">The agreed schedule and current Xero position.</p></div></div>
+    <a class="text-sm font-semibold text-stone-600 hover:text-moss" href="/finance">Finance dashboard</a>
+  </header>
+  <div class="grid grid-cols-2 gap-px border-b border-stone-200 bg-stone-200 lg:grid-cols-5">
+    {[['Agreed', agreedFeeTotal ?? 0], ['Invoiced', totals.invoiced], ['Paid', totals.paid], ['Outstanding', totals.outstanding], ['Overdue', totals.overdue]].map(([label, value]) => <div class:list={['bg-white px-4 py-3 sm:px-5', label === 'Overdue' && Number(value) > 0 && 'bg-red-50']}><p class="label">{label}</p><p class:list={['mt-1 text-lg font-semibold', label === 'Overdue' && Number(value) > 0 ? 'text-red-800' : 'text-ink']}>{money(value as Prisma.Decimal, currency)}</p></div>)}
+  </div>
+  {projectFeePlan ? <div class="px-4 py-4 sm:px-5">
+    <div class="mb-3"><h3 class="font-semibold text-ink">{projectFeePlan.name}</h3><p class="mt-0.5 text-xs text-stone-500">{projectFeePlan.milestones.length} milestone{projectFeePlan.milestones.length === 1 ? '' : 's'} · {currency}</p></div>
+    <div class="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">{projectFeePlan.milestones.map((milestone) => {
+      const [status, statusClass] = statusFor(milestone.state);
+      return <article class="bg-white px-4 py-3"><div class="grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h4 class="font-semibold text-ink">{milestone.label}</h4><span class:list={['rounded px-2 py-0.5 text-xs font-semibold', statusClass]}>{status}</span></div><p class="mt-1 text-xs text-stone-500">{milestone.triggerEventType ? humanizeEnum(milestone.triggerEventType) : 'Manual milestone'}</p>{milestone.lastError && <p class="mt-1 text-xs font-medium text-red-700">{milestone.lastError}</p>}</div>
+        <p class="font-semibold text-ink sm:text-right">{money(milestone.amount, milestone.currency)}</p>
+        <div class="flex items-center gap-2 sm:justify-end">{milestone.state === 'ELIGIBLE' && <form data-api-form data-action={`/api/finance/milestones/${milestone.id}/create-draft`} data-method="POST" data-redirect="reload"><button class="btn btn-primary min-h-9 px-3">Create Xero draft</button><span data-form-status class="ml-2 text-xs text-stone-500"></span></form>}{['PENDING', 'ELIGIBLE'].includes(milestone.state) && <details><summary class="cursor-pointer list-none rounded px-2 py-1 text-xs font-semibold text-stone-500 hover:bg-stone-100 hover:text-ink">Edit</summary><div class="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:min-w-[430px]"><form data-api-form data-action={`/api/finance/milestones/${milestone.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)_auto]"><label><span class="label">Amount</span><input required name="amount" type="number" min="0.01" step="0.01" value={milestone.amount.toFixed(2)} class="field" /></label><label><span class="label">Invoice description</span><input required name="invoiceDescription" value={milestone.invoiceDescription} class="field" /></label><button class="btn btn-secondary self-end">Save</button><span data-form-status class="text-xs text-stone-500 sm:col-span-3"></span></form><form data-api-form data-action={`/api/finance/milestones/${milestone.id}`} data-method="PATCH" data-redirect="reload" data-confirm={`Waive ${milestone.label}?`} class="mt-2"><input type="hidden" name="waive" value="true" /><button class="text-xs font-semibold text-red-700">Waive milestone</button></form></div></details>}</div>
+      </div></article>;
+    })}</div>
+  </div> : <div class="px-5 py-5"><h3 class="font-semibold text-ink">Set up the agreed fee schedule</h3><p class="mt-1 text-sm text-stone-500">Choose a fee plan to create this project’s milestone schedule.</p><form data-api-form data-action={`/api/finance/projects/${projectId}/fee-plan`} data-method="PUT" data-redirect="reload" class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><label><span class="label">Fee plan template</span><select required name="templateId" class="field"><option value="">Choose a reusable template</option>{feePlanTemplates.map((template) => <option value={template.id}>{template.name} · v{template.version}</option>)}</select></label><button class="btn btn-primary self-end" disabled={!feePlanTemplates.length}>Assign fee plan</button><span data-form-status class="text-sm text-stone-500 sm:col-span-2"></span></form></div>}
+  {!projectFinance ? <div class="border-t border-stone-200 px-5 py-4"><p class="font-semibold text-ink">Xero is not connected</p><p class="mt-1 text-sm text-stone-500">The fee schedule still works. Connect Xero when you want invoice drafts and payment status.</p><a class="mt-2 inline-flex text-sm font-semibold text-moss hover:text-ink" href="/settings/integrations">Open integrations</a></div> : <div class="border-t border-stone-200">
+    {projectFinance.links.length ? <details><summary class="cursor-pointer px-5 py-3 text-sm font-semibold text-stone-600 hover:bg-stone-50">Linked Xero invoices ({projectFinance.links.length})</summary><div class="divide-y divide-stone-100 border-t border-stone-100">{projectFinance.links.map((link) => <article class="grid gap-3 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_repeat(3,minmax(90px,.4fr))_auto] sm:items-center"><div><p class="font-semibold">{link.invoice.invoiceNumber ?? 'Xero invoice'}</p><p class="mt-1 text-xs text-stone-500">{link.invoice.dueDate ? `Due ${formatDate(link.invoice.dueDate)}` : 'No due date'}</p></div><div><p class="label">Total</p><p class="text-sm">{money(link.invoice.total, link.invoice.currency)}</p></div><div><p class="label">Paid</p><p class="text-sm">{money(link.invoice.amountPaid, link.invoice.currency)}</p></div><div><p class="label">Outstanding</p><p class="text-sm">{money(link.invoice.amountDue, link.invoice.currency)}</p></div><div class="flex gap-2">{xeroInvoiceDeepLink(projectFinance.connection.xeroShortCode, link.xeroInvoiceId) && <a class="btn btn-secondary min-h-9 px-3" href={xeroInvoiceDeepLink(projectFinance.connection.xeroShortCode, link.xeroInvoiceId)!} target="_blank" rel="noreferrer" aria-label="View invoice in Xero"><ExternalLink size={14} /></a>}<form data-api-form data-action={`/api/finance/projects/${projectId}/invoices/${link.xeroInvoiceId}`} data-method="DELETE" data-redirect="reload"><button class="btn btn-secondary min-h-9 px-3">Unlink</button></form></div></article>)}</div></details> : <p class="px-5 py-3 text-sm text-stone-500">No Xero invoices linked yet.</p>}
+    <details class="border-t border-stone-100"><summary class="cursor-pointer px-5 py-3 text-sm font-semibold text-stone-600 hover:bg-stone-50">Link an existing Xero invoice</summary><form data-api-form data-action={`/api/finance/projects/${projectId}/invoices`} data-method="POST" data-redirect="reload" class="grid gap-3 border-t border-stone-100 bg-stone-50/60 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto]"><label><span class="label">Xero invoice</span><select required name="xeroInvoiceId" class="field"><option value="">Select invoice</option>{projectFinance.candidates.map((invoice) => <option value={invoice.xeroInvoiceId}>{invoice.invoiceNumber ?? 'No number'} · {invoice.reference ?? 'No reference'} · {money(invoice.total, invoice.currency)}</option>)}</select></label><button class="btn btn-secondary self-end" disabled={!projectFinance.candidates.length}>Link invoice</button>{!projectFinance.clientLink && <p class="text-xs text-stone-500 sm:col-span-2">Link the project client to a Xero contact to narrow this list.</p>}</form></details>
+  </div>}
+</section>

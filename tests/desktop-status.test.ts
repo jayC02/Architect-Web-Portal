@@ -35,6 +35,7 @@ const makeJob = (
   documentSnapshot: { documents: [] },
   resultSummary: null,
   error: null,
+  payloadVersion: 2,
   preparedAt: new Date(updatedAt),
   claimedAt: null,
   executionAuthorisedAt: null,
@@ -167,6 +168,14 @@ const appShell = fs.readFileSync('src/components/layout/AppShell.astro', 'utf8')
 const settingsPanel = fs.readFileSync('src/components/live/LiveDataPanel.tsx', 'utf8');
 const historyPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
 const statusPanel = fs.readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
+const liveCard = fs.readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
+const statusRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/status.ts', 'utf8');
+const revealRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/reveal-browser.ts', 'utf8');
+const revealAckRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/reveal-browser.ts', 'utf8');
+const heartbeatRoute = fs.readFileSync('src/pages/api/desktop/heartbeat.ts', 'utf8');
+const enrollmentPanel = fs.readFileSync('src/components/integrations/DesktopAccessIntegration.tsx', 'utf8');
+const projectFees = fs.readFileSync('src/components/projects/ProjectFees.astro', 'utf8');
+const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const launchButton = fs.readFileSync('src/components/automation/AutomationLaunchButton.tsx', 'utf8');
 const projectRoute = fs.readFileSync('src/pages/api/projects/[id]/automation-jobs.ts', 'utf8');
 const globalRoute = fs.readFileSync('src/pages/api/automation-jobs/index.ts', 'utf8');
@@ -191,17 +200,34 @@ assert.doesNotMatch(historyPage, /Create desktop job|summaryCards|Show technical
 assert.match(historyPage, /value: 'active'[\s\S]*value: 'attention'[\s\S]*value: 'history'/, 'history defaults to simple filters');
 assert.match(historyPage, /attentionStatuses\.includes\(status\)[\s\S]*AutomationJobStatus\.READY/, 'active history prioritises attention before ready and running work');
 
-assert.match(statusPanel, /desktopAutomationPresentation\(job\.status\)/, 'status panel uses the shared human-readable presentation');
-assert.match(statusPanel, /`\/building-warrant\/\$\{exactApplicationId\}\/preparation\?job=\$\{job\.id\}`/, 'Building Warrant status actions use the exact application and job route');
-assert.match(statusPanel, /`\/planning\/\$\{exactApplicationId\}\/preparation\?job=\$\{job\.id\}`/, 'Planning status actions use the exact application and job route');
+assert.match(statusPanel, /DesktopAutomationLiveCard client:load/, 'prepared jobs render through the live state-driven application card');
 assert.match(statusPanel, /Complete Building Warrant details/, 'Building Warrant needs-input work uses specific wording');
 assert.match(statusPanel, /Complete Planning application details/, 'Planning needs-input work uses specific wording');
 assert.match(statusPanel, /canPrepare && !preparationReady[\s\S]*AutomationLaunchButton[\s\S]*destination="preparation"/, 'an application without a job creates one before opening focused preparation');
 assert.match(launchButton, /destination === 'preparation' \? result\.preparationRedirectTo : result\.redirectTo/, 'the preparation action follows the exact route returned for the created or reused job');
-assert.match(statusPanel, /AutomationJobStatus\.CLAIMED[\s\S]*Resume in desktop/, 'claimed work exposes Resume in desktop');
-assert.match(statusPanel, /AutomationJobStatus\.IN_PROGRESS[\s\S]*Resume in desktop/, 'in-progress work exposes Resume in desktop');
-assert.match(statusPanel, /ExistingAutomationJobButton/, 'ready work reuses the existing deep-link implementation');
+assert.match(liveCard, /setInterval\([\s\S]*3_000/, 'active application state polls the existing projection path without a page refresh');
+assert.match(liveCard, /job\.status === 'READY'[\s\S]*Queued/, 'the live card covers authorised and queued state');
+assert.match(liveCard, /new Set\(\['CLAIMED', 'IN_PROGRESS'\]\)/, 'the live card covers claimed and running states');
+assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*Complete the fee in the browser/, 'awaiting-fee has explicit non-failure copy');
+assert.match(liveCard, /Continue fee in browser/, 'awaiting-fee exposes the primary browser handoff action');
+assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning application details/, 'fee and running states do not expose competing restart or preparation actions');
+assert.match(liveCard, /connectedAgent[\s\S]*Run application/, 'the connected Agent path is the primary ready-state action');
+assert.match(liveCard, /failedStatuses[\s\S]*Automation stopped[\s\S]*Stage:/, 'structured failures are prominent and name the stage');
+assert.match(statusRoute, /organisationId: organisation\.id/, 'live projections remain organisation scoped');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
+
+assert.match(revealRoute, /organisationId: organisation\.id[\s\S]*AWAITING_PORTAL_REVIEW[\s\S]*browserRevealRequestedAt/, 'browser reveal requests are organisation scoped and only target paused jobs');
+assert.match(heartbeatRoute, /claimedByAgentId: agent\.id[\s\S]*agentRunId: body\.agentRunId[\s\S]*REVEAL_BROWSER/, 'reveal commands preserve the claimed Agent and run identity');
+assert.match(revealAckRoute, /browserRevealRequestedAt\.toISOString\(\) !== body\.requestedAt/, 'stale reveal acknowledgements cannot consume a newer command');
+
+assert.match(enrollmentPanel, /Install and open[\s\S]*Paste the code[\s\S]*Confirm connection/, 'Agent enrolment explains the complete three-step sequence');
+assert.match(enrollmentPanel, /connectedAgents\.length[\s\S]*Connect Desktop Agent/, 'raw enrolment is demoted after an Agent connects');
+assert.match(projectFees, /Agreed[\s\S]*Invoiced[\s\S]*Paid[\s\S]*Outstanding[\s\S]*Overdue/, 'fees render the compact finance summary');
+assert.match(projectFees, /Ready to invoice[\s\S]*Draft created[\s\S]*Waived[\s\S]*Needs attention/, 'milestones use semantic states');
+assert.match(projectFees, /milestone\.state === 'ELIGIBLE'[\s\S]*Create Xero draft/, 'Xero draft creation stays inside the eligible milestone action area');
+assert.match(projectFees, /<details class="border-t border-stone-100">[\s\S]*Link an existing Xero invoice/, 'manual invoice linking remains accessible through secondary disclosure');
+assert.ok(projectPage.indexOf('<ApplicationSummaryCard') < projectPage.indexOf('<ProjectFees'), 'applications render before fees');
+assert.ok(projectPage.indexOf('<ProjectFees') < projectPage.indexOf('id="attention"'), 'next actions and recent activity render below fees');
 
 for (const route of [projectRoute, globalRoute]) {
   assert.match(route, /findReusableAutomationJob/, 'contextual preparation reuses an existing active job');

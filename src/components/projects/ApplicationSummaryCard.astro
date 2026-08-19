@@ -21,6 +21,7 @@ interface Props {
   desktopJob?: DesktopAutomationJob | null;
   desktopPreparationReady?: boolean;
   desktopMissingCount?: number;
+  connectedAgent?: boolean;
 }
 
 const {
@@ -40,6 +41,7 @@ const {
   desktopJob,
   desktopPreparationReady = false,
   desktopMissingCount = 0,
+  connectedAgent = false,
 } = Astro.props;
 ---
 <section id={id} class="flex h-full scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white">
@@ -90,6 +92,7 @@ const {
       job={desktopJob}
       preparationReady={desktopPreparationReady}
       missingCount={desktopMissingCount}
+      connectedAgent={connectedAgent}
     />
   </footer>
 </section>

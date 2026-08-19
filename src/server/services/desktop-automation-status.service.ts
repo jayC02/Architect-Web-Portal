@@ -15,6 +15,7 @@ export const desktopAutomationJobSelect = {
   documentSnapshot: true,
   resultSummary: true,
   error: true,
+  payloadVersion: true,
   preparedAt: true,
   claimedAt: true,
   executionAuthorisedAt: true,

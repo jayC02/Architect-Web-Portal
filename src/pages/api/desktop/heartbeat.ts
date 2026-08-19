@@ -15,7 +15,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const agent = await requireAgentAuth(context);
   const body = await parseBody(context.request, agentHeartbeatSchema);
   const now = new Date();
-  await prisma.$transaction(async (tx) => {
+  const commands = await prisma.$transaction(async (tx) => {
     await tx.agentRegistration.updateMany({
       where: { id: agent.id, enabled: true, revokedAt: null },
       data: {
@@ -37,9 +37,29 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         },
         data: { agentHeartbeatAt: now, leaseExpiresAt: agentLeaseExpiry(now) },
       });
+      const current = await tx.automationJob.findFirst({
+        where: {
+          id: body.currentJobId,
+          organisationId: agent.organisationId,
+          claimedByAgentId: agent.id,
+          agentRunId: body.agentRunId,
+          status: AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+          browserRevealRequestedAt: { not: null },
+        },
+        select: { id: true, agentRunId: true, browserRevealRequestedAt: true, browserRevealAcknowledgedAt: true },
+      });
+      if (current?.browserRevealRequestedAt
+        && (!current.browserRevealAcknowledgedAt || current.browserRevealRequestedAt > current.browserRevealAcknowledgedAt)) {
+        return [{
+          type: 'REVEAL_BROWSER',
+          jobId: current.id,
+          agentRunId: current.agentRunId,
+          requestedAt: current.browserRevealRequestedAt.toISOString(),
+        }];
+      }
     }
+    return [];
   });
   await reconcileStaleAgentJobs({ organisationId: agent.organisationId, now });
-  return jsonResponse(200, { ok: true, serverTime: now.toISOString(), heartbeatAfterSeconds: 30 });
+  return jsonResponse(200, { ok: true, serverTime: now.toISOString(), heartbeatAfterSeconds: commands.length ? 5 : 30, commands });
 }, context);
-

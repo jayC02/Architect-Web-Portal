@@ -1057,6 +1057,8 @@ model AutomationJob {
   etaSeconds            Int?
   progressMessage       String?
   progressUpdatedAt     DateTime?
+  browserRevealRequestedAt    DateTime?
+  browserRevealAcknowledgedAt DateTime?
   lastProgressSequence  Int                     @default(0)
   handoffCodeHash       String?                 @unique
   handoffExpiresAt      DateTime?

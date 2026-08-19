@@ -1,16 +1,8 @@
 ---
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
-import AutomationLaunchButton, {
-  ExistingAutomationJobButton,
-  RestartAutomationJobButton,
-  RunAutomationJobButton,
-} from '@/components/automation/AutomationLaunchButton';
-import DesktopAgentProgress from '@/components/automation/DesktopAgentProgress';
-import { formatDate } from '@/lib/format';
+import AutomationLaunchButton from '@/components/automation/AutomationLaunchButton';
+import DesktopAutomationLiveCard from '@/components/automation/DesktopAutomationLiveCard';
 import {
-  automationJobDocumentCount,
-  automationJobApplicationId,
-  desktopAutomationPresentation,
   type DesktopAutomationJob,
 } from '@/server/services/desktop-automation-status.service';
 
@@ -23,6 +15,7 @@ interface Props {
   job?: DesktopAutomationJob | null;
   preparationReady?: boolean;
   missingCount?: number;
+  connectedAgent?: boolean;
 }
 
 const {
@@ -34,95 +27,48 @@ const {
   job = null,
   preparationReady = false,
   missingCount = 0,
+  connectedAgent = false,
 } = Astro.props;
-const presentation = job ? desktopAutomationPresentation(job.status) : null;
-const documentCount = job ? automationJobDocumentCount(job) : 0;
-const jobApplicationId = job ? automationJobApplicationId(job) : null;
-const exactApplicationId = jobApplicationId ?? applicationId;
-const exactPreparationHref = exactApplicationId && job
-  ? type === AutomationJobType.BUILDING_WARRANT
-    ? `/building-warrant/${exactApplicationId}/preparation?job=${job.id}`
-    : `/planning/${exactApplicationId}/preparation?job=${job.id}`
-  : manageHref;
 const preparationActionLabel = type === AutomationJobType.BUILDING_WARRANT
   ? 'Complete Building Warrant details'
   : 'Complete Planning application details';
 const canPrepare = !job || job.status === AutomationJobStatus.CANCELLED;
-const statusLabel = presentation?.label ?? (preparationReady ? 'Ready to prepare' : 'Needs your attention');
-const description = presentation?.description ?? (preparationReady
+const statusLabel = preparationReady ? 'Ready to prepare' : 'Needs your attention';
+const description = preparationReady
   ? `${applicationLabel} details can now be prepared for ArchitectPro Desktop.`
   : missingCount > 0
     ? `${missingCount} application detail${missingCount === 1 ? '' : 's'} must be completed before desktop preparation.`
-    : `Complete the ${applicationLabel.toLowerCase()} details before desktop preparation.`);
-const statusDate = job?.completedAt ?? job?.claimedAt ?? job?.preparedAt ?? job?.updatedAt ?? null;
-const attentionStatuses = new Set<AutomationJobStatus>([
-  AutomationJobStatus.DRAFT,
-  AutomationJobStatus.PREFLIGHT_REQUIRED,
-  AutomationJobStatus.NEEDS_INPUT,
-  AutomationJobStatus.STALE,
-  AutomationJobStatus.NEEDS_REVIEW,
-  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-]);
-const failedStatuses = new Set<AutomationJobStatus>([
-  AutomationJobStatus.FAILED,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED_FINAL,
-]);
-const startedStatuses = new Set<AutomationJobStatus>([
-  AutomationJobStatus.CLAIMED,
-  AutomationJobStatus.IN_PROGRESS,
-  AutomationJobStatus.NEEDS_REVIEW,
-  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-  AutomationJobStatus.COMPLETED,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED_FINAL,
-  AutomationJobStatus.FAILED,
-]);
+    : `Complete the ${applicationLabel.toLowerCase()} details before desktop preparation.`;
 ---
-<section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
+{job ? (
+  <DesktopAutomationLiveCard client:load jobId={job.id} manageHref={manageHref} detailsHref={`/automation-job/${job.id}`} connectedAgent={connectedAgent} initial={{
+    id: job.id,
+    status: job.status,
+    executionAuthorisedAt: job.executionAuthorisedAt?.toISOString() ?? null,
+    progressStage: job.progressStage,
+    progressStageState: job.progressStageState,
+    progressPercent: job.progressPercent,
+    etaSeconds: job.etaSeconds,
+    progressMessage: job.progressMessage,
+    resultSummary: job.resultSummary,
+    error: job.error,
+    stale: Boolean(job.agentHeartbeatAt && Date.now() - job.agentHeartbeatAt.getTime() > 90_000),
+  }} />
+) : <section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="min-w-0">
       <p class="text-xs font-semibold uppercase text-stone-500">Desktop automation</p>
       <div class="mt-2 flex items-center gap-2">
         <span class:list={[
           'h-2 w-2 shrink-0 rounded-full',
-          presentation?.kind === 'failed' ? 'bg-red-700'
-            : presentation?.kind === 'attention' ? 'bg-amber-600'
-              : presentation?.kind === 'ready' || presentation?.kind === 'completed' ? 'bg-moss'
-                : 'bg-stone-500',
+          preparationReady ? 'bg-moss' : 'bg-amber-600',
         ]} aria-hidden="true"></span>
         <h3 class="font-semibold text-ink">{statusLabel}</h3>
       </div>
       <p class="mt-1.5 max-w-2xl text-sm leading-5 text-stone-600">{description}</p>
-      {job && (
-        <p class="mt-2 text-xs text-stone-500">
-          {statusDate ? formatDate(statusDate) : 'Date not recorded'}
-          {documentCount > 0 ? ` / ${documentCount} document${documentCount === 1 ? '' : 's'}` : ''}
-        </p>
-      )}
     </div>
 
     <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-      {job?.status === AutomationJobStatus.READY && (
-        job.executionAuthorisedAt
-          ? <p class="text-sm font-semibold text-moss">Waiting for Architect Pro Agent</p>
-          : <RunAutomationJobButton client:load jobId={job.id} />
-      )}
-      {job && attentionStatuses.has(job.status) && (
-        <a class="btn btn-primary" href={exactPreparationHref}>{preparationActionLabel}</a>
-      )}
-      {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS) && (
-        <ExistingAutomationJobButton client:load jobId={job.id} label="Resume in desktop" />
-      )}
-      {job?.status === AutomationJobStatus.COMPLETED && (
-        <a class="btn btn-secondary" href={manageHref}>View application</a>
-      )}
-      {job && failedStatuses.has(job.status) && (
-        <a class="btn btn-primary" href={`/automation-job/${job.id}`}>Review issue</a>
-      )}
-      {job && startedStatuses.has(job.status) && (
-        <RestartAutomationJobButton client:load jobId={job.id} />
-      )}
       {canPrepare && preparationReady && (
         <AutomationLaunchButton
           client:load
@@ -144,24 +90,7 @@ const startedStatuses = new Set<AutomationJobStatus>([
           destination="preparation"
         />
       )}
-      {job?.status === AutomationJobStatus.READY && (
-        <>
-          <ExistingAutomationJobButton client:load jobId={job.id} label="Open desktop manually" />
-          <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>
-        </>
-      )}
       <a class="text-xs font-semibold text-stone-500 hover:text-ink" href="/automation-jobs">View desktop job history</a>
     </div>
   </div>
-  {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS || job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) && (
-    <DesktopAgentProgress client:load jobId={job.id} initial={{
-      status: job.status,
-      progressStage: job.progressStage,
-      progressStageState: job.progressStageState,
-      progressPercent: job.progressPercent,
-      etaSeconds: job.etaSeconds,
-      progressMessage: job.progressMessage,
-      stale: Boolean(job.agentHeartbeatAt && Date.now() - job.agentHeartbeatAt.getTime() > 90_000),
-    }} />
-  )}
-</section>
+</section>}

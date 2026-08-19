@@ -7,6 +7,7 @@ const restartRoute = source('src/pages/api/automation-jobs/[id]/restart.ts');
 const completionRoute = source('src/pages/api/planning/[id]/complete-details.ts');
 const preparationPage = source('src/pages/planning/[id]/preparation.astro');
 const statusPanel = source('src/components/automation/DesktopAutomationStatus.astro');
+const liveStatusPanel = source('src/components/automation/DesktopAutomationLiveCard.tsx');
 const launchButton = source('src/components/automation/AutomationLaunchButton.tsx');
 
 assert.match(
@@ -55,7 +56,8 @@ assert.match(
   /editableJobStatuses\.has\(candidate\.status\)[\s\S]*automationJobApplicationId\(candidate\) === application\.id/,
   'started historical jobs are not submitted as editable preparation state',
 );
-assert.match(statusPanel, /RestartAutomationJobButton[\s\S]*startedStatuses\.has\(job\.status\)/);
+assert.doesNotMatch(statusPanel, /RestartAutomationJobButton|startedStatuses/);
+assert.doesNotMatch(liveStatusPanel, /Restart desktop automation/, 'running and fee-paused cards do not offer a competing restart action');
 assert.match(launchButton, /\/api\/automation-jobs\/\$\{jobId\}\/restart/);
 
 console.log('Planning automation restart lifecycle regression tests passed');

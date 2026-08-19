@@ -10,6 +10,7 @@ const validation = fs.readFileSync('src/lib/validation/automation-job.ts', 'utf8
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
 const desktopStatus = fs.readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
+const liveDesktopStatus = fs.readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
 const desktopStatusService = fs.readFileSync('src/server/services/desktop-automation-status.service.ts', 'utf8');
 const jobsPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
 const preparationRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/preparation.ts', 'utf8');
@@ -67,7 +68,7 @@ assert.match(validation, /'apiKey'/, 'snapshot validation forbids apiKey fields'
 assert.match(projectPage, /ApplicationSummaryCard/, 'project detail page uses the shared application summary');
 assert.match(applicationSummaryCard, /DesktopAutomationStatus/, 'application summaries use one shared desktop status panel');
 assert.match(desktopStatus, /AutomationLaunchButton/, 'the shared status panel keeps contextual manual preparation');
-assert.match(desktopStatus, /ExistingAutomationJobButton/, 'the shared status panel reuses the existing secure deep link');
+assert.match(liveDesktopStatus, /detailsHref/, 'the shared live status panel retains the secure job detail path');
 assert.match(applicationSummaryCard, /AutomationJobType\.HOUSEHOLDER_PLANNING/, 'application summaries can open householder jobs');
 assert.match(applicationSummaryCard, /AutomationJobType\.BUILDING_WARRANT/, 'application summaries can open building warrant jobs');
 assert.doesNotMatch(applicationSummaryCard, /type="PLANNING_APPLICATION"/, 'unsupported generic planning automation is not offered to desktop users');
