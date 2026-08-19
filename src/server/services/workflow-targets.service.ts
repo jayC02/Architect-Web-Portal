@@ -5,31 +5,31 @@ export const WORKFLOW_TARGET_DEFINITIONS = [
     key: WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW,
     label: 'Document review',
     description: 'Review the project documents and confirm the next application details.',
-    defaultOffsetDays: 3,
+    defaultOffsetDays: 0,
   },
   {
     key: WorkflowTargetKey.PLANNING_PREPARATION,
     label: 'Planning preparation',
     description: 'Complete the Planning application details and preflight checks.',
-    defaultOffsetDays: 7,
+    defaultOffsetDays: 0,
   },
   {
     key: WorkflowTargetKey.PLANNING_FINAL_REVIEW,
     label: 'Planning final review',
     description: 'Carry out the final review and run the prepared Planning application.',
-    defaultOffsetDays: 1,
+    defaultOffsetDays: 0,
   },
   {
     key: WorkflowTargetKey.BUILDING_WARRANT_ACTION,
     label: 'Building Warrant after Planning approval',
     description: 'Continue the existing Building Warrant application after Planning approval.',
-    defaultOffsetDays: 2,
+    defaultOffsetDays: 0,
   },
   {
     key: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW,
     label: 'Building Warrant final review',
     description: 'Carry out the final review and run the prepared Building Warrant application.',
-    defaultOffsetDays: 1,
+    defaultOffsetDays: 0,
   },
 ] as const;
 

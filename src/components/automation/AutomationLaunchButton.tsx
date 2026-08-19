@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, LoaderCircle, RotateCcw } from 'lucide-react';
+import { ExternalLink, LoaderCircle, Play, RotateCcw } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 
 type Props = {
@@ -66,6 +66,40 @@ export function ExistingAutomationJobButton({ jobId, label = 'Open in desktop ap
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
         {working ? 'Opening...' : label}
       </button>
+      {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+export function RunAutomationJobButton({ jobId }: { jobId: string }) {
+  const [working, setWorking] = useState(false);
+  const [queued, setQueued] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const run = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      const result = await apiRequest<{ compatibleAgentOnline: boolean }>(`/api/automation-jobs/${jobId}/run`, { method: 'POST' });
+      setQueued(true);
+      setMessage(result.compatibleAgentOnline
+        ? 'Authorised. Your connected Agent will start automatically.'
+        : 'Authorised. Waiting for a compatible Architect Pro Agent.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'The application could not be queued.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div>
+      <button type="button" className="btn btn-primary gap-2" disabled={working || queued} onClick={() => void run()}>
+        {working ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
+        {working ? 'Authorising...' : queued ? 'Application queued' : 'Run application'}
+      </button>
+      {message && <p role="status" className="mt-2 max-w-xs text-sm font-medium text-moss">{message}</p>}
       {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
     </div>
   );

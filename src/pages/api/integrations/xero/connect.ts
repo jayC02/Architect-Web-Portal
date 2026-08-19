@@ -9,5 +9,6 @@ import { requireOrganisationRole } from '@/server/permissions/authz';
 export const GET: APIRoute = (context) => withErrorHandling(async () => {
   assertRateLimit(context, rateLimitPolicies.oauth, 'xero:connect');
   const { organisation, user } = await requireOrganisationRole(context, ['OWNER', 'ADMIN']);
-  return context.redirect(await createXeroAuthorizationUrl(organisation.id, user.id));
+  const draftInvoices = new URL(context.request.url).searchParams.get('draft') === '1';
+  return context.redirect(await createXeroAuthorizationUrl(organisation.id, user.id, { draftInvoices }));
 }, context);

@@ -4,7 +4,7 @@ import type { CalendarProvider } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { getGoogleCalendarConfigurationStatus } from '@/lib/integrations/google-calendar';
-import { getXeroConfigurationStatus } from '@/lib/xero/config';
+import { getXeroConfigurationStatus, hasXeroDraftInvoiceScope } from '@/lib/xero/config';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
@@ -63,6 +63,7 @@ export const GET: APIRoute = (context) =>
         _count: { select: { contacts: true, invoices: true, payments: true } },
       },
     }) : null;
+    const financeSettings = canManage ? await prisma.organisationFinanceSettings.findUnique({ where: { organisationId: organisation.id } }) : null;
 
     return jsonResponse(200, {
       connections: connections.map(({ _count, grantedScopes, ...connection }) => ({
@@ -73,8 +74,10 @@ export const GET: APIRoute = (context) =>
       canManage,
       googleConfigured: getGoogleCalendarConfigurationStatus().configured,
       xeroConfigured: getXeroConfigurationStatus().configured,
+      financeSettings,
       xero: xero ? {
         ...xero,
+        draftInvoicePermissionGranted: hasXeroDraftInvoiceScope(xero.grantedScopes),
         snapshotCounts: { contacts: xero._count.contacts, invoices: xero._count.invoices, payments: xero._count.payments },
         _count: undefined,
       } : null,

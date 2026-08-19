@@ -175,6 +175,33 @@ enum XeroReportType {
   AGED_RECEIVABLES
 }
 
+enum AgentOperatingState {
+  DISCONNECTED
+  CONNECTING
+  READY
+  RUNNING
+  USER_ACTION_REQUIRED
+  ERROR
+}
+
+enum ProjectFeeMilestoneState {
+  PENDING
+  ELIGIBLE
+  DRAFT_CREATING
+  DRAFT_CREATED
+  WAIVED
+  FAILED
+}
+
+enum XeroWriteAttemptStatus {
+  PENDING
+  PROCESSING
+  UNCERTAIN
+  RETRYABLE
+  SUCCEEDED
+  FAILED_FINAL
+}
+
 enum GmailMatchStatus {
   UNMATCHED
   MATCHED
@@ -309,6 +336,7 @@ enum LifecycleEventType {
   PLANNING_APPROVED
   BUILDING_WARRANT_READY
   BUILDING_WARRANT_READINESS_REVOKED
+  BUILDING_WARRANT_SUBMITTED
 }
 
 enum LifecycleEventSource {
@@ -340,6 +368,8 @@ enum ActionItemKind {
   BUILDING_WARRANT_FINAL_REVIEW
   PLANNING_CORRESPONDENCE
   GMAIL_MONITORING
+  DESKTOP_AUTOMATION
+  XERO_INVOICE
 }
 
 enum ActionItemPriority {
@@ -366,10 +396,13 @@ enum ProjectActivityEventType {
   BUILDING_WARRANT_ACTIVATED
   BUILDING_WARRANT_READY
   WORKFLOW_DEADLINE_OVERRIDDEN
+  XERO_DRAFT_CREATED
+  INVOICE_PAID
 }
 
 enum ProjectActivityVisibility {
   STANDARD
+  FINANCE
 }
 
 enum WorkflowTargetKey {
@@ -410,6 +443,10 @@ model User {
   xeroOAuthStates          XeroOAuthState[]
   xeroClientLinks          XeroClientLink[]         @relation("XeroClientLinkCreatedBy")
   xeroProjectInvoiceLinks  XeroProjectInvoiceLink[] @relation("XeroProjectInvoiceLinkCreatedBy")
+  enrolledAgents           AgentRegistration[]      @relation("AgentRegistrationEnrolledBy")
+  agentEnrollmentTokens    AgentEnrollmentToken[]   @relation("AgentEnrollmentTokenCreatedBy")
+  feePlanTemplates         FeePlanTemplate[]        @relation("FeePlanTemplateCreatedBy")
+  projectFeePlans          ProjectFeePlan[]         @relation("ProjectFeePlanCreatedBy")
   lifecycleEvents          LifecycleEvent[]         @relation("LifecycleEventActor")
   projectActivities        ProjectActivity[]        @relation("ProjectActivityActor")
   deadlineOverrides        Deadline[]               @relation("DeadlineManualOverrideBy")
@@ -488,41 +525,48 @@ model Organisation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members              OrganisationMember[]
-  clients              Client[]
-  sites                Site[]
-  projects             Project[]
-  documents            ProjectDocument[]
-  planningApplications PlanningApplication[]
-  warrantApplications  BuildingWarrantApplication[]
-  deadlines            Deadline[]
-  calendarConnections  CalendarConnection[]
-  syncedCalendarEvents SyncedCalendarEvent[]
-  submissionPackages   SubmissionPackage[]
-  documentSortBatches  DocumentSortBatch[]
-  automationJobs       AutomationJob[]
-  desktopAccessTokens  DesktopAccessToken[]
-  trackedEmails        TrackedEmail[]
-  gmailSuggestions     GmailUpdateSuggestion[]
-  gmailAttachments     GmailAttachment[]
-  defaults             OrganisationDefaults?
-  certifierPresets     OrganisationCertifierPreset[]
-  automationJobEvents  AutomationJobEvent[]
-  applicationDrafts    ApplicationDraft[]
-  xeroConnections      XeroConnection[]
-  xeroOAuthStates      XeroOAuthState[]
-  xeroContacts         XeroContactSnapshot[]
-  xeroClientLinks      XeroClientLink[]
-  xeroInvoices         XeroInvoiceSnapshot[]
-  xeroPayments         XeroPaymentSnapshot[]
-  xeroProjectLinks     XeroProjectInvoiceLink[]
-  xeroReports          XeroReportSnapshot[]
-  xeroAgedReceivables  XeroAgedReceivableSnapshot[]
-  lifecycleEvents      LifecycleEvent[]
-  workflowEffects      WorkflowEffect[]
-  actionItems          ActionItem[]
-  projectActivities    ProjectActivity[]
-  workflowTargets      WorkflowTarget[]
+  members               OrganisationMember[]
+  clients               Client[]
+  sites                 Site[]
+  projects              Project[]
+  documents             ProjectDocument[]
+  planningApplications  PlanningApplication[]
+  warrantApplications   BuildingWarrantApplication[]
+  deadlines             Deadline[]
+  calendarConnections   CalendarConnection[]
+  syncedCalendarEvents  SyncedCalendarEvent[]
+  submissionPackages    SubmissionPackage[]
+  documentSortBatches   DocumentSortBatch[]
+  automationJobs        AutomationJob[]
+  desktopAccessTokens   DesktopAccessToken[]
+  trackedEmails         TrackedEmail[]
+  gmailSuggestions      GmailUpdateSuggestion[]
+  gmailAttachments      GmailAttachment[]
+  defaults              OrganisationDefaults?
+  certifierPresets      OrganisationCertifierPreset[]
+  automationJobEvents   AutomationJobEvent[]
+  applicationDrafts     ApplicationDraft[]
+  xeroConnections       XeroConnection[]
+  xeroOAuthStates       XeroOAuthState[]
+  xeroContacts          XeroContactSnapshot[]
+  xeroClientLinks       XeroClientLink[]
+  xeroInvoices          XeroInvoiceSnapshot[]
+  xeroPayments          XeroPaymentSnapshot[]
+  xeroProjectLinks      XeroProjectInvoiceLink[]
+  xeroReports           XeroReportSnapshot[]
+  xeroAgedReceivables   XeroAgedReceivableSnapshot[]
+  lifecycleEvents       LifecycleEvent[]
+  workflowEffects       WorkflowEffect[]
+  actionItems           ActionItem[]
+  projectActivities     ProjectActivity[]
+  workflowTargets       WorkflowTarget[]
+  agentRegistrations    AgentRegistration[]
+  agentEnrollmentTokens AgentEnrollmentToken[]
+  financeSettings       OrganisationFinanceSettings?
+  feePlanTemplates      FeePlanTemplate[]
+  projectFeePlans       ProjectFeePlan[]
+  projectFeeMilestones  ProjectFeeMilestone[]
+  xeroWriteAttempts     XeroWriteAttempt[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -673,6 +717,7 @@ model Project {
   lifecycleEvents      LifecycleEvent[]
   actionItems          ActionItem[]
   activities           ProjectActivity[]
+  feePlan              ProjectFeePlan?
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
@@ -754,7 +799,7 @@ model ActionItem {
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
-  organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisation         Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project              Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sourceLifecycleEvent LifecycleEvent? @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
 
@@ -977,37 +1022,49 @@ model ApplicationDraftDocument {
 }
 
 model AutomationJob {
-  id                   String                  @id @default(cuid())
-  organisationId       String
-  projectId            String
-  type                 AutomationJobType
-  status               AutomationJobStatus     @default(DRAFT)
-  sourceType           AutomationJobSourceType @default(PROJECT)
-  title                String
-  dataSnapshot         Json
-  documentSnapshot     Json
-  resultSummary        String?
-  error                String?
-  payloadVersion       Int                     @default(1)
-  snapshotHash         String?
-  sourceUpdatedAt      DateTime?
-  preparedAt           DateTime?
-  reviewedAt           DateTime?
-  resultData           Json?
-  lastCheckpoint       String?
-  preparationDraft     Json?
-  preparationDraftHash String?
-  preparationDraftAt   DateTime?
-  createdById          String
-  claimedByUserId      String?
-  claimedDeviceId      String?
-  handoffCodeHash      String?                 @unique
-  handoffExpiresAt     DateTime?
-  handoffRedeemedAt    DateTime?
-  claimedAt            DateTime?
-  completedAt          DateTime?
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
+  id                    String                  @id @default(cuid())
+  organisationId        String
+  projectId             String
+  type                  AutomationJobType
+  status                AutomationJobStatus     @default(DRAFT)
+  sourceType            AutomationJobSourceType @default(PROJECT)
+  title                 String
+  dataSnapshot          Json
+  documentSnapshot      Json
+  resultSummary         String?
+  error                 String?
+  payloadVersion        Int                     @default(1)
+  snapshotHash          String?
+  sourceUpdatedAt       DateTime?
+  preparedAt            DateTime?
+  reviewedAt            DateTime?
+  resultData            Json?
+  lastCheckpoint        String?
+  preparationDraft      Json?
+  preparationDraftHash  String?
+  preparationDraftAt    DateTime?
+  createdById           String
+  claimedByUserId       String?
+  claimedDeviceId       String?
+  claimedByAgentId      String?
+  agentRunId            String?
+  leaseExpiresAt        DateTime?
+  agentHeartbeatAt      DateTime?
+  executionAuthorisedAt DateTime?
+  progressStage         String?
+  progressStageState    String?
+  progressPercent       Int?
+  etaSeconds            Int?
+  progressMessage       String?
+  progressUpdatedAt     DateTime?
+  lastProgressSequence  Int                     @default(0)
+  handoffCodeHash       String?                 @unique
+  handoffExpiresAt      DateTime?
+  handoffRedeemedAt     DateTime?
+  claimedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1015,12 +1072,58 @@ model AutomationJob {
   claimedBy           User?                @relation("AutomationJobClaimedBy", fields: [claimedByUserId], references: [id], onDelete: SetNull)
   desktopAccessTokens DesktopAccessToken[] @relation("DesktopTokenAutomationJob")
   events              AutomationJobEvent[]
+  claimedByAgent      AgentRegistration?   @relation(fields: [claimedByAgentId], references: [id], onDelete: SetNull)
 
   @@index([organisationId, projectId, status, type, createdAt])
   @@index([organisationId, status, createdAt])
   @@index([createdById])
   @@index([claimedByUserId])
   @@index([handoffExpiresAt])
+  @@index([organisationId, executionAuthorisedAt, status, createdAt])
+  @@index([claimedByAgentId, status, leaseExpiresAt])
+  @@index([agentRunId])
+}
+
+model AgentRegistration {
+  id               String              @id @default(cuid())
+  organisationId   String
+  enrolledByUserId String
+  installationId   String              @unique
+  machineName      String
+  agentVersion     String
+  capabilities     Json
+  credentialHash   String              @unique
+  credentialPrefix String
+  enabled          Boolean             @default(true)
+  revokedAt        DateTime?
+  lastSeenAt       DateTime?
+  operatingState   AgentOperatingState @default(DISCONNECTED)
+  currentJobId     String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  enrolledBy   User            @relation("AgentRegistrationEnrolledBy", fields: [enrolledByUserId], references: [id], onDelete: Restrict)
+  claimedJobs  AutomationJob[]
+
+  @@index([organisationId, enabled, revokedAt, lastSeenAt])
+  @@index([enrolledByUserId])
+}
+
+model AgentEnrollmentToken {
+  id              String    @id @default(cuid())
+  organisationId  String
+  createdByUserId String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("AgentEnrollmentTokenCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, expiresAt, usedAt])
+  @@index([createdByUserId])
 }
 
 model AutomationJobEvent {
@@ -1233,12 +1336,151 @@ model XeroConnection {
   projectInvoiceLinks XeroProjectInvoiceLink[]
   reports             XeroReportSnapshot[]
   agedReceivables     XeroAgedReceivableSnapshot[]
+  writeAttempts       XeroWriteAttempt[]
 
   @@unique([organisationId])
   @@unique([xeroConnectionId])
   @@unique([organisationId, xeroTenantId])
   @@index([organisationId, status])
   @@index([xeroTenantId])
+}
+
+model OrganisationFinanceSettings {
+  id                      String   @id @default(cuid())
+  organisationId          String   @unique
+  automaticDraftInvoices  Boolean  @default(false)
+  defaultSalesAccountCode String?
+  defaultTaxType          String?
+  defaultInvoiceDueDays   Int?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model FeePlanTemplate {
+  id              String   @id @default(cuid())
+  organisationId  String
+  createdByUserId String
+  name            String
+  currency        String
+  active          Boolean  @default(true)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organisation Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User                       @relation("FeePlanTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  milestones   FeePlanTemplateMilestone[]
+  projectPlans ProjectFeePlan[]
+
+  @@unique([organisationId, name, version])
+  @@index([organisationId, active, name])
+  @@index([createdByUserId])
+}
+
+model FeePlanTemplateMilestone {
+  id                 String              @id @default(cuid())
+  templateId         String
+  milestoneKey       String
+  label              String
+  triggerEventType   LifecycleEventType?
+  amount             Decimal             @db.Decimal(18, 2)
+  invoiceDescription String
+  enabled            Boolean             @default(true)
+  sortOrder          Int                 @default(0)
+  accountCode        String?
+  taxType            String?
+  dueDays            Int?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  template FeePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, milestoneKey])
+  @@index([templateId, sortOrder])
+}
+
+model ProjectFeePlan {
+  id              String   @id @default(cuid())
+  organisationId  String
+  projectId       String   @unique
+  templateId      String?
+  templateVersion Int?
+  createdByUserId String
+  name            String
+  currency        String
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organisation Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template     FeePlanTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdBy    User                  @relation("ProjectFeePlanCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  milestones   ProjectFeeMilestone[]
+
+  @@index([organisationId, active])
+  @@index([templateId])
+  @@index([createdByUserId])
+}
+
+model ProjectFeeMilestone {
+  id                     String                   @id @default(cuid())
+  organisationId         String
+  projectFeePlanId       String
+  milestoneKey           String
+  label                  String
+  triggerEventType       LifecycleEventType?
+  amount                 Decimal                  @db.Decimal(18, 2)
+  currency               String
+  invoiceDescription     String
+  enabled                Boolean                  @default(true)
+  sortOrder              Int                      @default(0)
+  accountCode            String?
+  taxType                String?
+  dueDays                Int?
+  state                  ProjectFeeMilestoneState @default(PENDING)
+  linkedXeroInvoiceId    String?
+  sourceLifecycleEventId String?
+  eligibleAt             DateTime?
+  draftCreatedAt         DateTime?
+  lastError              String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  organisation   Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectFeePlan ProjectFeePlan    @relation(fields: [projectFeePlanId], references: [id], onDelete: Cascade)
+  writeAttempt   XeroWriteAttempt?
+
+  @@unique([projectFeePlanId, milestoneKey])
+  @@index([organisationId, state, eligibleAt])
+  @@index([sourceLifecycleEventId])
+  @@index([linkedXeroInvoiceId])
+}
+
+model XeroWriteAttempt {
+  id             String                 @id @default(cuid())
+  organisationId String
+  connectionId   String
+  milestoneId    String                 @unique
+  operation      String
+  idempotencyKey String                 @unique
+  requestHash    String
+  status         XeroWriteAttemptStatus @default(PENDING)
+  providerId     String?
+  attempts       Int                    @default(0)
+  lastError      String?
+  retryAt        DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection   XeroConnection      @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  milestone    ProjectFeeMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, status, retryAt])
+  @@index([connectionId, status])
 }
 
 model XeroOAuthState {
@@ -1439,7 +1681,7 @@ model XeroAgedReceivableSnapshot {
 }
 
 model TrackedEmail {
-  id                           String                @id @default(cuid())
+  id                           String                       @id @default(cuid())
   organisationId               String
   gmailMessageId               String
   gmailThreadId                String
@@ -1448,8 +1690,8 @@ model TrackedEmail {
   subject                      String
   sentAt                       DateTime
   textExcerpt                  String?
-  matchStatus                  GmailMatchStatus      @default(UNMATCHED)
-  processingStatus             GmailProcessingStatus @default(DISCOVERED)
+  matchStatus                  GmailMatchStatus             @default(UNMATCHED)
+  processingStatus             GmailProcessingStatus        @default(DISCOVERED)
   projectId                    String?
   planningApplicationId        String?
   buildingWarrantApplicationId String?
@@ -1461,8 +1703,8 @@ model TrackedEmail {
   automaticTransitionAt        DateTime?
   processingError              String?
   processedAt                  DateTime?
-  createdAt                    DateTime              @default(now())
-  updatedAt                    DateTime              @updatedAt
+  createdAt                    DateTime                     @default(now())
+  updatedAt                    DateTime                     @updatedAt
 
   organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)

@@ -31,6 +31,7 @@ import {
 } from '../src/server/services/workflow-deadlines.service';
 import {
   WORKFLOW_TARGET_DEFINITIONS,
+  calculateWorkflowTargetDate,
   getWorkflowTarget,
   getWorkflowTargets,
   saveWorkflowTargets,
@@ -229,6 +230,7 @@ const makeEffect = (id: string, eventType: LifecycleEventType, payload: Record<s
 
 const runHandlers = async (keys: readonly string[], effect: any, sync = calendarSync) => {
   for (const key of keys) {
+    if (key === 'finance.fee-milestone.evaluate') continue;
     const handler = PHASE_2_EFFECT_HANDLERS[key as keyof typeof PHASE_2_EFFECT_HANDLERS];
     assert.ok(handler, `handler registered for ${key}`);
     await handler(effect, { database: database as PrismaClient, calendarSync: sync });
@@ -238,12 +240,19 @@ const runHandlers = async (keys: readonly string[], effect: any, sync = calendar
 // Central defaults, organisation overrides, disabling, and tenant isolation.
 const defaults = await getWorkflowTargets(database, 'org_a');
 assert.deepEqual(defaults.map(({ key, enabled, offsetDays }) => ({ key, enabled, offsetDays })), [
-  { key: WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW, enabled: true, offsetDays: 3 },
-  { key: WorkflowTargetKey.PLANNING_PREPARATION, enabled: true, offsetDays: 7 },
-  { key: WorkflowTargetKey.PLANNING_FINAL_REVIEW, enabled: true, offsetDays: 1 },
-  { key: WorkflowTargetKey.BUILDING_WARRANT_ACTION, enabled: true, offsetDays: 2 },
-  { key: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW, enabled: true, offsetDays: 1 },
+  { key: WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW, enabled: true, offsetDays: 0 },
+  { key: WorkflowTargetKey.PLANNING_PREPARATION, enabled: true, offsetDays: 0 },
+  { key: WorkflowTargetKey.PLANNING_FINAL_REVIEW, enabled: true, offsetDays: 0 },
+  { key: WorkflowTargetKey.BUILDING_WARRANT_ACTION, enabled: true, offsetDays: 0 },
+  { key: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW, enabled: true, offsetDays: 0 },
 ]);
+for (const definition of WORKFLOW_TARGET_DEFINITIONS) {
+  assert.equal(
+    calculateWorkflowTargetDate(occurredAt, definition.defaultOffsetDays).toISOString(),
+    occurredAt.toISOString(),
+    `${definition.key} is immediately actionable by default`,
+  );
+}
 await saveWorkflowTargets(database, 'org_a', WORKFLOW_TARGET_DEFINITIONS.map((definition) => ({
   key: definition.key,
   enabled: definition.key !== WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW,
@@ -252,7 +261,7 @@ await saveWorkflowTargets(database, 'org_a', WORKFLOW_TARGET_DEFINITIONS.map((de
 assert.deepEqual(await getWorkflowTarget(database, 'org_a', WorkflowTargetKey.PLANNING_PREPARATION), {
   key: WorkflowTargetKey.PLANNING_PREPARATION, enabled: true, offsetDays: 9,
 });
-assert.equal((await getWorkflowTarget(database, 'org_b', WorkflowTargetKey.PLANNING_PREPARATION)).offsetDays, 7);
+assert.equal((await getWorkflowTarget(database, 'org_b', WorkflowTargetKey.PLANNING_PREPARATION)).offsetDays, 0);
 assert.equal((await getWorkflowTarget(database, 'org_a', WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW)).enabled, false);
 
 const permissionsSource = fs.readFileSync(new URL('../src/pages/api/settings/workflow-targets.ts', import.meta.url), 'utf8');
@@ -420,7 +429,7 @@ await ensureWorkflowDeadline(database, {
   occurredAt: new Date('2026-08-25T09:00:00.000Z'),
 });
 assert.equal(warrantFinal.dueDate.toISOString(), manualDate.toISOString());
-assert.equal(warrantFinal.calculatedDueDate.toISOString(), '2026-08-26T09:00:00.000Z');
+assert.equal(warrantFinal.calculatedDueDate.toISOString(), '2026-08-25T09:00:00.000Z');
 await resetWorkflowDeadlineToCalculated(database, 'org_a', warrantFinal.id);
 assert.equal(warrantFinal.dueDate.toISOString(), warrantFinal.calculatedDueDate.toISOString());
 assert.equal(warrantFinal.manualOverrideAt, null);

@@ -37,6 +37,15 @@ const makeJob = (
   error: null,
   preparedAt: new Date(updatedAt),
   claimedAt: null,
+  executionAuthorisedAt: null,
+  agentRunId: null,
+  agentHeartbeatAt: null,
+  progressStage: null,
+  progressStageState: null,
+  progressPercent: null,
+  etaSeconds: null,
+  progressMessage: null,
+  progressUpdatedAt: null,
   completedAt: null,
   createdAt: new Date(updatedAt),
   updatedAt: new Date(updatedAt),
@@ -146,9 +155,9 @@ assert.ok(reusableAutomationJobStatuses.includes(AutomationJobStatus.IN_PROGRESS
 assert.ok(!reusableAutomationJobStatuses.includes(AutomationJobStatus.COMPLETED as never));
 assert.ok(!reusableAutomationJobStatuses.includes(AutomationJobStatus.CANCELLED as never));
 
-assert.equal(desktopAutomationPresentation(AutomationJobStatus.READY).label, 'Ready to open');
+assert.equal(desktopAutomationPresentation(AutomationJobStatus.READY).label, 'Ready to run');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.NEEDS_INPUT).label, 'Needs your attention');
-assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).label, 'In progress in desktop');
+assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).label, 'Agent running');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).actionLabel, 'Resume in desktop');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.COMPLETED).label, 'Completed');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.FAILED_FINAL).label, 'Could not complete');

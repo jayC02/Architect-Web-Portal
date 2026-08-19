@@ -1,6 +1,7 @@
 ---
 import { AlertTriangle, ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
+import FeePlanTemplates from '@/components/finance/FeePlanTemplates';
 import { loadFinanceDashboard } from '@/lib/xero/finance';
 import { formatDate } from '@/lib/format';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -45,6 +46,8 @@ const metricCards = finance ? [
     </div>
     {finance && <form data-api-form data-action="/api/integrations/xero/sync" data-method="POST" data-redirect="reload"><button class="btn btn-primary gap-2"><RefreshCw size={16} />Sync now</button></form>}
   </header>
+
+  <FeePlanTemplates client:load />
 
   {!finance ? (
     <section class="panel rounded-lg p-8 text-center"><h2 class="text-xl font-semibold">Connect Xero to view finance</h2><p class="mt-2 text-sm text-stone-500">An organisation owner or admin can connect the practice’s Xero organisation.</p><a class="btn btn-primary mt-5" href="/settings/integrations">Open integrations</a></section>

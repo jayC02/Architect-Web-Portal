@@ -3,7 +3,7 @@ import type { APIContext } from 'astro';
 import { XeroConnectionStatus } from '@prisma/client';
 import { encryptGoogleToken as encryptToken, decryptGoogleToken as decryptToken } from '@/lib/integrations/google-calendar';
 import { prisma } from '@/lib/db/prisma';
-import { XERO_AUTHORIZE_URL, XERO_CONNECTIONS_URL, XERO_SCOPES, XERO_TOKEN_URL, getXeroConfig, xeroBasicAuthorization } from '@/lib/xero/config';
+import { XERO_AUTHORIZE_URL, XERO_CONNECTIONS_URL, XERO_DRAFT_SCOPES, XERO_SCOPES, XERO_TOKEN_URL, getXeroConfig, xeroBasicAuthorization } from '@/lib/xero/config';
 import { XeroOAuthStateInvalid, XeroTenantConflict } from '@/lib/xero/errors';
 import type { XeroTenant, XeroTokenResponse } from '@/lib/xero/types';
 import { HttpError } from '@/lib/utils/http';
@@ -33,7 +33,7 @@ const parseTokenResponse = async (response: Response) => {
   return payload as Required<Pick<XeroTokenResponse, 'access_token' | 'refresh_token' | 'expires_in'>> & XeroTokenResponse;
 };
 
-export const createXeroAuthorizationUrl = async (organisationId: string, userId: string) => {
+export const createXeroAuthorizationUrl = async (organisationId: string, userId: string, options: { draftInvoices?: boolean } = {}) => {
   const config = getXeroConfig();
   const state = createOpaqueValue();
   await prisma.xeroOAuthState.create({
@@ -49,7 +49,7 @@ export const createXeroAuthorizationUrl = async (organisationId: string, userId:
     response_type: 'code',
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: XERO_SCOPES.join(' '),
+    scope: (options.draftInvoices ? XERO_DRAFT_SCOPES : XERO_SCOPES).join(' '),
     state,
   }).toString();
   return url.toString();

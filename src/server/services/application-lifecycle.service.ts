@@ -4,6 +4,7 @@ import {
   LifecycleEventSource,
   LifecycleEventType,
   PlanningStatus,
+  WarrantStatus,
   type Prisma,
   type PrismaClient,
 } from '@prisma/client';
@@ -11,6 +12,7 @@ import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
 import {
   emitBuildingWarrantReadyLifecycleEvent,
+  emitBuildingWarrantSubmittedLifecycleEvent,
   emitPlanningLifecycleEvent,
 } from '@/server/services/lifecycle-events.service';
 import { drainWorkflowEffectsBestEffort } from '@/server/services/workflow-effects.service';
@@ -91,6 +93,39 @@ export const updatePlanningApplicationInTransaction = async (
       })).id);
     }
     return { application, lifecycleEventIds };
+};
+
+export const updateBuildingWarrantWithLifecycle = async (
+  input: {
+    organisationId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId?: string | null;
+    data: Prisma.BuildingWarrantApplicationUncheckedUpdateInput & { status?: WarrantStatus };
+    occurredAt?: Date;
+  },
+  database: PrismaClient = prisma,
+) => {
+  const result = await database.$transaction(async (tx) => {
+    const existing = await tx.buildingWarrantApplication.findFirst({
+      where: { id: input.buildingWarrantApplicationId, organisationId: input.organisationId },
+      select: { id: true, projectId: true, status: true },
+    });
+    if (!existing) throw new HttpError(404, 'Building warrant application not found.');
+    const application = await tx.buildingWarrantApplication.update({ where: { id: existing.id }, data: input.data });
+    const lifecycleEventIds: string[] = [];
+    if (existing.status !== WarrantStatus.SUBMITTED && application.status === WarrantStatus.SUBMITTED) {
+      lifecycleEventIds.push((await emitBuildingWarrantSubmittedLifecycleEvent(tx, {
+        organisationId: input.organisationId,
+        projectId: existing.projectId,
+        buildingWarrantApplicationId: existing.id,
+        actorUserId: input.actorUserId,
+        occurredAt: input.occurredAt,
+      })).id);
+    }
+    return { application, lifecycleEventIds };
+  });
+  await drainLifecycleEventsBestEffort(input.organisationId, result.lifecycleEventIds);
+  return result.application;
 };
 
 export const recordAutomationReadinessTransition = async (

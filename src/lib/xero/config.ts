@@ -7,7 +7,7 @@ export const XERO_CONNECTIONS_URL = 'https://api.xero.com/connections';
 export const xeroBasicAuthorization = (clientId: string, clientSecret: string) =>
   `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
 
-export const XERO_SCOPES = [
+export const XERO_READ_SCOPES = [
   'offline_access',
   'accounting.contacts.read',
   'accounting.invoices.read',
@@ -16,6 +16,14 @@ export const XERO_SCOPES = [
   'accounting.reports.aged.read',
   'accounting.settings.read',
 ] as const;
+
+// Kept as the read-only default so existing connections are never silently
+// upgraded. Xero's granular invoices scope is requested only when an owner or
+// admin explicitly enables draft creation.
+export const XERO_SCOPES = XERO_READ_SCOPES;
+export const XERO_DRAFT_SCOPES = [...XERO_READ_SCOPES, 'accounting.invoices'] as const;
+export const hasXeroDraftInvoiceScope = (grantedScopes: string | null | undefined) =>
+  new Set(String(grantedScopes ?? '').split(/\s+/).filter(Boolean)).has('accounting.invoices');
 
 const requiredEnvironmentValue = (name: string) => {
   const value = process.env[name]?.trim();

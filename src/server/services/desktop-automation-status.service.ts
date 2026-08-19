@@ -17,6 +17,15 @@ export const desktopAutomationJobSelect = {
   error: true,
   preparedAt: true,
   claimedAt: true,
+  executionAuthorisedAt: true,
+  agentRunId: true,
+  agentHeartbeatAt: true,
+  progressStage: true,
+  progressStageState: true,
+  progressPercent: true,
+  etaSeconds: true,
+  progressMessage: true,
+  progressUpdatedAt: true,
   completedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -189,16 +198,16 @@ export const desktopAutomationPresentation = (status: AutomationJobStatus) => {
   if (status === AutomationJobStatus.READY) {
     return {
       kind: 'ready' as const,
-      label: 'Ready to open',
-      description: 'The reviewed application is ready for ArchitectPro Desktop.',
-      actionLabel: 'Open in desktop',
+      label: 'Ready to run',
+      description: 'The reviewed application is ready for the Architect Pro Agent.',
+      actionLabel: 'Run application',
     };
   }
   if (runningStatuses.has(status)) {
     return {
       kind: 'progress' as const,
-      label: 'In progress in desktop',
-      description: 'This unfinished application can be reopened in ArchitectPro Desktop.',
+      label: 'Agent running',
+      description: 'Architect Pro Agent is preparing this application in the background.',
       actionLabel: 'Resume in desktop',
     };
   }

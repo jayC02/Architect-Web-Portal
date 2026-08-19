@@ -3,7 +3,9 @@ import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AutomationLaunchButton, {
   ExistingAutomationJobButton,
   RestartAutomationJobButton,
+  RunAutomationJobButton,
 } from '@/components/automation/AutomationLaunchButton';
+import DesktopAgentProgress from '@/components/automation/DesktopAgentProgress';
 import { formatDate } from '@/lib/format';
 import {
   automationJobDocumentCount,
@@ -102,7 +104,9 @@ const startedStatuses = new Set<AutomationJobStatus>([
 
     <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
       {job?.status === AutomationJobStatus.READY && (
-        <ExistingAutomationJobButton client:load jobId={job.id} label="Open in desktop" />
+        job.executionAuthorisedAt
+          ? <p class="text-sm font-semibold text-moss">Waiting for Architect Pro Agent</p>
+          : <RunAutomationJobButton client:load jobId={job.id} />
       )}
       {job && attentionStatuses.has(job.status) && (
         <a class="btn btn-primary" href={exactPreparationHref}>{preparationActionLabel}</a>
@@ -141,9 +145,23 @@ const startedStatuses = new Set<AutomationJobStatus>([
         />
       )}
       {job?.status === AutomationJobStatus.READY && (
-        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>
+        <>
+          <ExistingAutomationJobButton client:load jobId={job.id} label="Open desktop manually" />
+          <a class="text-sm font-semibold text-stone-600 hover:text-ink" href={`/automation-job/${job.id}`}>View details</a>
+        </>
       )}
       <a class="text-xs font-semibold text-stone-500 hover:text-ink" href="/automation-jobs">View desktop job history</a>
     </div>
   </div>
+  {job && (job.status === AutomationJobStatus.CLAIMED || job.status === AutomationJobStatus.IN_PROGRESS || job.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) && (
+    <DesktopAgentProgress client:load jobId={job.id} initial={{
+      status: job.status,
+      progressStage: job.progressStage,
+      progressStageState: job.progressStageState,
+      progressPercent: job.progressPercent,
+      etaSeconds: job.etaSeconds,
+      progressMessage: job.progressMessage,
+      stale: Boolean(job.agentHeartbeatAt && Date.now() - job.agentHeartbeatAt.getTime() > 90_000),
+    }} />
+  )}
 </section>

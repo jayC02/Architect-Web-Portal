@@ -30,3 +30,19 @@ export const xeroGet = async <T>(connection: XeroConnection, path: string, heade
   const accessToken = await getValidXeroAccessToken(connection);
   return xeroRequestWithAccessToken<T>(accessToken, connection.xeroTenantId, path, { headers });
 };
+
+export const xeroPost = async <T>(
+  connection: XeroConnection,
+  path: string,
+  body: unknown,
+  headers?: HeadersInit,
+) => {
+  const accessToken = await getValidXeroAccessToken(connection);
+  const requestHeaders = new Headers(headers);
+  requestHeaders.set('content-type', 'application/json');
+  return xeroRequestWithAccessToken<T>(accessToken, connection.xeroTenantId, path, {
+    method: 'POST',
+    headers: requestHeaders,
+    body: JSON.stringify(body),
+  });
+};

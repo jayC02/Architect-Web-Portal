@@ -22,11 +22,13 @@ const transitions: Record<AutomationJobStatus, ReadonlySet<AutomationJobStatus>>
   ]),
   STALE: new Set([AutomationJobStatus.PREFLIGHT_REQUIRED, AutomationJobStatus.CANCELLED]),
   CLAIMED: new Set([
+    AutomationJobStatus.READY,
     AutomationJobStatus.IN_PROGRESS,
     AutomationJobStatus.FAILED_RETRYABLE,
     AutomationJobStatus.CANCELLED,
   ]),
   IN_PROGRESS: new Set([
+    AutomationJobStatus.NEEDS_REVIEW,
     AutomationJobStatus.AWAITING_PORTAL_REVIEW,
     AutomationJobStatus.FAILED_RETRYABLE,
     AutomationJobStatus.FAILED_FINAL,
@@ -67,4 +69,3 @@ export const isAutomationJobTerminal = (status: AutomationJobStatus) =>
   status === AutomationJobStatus.COMPLETED
   || status === AutomationJobStatus.FAILED_FINAL
   || status === AutomationJobStatus.CANCELLED;
-

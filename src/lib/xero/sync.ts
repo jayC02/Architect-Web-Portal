@@ -10,6 +10,7 @@ import {
   parseXeroDate,
 } from '@/lib/xero/mapping';
 import type { XeroContact, XeroInvoice, XeroPayment, XeroReport } from '@/lib/xero/types';
+import { reconcileXeroFinanceAttention } from '@/server/services/xero-finance-attention.service';
 
 const pageSize = 100;
 const syncStaleBefore = () => new Date(Date.now() - 30 * 60 * 1000);
@@ -340,6 +341,7 @@ export const syncXeroOrganisation = async (organisationId: string) => {
       lastSyncError: errors.length ? errors.join('; ').slice(0, 1000) : null,
     },
   });
+  await reconcileXeroFinanceAttention(prisma, organisationId);
   if (errors.length) throw new XeroSyncFailed();
   return results;
 };

@@ -214,7 +214,7 @@ await emitProjectCreatedLifecycleEvent(database as never, {
   actorUserId: 'user_org_a',
 });
 assert.equal(store.events.length, 1, 're-emitting the same project event is idempotent');
-assert.equal(store.effects.length, 3, 'effect expansion is idempotent');
+assert.equal(store.effects.length, PROJECT_CREATED_HANDLER_KEYS.length, 'effect expansion is idempotent');
 
 const drained = await drainWorkflowEffects({
   database: database as PrismaClient,
@@ -232,7 +232,7 @@ assert.equal(store.deadlines.length, 1);
 assert.equal(calendarEvents.size, 1);
 assert.equal(store.deadlines[0].sourceKey, `workflow:project:${first.project.id}:document-review`);
 assert.match(store.deadlines[0].description, /Internal practice target/);
-assert.equal(store.deadlines[0].dueDate.toISOString(), '2026-08-20T09:00:00.000Z');
+assert.equal(store.deadlines[0].dueDate.toISOString(), '2026-08-17T09:00:00.000Z');
 
 for (const effect of store.effects) {
   effect.status = WorkflowEffectStatus.RETRYABLE;
@@ -371,7 +371,7 @@ await assert.rejects(() => emitProjectCreatedLifecycleEvent(database as never, {
 store.targets.push({ organisationId: 'org_b', key: 'PROJECT_DOCUMENT_REVIEW', enabled: true, offsetDays: 9 });
 assert.deepEqual(
   await getProjectDocumentReviewTarget(database as PrismaClient, 'org_a'),
-  { enabled: true, offsetDays: 3 },
+  { enabled: true, offsetDays: 0 },
   'workflow target lookup cannot read another organisation configuration',
 );
 const orgAEffectsBefore = store.effects.filter((effect) => effect.organisationId === 'org_a' && effect.status === WorkflowEffectStatus.PENDING).length;

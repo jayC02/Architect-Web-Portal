@@ -11,6 +11,7 @@ export const PROJECT_CREATED_HANDLER_KEYS = [
   'project.action.initial-document-review',
   'project.activity.created',
   'project.deadline.document-review',
+  'finance.fee-milestone.evaluate',
 ] as const;
 
 export const DOCUMENT_REVIEW_COMPLETED_HANDLER_KEYS = [
@@ -34,6 +35,7 @@ export const PLANNING_SUBMITTED_HANDLER_KEYS = [
   'planning.action.submitted',
   'planning.activity.submitted',
   'planning.deadline.submitted',
+  'finance.fee-milestone.evaluate',
 ] as const;
 
 export const PLANNING_VALIDATED_HANDLER_KEYS = [
@@ -51,6 +53,11 @@ export const PLANNING_APPROVED_HANDLER_KEYS = [
   'planning.deadline.approved',
   'planning.stage.approved',
   'warrant.activity.activated-after-planning',
+  'finance.fee-milestone.evaluate',
+] as const;
+
+export const BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS = [
+  'finance.fee-milestone.evaluate',
 ] as const;
 
 export const BUILDING_WARRANT_READY_HANDLER_KEYS = [
@@ -64,7 +71,7 @@ export const BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS = [
   'warrant.deadline.readiness-revoked',
 ] as const;
 
-export type ProjectCreatedHandlerKey = typeof PROJECT_CREATED_HANDLER_KEYS[number];
+export type ProjectCreatedHandlerKey = Exclude<typeof PROJECT_CREATED_HANDLER_KEYS[number], 'finance.fee-milestone.evaluate'>;
 export type LifecycleHandlerKey =
   | ProjectCreatedHandlerKey
   | typeof DOCUMENT_REVIEW_COMPLETED_HANDLER_KEYS[number]
@@ -75,7 +82,8 @@ export type LifecycleHandlerKey =
   | typeof PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS[number]
   | typeof PLANNING_APPROVED_HANDLER_KEYS[number]
   | typeof BUILDING_WARRANT_READY_HANDLER_KEYS[number]
-  | typeof BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS[number];
+  | typeof BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS[number]
+  | typeof BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS[number];
 
 export const LIFECYCLE_EVENT_HANDLER_KEYS: Record<LifecycleEventType, readonly LifecycleHandlerKey[]> = {
   [LifecycleEventType.PROJECT_CREATED]: PROJECT_CREATED_HANDLER_KEYS,
@@ -88,6 +96,7 @@ export const LIFECYCLE_EVENT_HANDLER_KEYS: Record<LifecycleEventType, readonly L
   [LifecycleEventType.PLANNING_APPROVED]: PLANNING_APPROVED_HANDLER_KEYS,
   [LifecycleEventType.BUILDING_WARRANT_READY]: BUILDING_WARRANT_READY_HANDLER_KEYS,
   [LifecycleEventType.BUILDING_WARRANT_READINESS_REVOKED]: BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS,
+  [LifecycleEventType.BUILDING_WARRANT_SUBMITTED]: BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS,
 };
 
 type ProjectCreatedEventInput = {
@@ -286,6 +295,28 @@ export const emitBuildingWarrantReadyLifecycleEvent = (
   actorUserId: input.actorUserId,
   occurredAt: input.occurredAt ?? new Date(),
   idempotencyKey: `warrant:${input.buildingWarrantApplicationId}:${input.revoked ? 'readiness-revoked' : 'ready'}:${input.readinessKey}`,
+});
+
+export const emitBuildingWarrantSubmittedLifecycleEvent = (
+  tx: Prisma.TransactionClient,
+  input: {
+    organisationId: string;
+    projectId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId?: string | null;
+    occurredAt?: Date;
+  },
+) => emitLifecycleEvent(tx, {
+  organisationId: input.organisationId,
+  projectId: input.projectId,
+  aggregateType: LifecycleAggregateType.BUILDING_WARRANT_APPLICATION,
+  aggregateId: input.buildingWarrantApplicationId,
+  eventType: LifecycleEventType.BUILDING_WARRANT_SUBMITTED,
+  payload: { projectId: input.projectId, buildingWarrantApplicationId: input.buildingWarrantApplicationId },
+  source: LifecycleEventSource.APPLICATION_STATUS,
+  actorUserId: input.actorUserId,
+  occurredAt: input.occurredAt ?? new Date(),
+  idempotencyKey: `warrant:${input.buildingWarrantApplicationId}:submitted`,
 });
 
 export const expandUndispatchedLifecycleEvents = async (

@@ -8,15 +8,50 @@ type XeroConnection = {
   status: 'IDLE' | 'SYNCING' | 'CONNECTED' | 'ERROR' | 'RECONNECT_REQUIRED' | 'DISCONNECTED';
   baseCurrency: string | null;
   grantedScopes: string;
+  draftInvoicePermissionGranted: boolean;
   lastSyncedAt: string | null;
   lastSyncError: string | null;
   snapshotCounts: { contacts: number; invoices: number; payments: number };
 };
-type ResponseData = { canManage: boolean; xeroConfigured: boolean; xero: XeroConnection | null };
+type FinanceSettings = { automaticDraftInvoices: boolean; defaultSalesAccountCode: string | null; defaultTaxType: string | null; defaultInvoiceDueDays: number | null } | null;
+type ResponseData = { canManage: boolean; xeroConfigured: boolean; xero: XeroConnection | null; financeSettings: FinanceSettings };
 
 const dateTime = (value: string | null) => value
   ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : 'Not synced yet';
+
+function DraftAutomationSettings({ settings, onSaved }: { settings: FinanceSettings; onSaved: () => Promise<void> }) {
+  const [automatic, setAutomatic] = useState(settings?.automaticDraftInvoices ?? false);
+  const [accountCode, setAccountCode] = useState(settings?.defaultSalesAccountCode ?? '');
+  const [taxType, setTaxType] = useState(settings?.defaultTaxType ?? '');
+  const [dueDays, setDueDays] = useState(String(settings?.defaultInvoiceDueDays ?? 14));
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+  const save = async () => {
+    setSaving(true); setStatus('');
+    try {
+      await apiRequest('/api/finance/settings', { method: 'PUT', body: JSON.stringify({
+        automaticDraftInvoices: automatic,
+        defaultSalesAccountCode: accountCode.trim() || null,
+        defaultTaxType: taxType.trim() || null,
+        defaultInvoiceDueDays: Number(dueDays),
+      }) });
+      setStatus('Draft automation settings saved.');
+      await onSaved();
+    } catch (requestError) {
+      setStatus(requestError instanceof Error ? requestError.message : 'Could not save settings.');
+    } finally { setSaving(false); }
+  };
+  return <div className="border-t border-stone-200 bg-stone-50/60 px-5 py-5">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+      <label className="flex flex-1 items-start gap-3"><input type="checkbox" className="mt-1" checked={automatic} onChange={(event) => setAutomatic(event.target.checked)} /><span><strong className="block text-sm">Automatic Xero drafts</strong><span className="mt-1 block text-xs leading-5 text-stone-500">When an agreed fee milestone becomes eligible, create a DRAFT only. Missing prerequisites create an action instead.</span></span></label>
+      <label><span className="label">Sales account code</span><input className="field w-40" value={accountCode} onChange={(event) => setAccountCode(event.target.value)} placeholder="200" /></label>
+      <label><span className="label">Tax type</span><input className="field w-40" value={taxType} onChange={(event) => setTaxType(event.target.value)} placeholder="OUTPUT2" /></label>
+      <label><span className="label">Due days</span><input className="field w-24" type="number" min="0" max="365" value={dueDays} onChange={(event) => setDueDays(event.target.value)} /></label>
+      <button className="btn btn-primary" disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save'}</button>
+    </div>{status && <p className="mt-3 text-sm text-stone-600" role="status">{status}</p>}
+  </div>;
+}
 
 export default function XeroIntegration() {
   const [data, setData] = useState<ResponseData | null>(null);
@@ -69,7 +104,7 @@ export default function XeroIntegration() {
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><CircleDollarSign size={22} aria-hidden="true" /></span>
           <div>
             <div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold">Xero</h2><span className={`text-xs font-semibold ${connected && !reconnect ? 'text-emerald-800' : 'text-stone-500'}`}>{connected ? reconnect ? 'Reconnect required' : 'Connected' : 'Not connected'}</span></div>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">Connect your accounting data to Architect Pro. Contacts, sales invoices, payments and reports are imported read-only.</p>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">Contacts, invoices, payments and reports are imported read-only. Draft invoice creation is a separate, explicit permission.</p>
           </div>
         </div>
         {!connected || reconnect ? (
@@ -88,6 +123,8 @@ export default function XeroIntegration() {
         <div className="bg-white p-5"><p className="label">Cached records</p><p className="mt-2 font-medium">{data.xero ? `${data.xero.snapshotCounts.contacts} contacts · ${data.xero.snapshotCounts.invoices} invoices · ${data.xero.snapshotCounts.payments} payments` : 'None'}</p></div>
       </div>
       {data.xero?.lastSyncError && <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Last sync needs attention: {data.xero.lastSyncError}</div>}
+      {connected && !reconnect && !data.xero?.draftInvoicePermissionGranted && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-950"><span>Automatic fee milestones need permission to create Xero invoices. Architect Pro creates DRAFT invoices only.</span><a className="btn btn-secondary" href="/api/integrations/xero/connect?draft=1">Allow draft creation</a></div>}
+      {connected && !reconnect && data.xero?.draftInvoicePermissionGranted && <DraftAutomationSettings settings={data.financeSettings} onSaved={load} />}
       {!data.xeroConfigured && <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">Server setup is incomplete. Add the Xero environment variables before connecting.</div>}
     </section>
   );

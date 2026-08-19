@@ -31,6 +31,7 @@ import {
   calculateWorkflowTargetDate,
   getProjectDocumentReviewTarget,
 } from '@/server/services/workflow-targets.service';
+import { makeFeeMilestonesEligible } from '@/server/services/xero-draft-invoices.service';
 
 const MAX_EFFECT_ATTEMPTS = 6;
 const EFFECT_LEASE_MS = 2 * 60 * 1000;
@@ -154,6 +155,9 @@ export const PROJECT_CREATED_EFFECT_HANDLERS: Record<ProjectCreatedHandlerKey, E
 export const LIFECYCLE_EFFECT_HANDLERS: Record<LifecycleHandlerKey, EffectHandler> = {
   ...PROJECT_CREATED_EFFECT_HANDLERS,
   ...PHASE_2_EFFECT_HANDLERS,
+  'finance.fee-milestone.evaluate': async (effect, { database }) => {
+    await makeFeeMilestonesEligible(database, effect.lifecycleEvent);
+  },
 } as Record<LifecycleHandlerKey, EffectHandler>;
 
 const CONTROLLED_HANDLER_KEYS = new Set<LifecycleHandlerKey>(

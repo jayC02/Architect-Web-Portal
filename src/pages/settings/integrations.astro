@@ -20,6 +20,6 @@ if (!auth) return Astro.redirect('/login');
   <GoogleCalendarIntegration client:load />
   </div>
   <div class="mt-5">
-    <DesktopAccessIntegration client:load />
+    <DesktopAccessIntegration client:load canManage={['OWNER', 'ADMIN'].includes(auth.membership.role)} />
   </div>
 </AppShell>
