@@ -3,25 +3,30 @@ import {
   ActionItemKind,
   ActionItemPriority,
   ActionItemStatus,
-  DeadlinePriority,
-  DeadlineStatus,
-  DeadlineType,
   LifecycleEventType,
   Prisma,
   ProjectActivityEventType,
   ProjectActivityVisibility,
   WorkflowEffectStatus,
-  type LifecycleEvent,
+  WorkflowTargetKey,
   type PrismaClient,
-  type WorkflowEffect,
 } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calendar';
 import {
+  LIFECYCLE_EVENT_HANDLER_KEYS,
   PROJECT_CREATED_HANDLER_KEYS,
+  type LifecycleHandlerKey,
   type ProjectCreatedHandlerKey,
 } from '@/server/services/lifecycle-events.service';
+import { PHASE_2_EFFECT_HANDLERS, workflowSourceKeys } from '@/server/services/phase2-workflow-handlers.service';
+import type { EffectHandler, EffectWithEvent } from '@/server/services/workflow-effect-types';
+import { ensureWorkflowDeadline } from '@/server/services/workflow-deadlines.service';
+import {
+  PermanentWorkflowEffectError,
+  RetryableWorkflowEffectError,
+} from '@/server/services/workflow-effect-errors';
 import {
   calculateWorkflowTargetDate,
   getProjectDocumentReviewTarget,
@@ -34,15 +39,7 @@ const projectCreatedPayloadSchema = z.object({
   projectName: z.string().min(1).max(300),
 }).strict();
 
-type EffectWithEvent = WorkflowEffect & { lifecycleEvent: LifecycleEvent };
-type EffectExecutionDependencies = {
-  database: PrismaClient;
-  calendarSync: typeof syncDeadlineToGoogleBestEffort;
-};
-type EffectHandler = (effect: EffectWithEvent, dependencies: EffectExecutionDependencies) => Promise<void>;
-
-export class PermanentWorkflowEffectError extends Error {}
-export class RetryableWorkflowEffectError extends Error {}
+export { PermanentWorkflowEffectError, RetryableWorkflowEffectError };
 
 const loadProjectCreatedContext = async (effect: EffectWithEvent, database: PrismaClient) => {
   if (effect.lifecycleEvent.eventType !== LifecycleEventType.PROJECT_CREATED) {
@@ -73,6 +70,11 @@ const loadProjectCreatedContext = async (effect: EffectWithEvent, database: Pris
 const ensureInitialDocumentReviewAction: EffectHandler = async (effect, { database }) => {
   const { project, target, dueAt } = await loadProjectCreatedContext(effect, database);
   const dedupeKey = `project:${project.id}:document-review`;
+  const existing = await database.actionItem.findUnique({
+    where: { organisationId_dedupeKey: { organisationId: effect.organisationId, dedupeKey } },
+    select: { status: true, resolvedAt: true },
+  });
+  const preserveResolved = existing?.status === ActionItemStatus.RESOLVED;
   await database.actionItem.upsert({
     where: { organisationId_dedupeKey: { organisationId: effect.organisationId, dedupeKey } },
     update: {
@@ -80,10 +82,10 @@ const ensureInitialDocumentReviewAction: EffectHandler = async (effect, { databa
       summary: 'Check the project documents and confirm the next application details.',
       actionUrl: `/projects/${project.id}#documents`,
       priority: ActionItemPriority.MEDIUM,
-      status: ActionItemStatus.OPEN,
+      status: preserveResolved ? ActionItemStatus.RESOLVED : ActionItemStatus.OPEN,
       availableAt: effect.lifecycleEvent.occurredAt,
       dueAt: target.enabled ? dueAt : null,
-      resolvedAt: null,
+      resolvedAt: preserveResolved ? existing.resolvedAt : null,
     },
     create: {
       organisationId: effect.organisationId,
@@ -126,33 +128,17 @@ const ensureProjectCreatedActivity: EffectHandler = async (effect, { database })
 };
 
 const ensureInternalDocumentReviewDeadline: EffectHandler = async (effect, { database, calendarSync }) => {
-  const { project, target, dueAt } = await loadProjectCreatedContext(effect, database);
-  if (!target.enabled) return;
-  const sourceKey = `workflow:project:${project.id}:document-review`;
-  const deadline = await database.deadline.upsert({
-    where: { organisationId_sourceKey: { organisationId: effect.organisationId, sourceKey } },
-    update: {
-      projectId: project.id,
-      title: 'Review project documents',
-      description: 'Internal practice target for checking the project documents and next application details.',
-      dueDate: dueAt,
-      type: DeadlineType.INTERNAL_TASK,
-      status: DeadlineStatus.UPCOMING,
-      priority: DeadlinePriority.MEDIUM,
-      completedDate: null,
-    },
-    create: {
-      organisationId: effect.organisationId,
-      projectId: project.id,
-      title: 'Review project documents',
-      description: 'Internal practice target for checking the project documents and next application details.',
-      dueDate: dueAt,
-      type: DeadlineType.INTERNAL_TASK,
-      status: DeadlineStatus.UPCOMING,
-      priority: DeadlinePriority.MEDIUM,
-      sourceKey,
-    },
+  const { project } = await loadProjectCreatedContext(effect, database);
+  const deadline = await ensureWorkflowDeadline(database, {
+    organisationId: effect.organisationId,
+    projectId: project.id,
+    sourceKey: workflowSourceKeys.documentReview(project.id),
+    title: 'Review project documents',
+    description: 'Internal practice target for checking the project documents and next application details.',
+    targetKey: WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW,
+    occurredAt: effect.lifecycleEvent.occurredAt,
   });
+  if (!deadline) return;
   const calendar = await calendarSync(effect.organisationId, deadline.id);
   if (calendar.attempted && !calendar.synced) {
     throw new RetryableWorkflowEffectError('Google Calendar could not sync the internal project deadline.');
@@ -164,6 +150,15 @@ export const PROJECT_CREATED_EFFECT_HANDLERS: Record<ProjectCreatedHandlerKey, E
   'project.activity.created': ensureProjectCreatedActivity,
   'project.deadline.document-review': ensureInternalDocumentReviewDeadline,
 };
+
+export const LIFECYCLE_EFFECT_HANDLERS: Record<LifecycleHandlerKey, EffectHandler> = {
+  ...PROJECT_CREATED_EFFECT_HANDLERS,
+  ...PHASE_2_EFFECT_HANDLERS,
+} as Record<LifecycleHandlerKey, EffectHandler>;
+
+const CONTROLLED_HANDLER_KEYS = new Set<LifecycleHandlerKey>(
+  Object.values(LIFECYCLE_EVENT_HANDLER_KEYS).flat(),
+);
 
 const candidateWhere = (
   now: Date,
@@ -242,7 +237,7 @@ export const drainWorkflowEffects = async (input: {
   leaseOwner?: string;
   now?: Date;
   random?: () => number;
-  handlerOverrides?: Partial<Record<ProjectCreatedHandlerKey, EffectHandler>>;
+  handlerOverrides?: Partial<Record<LifecycleHandlerKey, EffectHandler>>;
   database?: PrismaClient;
   calendarSync?: typeof syncDeadlineToGoogleBestEffort;
 } = {}) => {
@@ -253,10 +248,10 @@ export const drainWorkflowEffects = async (input: {
   const effects = await claimWorkflowEffects({ ...input, now });
   const result = { claimed: effects.length, completed: 0, retryable: 0, failedFinal: 0 };
   for (const effect of effects) {
-    const handlerKey = effect.handlerKey as ProjectCreatedHandlerKey;
-    const handler = input.handlerOverrides?.[handlerKey] ?? PROJECT_CREATED_EFFECT_HANDLERS[handlerKey];
+    const handlerKey = effect.handlerKey as LifecycleHandlerKey;
+    const handler = input.handlerOverrides?.[handlerKey] ?? LIFECYCLE_EFFECT_HANDLERS[handlerKey];
     try {
-      if (!PROJECT_CREATED_HANDLER_KEYS.includes(handlerKey) || !handler) {
+      if (!CONTROLLED_HANDLER_KEYS.has(handlerKey) || !handler) {
         throw new PermanentWorkflowEffectError(`Unknown workflow effect handler: ${effect.handlerKey}`);
       }
       await handler(effect, { database, calendarSync });
@@ -277,7 +272,9 @@ export const drainWorkflowEffects = async (input: {
       });
       result.completed += 1;
     } catch (error) {
-      const permanent = error instanceof PermanentWorkflowEffectError || effect.attempts >= MAX_EFFECT_ATTEMPTS;
+      const permanent = error instanceof PermanentWorkflowEffectError
+        || error instanceof z.ZodError
+        || effect.attempts >= MAX_EFFECT_ATTEMPTS;
       const message = error instanceof Error ? error.message.slice(0, 1000) : 'Workflow effect failed.';
       await database.workflowEffect.updateMany({
         where: {

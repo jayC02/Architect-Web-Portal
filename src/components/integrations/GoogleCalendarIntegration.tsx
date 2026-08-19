@@ -112,6 +112,10 @@ export default function GoogleCalendarIntegration() {
 
   const google = data?.connections.find((connection) => connection.provider === 'GOOGLE');
   const connected = google?.status === 'CONNECTED' || google?.status === 'ERROR';
+  const gmailNeedsReconnect = Boolean(
+    google?.gmailEnabled
+    && (!google.gmailPermissionGranted || google.status === 'NOT_CONNECTED' || google.status === 'PAUSED'),
+  );
 
   return (
     <div className="space-y-5">
@@ -232,18 +236,22 @@ export default function GoogleCalendarIntegration() {
           </div>
         </div>
 
-        <div className="grid gap-px bg-stone-200 sm:grid-cols-3">
+        <div className="grid gap-px bg-stone-200 sm:grid-cols-2 lg:grid-cols-4">
           <div className="bg-white p-5">
-            <p className="text-xs font-semibold uppercase text-stone-500">Connected account</p>
+            <p className="text-xs font-semibold uppercase text-stone-500">Connected</p>
             <p className="mt-2 truncate text-sm font-medium text-ink">{google?.gmailEnabled ? google.accountEmail ?? 'Google account' : 'No Gmail account connected'}</p>
           </div>
           <div className="bg-white p-5">
-            <p className="text-xs font-semibold uppercase text-stone-500">Last successful sync</p>
-            <p className="mt-2 text-sm font-medium text-ink">{formatDateTime(google?.gmailLastSuccessfulSyncAt ?? null)}</p>
+            <p className="text-xs font-semibold uppercase text-stone-500">Last checked</p>
+            <p className="mt-2 text-sm font-medium text-ink">{formatDateTime(google?.gmailLastAttemptedSyncAt ?? null)}</p>
           </div>
           <div className="bg-white p-5">
-            <p className="text-xs font-semibold uppercase text-stone-500">Last attempted sync</p>
-            <p className="mt-2 text-sm font-medium text-ink">{formatDateTime(google?.gmailLastAttemptedSyncAt ?? null)}</p>
+            <p className="text-xs font-semibold uppercase text-stone-500">Monitoring</p>
+            <p className="mt-2 text-sm font-medium text-ink">{google?.gmailEnabled && !gmailNeedsReconnect ? 'Active' : 'Paused'}</p>
+          </div>
+          <div className="bg-white p-5">
+            <p className="text-xs font-semibold uppercase text-stone-500">Connection health</p>
+            <p className={`mt-2 text-sm font-medium ${gmailNeedsReconnect ? 'text-amber-800' : 'text-ink'}`}>{gmailNeedsReconnect ? 'Needs reconnect' : google?.gmailEnabled ? 'Connected' : 'Not connected'}</p>
           </div>
         </div>
 

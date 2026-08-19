@@ -21,6 +21,10 @@ import {
   currentAutomationSourceUpdatedAt,
 } from '@/server/services/automation-jobs.service';
 import { resolveAutomationJobIdentity } from '@/server/services/desktop-automation-status.service';
+import {
+  drainLifecycleEventsBestEffort,
+  recordAutomationReadinessTransition,
+} from '@/server/services/application-lifecycle.service';
 
 const launchableStatuses = [
   AutomationJobStatus.READY,
@@ -102,22 +106,36 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       const refreshedStatus = refreshed.preflight.status === 'READY'
         ? AutomationJobStatus.READY
         : AutomationJobStatus.NEEDS_INPUT;
-      const refresh = await prisma.automationJob.updateMany({
-        where: { id: job.id, organisationId: organisation.id, status: AutomationJobStatus.READY },
-        data: {
-          title: refreshed.title,
-          status: refreshedStatus,
-          sourceType: refreshed.sourceType,
-          payloadVersion: 2,
-          snapshotHash: refreshed.snapshotHash,
-          sourceUpdatedAt: refreshed.sourceUpdatedAt,
-          preparedAt: new Date(),
-          dataSnapshot: refreshed.dataSnapshot as Prisma.InputJsonValue,
-          documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
-          error: null,
-        },
+      const lifecycleEvent = await prisma.$transaction(async (tx) => {
+        const refresh = await tx.automationJob.updateMany({
+          where: { id: job.id, organisationId: organisation.id, status: AutomationJobStatus.READY },
+          data: {
+            title: refreshed.title,
+            status: refreshedStatus,
+            sourceType: refreshed.sourceType,
+            payloadVersion: 2,
+            snapshotHash: refreshed.snapshotHash,
+            sourceUpdatedAt: refreshed.sourceUpdatedAt,
+            preparedAt: new Date(),
+            dataSnapshot: refreshed.dataSnapshot as Prisma.InputJsonValue,
+            documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
+            error: null,
+          },
+        });
+        if (!refresh.count) throw new HttpError(409, 'This automation job changed while its latest details were being prepared. Retry safely.');
+        return recordAutomationReadinessTransition(tx, {
+          organisationId: organisation.id,
+          projectId: job.projectId,
+          jobType: job.type,
+          previousStatus: job.status,
+          nextStatus: refreshedStatus,
+          readinessKey: refreshed.snapshotHash,
+          planningApplicationId: refreshed.dataSnapshot.planning?.recordId,
+          buildingWarrantApplicationId: refreshed.dataSnapshot.buildingWarrant?.recordId,
+          actorUserId: user.id,
+        });
       });
-      if (!refresh.count) throw new HttpError(409, 'This automation job changed while its latest details were being prepared. Retry safely.');
+      await drainLifecycleEventsBestEffort(organisation.id, [lifecycleEvent?.id]);
       if (refreshedStatus !== AutomationJobStatus.READY) {
         throw new HttpError(409, 'Project information was refreshed, but required application details now need attention before desktop can open.');
       }

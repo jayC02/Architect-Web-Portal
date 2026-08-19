@@ -203,7 +203,7 @@ assert.match(projectRoute, /preparationRedirectTo: preparationRedirectTo\(existi
 assert.match(commitRoute, /\/projects\/\$\{encodeURIComponent\(result\.projectId\)\}/, 'AI-first commit returns to the resulting project');
 assert.match(commitRoute, /applicationPrepared=1/, 'AI-first commit displays a contextual success state');
 assert.doesNotMatch(draftReview, /\/api\/automation-jobs\/\$\{result\.automationJobId\}\/launch/, 'committing never launches desktop automation without another user action');
-assert.match(warrantPreparationPage, /automationJobApplicationId\(reusableJob\) !== application\.id/, 'focused preparation rejects a job for another application');
+assert.match(warrantPreparationPage, /automationJobApplicationId\(reusableJob\) === application\.id \? reusableJob : null/, 'focused preparation rejects a job for another application');
 assert.match(planningPreparationPage, /automationJobApplicationId\(candidate\) === application\.id/, 'Planning preparation selects only the exact application job');
 assert.match(planningPreparationPage, /Planning application details/, 'Planning has a distinct preparation page');
 assert.doesNotMatch(planningPreparationPage, /registrationAPart1|registrationBPart1|Certifier details/, 'Planning never renders Building Warrant certifier fields');

@@ -6,6 +6,7 @@ import {
   DeadlineType,
   GmailSuggestionStatus,
   GmailUpdateType,
+  LifecycleEventSource,
   PlanningStatus,
   Prisma,
   WarrantStatus,
@@ -13,6 +14,11 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import { syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calendar';
 import { HttpError } from '@/lib/utils/http';
+import {
+  drainLifecycleEventsBestEffort,
+  updatePlanningApplicationInTransaction,
+} from '@/server/services/application-lifecycle.service';
+import { resolvePlanningCorrespondenceReviewAction } from '@/server/services/gmail-planning-lifecycle.service';
 
 const planningFields = new Set([
   'applicationReference',
@@ -66,7 +72,7 @@ const validatedDate = (value: unknown) => {
   return result;
 };
 
-const planningData = (fieldName: string, value: unknown): Prisma.PlanningApplicationUpdateInput => {
+const planningData = (fieldName: string, value: unknown): Prisma.PlanningApplicationUncheckedUpdateInput => {
   if (!planningFields.has(fieldName)) throw new HttpError(400, 'This planning update is not supported.');
   if (fieldName === 'status') {
     if (!Object.values(PlanningStatus).includes(value as PlanningStatus)) throw new HttpError(400, 'The suggested planning status is invalid.');
@@ -116,7 +122,8 @@ const ensurePlanningApplication = async (organisationId: string, projectId: stri
     where: { organisationId, projectId },
     orderBy: { updatedAt: 'desc' },
   });
-  return latest ?? prisma.planningApplication.create({ data: { organisationId, projectId } });
+  if (!latest) throw new HttpError(409, 'No existing Planning application is linked to this email.');
+  return latest;
 };
 
 const ensureWarrantApplication = async (organisationId: string, projectId: string, preferredId?: string | null) => {
@@ -128,7 +135,8 @@ const ensureWarrantApplication = async (organisationId: string, projectId: strin
     where: { organisationId, projectId },
     orderBy: { updatedAt: 'desc' },
   });
-  return latest ?? prisma.buildingWarrantApplication.create({ data: { organisationId, projectId } });
+  if (!latest) throw new HttpError(409, 'No existing Building Warrant is linked to this email.');
+  return latest;
 };
 
 type ApplySuggestionInput = {
@@ -170,12 +178,31 @@ export const applyGmailSuggestion = async ({
         suggestion.existingValue,
         value,
       );
-      await prisma.$transaction([
-        prisma.planningApplication.update({
-          where: { id: application.id },
-          data: planningData(suggestion.fieldName, value),
-        }),
-        prisma.gmailUpdateSuggestion.update({
+      const applied = await prisma.$transaction(async (tx) => {
+        const lifecycleEventIds: string[] = [];
+        if (suggestion.fieldName === 'status') {
+          planningData(suggestion.fieldName, value);
+          const transition = await updatePlanningApplicationInTransaction(tx, {
+            organisationId,
+            planningApplicationId: application.id,
+            actorUserId: reviewedById ?? null,
+            source: LifecycleEventSource.GMAIL,
+            occurredAt: suggestion.trackedEmail.sentAt,
+            data: { status: value as PlanningStatus },
+            evidence: {
+              sourceType: 'GMAIL_REVIEW',
+              gmailMessageId: suggestion.trackedEmail.gmailMessageId,
+              trackedEmailId: suggestion.trackedEmailId,
+            },
+          });
+          lifecycleEventIds.push(...transition.lifecycleEventIds);
+        } else {
+          await tx.planningApplication.update({
+            where: { id: application.id },
+            data: planningData(suggestion.fieldName, value),
+          });
+        }
+        await tx.gmailUpdateSuggestion.update({
           where: { id: suggestion.id },
           data: {
             planningApplicationId: application.id,
@@ -187,12 +214,15 @@ export const applyGmailSuggestion = async ({
             appliedAt: new Date(),
             error: null,
           },
-        }),
-        prisma.trackedEmail.update({
+        });
+        await tx.trackedEmail.update({
           where: { id: suggestion.trackedEmailId },
           data: { planningApplicationId: application.id, processingStatus: 'PROCESSED' },
-        }),
-      ]);
+        });
+        return lifecycleEventIds;
+      });
+      await drainLifecycleEventsBestEffort(organisationId, applied);
+      await resolvePlanningCorrespondenceReviewAction(prisma, organisationId, suggestion.trackedEmailId);
     } else if (suggestion.updateType === GmailUpdateType.BUILDING_WARRANT) {
       const application = await ensureWarrantApplication(
         organisationId,

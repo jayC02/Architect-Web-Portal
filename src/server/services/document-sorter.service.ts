@@ -105,8 +105,8 @@ const RULES: Rule[] = [
   { type: DocumentType.PHOTO, points: 75, phrases: ['photo', 'photos', 'image', 'pic'], label: 'photo' },
   {
     type: DocumentType.CORRESPONDENCE,
-    points: 72,
-    phrases: ['letter', 'email', 'correspondence', 'response', 'consultation'],
+    points: 92,
+    phrases: ['planning decision notice', 'decision notice', 'planning decision letter', 'approval notice', 'refusal notice', 'letter', 'email', 'correspondence', 'response', 'consultation'],
     label: 'correspondence',
   },
   {

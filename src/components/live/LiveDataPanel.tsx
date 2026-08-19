@@ -786,7 +786,7 @@ function DeadlineDirectoryTable({ deadlines, onView, onEdit }: { deadlines: AnyR
           <thead className="table-head"><tr><th className="px-5 py-4">Deadline</th><th className="px-5 py-4">Project</th><th className="px-5 py-4">Due date</th><th className="px-5 py-4">Priority</th><th className="px-5 py-4 text-right">Actions</th></tr></thead>
           <tbody>{deadlines.map((deadline) => {
             const overdue = deadline.status !== 'COMPLETED' && new Date(deadline.dueDate) < today;
-            return <tr key={deadline.id} className="border-t border-stone-100 transition hover:bg-stone-50"><td className="max-w-md px-5 py-5 align-middle"><p className="truncate font-semibold text-ink">{deadline.title}</p><p className="mt-1 line-clamp-1 text-sm text-stone-500">{deadline.description || 'No description'}</p></td><td className="px-5 py-5 align-middle text-sm text-stone-700">{deadline.project?.name ?? 'General'}</td><td className={`px-5 py-5 align-middle text-sm font-medium ${overdue ? 'text-red-800' : 'text-stone-700'}`}>{date(deadline.dueDate)}{overdue && <span className="ml-2 text-xs font-semibold">Overdue</span>}</td><td className="px-5 py-5 align-middle text-sm text-stone-700"><span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${deadline.priority === 'CRITICAL' ? 'bg-red-700' : deadline.priority === 'HIGH' ? 'bg-amber-500' : 'bg-moss/70'}`} />{human(deadline.priority)}</span></td><td className="px-5 py-5 align-middle"><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => onView(deadline)}>View</button><button type="button" className="btn btn-secondary" onClick={() => onEdit(deadline)}>Edit</button></div></td></tr>;
+            return <tr key={deadline.id} className="border-t border-stone-100 transition hover:bg-stone-50"><td className="max-w-md px-5 py-5 align-middle"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold text-ink">{deadline.title}</p>{deadline.managedBy === 'WORKFLOW' && <span className="rounded-md bg-[#eef3e9] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-moss">Workflow</span>}</div><p className="mt-1 line-clamp-1 text-sm text-stone-500">{deadline.description || 'No description'}</p></td><td className="px-5 py-5 align-middle text-sm text-stone-700">{deadline.project?.name ?? 'General'}</td><td className={`px-5 py-5 align-middle text-sm font-medium ${overdue ? 'text-red-800' : 'text-stone-700'}`}>{date(deadline.dueDate)}{overdue && <span className="ml-2 text-xs font-semibold">Overdue</span>}{deadline.manualOverrideAt && <span className="mt-1 block text-xs font-normal text-amber-700">Manual override</span>}</td><td className="px-5 py-5 align-middle text-sm text-stone-700"><span className="inline-flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${deadline.priority === 'CRITICAL' ? 'bg-red-700' : deadline.priority === 'HIGH' ? 'bg-amber-500' : 'bg-moss/70'}`} />{human(deadline.priority)}</span></td><td className="px-5 py-5 align-middle"><div className="flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => onView(deadline)}>View</button><button type="button" className="btn btn-secondary" onClick={() => onEdit(deadline)}>Edit</button></div></td></tr>;
           })}</tbody>
         </table>
       </div>
@@ -798,11 +798,11 @@ function DeadlineDirectoryTable({ deadlines, onView, onEdit }: { deadlines: AnyR
 function DeadlineDrawer({ drawer, projects, onClose, onEdit }: { drawer: { mode: 'create' | 'view' | 'edit'; item?: AnyRecord }; projects: AnyRecord[]; onClose: () => void; onEdit: (deadline: AnyRecord) => void }) {
   if (drawer.mode === 'view' && drawer.item) {
     const deadline = drawer.item;
-    return <DirectoryDrawer title={deadline.title} description="Project deadline details." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Project" value={deadline.project?.name ?? 'General'} /><DetailRow label="Due date" value={date(deadline.dueDate)} /><DetailRow label="Priority" value={human(deadline.priority)} /><DetailRow label="Description" value={deadline.description || 'No description'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(deadline)}>Edit deadline</button></div></DirectoryDrawer>;
+    return <DirectoryDrawer title={deadline.title} description="Project deadline details." onClose={onClose}><div className="space-y-5 text-sm"><DetailRow label="Project" value={deadline.project?.name ?? 'General'} /><DetailRow label="Due date" value={date(deadline.dueDate)} />{deadline.managedBy === 'WORKFLOW' && <DetailRow label="Calculated workflow date" value={date(deadline.calculatedDueDate)} />}<DetailRow label="Managed by" value={human(deadline.managedBy ?? 'MANUAL')} /><DetailRow label="Priority" value={human(deadline.priority)} /><DetailRow label="Description" value={deadline.description || 'No description'} /><button type="button" className="btn btn-primary w-full" onClick={() => onEdit(deadline)}>Edit deadline</button></div></DirectoryDrawer>;
   }
   const deadline = drawer.item;
   const editing = drawer.mode === 'edit';
-  return <DirectoryDrawer title={editing ? 'Edit deadline' : 'New deadline'} description={editing ? 'Update the project, date or details for this deadline.' : 'Add a project date. It will sync automatically when Google Calendar is connected.'} onClose={onClose}><DeadlineForm deadline={deadline} projects={projects} onClose={onClose} />{editing && deadline && <DeleteForm action={`/api/deadlines/${deadline.id}`} label="Delete deadline" confirm="Delete this deadline? It will also be removed from Google Calendar." />}</DirectoryDrawer>;
+  return <DirectoryDrawer title={editing ? 'Edit deadline' : 'New deadline'} description={editing ? 'Update the project, date or details for this deadline.' : 'Add a project date. It will sync automatically when Google Calendar is connected.'} onClose={onClose}><DeadlineForm deadline={deadline} projects={projects} onClose={onClose} />{editing && deadline?.managedBy === 'WORKFLOW' && deadline.calculatedDueDate && <form data-api-form data-action={`/api/deadlines/${deadline.id}/reset-calculated`} data-method="POST" className="mt-3 border-t border-stone-200 pt-3"><button className="btn btn-secondary w-full">Reset to calculated date</button><p className="mt-2 text-xs leading-5 text-stone-500">Calculated date: {date(deadline.calculatedDueDate)}. This removes the manual override.</p><p data-form-status className="mt-2 text-sm text-stone-500" /></form>}{editing && deadline && <DeleteForm action={`/api/deadlines/${deadline.id}`} label="Delete deadline" confirm="Delete this deadline? It will also be removed from Google Calendar." />}</DirectoryDrawer>;
 }
 
 function DeadlineForm({ deadline, projects, onClose }: { deadline?: AnyRecord; projects: AnyRecord[]; onClose: () => void }) {
@@ -817,7 +817,7 @@ function DeadlineForm({ deadline, projects, onClose }: { deadline?: AnyRecord; p
       <input type="hidden" name="status" value={deadline?.status ?? 'UPCOMING'} />
       <label className="block"><span className="label">Title</span><input required name="title" maxLength={160} defaultValue={deadline?.title ?? ''} className="field" placeholder="Enter deadline title" autoFocus /></label>
       <label className="block"><span className="label">Project</span><select name="projectId" value={projectId} onChange={(event) => setProjectId(event.target.value)} className="field"><option value="">General</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-      <label className="block"><span className="label">Due date</span><input required type="date" name="dueDate" defaultValue={dateInput(deadline?.dueDate)} className="field" /></label>
+      <label className="block"><span className="label">Due date</span><input required type="date" name="dueDate" defaultValue={dateInput(deadline?.dueDate)} className="field" />{deadline?.managedBy === 'WORKFLOW' && <span className="mt-1 block text-xs leading-5 text-stone-500">Changing this date creates a manual override. Future workflow recalculation will preserve it.</span>}</label>
       <label className="block"><span className="label">Priority</span><select name="priority" defaultValue={deadline?.priority ?? 'MEDIUM'} className="field">{deadlinePriorities.map((priority) => <option key={priority} value={priority}>{human(priority)}</option>)}</select></label>
       <label className="block"><span className="label">Description <span className="normal-case text-stone-400">(optional)</span></span><textarea name="description" rows={5} value={description} onChange={(event) => setDescription(event.target.value)} className="field" placeholder="What needs to happen by this date?" /></label>
       <button className="btn btn-primary w-full">Save deadline</button>
@@ -996,6 +996,86 @@ function DocumentFolder({ data }: { data: AnyRecord }) {
   return <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Document buckets</h2><span className="text-sm text-stone-500">{project.documentCount} documents</span></div>{buckets.map((bucket: AnyRecord) => <details key={bucket.type} className="panel rounded-lg" open={bucket.documents.length > 0}><summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3"><span className="font-semibold">{bucket.label}</span><span className="rounded-md bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-600">{bucket.documents.length} file{bucket.documents.length === 1 ? '' : 's'}</span></summary><div className="border-t border-stone-100">{bucket.documents.length ? bucket.documents.map((document: AnyRecord) => <div key={document.id} className="border-b border-stone-100 px-4 py-3 last:border-b-0"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><a className="font-semibold hover:underline" href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer">{document.originalName}</a><p className="mt-1 text-xs text-stone-500">{document.revision ? `Rev ${document.revision}` : 'No revision'} - {human(document.status)} - {date(document.createdAt)} - {bytes(document.sizeBytes)}</p></div></div></div>) : <div className="px-4 py-6 text-sm text-stone-500">No files in this bucket yet.</div>}</div></details>)}</section>;
 }
 
+function WorkflowTargetsSettings({ targets, canManage }: { targets: AnyRecord[]; canManage: boolean }) {
+  const [values, setValues] = useState<AnyRecord[]>(targets);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setValues(targets), [targets]);
+
+  const update = (key: string, change: Partial<AnyRecord>) => {
+    setValues((current) => current.map((target) => target.key === key ? { ...target, ...change } : target));
+  };
+  const save = async () => {
+    setSaving(true); setMessage('Saving automatic workflow reminders...'); setFailed(false);
+    try {
+      const response = await apiRequest<AnyRecord>('/api/settings/workflow-targets', {
+        method: 'PUT',
+        body: JSON.stringify({
+          targets: values.map(({ key, enabled, offsetDays }) => ({ key, enabled, offsetDays: Number(offsetDays) })),
+        }),
+      });
+      setValues(response.targets ?? values);
+      setMessage(response.message ?? 'Automatic workflow reminders saved.');
+      window.dispatchEvent(new CustomEvent('portal:mutation-success', {
+        detail: { action: '/api/settings/workflow-targets', method: 'PUT' },
+      }));
+    } catch (error) {
+      setFailed(true);
+      setMessage(error instanceof Error ? error.message : 'Workflow reminders could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="panel rounded-lg p-5" aria-labelledby="automatic-workflow-reminders-heading">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="automatic-workflow-reminders-heading" className="text-xl font-semibold">Automatic workflow reminders</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Internal practice targets only. These dates are not statutory or council deadlines.</p>
+        </div>
+        {!canManage && <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Owner or Admin access required</span>}
+      </div>
+      <fieldset disabled={!canManage || saving} className="mt-5 divide-y divide-stone-100">
+        <legend className="sr-only">Automatic workflow reminder targets</legend>
+        {values.map((target) => (
+          <div key={target.key} className="grid gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <label className="flex min-w-0 items-start gap-3">
+              <input
+                type="checkbox"
+                checked={Boolean(target.enabled)}
+                onChange={(event) => update(target.key, { enabled: event.target.checked })}
+                className="mt-1 h-4 w-4 shrink-0 accent-[#526a4a]"
+              />
+              <span>
+                <span className="block font-semibold text-ink">{target.label}</span>
+                <span className="mt-1 block text-sm leading-5 text-stone-500">{target.description}</span>
+              </span>
+            </label>
+            <label className="flex items-center gap-2 sm:justify-end">
+              <span className="sr-only">{target.label} offset in days</span>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                value={target.offsetDays}
+                onChange={(event) => update(target.key, { offsetDays: event.target.value })}
+                className="field w-24"
+                aria-describedby={`${target.key}-unit`}
+              />
+              <span id={`${target.key}-unit`} className="w-12 text-sm text-stone-500">days</span>
+            </label>
+          </div>
+        ))}
+      </fieldset>
+      {canManage && <button type="button" onClick={() => void save()} disabled={saving} className="btn btn-primary mt-5">{saving ? 'Saving...' : 'Save workflow reminders'}</button>}
+      {message && <p role={failed ? 'alert' : 'status'} className={`mt-3 text-sm ${failed ? 'text-red-700' : 'text-stone-500'}`}>{message}</p>}
+    </section>
+  );
+}
+
 function SettingsOverview({ data }: { data: AnyRecord }) {
   const defaults = data.defaults ?? {};
   const certifierPresets = data.certifierPresets ?? [];
@@ -1017,6 +1097,8 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
           <p className="mt-2 text-xs uppercase text-stone-500">Your role: {data.role}</p>
         </div>
       </div>
+
+      <WorkflowTargetsSettings targets={data.workflowTargets ?? []} canManage={canManage} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
         <form data-api-form data-action="/api/settings/organisation-defaults" data-method="PUT" className="panel grid gap-4 rounded-lg p-5">

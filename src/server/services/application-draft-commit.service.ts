@@ -27,7 +27,11 @@ import {
   getApplicationDraftForOrganisation,
 } from '@/server/services/application-draft.service';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
-import { emitProjectCreatedLifecycleEvent } from '@/server/services/lifecycle-events.service';
+import { recordAutomationReadinessTransition } from '@/server/services/application-lifecycle.service';
+import {
+  emitDocumentReviewCompletedLifecycleEvent,
+  emitProjectCreatedLifecycleEvent,
+} from '@/server/services/lifecycle-events.service';
 import { drainWorkflowEffectsBestEffort } from '@/server/services/workflow-effects.service';
 
 type CommitUser = {
@@ -322,6 +326,7 @@ export const commitApplicationDraft = async (
         warrantId: current.resultingWarrantId,
         automationJobId: current.resultingAutomationJobId,
         lifecycleEventId: null,
+        documentReviewLifecycleEventId: null,
       };
     }
     if (current.status === ApplicationDraftStatus.COMMITTING && current.resultingProjectId) {
@@ -331,6 +336,7 @@ export const commitApplicationDraft = async (
         warrantId: current.resultingWarrantId,
         automationJobId: current.resultingAutomationJobId,
         lifecycleEventId: null,
+        documentReviewLifecycleEventId: null,
       };
     }
     const locked = await tx.applicationDraft.updateMany({
@@ -497,6 +503,15 @@ export const commitApplicationDraft = async (
       });
     }
 
+    const documentReviewLifecycleEvent = await emitDocumentReviewCompletedLifecycleEvent(tx, {
+      organisationId: organisation.id,
+      projectId: records.projectId,
+      applicationDraftId: current.id,
+      planningApplicationId: planningId,
+      buildingWarrantApplicationId: warrantId,
+      actorUserId: user.id,
+    });
+
     await tx.applicationDraft.update({
       where: { id: current.id },
       data: {
@@ -515,10 +530,16 @@ export const commitApplicationDraft = async (
       warrantId,
       automationJobId: jobId,
       lifecycleEventId: lifecycleEvent?.id ?? null,
+      documentReviewLifecycleEventId: documentReviewLifecycleEvent.id,
     };
   });
 
+  let readinessLifecycleEventId: string | null = null;
   if (jobType && committedRecords.automationJobId) {
+    const previousJob = await prisma.automationJob.findFirst({
+      where: { id: committedRecords.automationJobId, organisationId: organisation.id },
+      select: { status: true },
+    });
     const snapshot = await buildAutomationJobSnapshot({
       jobId: committedRecords.automationJobId,
       organisationId: organisation.id,
@@ -532,42 +553,54 @@ export const commitApplicationDraft = async (
       planningApplicationId: committedRecords.planningId ?? undefined,
       buildingWarrantApplicationId: committedRecords.warrantId ?? undefined,
     });
-    await prisma.automationJob.upsert({
-      where: { id: committedRecords.automationJobId },
-      create: {
-        id: committedRecords.automationJobId,
+    const nextStatus = snapshot.preflight.status === 'READY'
+      ? AutomationJobStatus.READY
+      : AutomationJobStatus.NEEDS_INPUT;
+    readinessLifecycleEventId = await prisma.$transaction(async (tx) => {
+      await tx.automationJob.upsert({
+        where: { id: committedRecords.automationJobId! },
+        create: {
+          id: committedRecords.automationJobId!,
+          organisationId: organisation.id,
+          projectId: committedRecords.projectId,
+          type: jobType,
+          status: nextStatus,
+          sourceType: snapshot.sourceType,
+          title: snapshot.title,
+          payloadVersion: 2,
+          snapshotHash: snapshot.snapshotHash,
+          sourceUpdatedAt: snapshot.sourceUpdatedAt,
+          preparedAt: new Date(),
+          reviewedAt: new Date(),
+          dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+          documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+          createdById: user.id,
+        },
+        update: {
+          type: jobType,
+          status: nextStatus,
+          sourceType: snapshot.sourceType,
+          title: snapshot.title,
+          payloadVersion: 2,
+          snapshotHash: snapshot.snapshotHash,
+          sourceUpdatedAt: snapshot.sourceUpdatedAt,
+          preparedAt: new Date(),
+          reviewedAt: new Date(),
+          dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+          documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+        },
+      });
+      return (await recordAutomationReadinessTransition(tx, {
         organisationId: organisation.id,
         projectId: committedRecords.projectId,
-        type: jobType,
-        status: snapshot.preflight.status === 'READY'
-          ? AutomationJobStatus.READY
-          : AutomationJobStatus.NEEDS_INPUT,
-        sourceType: snapshot.sourceType,
-        title: snapshot.title,
-        payloadVersion: 2,
-        snapshotHash: snapshot.snapshotHash,
-        sourceUpdatedAt: snapshot.sourceUpdatedAt,
-        preparedAt: new Date(),
-        reviewedAt: new Date(),
-        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-        createdById: user.id,
-      },
-      update: {
-        type: jobType,
-        status: snapshot.preflight.status === 'READY'
-          ? AutomationJobStatus.READY
-          : AutomationJobStatus.NEEDS_INPUT,
-        sourceType: snapshot.sourceType,
-        title: snapshot.title,
-        payloadVersion: 2,
-        snapshotHash: snapshot.snapshotHash,
-        sourceUpdatedAt: snapshot.sourceUpdatedAt,
-        preparedAt: new Date(),
-        reviewedAt: new Date(),
-        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-      },
+        jobType,
+        previousStatus: previousJob?.status ?? null,
+        nextStatus,
+        readinessKey: snapshot.snapshotHash,
+        planningApplicationId: committedRecords.planningId,
+        buildingWarrantApplicationId: committedRecords.warrantId,
+        actorUserId: user.id,
+      }))?.id ?? null;
     });
     await persistApplicationPreparationDraft(committedRecords.automationJobId, organisation.id);
   }
@@ -587,6 +620,18 @@ export const commitApplicationDraft = async (
     await drainWorkflowEffectsBestEffort({
       organisationId: organisation.id,
       lifecycleEventId: committedRecords.lifecycleEventId,
+    });
+  }
+  if (committedRecords.documentReviewLifecycleEventId) {
+    await drainWorkflowEffectsBestEffort({
+      organisationId: organisation.id,
+      lifecycleEventId: committedRecords.documentReviewLifecycleEventId,
+    });
+  }
+  if (readinessLifecycleEventId) {
+    await drainWorkflowEffectsBestEffort({
+      organisationId: organisation.id,
+      lifecycleEventId: readinessLifecycleEventId,
     });
   }
 

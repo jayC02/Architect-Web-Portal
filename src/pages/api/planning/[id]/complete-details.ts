@@ -11,6 +11,11 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import {
+  drainLifecycleEventsBestEffort,
+  recordAutomationReadinessTransition,
+  updatePlanningApplicationWithLifecycle,
+} from '@/server/services/application-lifecycle.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 
@@ -29,7 +34,7 @@ const jsonObject = (value: unknown): Record<string, unknown> =>
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
   assertRateLimit(context, rateLimitPolicies.mutation, 'planning:complete-details');
-  const { organisation } = await requireOrganisation(context);
+  const { organisation, user } = await requireOrganisation(context);
   const id = context.params.id;
   if (!id) throw new HttpError(400, 'Planning application id is required.');
   const body = await parseBody(context.request, planningPreparationDetailsSchema);
@@ -73,8 +78,10 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     soleOwner,
     agriculturalHolding,
   } = body;
-  await prisma.planningApplication.update({
-    where: { id: application.id },
+  await updatePlanningApplicationWithLifecycle({
+    organisationId: organisation.id,
+    planningApplicationId: application.id,
+    actorUserId: user.id,
     data: {
       applicationReference,
       submissionDate,
@@ -119,21 +126,34 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const status = snapshot.preflight.status === 'READY'
     ? AutomationJobStatus.READY
     : AutomationJobStatus.NEEDS_INPUT;
-  await prisma.automationJob.update({
-    where: { id: job.id },
-    data: {
-      status,
-      payloadVersion: 2,
-      snapshotHash: snapshot.snapshotHash,
-      sourceUpdatedAt: snapshot.sourceUpdatedAt,
-      preparedAt: new Date(),
-      reviewedAt: null,
-      dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-      documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-      error: null,
-    },
+  const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
+    await tx.automationJob.update({
+      where: { id: job.id },
+      data: {
+        status,
+        payloadVersion: 2,
+        snapshotHash: snapshot.snapshotHash,
+        sourceUpdatedAt: snapshot.sourceUpdatedAt,
+        preparedAt: new Date(),
+        reviewedAt: null,
+        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+        error: null,
+      },
+    });
+    return recordAutomationReadinessTransition(tx, {
+      organisationId: organisation.id,
+      projectId: application.projectId,
+      jobType: job.type,
+      previousStatus: job.status,
+      nextStatus: status,
+      readinessKey: snapshot.snapshotHash,
+      planningApplicationId: application.id,
+      actorUserId: user.id,
+    });
   });
   await persistApplicationPreparationDraft(job.id, organisation.id);
+  await drainLifecycleEventsBestEffort(organisation.id, [readinessLifecycleEvent?.id]);
 
   return jsonResponse(200, {
     ok: true,

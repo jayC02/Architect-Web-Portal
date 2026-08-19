@@ -11,6 +11,10 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import {
+  drainLifecycleEventsBestEffort,
+  recordAutomationReadinessTransition,
+} from '@/server/services/application-lifecycle.service';
 import { findOrCreateCertifierProfile } from '@/server/services/certifier-presets.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
@@ -31,7 +35,7 @@ export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
     assertAllowedOrigin(context.request);
     assertRateLimit(context, rateLimitPolicies.mutation, 'warrant:certifier-details');
-    const { organisation } = await requireOrganisation(context);
+    const { organisation, user } = await requireOrganisation(context);
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Building warrant application id is required.');
     const body = await parseBody(context.request, buildingWarrantCertifierDetailsSchema);
@@ -144,21 +148,34 @@ export const POST: APIRoute = (context) =>
     const status = snapshot.preflight.status === 'READY'
       ? AutomationJobStatus.READY
       : AutomationJobStatus.NEEDS_INPUT;
-    await prisma.automationJob.update({
-      where: { id: job.id },
-      data: {
-        status,
-        payloadVersion: 2,
-        snapshotHash: snapshot.snapshotHash,
-        sourceUpdatedAt: snapshot.sourceUpdatedAt,
-        preparedAt: new Date(),
-        reviewedAt: null,
-        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-        error: null,
-      },
+    const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
+      await tx.automationJob.update({
+        where: { id: job.id },
+        data: {
+          status,
+          payloadVersion: 2,
+          snapshotHash: snapshot.snapshotHash,
+          sourceUpdatedAt: snapshot.sourceUpdatedAt,
+          preparedAt: new Date(),
+          reviewedAt: null,
+          dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+          documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+          error: null,
+        },
+      });
+      return recordAutomationReadinessTransition(tx, {
+        organisationId: organisation.id,
+        projectId: application.projectId,
+        jobType: job.type,
+        previousStatus: job.status,
+        nextStatus: status,
+        readinessKey: snapshot.snapshotHash,
+        buildingWarrantApplicationId: application.id,
+        actorUserId: user.id,
+      });
     });
     await persistApplicationPreparationDraft(job.id, organisation.id);
+    await drainLifecycleEventsBestEffort(organisation.id, [readinessLifecycleEvent?.id]);
 
     const preparationRedirect = `/building-warrant/${encodeURIComponent(application.id)}/preparation?job=${encodeURIComponent(job.id)}&incomplete=1`;
     return jsonResponse(200, {

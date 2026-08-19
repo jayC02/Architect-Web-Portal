@@ -42,6 +42,7 @@ const completeBuildingReview = applicationDraftReviewSchema.parse({
   siteMode: 'create',
   existingSiteId: null,
   site: {
+    buildingNumber: '105',
     addressLine1: '105 Ralston Avenue',
     addressLine2: null,
     townCity: 'Glasgow',
@@ -60,6 +61,7 @@ const completeBuildingReview = applicationDraftReviewSchema.parse({
     companyName: null,
     email: 'laura@example.com',
     phone: '07123 456789',
+    buildingNumber: '105',
     addressLine1: '105 Ralston Avenue',
     addressLine2: null,
     townCity: 'Glasgow',

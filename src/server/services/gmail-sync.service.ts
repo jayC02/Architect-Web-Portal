@@ -2,10 +2,13 @@ import {
   CalendarConnectionStatus,
   CalendarProvider,
   GmailMatchStatus,
+  GmailPlanningClassification,
   GmailProcessingStatus,
   GmailSuggestionStatus,
   GmailUpdateType,
+  PlanningStatus,
   Prisma,
+  WarrantStatus,
   type CalendarConnection,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
@@ -21,6 +24,12 @@ import {
 } from '@/lib/integrations/gmail-tracking';
 import { HttpError } from '@/lib/utils/http';
 import { applyGmailSuggestion, gmailSuggestionDedupeKey } from '@/server/services/gmail-updates.service';
+import { processPlanningClassification } from '@/server/services/gmail-planning-lifecycle.service';
+import { resolveGmailReconnectAction, upsertGmailReconnectAction } from '@/server/services/gmail-monitoring-actions.service';
+import {
+  ingestGmailProjectDocument,
+  isLikelyDecisionNoticeAttachment,
+} from '@/server/services/gmail-document-ingestion.service';
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1';
 const DEFAULT_INITIAL_SYNC_DAYS = 30;
@@ -44,6 +53,7 @@ const configuredInteger = (name: string, fallback: number, max: number) => {
 export const gmailSyncConfiguration = {
   initialDays: () => configuredInteger('GMAIL_INITIAL_SYNC_DAYS', DEFAULT_INITIAL_SYNC_DAYS, 365),
   messageLimit: () => configuredInteger('GMAIL_SYNC_MESSAGE_LIMIT', DEFAULT_MESSAGE_LIMIT, 500),
+  organisationLimit: () => configuredInteger('GMAIL_SYNC_ORGANISATION_LIMIT', 25, 100),
   autoApplyThreshold: () => {
     const value = Number(process.env.GMAIL_AUTO_APPLY_THRESHOLD);
     return Number.isFinite(value) && value >= 0.9 && value <= 1 ? value : 0.97;
@@ -71,13 +81,30 @@ const gmailRequest = async <T>(accessToken: string, path: string) => parseGoogle
 const loadProjectCandidates = async (organisationId: string) => {
   const [projects, linkedThreads] = await Promise.all([
     prisma.project.findMany({
-      where: { organisationId, status: { not: 'ARCHIVED' } },
+      where: {
+        organisationId,
+        status: { not: 'ARCHIVED' },
+        OR: [
+          { planningApplications: { some: { status: { in: [
+            PlanningStatus.SUBMITTED,
+            PlanningStatus.VALIDATED,
+            PlanningStatus.IN_REVIEW,
+            PlanningStatus.FURTHER_INFORMATION_REQUESTED,
+          ] } } } },
+          { warrantApplications: { some: { status: { in: [
+            WarrantStatus.SUBMITTED,
+            WarrantStatus.IN_REVIEW,
+            WarrantStatus.FURTHER_INFORMATION_REQUESTED,
+          ] } } } },
+        ],
+      },
       select: {
         id: true,
         name: true,
         internalReference: true,
         siteAddress: true,
-        site: { select: { addressLine1: true, addressLine2: true, townCity: true, postcode: true } },
+        localAuthority: true,
+        site: { select: { addressLine1: true, addressLine2: true, townCity: true, postcode: true, localAuthority: true } },
         client: { select: { email: true } },
         planningApplications: {
           orderBy: { updatedAt: 'desc' },
@@ -89,6 +116,7 @@ const loadProjectCandidates = async (organisationId: string) => {
             decisionTargetDate: true,
             decisionDate: true,
             status: true,
+            updatedAt: true,
           },
         },
         warrantApplications: {
@@ -177,6 +205,15 @@ const readMessage = (accessToken: string, id: string, format: 'metadata' | 'full
   return gmailRequest<GmailMessagePayload>(accessToken, `/users/me/messages/${encodeURIComponent(id)}?${query}`);
 };
 
+const readAttachmentBytes = async (accessToken: string, messageId: string, attachmentId: string) => {
+  const payload = await gmailRequest<{ data?: string }>(
+    accessToken,
+    `/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+  );
+  if (!payload.data) throw new Error('Gmail did not return attachment data.');
+  return Buffer.from(payload.data, 'base64url');
+};
+
 const currentValueForUpdate = (
   candidate: Awaited<ReturnType<typeof loadProjectCandidates>>[number],
   updateType: GmailUpdateType,
@@ -206,13 +243,13 @@ const serialisable = (value: unknown): Prisma.InputJsonValue | Prisma.JsonNullVa
 const persistCandidateMessage = async (
   organisationId: string,
   connection: CalendarConnection,
+  accessToken: string,
   parsed: ParsedGmailMessage,
   candidates: Awaited<ReturnType<typeof loadProjectCandidates>>,
 ) => {
   const match = matchEmailToProjects(parsed, candidates as GmailProjectCandidate[]);
   const candidate = match.projectId ? candidates.find((project) => project.id === match.projectId) : null;
-  const tracked = await prisma.trackedEmail.create({
-    data: {
+  const trackedData = {
       organisationId,
       gmailMessageId: parsed.gmailMessageId,
       gmailThreadId: parsed.gmailThreadId,
@@ -228,21 +265,109 @@ const persistCandidateMessage = async (
       buildingWarrantApplicationId: match.buildingWarrantApplicationId,
       matchConfidence: match.confidence,
       matchReason: match.reason,
+      processingError: null,
       processedAt: new Date(),
+  };
+  const tracked = await prisma.trackedEmail.upsert({
+    where: { organisationId_gmailMessageId: { organisationId, gmailMessageId: parsed.gmailMessageId } },
+    update: {
+      ...trackedData,
       attachments: {
-        create: parsed.attachments.map((attachment) => ({
-          organisationId,
-          ...attachment,
-        })),
+        createMany: {
+          data: parsed.attachments.map((attachment) => ({ organisationId, ...attachment })),
+          skipDuplicates: true,
+        },
+      },
+    },
+    create: {
+      ...trackedData,
+      attachments: {
+        create: parsed.attachments.map((attachment) => ({ organisationId, ...attachment })),
       },
     },
   });
 
-  if (!candidate || match.status !== 'MATCHED') return { tracked, suggestionIds: [] as string[] };
+  const planningApplication = candidate
+    ? candidate.planningApplications.find((application) => application.id === match.planningApplicationId)
+      ?? candidate.planningApplications[0]
+      ?? null
+    : null;
+  const planningContent = Boolean(planningApplication)
+    || /\b(planning|householder|planning permission)\b/i.test(`${parsed.subject} ${parsed.text || parsed.excerpt}`);
+  let classificationSuggestionId: string | null = null;
+  let planningDecision: Awaited<ReturnType<typeof processPlanningClassification>> | null = null;
+  if (planningContent) {
+    const classification = await processPlanningClassification({
+      organisationId,
+      connection,
+      trackedEmailId: tracked.id,
+      matchStatus: match.status as GmailMatchStatus,
+      parsed,
+      project: candidate ? {
+        id: candidate.id,
+        name: candidate.name,
+        localAuthority: candidate.site?.localAuthority ?? candidate.localAuthority,
+      } : null,
+      application: planningApplication ? {
+        ...planningApplication,
+        projectId: candidate!.id,
+      } : null,
+    });
+    planningDecision = classification;
+    classificationSuggestionId = classification.suggestionId;
+  }
+
+  if (
+    planningDecision?.applied
+    && candidate
+    && (
+      planningDecision.classification.classification === GmailPlanningClassification.DECISION_APPROVED
+      || planningDecision.classification.classification === GmailPlanningClassification.DECISION_REFUSED
+    )
+  ) {
+    const attachments = (await prisma.gmailAttachment.findMany({
+      where: { trackedEmailId: tracked.id, organisationId, importedDocumentId: null },
+    })).filter((attachment) => isLikelyDecisionNoticeAttachment({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      subject: parsed.subject,
+    }));
+    if (attachments.length) {
+      const member = await prisma.organisationMember.findFirst({
+        where: { organisationId },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+        select: { userId: true },
+      });
+      if (!member) throw new Error('No organisation member is available to own the imported Gmail document.');
+      for (const attachment of attachments) {
+        await ingestGmailProjectDocument({
+          organisationId,
+          projectId: candidate.id,
+          trackedEmailId: tracked.id,
+          gmailAttachmentId: attachment.id,
+          gmailMessageId: parsed.gmailMessageId,
+          filename: attachment.fileName,
+          mimeType: attachment.mimeType,
+          bytes: await readAttachmentBytes(accessToken, parsed.gmailMessageId, attachment.gmailAttachmentId),
+          initiatedByUserId: member.userId,
+          decisionNotice: true,
+        });
+      }
+    }
+  }
+
+  if (!candidate || match.status !== 'MATCHED') {
+    const refreshed = await prisma.trackedEmail.findUniqueOrThrow({ where: { id: tracked.id } });
+    return { tracked: refreshed, suggestionIds: classificationSuggestionId ? [classificationSuggestionId] : [] as string[] };
+  }
   const updates = extractGmailUpdates(parsed);
-  const suggestionIds: string[] = [];
+  const suggestionIds: string[] = classificationSuggestionId ? [classificationSuggestionId] : [];
   for (const update of updates) {
     const updateType = update.updateType as GmailUpdateType;
+    if (
+      updateType === GmailUpdateType.PLANNING_APPLICATION
+      && ['status', 'submissionDate', 'validDate', 'decisionDate'].includes(update.fieldName)
+    ) continue;
     const suggestedValue = update.deadline
       ? { ...update.deadline, dueDate: update.deadline.dueDate }
       : update.value;
@@ -282,7 +407,12 @@ const persistCandidateMessage = async (
     suggestionIds.push(suggestion.id);
   }
 
-  if (suggestionIds.length) {
+  const pendingReviewCount = suggestionIds.length
+    ? await prisma.gmailUpdateSuggestion.count({
+        where: { id: { in: suggestionIds }, status: GmailSuggestionStatus.PENDING },
+      })
+    : 0;
+  if (pendingReviewCount) {
     await prisma.trackedEmail.update({
       where: { id: tracked.id },
       data: { processingStatus: GmailProcessingStatus.NEEDS_REVIEW },
@@ -297,6 +427,7 @@ const persistCandidateMessage = async (
         id: { in: suggestionIds },
         status: GmailSuggestionStatus.PENDING,
         confidence: { gte: threshold },
+        fieldName: { not: 'status' },
       },
       select: { id: true },
     });
@@ -313,7 +444,8 @@ const persistCandidateMessage = async (
     }
   }
 
-  return { tracked, suggestionIds };
+  const refreshed = await prisma.trackedEmail.findUniqueOrThrow({ where: { id: tracked.id } });
+  return { tracked: refreshed, suggestionIds };
 };
 
 const acquireSyncLease = async (connection: CalendarConnection) => {
@@ -335,11 +467,15 @@ export const syncOrganisationGmail = async (organisationId: string) => {
     where: { organisationId_provider: { organisationId, provider: CalendarProvider.GOOGLE } },
   });
   if (!connection || !connection.gmailEnabled) throw new HttpError(409, 'Enable Gmail tracking before syncing.');
-  if (!googleConnectionHasGmailScope(connection)) throw new HttpError(409, 'Reconnect Google and approve Gmail read access.');
+  if (!googleConnectionHasGmailScope(connection)) {
+    await upsertGmailReconnectAction(organisationId, 'Gmail read permission is missing. Reconnect Google to resume monitoring.');
+    throw new HttpError(409, 'Reconnect Google and approve Gmail read access.');
+  }
   if (
     connection.status !== CalendarConnectionStatus.CONNECTED
     && connection.status !== CalendarConnectionStatus.ERROR
   ) {
+    await upsertGmailReconnectAction(organisationId, 'The Google connection is unavailable. Reconnect it to resume Gmail monitoring.');
     throw new HttpError(409, 'Reconnect Google before syncing Gmail.');
   }
   await acquireSyncLease(connection);
@@ -352,24 +488,27 @@ export const syncOrganisationGmail = async (organisationId: string) => {
     const accessToken = await getGoogleAccessToken(connection);
     const candidates = await loadProjectCandidates(organisationId);
     let messageIds: string[];
-    let historyId = connection.gmailHistoryId ?? null;
-    if (historyId) {
+    const startingHistoryId = connection.gmailHistoryId ?? null;
+    let proposedHistoryId = startingHistoryId;
+    if (startingHistoryId) {
       try {
-        const history = await listHistoryMessageIds(accessToken, historyId);
+        const history = await listHistoryMessageIds(accessToken, startingHistoryId);
         messageIds = history.ids;
-        historyId = history.historyId;
+        proposedHistoryId = history.historyId;
       } catch (error) {
         if ((error as GmailApiError).googleStatus !== 404) throw error;
         messageIds = await listRecentMessageIds(accessToken);
-        historyId = null;
+        proposedHistoryId = null;
       }
     } else {
       messageIds = await listRecentMessageIds(accessToken);
     }
     const existingIds = new Set((await prisma.trackedEmail.findMany({
       where: { organisationId, gmailMessageId: { in: messageIds } },
-      select: { gmailMessageId: true },
-    })).map((email) => email.gmailMessageId));
+      select: { gmailMessageId: true, processingStatus: true },
+    }))
+      .filter((email) => email.processingStatus !== GmailProcessingStatus.FAILED)
+      .map((email) => email.gmailMessageId));
 
     for (const messageId of messageIds) {
       if (existingIds.has(messageId)) {
@@ -383,11 +522,22 @@ export const syncOrganisationGmail = async (organisationId: string) => {
           continue;
         }
         const parsed = parseGmailMessage(await readMessage(accessToken, messageId, 'full'));
-        const result = await persistCandidateMessage(organisationId, connection, parsed, candidates);
+        const result = await persistCandidateMessage(organisationId, connection, accessToken, parsed, candidates);
         imported += 1;
-        if (result.tracked.processingStatus === GmailProcessingStatus.NEEDS_REVIEW || result.suggestionIds.length) reviewed += 1;
+        if (result.tracked.processingStatus === GmailProcessingStatus.NEEDS_REVIEW) reviewed += 1;
       } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          skipped += 1;
+          continue;
+        }
         failed += 1;
+        await prisma.trackedEmail.updateMany({
+          where: { organisationId, gmailMessageId: messageId },
+          data: {
+            processingStatus: GmailProcessingStatus.FAILED,
+            processingError: error instanceof Error ? error.message.slice(0, 500) : 'Candidate processing failed.',
+          },
+        });
         console.error('Gmail candidate processing failed', {
           organisationId,
           messageId,
@@ -395,17 +545,20 @@ export const syncOrganisationGmail = async (organisationId: string) => {
         });
       }
     }
-    const profile = await gmailRequest<{ historyId?: string }>(accessToken, '/users/me/profile');
-    historyId = profile.historyId ?? historyId;
+    if (!failed) {
+      const profile = await gmailRequest<{ historyId?: string }>(accessToken, '/users/me/profile');
+      proposedHistoryId = profile.historyId ?? proposedHistoryId;
+    }
     await prisma.calendarConnection.update({
       where: { id: connection.id },
       data: {
-        gmailHistoryId: historyId,
-        gmailLastSuccessfulSyncAt: new Date(),
+        gmailHistoryId: failed ? startingHistoryId : proposedHistoryId,
+        gmailLastSuccessfulSyncAt: failed ? connection.gmailLastSuccessfulSyncAt : new Date(),
         gmailSyncStartedAt: null,
         gmailSyncError: failed ? `${failed} candidate email${failed === 1 ? '' : 's'} could not be processed.` : null,
       },
     });
+    if (!failed) await resolveGmailReconnectAction(organisationId);
     return { imported, needsReview: reviewed, skipped, failed };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : 'Gmail sync failed.';
@@ -413,6 +566,9 @@ export const syncOrganisationGmail = async (organisationId: string) => {
       where: { id: connection.id },
       data: { gmailSyncStartedAt: null, gmailSyncError: message },
     });
+    if ((error as GmailApiError).googleStatus === 401 || /reconnect|permission|token/i.test(message)) {
+      await upsertGmailReconnectAction(organisationId, message);
+    }
     throw error;
   }
 };
@@ -448,6 +604,8 @@ export const syncAllEnabledGmailConnections = async () => {
       refreshTokenEncrypted: { not: null },
     },
     select: { organisationId: true },
+    orderBy: [{ gmailLastAttemptedSyncAt: 'asc' }, { organisationId: 'asc' }],
+    take: gmailSyncConfiguration.organisationLimit(),
   });
   const results = [];
   for (const connection of connections) {

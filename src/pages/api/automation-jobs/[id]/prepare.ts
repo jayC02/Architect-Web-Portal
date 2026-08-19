@@ -11,6 +11,10 @@ import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import {
+  drainLifecycleEventsBestEffort,
+  recordAutomationReadinessTransition,
+} from '@/server/services/application-lifecycle.service';
 
 const refreshableStatuses = [
   AutomationJobStatus.DRAFT,
@@ -26,7 +30,7 @@ export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
     assertAllowedOrigin(context.request);
     assertRateLimit(context, rateLimitPolicies.mutation, 'automation-jobs:prepare');
-    const { organisation } = await requireOrganisation(context);
+    const { organisation, user } = await requireOrganisation(context);
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Automation job id is required.');
 
@@ -56,20 +60,34 @@ export const POST: APIRoute = (context) =>
     const status = snapshot.preflight.status === 'READY'
       ? AutomationJobStatus.READY
       : AutomationJobStatus.NEEDS_INPUT;
-    await prisma.automationJob.update({
-      where: { id: job.id },
-      data: {
-        status,
-        payloadVersion: 2,
-        snapshotHash: snapshot.snapshotHash,
-        sourceUpdatedAt: snapshot.sourceUpdatedAt,
-        preparedAt: new Date(),
-        reviewedAt: null,
-        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
-        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
-        error: null,
-      },
+    const lifecycleEvent = await prisma.$transaction(async (tx) => {
+      await tx.automationJob.update({
+        where: { id: job.id },
+        data: {
+          status,
+          payloadVersion: 2,
+          snapshotHash: snapshot.snapshotHash,
+          sourceUpdatedAt: snapshot.sourceUpdatedAt,
+          preparedAt: new Date(),
+          reviewedAt: null,
+          dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+          documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+          error: null,
+        },
+      });
+      return recordAutomationReadinessTransition(tx, {
+        organisationId: organisation.id,
+        projectId: job.projectId,
+        jobType: job.type,
+        previousStatus: job.status,
+        nextStatus: status,
+        readinessKey: snapshot.snapshotHash,
+        planningApplicationId: snapshot.dataSnapshot.planning?.recordId,
+        buildingWarrantApplicationId: snapshot.dataSnapshot.buildingWarrant?.recordId,
+        actorUserId: user.id,
+      });
     });
+    await drainLifecycleEventsBestEffort(organisation.id, [lifecycleEvent?.id]);
     await persistApplicationPreparationDraft(job.id, organisation.id);
 
     return jsonResponse(200, {

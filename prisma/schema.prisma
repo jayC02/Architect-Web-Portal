@@ -203,6 +203,17 @@ enum GmailUpdateType {
   PROJECT_ACTIVITY
 }
 
+enum GmailPlanningClassification {
+  APPLICATION_RECEIVED
+  APPLICATION_VALIDATED
+  INFORMATION_REQUESTED
+  DECISION_APPROVED
+  DECISION_REFUSED
+  DECISION_OTHER
+  LIKELY_PROJECT_EMAIL
+  UNKNOWN
+}
+
 enum SubmissionPackageType {
   PLANNING
   BUILDING_WARRANT
@@ -283,15 +294,29 @@ enum ApplicationDraftDocumentStatus {
 
 enum LifecycleAggregateType {
   PROJECT
+  PLANNING_APPLICATION
+  BUILDING_WARRANT_APPLICATION
 }
 
 enum LifecycleEventType {
   PROJECT_CREATED
+  DOCUMENT_REVIEW_COMPLETED
+  PLANNING_READY
+  PLANNING_READINESS_REVOKED
+  PLANNING_SUBMITTED
+  PLANNING_VALIDATED
+  PLANNING_INFORMATION_REQUESTED
+  PLANNING_APPROVED
+  BUILDING_WARRANT_READY
+  BUILDING_WARRANT_READINESS_REVOKED
 }
 
 enum LifecycleEventSource {
   MANUAL_PROJECT
   APPLICATION_DRAFT
+  APPLICATION_PREFLIGHT
+  APPLICATION_STATUS
+  GMAIL
 }
 
 enum LifecycleActorType {
@@ -309,6 +334,12 @@ enum WorkflowEffectStatus {
 
 enum ActionItemKind {
   DOCUMENT_REVIEW
+  PLANNING_PREPARATION
+  PLANNING_FINAL_REVIEW
+  BUILDING_WARRANT_ACTION
+  BUILDING_WARRANT_FINAL_REVIEW
+  PLANNING_CORRESPONDENCE
+  GMAIL_MONITORING
 }
 
 enum ActionItemPriority {
@@ -325,6 +356,16 @@ enum ActionItemStatus {
 
 enum ProjectActivityEventType {
   PROJECT_CREATED
+  DOCUMENT_REVIEW_COMPLETED
+  PLANNING_READY
+  PLANNING_SUBMITTED
+  PLANNING_VALIDATED
+  PLANNING_INFORMATION_REQUESTED
+  PLANNING_APPROVED
+  DECISION_NOTICE_IMPORTED
+  BUILDING_WARRANT_ACTIVATED
+  BUILDING_WARRANT_READY
+  WORKFLOW_DEADLINE_OVERRIDDEN
 }
 
 enum ProjectActivityVisibility {
@@ -333,6 +374,17 @@ enum ProjectActivityVisibility {
 
 enum WorkflowTargetKey {
   PROJECT_DOCUMENT_REVIEW
+  PLANNING_PREPARATION
+  PLANNING_FINAL_REVIEW
+  BUILDING_WARRANT_ACTION
+  BUILDING_WARRANT_FINAL_REVIEW
+}
+
+enum DeadlineManagedBy {
+  MANUAL
+  WORKFLOW
+  GMAIL
+  PORTAL
 }
 
 model User {
@@ -360,6 +412,7 @@ model User {
   xeroProjectInvoiceLinks  XeroProjectInvoiceLink[] @relation("XeroProjectInvoiceLinkCreatedBy")
   lifecycleEvents          LifecycleEvent[]         @relation("LifecycleEventActor")
   projectActivities        ProjectActivity[]        @relation("ProjectActivityActor")
+  deadlineOverrides        Deadline[]               @relation("DeadlineManualOverrideBy")
 
   @@index([email])
   @@index([createdAt])
@@ -686,8 +739,8 @@ model WorkflowEffect {
 model ActionItem {
   id                     String             @id @default(cuid())
   organisationId         String
-  projectId              String
-  sourceLifecycleEventId String
+  projectId              String?
+  sourceLifecycleEventId String?
   kind                   ActionItemKind
   title                  String
   summary                String?
@@ -702,8 +755,8 @@ model ActionItem {
   updatedAt              DateTime           @updatedAt
 
   organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceLifecycleEvent LifecycleEvent @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
+  project              Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceLifecycleEvent LifecycleEvent? @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
 
   @@unique([organisationId, dedupeKey])
   @@index([organisationId, status, priority, availableAt])
@@ -715,7 +768,7 @@ model ProjectActivity {
   id                     String                    @id @default(cuid())
   organisationId         String
   projectId              String
-  sourceLifecycleEventId String
+  sourceLifecycleEventId String?
   eventType              ProjectActivityEventType
   summary                String
   actorType              LifecycleActorType
@@ -727,10 +780,10 @@ model ProjectActivity {
   idempotencyKey         String
   createdAt              DateTime                  @default(now())
 
-  organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceLifecycleEvent LifecycleEvent @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
-  actorUser            User?          @relation("ProjectActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  organisation         Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project              Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceLifecycleEvent LifecycleEvent? @relation(fields: [sourceLifecycleEventId], references: [id], onDelete: Cascade)
+  actorUser            User?           @relation("ProjectActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@unique([organisationId, idempotencyKey])
   @@index([organisationId, projectId, occurredAt])
@@ -1081,7 +1134,7 @@ model BuildingWarrantApplication {
 }
 
 model Deadline {
-  id                           String           @id @default(cuid())
+  id                           String            @id @default(cuid())
   organisationId               String
   projectId                    String?
   planningApplicationId        String?
@@ -1090,25 +1143,31 @@ model Deadline {
   description                  String?
   dueDate                      DateTime
   type                         DeadlineType
-  status                       DeadlineStatus   @default(UPCOMING)
-  priority                     DeadlinePriority @default(MEDIUM)
+  status                       DeadlineStatus    @default(UPCOMING)
+  priority                     DeadlinePriority  @default(MEDIUM)
   reminderDate                 DateTime?
   completedDate                DateTime?
   sourceKey                    String?
-  createdAt                    DateTime         @default(now())
-  updatedAt                    DateTime         @updatedAt
+  managedBy                    DeadlineManagedBy @default(MANUAL)
+  calculatedDueDate            DateTime?
+  manualOverrideAt             DateTime?
+  manualOverrideById           String?
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
 
   organisation               Organisation                @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project                    Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   planningApplication        PlanningApplication?        @relation(fields: [planningApplicationId], references: [id], onDelete: SetNull)
   buildingWarrantApplication BuildingWarrantApplication? @relation(fields: [buildingWarrantApplicationId], references: [id], onDelete: SetNull)
   calendarEvents             SyncedCalendarEvent[]
+  manualOverrideBy           User?                       @relation("DeadlineManualOverrideBy", fields: [manualOverrideById], references: [id], onDelete: SetNull)
 
   @@unique([organisationId, sourceKey])
   @@index([organisationId, status, dueDate])
   @@index([organisationId, projectId])
   @@index([planningApplicationId])
   @@index([buildingWarrantApplicationId])
+  @@index([manualOverrideById])
 }
 
 model CalendarConnection {
@@ -1396,6 +1455,10 @@ model TrackedEmail {
   buildingWarrantApplicationId String?
   matchConfidence              Float?
   matchReason                  String?
+  planningClassification       GmailPlanningClassification?
+  classificationConfidence     Float?
+  classificationReason         String?
+  automaticTransitionAt        DateTime?
   processingError              String?
   processedAt                  DateTime?
   createdAt                    DateTime              @default(now())
@@ -1412,6 +1475,7 @@ model TrackedEmail {
   @@index([organisationId, gmailThreadId])
   @@index([organisationId, matchStatus, sentAt])
   @@index([organisationId, processingStatus, sentAt])
+  @@index([organisationId, planningClassification, sentAt])
   @@index([organisationId, projectId, sentAt])
   @@index([planningApplicationId])
   @@index([buildingWarrantApplicationId])

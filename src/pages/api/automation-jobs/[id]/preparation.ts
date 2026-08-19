@@ -17,6 +17,10 @@ import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { persistApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import {
+  drainLifecycleEventsBestEffort,
+  recordAutomationReadinessTransition,
+} from '@/server/services/application-lifecycle.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 
 const optionalText = (limit: number) => z.preprocess(
@@ -310,22 +314,39 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     buildingWarrantApplicationId: oldSnapshot.data.buildingWarrant?.recordId ?? undefined,
     documentIds: documentIds.length ? documentIds : oldSnapshot.data.documents.map((document) => document.id),
   });
-  await prisma.automationJob.updateMany({
-    where: { id: job.id, organisationId: organisation.id },
-    data: {
-      title: refreshed.title,
-      status: refreshed.preflight.status === 'READY' ? AutomationJobStatus.READY : AutomationJobStatus.NEEDS_INPUT,
-      sourceType: refreshed.sourceType,
-      payloadVersion: 2,
-      snapshotHash: refreshed.snapshotHash,
-      sourceUpdatedAt: refreshed.sourceUpdatedAt,
-      preparedAt: new Date(),
-      reviewedAt: new Date(),
-      dataSnapshot: refreshed.dataSnapshot as Prisma.InputJsonValue,
-      documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
-    },
+  const nextStatus = refreshed.preflight.status === 'READY'
+    ? AutomationJobStatus.READY
+    : AutomationJobStatus.NEEDS_INPUT;
+  const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
+    await tx.automationJob.updateMany({
+      where: { id: job.id, organisationId: organisation.id },
+      data: {
+        title: refreshed.title,
+        status: nextStatus,
+        sourceType: refreshed.sourceType,
+        payloadVersion: 2,
+        snapshotHash: refreshed.snapshotHash,
+        sourceUpdatedAt: refreshed.sourceUpdatedAt,
+        preparedAt: new Date(),
+        reviewedAt: new Date(),
+        dataSnapshot: refreshed.dataSnapshot as Prisma.InputJsonValue,
+        documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
+      },
+    });
+    return recordAutomationReadinessTransition(tx, {
+      organisationId: organisation.id,
+      projectId: job.projectId,
+      jobType: job.type,
+      previousStatus: job.status,
+      nextStatus,
+      readinessKey: refreshed.snapshotHash,
+      planningApplicationId: oldSnapshot.data.planning?.recordId,
+      buildingWarrantApplicationId: oldSnapshot.data.buildingWarrant?.recordId,
+      actorUserId: user.id,
+    });
   });
   const draft = await persistApplicationPreparationDraft(job.id, organisation.id);
+  await drainLifecycleEventsBestEffort(organisation.id, [readinessLifecycleEvent?.id]);
   return jsonResponse(200, {
     message: refreshed.preflight.status === 'READY'
       ? 'Application details saved. This job is ready for desktop.'

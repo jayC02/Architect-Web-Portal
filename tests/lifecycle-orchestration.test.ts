@@ -141,6 +141,12 @@ const database: any = {
     )) ?? null,
   },
   actionItem: {
+    findUnique: async ({ where, select }: any) => {
+      const key = where.organisationId_dedupeKey;
+      const item = store.actions.find((value) => value.organisationId === key.organisationId && value.dedupeKey === key.dedupeKey) ?? null;
+      if (!item || !select) return item;
+      return Object.fromEntries(Object.keys(select).map((field) => [field, item[field]]));
+    },
     upsert: async ({ where, update, create }: any) => {
       const key = where.organisationId_dedupeKey;
       const existing = store.actions.find((item) => item.organisationId === key.organisationId && item.dedupeKey === key.dedupeKey);
@@ -159,6 +165,12 @@ const database: any = {
     },
   },
   deadline: {
+    findUnique: async ({ where, select }: any) => {
+      const key = where.organisationId_sourceKey;
+      const item = store.deadlines.find((value) => value.organisationId === key.organisationId && value.sourceKey === key.sourceKey) ?? null;
+      if (!item || !select) return item;
+      return Object.fromEntries(Object.keys(select).map((field) => [field, item[field]]));
+    },
     upsert: async ({ where, update, create }: any) => {
       const key = where.organisationId_sourceKey;
       const existing = store.deadlines.find((item) => item.organisationId === key.organisationId && item.sourceKey === key.sourceKey);
