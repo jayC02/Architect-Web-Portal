@@ -74,7 +74,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
 
   const newJob = await prisma.$transaction(async (transaction) => {
     const retryLockKey = `automation-retry:${organisation.id}:${oldJob.projectId}:${oldJob.type}`;
-    await transaction.$queryRaw(Prisma.sql`
+    await transaction.$executeRaw(Prisma.sql`
       SELECT pg_advisory_xact_lock(hashtext(${retryLockKey}))
     `);
     const existingActive = await transaction.automationJob.findFirst({

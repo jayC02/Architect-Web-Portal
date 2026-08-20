@@ -46,7 +46,7 @@ assert.match(
 assert.doesNotMatch(restartRoute, /transaction\.automationJob\.update/, 'retry never mutates the failed historical job');
 assert.doesNotMatch(restartRoute, /oldJob\.completedAt|data: \{ completedAt:/, 'retry does not consume or rewrite Job A');
 assert.match(callbackRoute, /COMPLETED[\s\S]*FAILED_RETRYABLE[\s\S]*FAILED_FINAL[\s\S]*\? new Date\(\) : null/, 'retryable failures are finalized when their callback is stored');
-assert.match(restartRoute, /pg_advisory_xact_lock[\s\S]*existingActive/, 'concurrent retries are serialized before the active-run check');
+assert.match(restartRoute, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive/, 'concurrent retries execute the transaction lock without deserializing its void result');
 assert.match(restartRoute, /existingActive[\s\S]*already has an active automation attempt/, 'a second active run is rejected');
 assert.match(
   restartRoute,

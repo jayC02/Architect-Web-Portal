@@ -52,7 +52,7 @@ assert.match(recovery, /review_portal[\s\S]*View Warrant[\s\S]*View Householder/
 assert.match(recovery, /portal:mutation-success[\s\S]*onRetry\(\)[\s\S]*setEditor\(null\)/, 'successful canonical save queues retry and closes recovery');
 
 assert.match(restart, /readAutomationFailureMetadata[\s\S]*!recovery\.retrySafe/, 'restart requires positive new-run safety metadata');
-assert.match(restart, /pg_advisory_xact_lock[\s\S]*existingActive[\s\S]*already has an active automation attempt/, 'restart serializes and blocks duplicate active attempts');
+assert.match(restart, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive[\s\S]*already has an active automation attempt/, 'restart serializes and blocks duplicate active attempts without deserializing the void lock result');
 assert.match(restart, /buildFreshAutomationJob[\s\S]*const \{ jobId: newJobId, snapshot \}/, 'retry creates a fresh snapshot for a distinct job');
 assert.doesNotMatch(restart, /transaction\.automationJob\.update/, 'failed history remains untouched during retry');
 assert.match(restart, /executionAuthorisedAt: authorisedAt/, 'fresh retry is authorised for automatic Agent claim');
