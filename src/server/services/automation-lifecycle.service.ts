@@ -44,15 +44,9 @@ const transitions: Record<AutomationJobStatus, ReadonlySet<AutomationJobStatus>>
     AutomationJobStatus.CANCELLED,
   ]),
   COMPLETED: new Set(),
-  FAILED_RETRYABLE: new Set([
-    AutomationJobStatus.PREFLIGHT_REQUIRED,
-    AutomationJobStatus.CANCELLED,
-  ]),
+  FAILED_RETRYABLE: new Set(),
   FAILED_FINAL: new Set(),
-  FAILED: new Set([
-    AutomationJobStatus.PREFLIGHT_REQUIRED,
-    AutomationJobStatus.CANCELLED,
-  ]),
+  FAILED: new Set(),
   CANCELLED: new Set(),
 };
 
@@ -68,5 +62,7 @@ export const assertAutomationJobTransition = (
 
 export const isAutomationJobTerminal = (status: AutomationJobStatus) =>
   status === AutomationJobStatus.COMPLETED
+  || status === AutomationJobStatus.FAILED
+  || status === AutomationJobStatus.FAILED_RETRYABLE
   || status === AutomationJobStatus.FAILED_FINAL
   || status === AutomationJobStatus.CANCELLED;

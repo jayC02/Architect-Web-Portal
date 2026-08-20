@@ -48,8 +48,6 @@ export const reusableAutomationJobStatuses = [
   AutomationJobStatus.IN_PROGRESS,
   AutomationJobStatus.NEEDS_REVIEW,
   AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED,
 ] as const;
 
 const runningStatuses = new Set<AutomationJobStatus>([

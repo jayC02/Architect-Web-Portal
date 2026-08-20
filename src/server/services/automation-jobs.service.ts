@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   AutomationJobSourceType,
   AutomationJobType,
@@ -517,6 +517,25 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
     sourceUpdatedAt,
     preflight,
   };
+};
+
+/**
+ * Shared entry point for every brand-new AutomationJob snapshot.
+ *
+ * The generated identity is embedded in the immutable snapshot, so callers
+ * cannot accidentally reuse an earlier job's execution identity or snapshot.
+ */
+export const buildFreshAutomationJob = async (
+  input: Omit<BuildAutomationJobSnapshotInput, 'jobId' | 'createdAt'>,
+) => {
+  const jobId = randomUUID();
+  const createdAt = new Date();
+  const snapshot = await buildAutomationJobSnapshot({
+    ...input,
+    jobId,
+    createdAt,
+  });
+  return { jobId, createdAt, snapshot };
 };
 
 export const ensureAutomationApplicationRecord = async (

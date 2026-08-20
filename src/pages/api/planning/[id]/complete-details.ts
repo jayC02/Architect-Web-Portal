@@ -24,8 +24,6 @@ const refreshableStatuses = [
   AutomationJobStatus.PREFLIGHT_REQUIRED,
   AutomationJobStatus.NEEDS_INPUT,
   AutomationJobStatus.STALE,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED,
 ];
 
 const jsonObject = (value: unknown): Record<string, unknown> =>

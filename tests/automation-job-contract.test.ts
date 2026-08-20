@@ -131,6 +131,14 @@ assert.throws(
   /cannot move/,
   'terminal jobs cannot return to active execution',
 );
+assert.throws(
+  () => assertAutomationJobTransition(
+    AutomationJobStatus.FAILED_RETRYABLE,
+    AutomationJobStatus.PREFLIGHT_REQUIRED,
+  ),
+  /cannot move/,
+  'retryable failures remain immutable history rather than being revived',
+);
 assert.doesNotThrow(() => assertAutomationJobTransition(
   AutomationJobStatus.AWAITING_PORTAL_REVIEW,
   AutomationJobStatus.COMPLETED,

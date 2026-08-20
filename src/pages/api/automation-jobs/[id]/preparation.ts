@@ -109,6 +109,14 @@ const preparationFormSchema = z.object({
 const jsonObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
+const editableJobStatuses = new Set<AutomationJobStatus>([
+  AutomationJobStatus.DRAFT,
+  AutomationJobStatus.PREFLIGHT_REQUIRED,
+  AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.READY,
+  AutomationJobStatus.STALE,
+]);
+
 export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
   assertRateLimit(context, rateLimitPolicies.mutation, 'automation-job:preparation');
@@ -120,12 +128,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     include: { project: { include: { client: true, site: true } } },
   });
   if (!job) throw new HttpError(404, 'Prepared application not found.');
-  if (new Set<AutomationJobStatus>([
-    AutomationJobStatus.CLAIMED,
-    AutomationJobStatus.IN_PROGRESS,
-    AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-    AutomationJobStatus.COMPLETED,
-  ]).has(job.status)) {
+  if (!editableJobStatuses.has(job.status)) {
     throw new HttpError(409, 'This prepared application can no longer be edited.');
   }
   const oldSnapshot = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);

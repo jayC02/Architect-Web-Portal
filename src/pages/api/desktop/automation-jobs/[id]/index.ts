@@ -134,6 +134,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         ) ? (body.error || body.result?.errorSummary || 'Desktop automation stopped unexpectedly.') : null,
         completedAt: (
           body.status === AutomationJobStatus.COMPLETED
+          || body.status === AutomationJobStatus.FAILED_RETRYABLE
           || body.status === AutomationJobStatus.FAILED_FINAL
         ) ? new Date() : null,
       },

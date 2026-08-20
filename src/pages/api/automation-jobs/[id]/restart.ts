@@ -1,11 +1,10 @@
 export const prerender = false;
 
-import { randomUUID } from 'node:crypto';
 import {
   AutomationJobStatus,
   AutomationJobType,
   DeadlineStatus,
-  type Prisma,
+  Prisma,
 } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
@@ -15,7 +14,7 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
-import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
+import { buildFreshAutomationJob } from '@/server/services/automation-jobs.service';
 import {
   resolveAutomationJobIdentity,
 } from '@/server/services/desktop-automation-status.service';
@@ -39,12 +38,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       dataSnapshot: true,
       resultData: true,
       progressStage: true,
-      completedAt: true,
     },
   });
   if (!oldJob) throw new HttpError(404, 'Automation job not found.');
   const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage);
-  if (oldJob.status !== AutomationJobStatus.FAILED_RETRYABLE || oldJob.completedAt || !recovery.retrySafe) {
+  if (oldJob.status !== AutomationJobStatus.FAILED_RETRYABLE || !recovery.retrySafe) {
     throw new HttpError(409, 'This automation attempt is not confirmed safe to retry. Review the issue before continuing.');
   }
 
@@ -55,9 +53,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       throw new HttpError(409, error instanceof Error ? error.message : 'This application cannot be retried safely.');
   }
 
-  const newJobId = randomUUID();
-  const snapshot = await buildAutomationJobSnapshot({
-    jobId: newJobId,
+  const freshJob = await buildFreshAutomationJob({
     organisationId: organisation.id,
     organisationName: organisation.name,
     projectId: oldJob.projectId,
@@ -70,12 +66,17 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       ? identity.applicationId
       : undefined,
   });
+  const { jobId: newJobId, snapshot } = freshJob;
   if (snapshot.preflight.status !== 'READY') {
     throw new HttpError(409, 'Application details changed and need review before the automation can be retried.');
   }
   const authorisedAt = new Date();
 
   const newJob = await prisma.$transaction(async (transaction) => {
+    const retryLockKey = `automation-retry:${organisation.id}:${oldJob.projectId}:${oldJob.type}`;
+    await transaction.$queryRaw(Prisma.sql`
+      SELECT pg_advisory_xact_lock(hashtext(${retryLockKey}))
+    `);
     const existingActive = await transaction.automationJob.findFirst({
       where: {
         organisationId: organisation.id,
@@ -95,18 +96,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     if (existingActive) {
       throw new HttpError(409, 'This application already has an active automation attempt.');
     }
-    const consumed = await transaction.automationJob.updateMany({
-      where: {
-        id: oldJob.id,
-        organisationId: organisation.id,
-        status: AutomationJobStatus.FAILED_RETRYABLE,
-        completedAt: null,
-      },
-      data: { completedAt: authorisedAt },
-    });
-    if (!consumed.count) {
-      throw new HttpError(409, 'This automation attempt has already been retried or changed.');
-    }
 
     const created = await transaction.automationJob.create({
       data: {
@@ -125,6 +114,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
         documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
         createdById: user.id,
+        createdAt: freshJob.createdAt,
       },
       select: {
         id: true, organisationId: true, projectId: true, type: true, payloadVersion: true,

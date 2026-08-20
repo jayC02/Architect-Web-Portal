@@ -51,10 +51,10 @@ assert.match(recovery, /documentsHref[\s\S]*Review documents/, 'document recover
 assert.match(recovery, /review_portal[\s\S]*View Warrant[\s\S]*View Householder/, 'uncertain outcomes expose workflow-specific portal review, not retry');
 assert.match(recovery, /portal:mutation-success[\s\S]*onRetry\(\)[\s\S]*setEditor\(null\)/, 'successful canonical save queues retry and closes recovery');
 
-assert.match(restart, /readAutomationFailureMetadata[\s\S]*!recovery\.retrySafe/, 'restart requires positive retry-safety metadata');
-assert.match(restart, /existingActive[\s\S]*already has an active automation attempt/, 'restart blocks duplicate active attempts');
-assert.match(restart, /const newJobId = randomUUID\(\)[\s\S]*buildAutomationJobSnapshot/, 'retry creates a fresh snapshot for a distinct job');
-assert.match(restart, /status: AutomationJobStatus\.FAILED_RETRYABLE,[\s\S]*completedAt: null[\s\S]*data: \{ completedAt: authorisedAt \}/, 'failed history is retained and atomically consumed');
+assert.match(restart, /readAutomationFailureMetadata[\s\S]*!recovery\.retrySafe/, 'restart requires positive new-run safety metadata');
+assert.match(restart, /pg_advisory_xact_lock[\s\S]*existingActive[\s\S]*already has an active automation attempt/, 'restart serializes and blocks duplicate active attempts');
+assert.match(restart, /buildFreshAutomationJob[\s\S]*const \{ jobId: newJobId, snapshot \}/, 'retry creates a fresh snapshot for a distinct job');
+assert.doesNotMatch(restart, /transaction\.automationJob\.update/, 'failed history remains untouched during retry');
 assert.match(restart, /executionAuthorisedAt: authorisedAt/, 'fresh retry is authorised for automatic Agent claim');
 assert.match(statusRoute, /resultData: true, lastCheckpoint: true/, 'live polling returns structured recovery metadata');
 assert.match(callbackRoute, /resultData: body\.result/, 'callback projection stores the structured result');

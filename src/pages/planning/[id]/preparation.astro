@@ -35,8 +35,6 @@ const editableJobStatuses = new Set<AutomationJobStatus>([
   AutomationJobStatus.NEEDS_INPUT,
   AutomationJobStatus.READY,
   AutomationJobStatus.STALE,
-  AutomationJobStatus.FAILED_RETRYABLE,
-  AutomationJobStatus.FAILED,
 ]);
 const job = candidates.find((candidate) =>
   editableJobStatuses.has(candidate.status)

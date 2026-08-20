@@ -29,7 +29,8 @@ assert.match(createRoute, /await requireProjectAccess\(organisation\.id,\s*body\
 assert.match(createRoute, /organisationId:\s*organisation\.id/s, 'automation job creation uses organisation id from session');
 assert.doesNotMatch(createRoute, /organisationId:\s*body\./, 'automation job creation does not trust submitted organisation ids');
 assert.match(createRoute, /automationJobCreateSchema/, 'automation job creation validates input with zod');
-assert.match(createRoute, /buildAutomationJobSnapshot/, 'automation job creation builds a trusted server-side snapshot');
+assert.match(createRoute, /buildFreshAutomationJob/, 'automation job creation uses the shared fresh-job path');
+assert.match(service, /buildFreshAutomationJob[\s\S]*buildAutomationJobSnapshot/, 'the fresh-job path builds a trusted server-side snapshot');
 
 assert.match(jobRoute, /where:\s*\{\s*id,\s*organisationId:\s*organisation\.id/s, 'job detail lookup is organisation scoped');
 assert.match(jobRoute, /updateMany\(\{\s*where:\s*\{\s*id,\s*organisationId:\s*organisation\.id/s, 'job status update is organisation scoped');
