@@ -34,7 +34,7 @@ assert.doesNotMatch(
 );
 
 for (const canonicalMapping of [
-  /addressLine1: project\.site\.addressLine1/,
+  /addressLine1: \[project\.site\.buildingNumber, project\.site\.addressLine1\]/,
   /townCity: project\.site\.townCity/,
   /postcode: project\.site\.postcode/,
   /buildingNumber: project\.client\.buildingNumber/,

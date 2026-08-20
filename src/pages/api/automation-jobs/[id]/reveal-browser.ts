@@ -28,10 +28,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       },
     },
   });
-  if (!job || ![
+  const revealableStatuses: AutomationJobStatus[] = [
     AutomationJobStatus.COMPLETED,
     AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-  ].includes(job.status)) {
+  ];
+  if (!job || !revealableStatuses.includes(job.status)) {
     throw new HttpError(409, 'This application is not available to open from the Desktop Agent.');
   }
   if (!job.claimedByAgentId || !job.agentRunId) {

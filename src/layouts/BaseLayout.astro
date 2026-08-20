@@ -146,7 +146,7 @@ const {
             window.location.href = redirect === 'reload' ? window.location.href : redirect;
             return;
           }
-          window.dispatchEvent(new CustomEvent('portal:mutation-success', { detail: { action, method } }));
+          window.dispatchEvent(new CustomEvent('portal:mutation-success', { detail: { action, method, values, payload } }));
           if (status) {
             status.textContent =
               typeof payload.message === 'string' && payload.message

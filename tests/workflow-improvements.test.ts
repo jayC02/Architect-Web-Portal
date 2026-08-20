@@ -12,12 +12,18 @@ const projectPage = source('src/pages/projects/[id].astro');
 const newProjectPage = source('src/pages/projects/new.astro');
 const projectsApi = source('src/pages/api/projects/index.ts');
 const directories = source('src/components/live/LiveDataPanel.tsx');
+const projectEditor = source('src/components/projects/ProjectLinkedRecordEditor.tsx');
 const certifierRoute = source('src/pages/api/building-warrant/[id]/certifier-details.ts');
 const certifierPage = source('src/pages/building-warrant/[id]/preparation.astro');
 const snapshotService = source('src/server/services/automation-jobs.service.ts');
 
-assert.match(projectPage, /`\/clients\?edit=\$\{project\.client\.id\}`/, 'Client opens its existing editable record');
-assert.match(projectPage, /`\/sites\?edit=\$\{project\.site\.id\}`/, 'Site opens its existing editable record');
+assert.match(projectPage, /ProjectLinkedRecordEditor client:load/, 'Project overview uses the in-context linked-record editor');
+assert.doesNotMatch(projectPage, /clients\?edit=|sites\?edit=/, 'Project overview no longer navigates away to directory edit links');
+assert.match(projectEditor, /ClientForm client=\{client\}/, 'Project client editing reuses the existing shared Client form');
+assert.match(projectEditor, /SiteForm site=\{site\}/, 'Project site editing reuses the existing shared Site form');
+assert.match(projectEditor, /portal:mutation-success/, 'Successful directory edits update the project card without navigation');
+assert.match(projectEditor, /aria-label=\{`Edit client/, 'Client card is an accessible keyboard-actionable edit button');
+assert.match(projectEditor, /aria-label=\{`Edit site/, 'Site card is an accessible keyboard-actionable edit button');
 assert.match(directories, /new URLSearchParams\(window\.location\.search\)\.get\('edit'\)/, 'directory drawers accept record edit links');
 assert.ok(
   projectPage.indexOf('data-project-edit-toggle') < projectPage.indexOf('id="overview"'),
