@@ -84,10 +84,11 @@
       "outcome": "failure",
       "jobId": "job_contract_123456",
       "applicationType": "BUILDING_WARRANT",
-      "message": "The portal took too long to confirm the current step.",
-      "lastStage": "documents",
+      "message": "Architect Pro couldn't start its browser automation component.",
+      "lastStage": "browser",
       "timings": { "overall": 75.0, "workflow": 74.0 },
-      "errorCode": "PORTAL_TIMEOUT"
+      "errorCode": "BROWSER_COMPONENT_STARTUP_FAILED",
+      "retrySafe": true
     },
     "callback": {
       "version": 1,
@@ -96,21 +97,59 @@
       "occurredAt": "2026-08-17T09:10:00+00:00",
       "status": "FAILED_RETRYABLE",
       "eventType": "result",
-      "resultSummary": "The portal took too long to confirm the current step.",
-      "error": "The portal took too long to confirm the current step.",
-      "lastCheckpoint": "documents",
+      "resultSummary": "Architect Pro couldn't start its browser automation component.",
+      "error": "Architect Pro couldn't start its browser automation component.",
+      "lastCheckpoint": "browser",
       "result": {
         "outcome": "failed_retryable",
         "lastCompletedStep": null,
-        "currentSection": "documents",
+        "currentSection": "browser",
         "warnings": [],
-        "userActionRequired": "Review the desktop activity, then prepare a retry.",
-        "safeRetryPoint": "documents",
-        "errorCode": "PORTAL_TIMEOUT",
-        "errorSummary": "The portal took too long to confirm the current step.",
+        "userActionRequired": "Review the issue, then retry the application.",
+        "safeRetryPoint": "browser",
+        "errorCode": "BROWSER_COMPONENT_STARTUP_FAILED",
+        "errorSummary": "Architect Pro couldn't start its browser automation component.",
         "timings": {
           "totalSeconds": 75.0,
           "stageDurationsSeconds": { "workflow": 74.0 }
+        }
+      }
+    }
+  },
+  {
+    "name": "uncertain_failure",
+    "runnerResult": {
+      "outcome": "failure",
+      "jobId": "job_contract_123456",
+      "applicationType": "HOUSEHOLDER_PLANNING",
+      "message": "The portal took too long to confirm the current step.",
+      "lastStage": "main_details",
+      "timings": { "overall": 44.0, "workflow": 42.0 },
+      "errorCode": "PORTAL_TIMEOUT",
+      "retrySafe": false
+    },
+    "callback": {
+      "version": 1,
+      "jobId": "job_contract_123456",
+      "callbackId": "55555555-5555-4555-8555-555555555555",
+      "occurredAt": "2026-08-17T09:12:00+00:00",
+      "status": "FAILED_FINAL",
+      "eventType": "result",
+      "resultSummary": "The portal took too long to confirm the current step.",
+      "error": "The portal took too long to confirm the current step.",
+      "lastCheckpoint": "main_details",
+      "result": {
+        "outcome": "failed_final",
+        "lastCompletedStep": null,
+        "currentSection": "main_details",
+        "warnings": [],
+        "userActionRequired": "Review the current portal state before starting another attempt.",
+        "safeRetryPoint": null,
+        "errorCode": "PORTAL_TIMEOUT",
+        "errorSummary": "The portal took too long to confirm the current step.",
+        "timings": {
+          "totalSeconds": 44.0,
+          "stageDurationsSeconds": { "workflow": 42.0 }
         }
       }
     }

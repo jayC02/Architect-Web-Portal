@@ -49,8 +49,9 @@ const etaLabel = (seconds: number | null) => {
 };
 
 export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent }: Props) {
+  const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
-  const [working, setWorking] = useState<'run' | 'reveal' | ''>('');
+  const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | ''>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -58,13 +59,14 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required');
   const addressAction = job.progressStage === 'address_selection' && job.progressStageState === 'user_action_required';
   const active = runningStatuses.has(job.status) || (job.status === 'READY' && Boolean(job.executionAuthorisedAt));
+  const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
 
   useEffect(() => {
     if (!active && !awaitingFee) return;
     let mounted = true;
     const poll = async () => {
       try {
-        const response = await apiRequest<{ job: DesktopJobProjection }>(`/api/automation-jobs/${jobId}/status`);
+        const response = await apiRequest<{ job: DesktopJobProjection }>(`/api/automation-jobs/${currentJobId}/status`);
         if (mounted) setJob(response.job);
       } catch {
         // Keep the last verified projection; the next lightweight poll retries.
@@ -73,12 +75,12 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     const timer = window.setInterval(() => void poll(), awaitingFee ? 5_000 : 3_000);
     void poll();
     return () => { mounted = false; window.clearInterval(timer); };
-  }, [active, awaitingFee, jobId]);
+  }, [active, awaitingFee, currentJobId]);
 
   const run = async () => {
     setWorking('run'); setError(''); setNotice('');
     try {
-      const result = await apiRequest<{ compatibleAgentOnline: boolean }>(`/api/automation-jobs/${jobId}/run`, { method: 'POST' });
+      const result = await apiRequest<{ compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/run`, { method: 'POST' });
       setJob((current) => ({ ...current, executionAuthorisedAt: new Date().toISOString() }));
       setNotice(result.compatibleAgentOnline
         ? 'Queued. Your connected Agent will start automatically.'
@@ -88,10 +90,25 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     } finally { setWorking(''); }
   };
 
+  const retry = async () => {
+    setWorking('retry'); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<{ job: DesktopJobProjection; compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/restart`, { method: 'POST' });
+      if (!result.job.id) throw new Error('The retry job was not returned.');
+      setCurrentJobId(result.job.id);
+      setJob(result.job);
+      setNotice(result.compatibleAgentOnline
+        ? 'Queued. Your connected Agent will start automatically.'
+        : 'Queued. Open or connect a compatible Architect Pro Agent to continue.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'The application could not be retried safely.');
+    } finally { setWorking(''); }
+  };
+
   const reveal = async () => {
     setWorking('reveal'); setError(''); setNotice('');
     try {
-      await apiRequest(`/api/automation-jobs/${jobId}/reveal-browser`, { method: 'POST' });
+      await apiRequest(`/api/automation-jobs/${currentJobId}/reveal-browser`, { method: 'POST' });
       setNotice('Sent to your Agent. The existing fee browser will come to the front.');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The fee browser could not be opened.');
@@ -111,7 +128,7 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening browser…' : 'Continue fee in browser'}
         </button>
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View run details</a>
+        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-amber-900">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
@@ -124,9 +141,21 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
         <div><p className="text-xs font-semibold uppercase tracking-wide text-red-800">Automation stopped</p><h3 className="mt-1 text-lg font-semibold text-ink">The application could not be completed</h3></div>
       </div>
       <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-700">{job.error || job.resultSummary || 'Architect Pro stopped before taking any further portal action.'}</p>
-      <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {stageLabel(job.progressStage)} · {job.status === 'FAILED_RETRYABLE' ? 'Safe to review for retry' : 'Review before retrying'}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3"><a className="btn btn-primary" href={detailsHref}>Review issue</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={manageHref}>View application</a></div>
-      <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {jobId} · {job.status} · {job.progressStage ?? 'stage not reported'}</p></details>
+      <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {stageLabel(job.progressStage)} · {job.status === 'FAILED_RETRYABLE' ? 'Safe to retry' : 'Review the current portal state'}</p>
+      {job.status === 'FAILED_RETRYABLE' && <p className="mt-2 text-sm font-medium text-stone-700">Architect Pro has confirmed this attempt can be started again safely.</p>}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {job.status === 'FAILED_RETRYABLE' ? <>
+          <button type="button" className="btn btn-primary gap-2" disabled={working === 'retry'} onClick={() => void retry()}>
+            {working === 'retry' ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
+            {working === 'retry' ? 'Queuing retry…' : 'Retry application'}
+          </button>
+          <a className="text-sm font-semibold text-stone-700 hover:text-ink" href={currentDetailsHref}>Review issue</a>
+        </> : <a className="btn btn-primary" href={currentDetailsHref}>Review issue</a>}
+        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={manageHref}>View application</a>
+      </div>
+      {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
+      <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {job.progressStage ?? 'stage not reported'}</p></details>
     </section>
   );
 
@@ -136,7 +165,7 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full rounded-full bg-moss transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
       {eta && <p className="mt-2 text-xs text-stone-500">{eta}</p>}
       {addressAction && <p className="mt-3 text-sm font-medium text-amber-800">Choose the correct address in the Agent. The browser remains paused safely.</p>}
-      <div className="mt-3"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View details</a></div>
+      <div className="mt-3"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a></div>
     </section>
   );
 
@@ -147,7 +176,7 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
       <p className="mt-1 text-sm text-stone-600">{connectedAgent ? 'Your connected Agent can prepare this application in the background.' : 'Run the application, then open or connect the Desktop Agent.'}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'run'} onClick={() => void run()}>{working === 'run' ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{working === 'run' ? 'Queuing…' : 'Run application'}</button>
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View details</a>
+        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a>
       </div>
       {!connectedAgent && <details className="mt-3 text-sm text-stone-600"><summary className="cursor-pointer font-semibold">Desktop fallback</summary><p className="mt-2">Open the Agent manually if it is installed but not currently connected.</p></details>}
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}

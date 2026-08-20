@@ -7,54 +7,283 @@ import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 export const prerender = true;
 setAstroCache(Astro, publicPageShort);
 ---
+
 <BaseLayout
   title="Privacy Policy | Architect Pro"
-  description="How Architect Pro collects and uses personal information."
+  description="How Architect Pro collects, uses and protects personal information and Google user data."
 >
   <main class="min-h-screen bg-paper px-4 py-10 sm:px-8 lg:px-12">
     <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col">
       <header class="flex items-center justify-between gap-4">
-        <a class="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
+        <a
+          class="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40"
+          href="/"
+          aria-label="Architect Pro home"
+        >
           <BrandLogo class="h-auto w-40" />
         </a>
-        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/login">Sign in</a>
+
+        <a
+          class="text-sm font-semibold text-stone-600 hover:text-ink"
+          href="/login"
+        >
+          Sign in
+        </a>
       </header>
 
       <article class="panel my-10 rounded-lg p-6 sm:p-10">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Architect Pro</p>
-        <h1 class="mt-3 text-3xl font-semibold text-ink">Privacy Policy</h1>
-        <p class="mt-3 text-sm text-stone-500">Last updated: 13 August 2026</p>
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">
+          Architect Pro
+        </p>
+
+        <h1 class="mt-3 text-3xl font-semibold text-ink">
+          Privacy Policy
+        </h1>
+
+        <p class="mt-3 text-sm text-stone-500">
+          Last updated: 20 August 2026
+        </p>
 
         <div class="mt-8 space-y-7 text-sm leading-7 text-stone-600">
+
           <section>
-            <h2 class="text-lg font-semibold text-ink">What this policy covers</h2>
-            <p class="mt-2">This policy explains how Architect Pro collects, uses and protects information when you use our website and practice workspace.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              What this policy covers
+            </h2>
+
+            <p class="mt-2">
+              This policy explains how Architect Pro collects, uses, stores,
+              shares and protects information when you use our website,
+              practice workspace and connected services, including Google
+              integrations.
+            </p>
           </section>
 
           <section>
-            <h2 class="text-lg font-semibold text-ink">Information we use</h2>
-            <p class="mt-2">We use information you provide to create and manage your account, including your name, email address, organisation details and project information. If you sign in with Google, Google provides the account details needed to create or access your Architect Pro account. We do not receive or store your Google password.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              Information we use
+            </h2>
+
+            <p class="mt-2">
+              We use information you provide to create and manage your account,
+              including your name, email address, organisation details, client
+              information, project information and documents you choose to
+              provide to Architect Pro.
+            </p>
+
+            <p class="mt-2">
+              If you sign in with Google, Google provides the account
+              information required to create or access your Architect Pro
+              account. Architect Pro does not receive or store your Google
+              password.
+            </p>
           </section>
 
           <section>
-            <h2 class="text-lg font-semibold text-ink">How we use it</h2>
-            <p class="mt-2">We use your information to provide, secure and improve Architect Pro, respond to support requests, communicate important service information and meet legal obligations. We do not sell your personal information or use it for unrelated advertising.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              Google user data
+            </h2>
+
+            <p class="mt-2">
+              Architect Pro allows users to optionally connect their Google
+              account to enable features including calendar integration and
+              project correspondence monitoring.
+            </p>
+
+            <p class="mt-2">
+              When you enable the Gmail integration, Architect Pro uses the
+              Gmail API with read-only permission to access email messages
+              that may relate to your planning applications, building warrant
+              applications or other Architect Pro projects.
+            </p>
+
+            <p class="mt-2">
+              This may include email metadata such as the sender, subject,
+              date and message identifiers, together with email content where
+              necessary to determine whether correspondence relates to an
+              Architect Pro project.
+            </p>
+
+            <p class="mt-2">
+              Architect Pro uses this information to identify project-related
+              correspondence and detect updates such as application
+              validation, requests for additional information, decisions,
+              approvals, refusals or other relevant communications from
+              planning and building standards authorities.
+            </p>
+
+            <p class="mt-2">
+              Relevant information may then be displayed within the associated
+              Architect Pro project and used to assist with project status,
+              deadline and workflow management.
+            </p>
+
+            <p class="mt-2">
+              Architect Pro's Gmail integration is read-only. Architect Pro
+              does not use Gmail access to send, modify or delete your email.
+            </p>
           </section>
 
           <section>
-            <h2 class="text-lg font-semibold text-ink">Sharing and retention</h2>
-            <p class="mt-2">We share information only with service providers that help us operate Architect Pro, or where the law requires it. We keep information while your account is active and for as long as reasonably necessary for security, legal and record-keeping purposes.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              How we use information
+            </h2>
+
+            <p class="mt-2">
+              We use information to provide and operate Architect Pro,
+              authenticate users, manage projects, provide connected features,
+              secure and improve the service, respond to support requests,
+              communicate important service information and meet applicable
+              legal obligations.
+            </p>
+
+            <p class="mt-2">
+              Google user data is used only to provide or improve the
+              user-facing Architect Pro features for which access was granted.
+              We do not sell Google user data or use Google user data for
+              advertising, profiling for advertising, or unrelated purposes.
+            </p>
           </section>
 
           <section>
-            <h2 class="text-lg font-semibold text-ink">Your choices</h2>
-            <p class="mt-2">You may ask us to access, correct or delete your personal information, subject to legal requirements. To make a request, please contact the person who invited you to Architect Pro or your organisation administrator.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              Data storage and protection
+            </h2>
+
+            <p class="mt-2">
+              Architect Pro takes reasonable technical and organisational
+              measures to protect personal information and Google user data
+              against unauthorised access, use, alteration, disclosure or loss.
+            </p>
+
+            <p class="mt-2">
+              Data transmitted between your browser, Architect Pro and our
+              service providers is protected using encrypted HTTPS/TLS
+              connections. Access to stored application data is restricted to
+              authorised systems and users who require access to operate the
+              service.
+            </p>
+
+            <p class="mt-2">
+              Authentication credentials and access tokens used to connect
+              external services are not exposed to other Architect Pro users
+              and are handled separately from your Google account password.
+            </p>
+
+            <!--
+              IMPORTANT:
+              Keep ONE of the following paragraphs depending on how Gmail
+              processing actually works.
+            -->
+
+            <!-- OPTION A: use this if email bodies are NOT permanently stored -->
+            <p class="mt-2">
+              Gmail message content is accessed only when required to perform
+              the correspondence-monitoring feature. Architect Pro does not
+              permanently store complete Gmail message bodies after processing.
+              Relevant project information derived from correspondence may be
+              retained within the associated Architect Pro project.
+            </p>
+
+            <!-- OPTION B: use this instead if you DO store message content
+            <p class="mt-2">
+              Relevant Gmail message information may be stored where necessary
+              to provide project correspondence and monitoring features.
+              Stored information is protected using the same access controls
+              and security measures applied to other Architect Pro project
+              data and is retained only for as long as required to provide the
+              service or meet applicable legal requirements.
+            </p>
+            -->
           </section>
 
           <section>
-            <h2 class="text-lg font-semibold text-ink">Contact</h2>
-            <p class="mt-2">For privacy questions or concerns, please contact your Architect Pro organisation administrator.</p>
+            <h2 class="text-lg font-semibold text-ink">
+              Sharing of information
+            </h2>
+
+            <p class="mt-2">
+              We do not sell personal information or Google user data.
+            </p>
+
+            <p class="mt-2">
+              Information may be processed by service providers that support
+              the operation of Architect Pro, such as hosting, database,
+              authentication and infrastructure providers, where necessary to
+              provide the service.
+            </p>
+
+            <p class="mt-2">
+              Information may also be disclosed where required by law,
+              regulation or a valid legal process.
+            </p>
           </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">
+              Google API Services User Data Policy
+            </h2>
+
+            <p class="mt-2">
+              Architect Pro's use and transfer to any other app of information
+              received from Google APIs will adhere to the Google API Services
+              User Data Policy, including the Limited Use requirements.
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">
+              Retention and deletion
+            </h2>
+
+            <p class="mt-2">
+              We retain account and project information while your account or
+              organisation workspace remains active and for as long as
+              reasonably necessary to provide the service, maintain security,
+              comply with legal obligations and maintain appropriate business
+              records.
+            </p>
+
+            <p class="mt-2">
+              You may disconnect your Google account from Architect Pro or
+              revoke Architect Pro's access through your Google Account
+              settings. You may also request deletion of personal information
+              associated with your Architect Pro account, subject to applicable
+              legal and record-keeping requirements.
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">
+              Your choices and rights
+            </h2>
+
+            <p class="mt-2">
+              You may ask us to access, correct or delete personal information
+              associated with your Architect Pro account, subject to applicable
+              legal requirements.
+            </p>
+
+            <p class="mt-2">
+              Google integrations are optional and can be disconnected if you
+              no longer want Architect Pro to access the associated Google
+              services.
+            </p>
+          </section>
+
+          <section>
+            <h2 class="text-lg font-semibold text-ink">
+              Contact
+            </h2>
+
+            <p class="mt-2">
+              For questions about this privacy policy, Google integrations or
+              how Architect Pro handles personal information, please contact
+              Architect Pro support or your Architect Pro organisation
+              administrator.
+            </p>
+          </section>
+
         </div>
       </article>
 

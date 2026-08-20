@@ -213,6 +213,9 @@ assert.match(liveCard, /Continue fee in browser/, 'awaiting-fee exposes the prim
 assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning application details/, 'fee and running states do not expose competing restart or preparation actions');
 assert.match(liveCard, /connectedAgent[\s\S]*Run application/, 'the connected Agent path is the primary ready-state action');
 assert.match(liveCard, /failedStatuses[\s\S]*Automation stopped[\s\S]*Stage:/, 'structured failures are prominent and name the stage');
+assert.match(liveCard, /job\.status === 'FAILED_RETRYABLE'[\s\S]*Retry application/, 'safely retryable failures expose the primary Retry application action');
+assert.match(liveCard, /job\.status === 'FAILED_RETRYABLE' \? <>[\s\S]*Review issue[\s\S]*: <a className="btn btn-primary"/, 'uncertain and final failures expose review instead of blind retry');
+assert.match(liveCard, /setCurrentJobId\(result\.job\.id\)[\s\S]*setJob\(result\.job\)/, 'retry transitions the open card to the replacement job without a refresh');
 assert.match(statusRoute, /organisationId: organisation\.id/, 'live projections remain organisation scoped');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
 

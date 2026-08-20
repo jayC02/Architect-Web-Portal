@@ -17,8 +17,8 @@ assert.match(
 );
 assert.match(
   restartRoute,
-  /planningApplicationId: identity\.applicationId/,
-  'restart preserves only the exact current Planning application identity',
+  /planningApplicationId: oldJob\.type === AutomationJobType\.BUILDING_WARRANT[\s\S]*buildingWarrantApplicationId: oldJob\.type === AutomationJobType\.BUILDING_WARRANT/,
+  'retry preserves the exact application identity for Planning and shared Building Warrant snapshots',
 );
 assert.doesNotMatch(
   restartRoute,
@@ -27,19 +27,22 @@ assert.doesNotMatch(
 );
 assert.match(
   restartRoute,
-  /status: oldJob\.status[\s\S]*status: AutomationJobStatus\.CANCELLED[\s\S]*automationJob\.create/,
-  'the old attempt is conditionally cancelled before the fresh job is inserted',
+  /oldJob\.status !== AutomationJobStatus\.FAILED_RETRYABLE \|\| oldJob\.completedAt/,
+  'only an unconsumed runner-confirmed retryable failure can enter the retry path',
 );
 assert.match(
   restartRoute,
-  /dataSnapshot: snapshot\.dataSnapshot[\s\S]*documentSnapshot: snapshot\.documentSnapshot/,
-  'the replacement stores the newly built canonical data and document snapshots',
+  /status: AutomationJobStatus\.FAILED_RETRYABLE,[\s\S]*completedAt: null,[\s\S]*data: \{ completedAt: authorisedAt \}/,
+  'retry atomically consumes the failed attempt so duplicate active jobs cannot be created',
 );
-assert.doesNotMatch(
+assert.match(
   restartRoute,
-  /resultData:|resultSummary:|lastCheckpoint:|claimedByUserId:/,
-  'the replacement starts without old desktop execution or proposal metadata',
+  /status: AutomationJobStatus\.READY,[\s\S]*executionAuthorisedAt: authorisedAt/,
+  'the replacement is queued and authorised for automatic Agent discovery',
 );
+assert.match(restartRoute, /organisationId: organisation\.id/, 'retry lookup and mutation remain organisation scoped');
+assert.match(restartRoute, /agentSupportsJob[\s\S]*ensureWaitingForAgentAction/, 'retry uses the existing automatic Agent compatibility and waiting flow');
+assert.doesNotMatch(restartRoute, /preparationRedirectTo/, 'retry does not send the user back through manual preparation');
 
 assert.match(
   completionRoute,
@@ -58,6 +61,8 @@ assert.match(
 );
 assert.doesNotMatch(statusPanel, /RestartAutomationJobButton|startedStatuses/);
 assert.doesNotMatch(liveStatusPanel, /Restart desktop automation/, 'running and fee-paused cards do not offer a competing restart action');
-assert.match(launchButton, /\/api\/automation-jobs\/\$\{jobId\}\/restart/);
+assert.match(liveStatusPanel, /Retry application/, 'the failure card owns the state-driven retry action');
+assert.match(liveStatusPanel, /setCurrentJobId\(result\.job\.id\)/, 'the retry state replaces the failed projection live');
+assert.doesNotMatch(launchButton, /RestartAutomationJobButton|Restart desktop automation/, 'the old generic restart control is removed');
 
 console.log('Planning automation restart lifecycle regression tests passed');
