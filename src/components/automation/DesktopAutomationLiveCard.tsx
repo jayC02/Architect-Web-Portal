@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ExternalLink, LoaderCircle, Play } from 'lucide-react';
+import AutomationFailureRecovery, { type FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
+import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { apiRequest } from '@/lib/api/http';
 
 export type DesktopJobProjection = {
@@ -13,6 +15,8 @@ export type DesktopJobProjection = {
   progressMessage: string | null;
   resultSummary: string | null;
   error: string | null;
+  resultData: unknown;
+  lastCheckpoint: string | null;
   stale: boolean;
 };
 
@@ -23,6 +27,7 @@ type Props = {
   initial: DesktopJobProjection;
   connectedAgent: boolean;
   applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  recoveryContext: FailureRecoveryContext;
 };
 
 const runningStatuses = new Set(['CLAIMED', 'IN_PROGRESS']);
@@ -40,6 +45,8 @@ const stageLabel = (stage: string | null) => ({
   final_review: 'Finalising the application',
   fee: 'Opening the fee page',
   address_selection: 'Confirming the property address',
+  applicant_details: 'Completing applicant details',
+  agent_details: 'Completing agent details',
 }[stage ?? ''] ?? 'Preparing the application');
 
 const etaLabel = (seconds: number | null) => {
@@ -50,7 +57,7 @@ const etaLabel = (seconds: number | null) => {
   return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
 };
 
-export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent, applicationType }: Props) {
+export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
   const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | ''>('');
@@ -105,7 +112,9 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
         ? 'Queued. Your connected Agent will start automatically.'
         : 'Queued. Open or connect a compatible Architect Pro Agent to continue.');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'The application could not be retried safely.');
+      const message = requestError instanceof Error ? requestError.message : 'The application could not be retried safely.';
+      setError(message);
+      throw new Error(message);
     } finally { setWorking(''); }
   };
 
@@ -123,6 +132,10 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
 
   const progress = Math.max(0, Math.min(100, job.progressPercent ?? 0));
   const eta = useMemo(() => awaitingFee || addressAction || job.stale ? null : etaLabel(job.etaSeconds), [addressAction, awaitingFee, job.etaSeconds, job.stale]);
+  const failure = useMemo(
+    () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint),
+    [job.lastCheckpoint, job.progressStage, job.resultData, job.status],
+  );
 
   if (job.status === 'COMPLETED') return (
     <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
@@ -168,24 +181,15 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
   if (failedStatuses.has(job.status)) return (
     <section className="border-l-4 border-l-red-700 bg-red-50/75 p-4 sm:px-5" aria-live="assertive">
       <div className="flex gap-3"><AlertTriangle className="mt-0.5 shrink-0 text-red-700" size={20} />
-        <div><p className="text-xs font-semibold uppercase tracking-wide text-red-800">Automation stopped</p><h3 className="mt-1 text-lg font-semibold text-ink">The application could not be completed</h3></div>
+        <div><p className="text-xs font-semibold uppercase tracking-wide text-red-800">Automation stopped</p><h3 className="mt-1 text-lg font-semibold text-ink">{failure.headline || 'The application could not be completed'}</h3></div>
       </div>
       <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-700">{job.error || job.resultSummary || 'Architect Pro stopped before taking any further portal action.'}</p>
-      <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {stageLabel(job.progressStage)} · {job.status === 'FAILED_RETRYABLE' ? 'Safe to retry' : 'Review the current portal state'}</p>
-      {job.status === 'FAILED_RETRYABLE' && <p className="mt-2 text-sm font-medium text-stone-700">Architect Pro has confirmed this attempt can be started again safely.</p>}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {job.status === 'FAILED_RETRYABLE' ? <>
-          <button type="button" className="btn btn-primary gap-2" disabled={working === 'retry'} onClick={() => void retry()}>
-            {working === 'retry' ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
-            {working === 'retry' ? 'Queuing retry…' : 'Retry application'}
-          </button>
-          <a className="text-sm font-semibold text-stone-700 hover:text-ink" href={currentDetailsHref}>Review issue</a>
-        </> : <a className="btn btn-primary" href={currentDetailsHref}>Review issue</a>}
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={manageHref}>View application</a>
-      </div>
+      <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {failure.stageDescription || stageLabel(failure.stage)}</p>
+      {failure.explanation && <p className="mt-2 text-sm font-medium text-stone-700">{failure.explanation}</p>}
+      <AutomationFailureRecovery metadata={failure} context={recoveryContext} applicationType={applicationType} retrying={working === 'retry'} onRetry={retry} detailsHref={currentDetailsHref} />
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
-      <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {job.progressStage ?? 'stage not reported'}</p></details>
+      <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {failure.category ?? 'AUTOMATION_FAILED'} · {failure.stage ?? 'stage not reported'}</p></details>
     </section>
   );
 

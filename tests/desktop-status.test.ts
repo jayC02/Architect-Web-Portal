@@ -35,6 +35,8 @@ const makeJob = (
   documentSnapshot: { documents: [] },
   resultSummary: null,
   error: null,
+  resultData: null,
+  lastCheckpoint: null,
   payloadVersion: 2,
   preparedAt: new Date(updatedAt),
   claimedAt: null,
@@ -169,6 +171,7 @@ const settingsPanel = fs.readFileSync('src/components/live/LiveDataPanel.tsx', '
 const historyPage = fs.readFileSync('src/pages/automation-jobs.astro', 'utf8');
 const statusPanel = fs.readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
 const liveCard = fs.readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
+const failureRecovery = fs.readFileSync('src/components/automation/AutomationFailureRecovery.tsx', 'utf8');
 const statusRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/status.ts', 'utf8');
 const revealRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/reveal-browser.ts', 'utf8');
 const revealAckRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/reveal-browser.ts', 'utf8');
@@ -217,8 +220,8 @@ assert.match(liveCard, /View Warrant/, 'Building Warrant completion uses its wor
 assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning application details/, 'fee and running states do not expose competing restart or preparation actions');
 assert.match(liveCard, /connectedAgent[\s\S]*Run application/, 'the connected Agent path is the primary ready-state action');
 assert.match(liveCard, /failedStatuses[\s\S]*Automation stopped[\s\S]*Stage:/, 'structured failures are prominent and name the stage');
-assert.match(liveCard, /job\.status === 'FAILED_RETRYABLE'[\s\S]*Retry application/, 'safely retryable failures expose the primary Retry application action');
-assert.match(liveCard, /job\.status === 'FAILED_RETRYABLE' \? <>[\s\S]*Review issue[\s\S]*: <a className="btn btn-primary"/, 'uncertain and final failures expose review instead of blind retry');
+assert.match(failureRecovery, /directRetry[\s\S]*Retry application/, 'positively safe failures expose the primary Retry application action');
+assert.match(failureRecovery, /review_portal[\s\S]*Review current portal state/, 'uncertain and final failures expose portal review instead of blind retry');
 assert.match(liveCard, /setCurrentJobId\(result\.job\.id\)[\s\S]*setJob\(result\.job\)/, 'retry transitions the open card to the replacement job without a refresh');
 assert.match(statusRoute, /organisationId: organisation\.id/, 'live projections remain organisation scoped');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');

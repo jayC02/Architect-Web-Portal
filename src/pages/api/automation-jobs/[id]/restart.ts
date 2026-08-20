@@ -10,6 +10,7 @@ import {
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
+import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
@@ -36,11 +37,14 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       type: true,
       status: true,
       dataSnapshot: true,
+      resultData: true,
+      progressStage: true,
       completedAt: true,
     },
   });
   if (!oldJob) throw new HttpError(404, 'Automation job not found.');
-  if (oldJob.status !== AutomationJobStatus.FAILED_RETRYABLE || oldJob.completedAt) {
+  const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage);
+  if (oldJob.status !== AutomationJobStatus.FAILED_RETRYABLE || oldJob.completedAt || !recovery.retrySafe) {
     throw new HttpError(409, 'This automation attempt is not confirmed safe to retry. Review the issue before continuing.');
   }
 
@@ -72,6 +76,25 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const authorisedAt = new Date();
 
   const newJob = await prisma.$transaction(async (transaction) => {
+    const existingActive = await transaction.automationJob.findFirst({
+      where: {
+        organisationId: organisation.id,
+        projectId: oldJob.projectId,
+        type: oldJob.type,
+        id: { not: oldJob.id },
+        completedAt: null,
+        status: { in: [
+          AutomationJobStatus.READY,
+          AutomationJobStatus.CLAIMED,
+          AutomationJobStatus.IN_PROGRESS,
+          AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+        ] },
+      },
+      select: { id: true },
+    });
+    if (existingActive) {
+      throw new HttpError(409, 'This application already has an active automation attempt.');
+    }
     const consumed = await transaction.automationJob.updateMany({
       where: {
         id: oldJob.id,
@@ -108,6 +131,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true,
         progressPercent: true, etaSeconds: true, progressMessage: true, resultSummary: true,
         error: true, agentHeartbeatAt: true,
+        resultData: true, lastCheckpoint: true,
       },
     });
     await transaction.deadline.updateMany({

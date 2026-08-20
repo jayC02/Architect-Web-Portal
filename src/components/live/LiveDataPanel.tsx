@@ -3,7 +3,7 @@ import { apiRequest } from '@/lib/api/http';
 import { AlertTriangle, ArrowRight, ExternalLink, Link2, Mail, MapPin, Phone, Plus, Search, Unlink } from 'lucide-react';
 import { clientIdentityLabel, clientStructuredAddress } from '@/lib/clients/display';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
-import { ClientForm, DirectoryDrawer, SiteForm } from './DirectoryEditor';
+import { AgentDefaultsForm, ClientForm, DirectoryDrawer, SiteForm } from './DirectoryEditor';
 
 type Variant =
   | 'dashboard'
@@ -990,36 +990,7 @@ function SettingsOverview({ data }: { data: AnyRecord }) {
       <WorkflowTargetsSettings targets={data.workflowTargets ?? []} canManage={canManage} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <form data-api-form data-action="/api/settings/organisation-defaults" data-method="PUT" className="panel grid gap-4 rounded-lg p-5">
-          <div>
-            <h2 className="text-xl font-semibold">Practice and agent defaults</h2>
-            <p className="mt-1 text-sm text-stone-500">Reused when preparing applications. Project-specific facts remain on the application record.</p>
-          </div>
-          <label className="block"><span className="label">Practice name</span><input name="practiceName" defaultValue={defaults.practiceName ?? data.organisation.name} className="field" disabled={!canManage} /></label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className="label">Agent first name</span><input name="agentFirstName" defaultValue={defaults.agentFirstName ?? ''} className="field" disabled={!canManage} /></label>
-            <label className="block"><span className="label">Agent last name</span><input name="agentLastName" defaultValue={defaults.agentLastName ?? ''} className="field" disabled={!canManage} /></label>
-            <label className="block"><span className="label">Agent email</span><input type="email" name="agentEmail" defaultValue={defaults.agentEmail ?? ''} className="field" disabled={!canManage} /></label>
-            <label className="block"><span className="label">Agent phone</span><input name="agentPhone" defaultValue={defaults.agentPhone ?? ''} className="field" disabled={!canManage} /></label>
-          </div>
-          <label className="block"><span className="label">Agent building number</span><input name="agentBuildingNumber" defaultValue={defaults.agentBuildingNumber ?? ''} className="field" disabled={!canManage} /></label>
-          <label className="block"><span className="label">Address line 1</span><input name="agentAddressLine1" defaultValue={defaults.agentAddressLine1 ?? ''} className="field" disabled={!canManage} /></label>
-          <label className="block"><span className="label">Address line 2</span><input name="agentAddressLine2" defaultValue={defaults.agentAddressLine2 ?? ''} className="field" disabled={!canManage} /></label>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <label className="block"><span className="label">Town/city</span><input name="agentTownCity" defaultValue={defaults.agentTownCity ?? ''} className="field" disabled={!canManage} /></label>
-            <label className="block"><span className="label">Postcode</span><input name="agentPostcode" defaultValue={defaults.agentPostcode ?? ''} className="field" disabled={!canManage} /></label>
-            <label className="block"><span className="label">Country</span><input name="agentCountry" defaultValue={defaults.agentCountry ?? 'United Kingdom'} className="field" disabled={!canManage} /></label>
-          </div>
-          <label className="block">
-            <span className="label">Default certifier</span>
-            <select name="defaultCertifierPresetId" defaultValue={defaults.defaultCertifierPresetId ?? ''} className="field" disabled={!canManage}>
-              <option value="">No default certifier</option>
-              {certifierPresets.map((preset: AnyRecord) => <option key={preset.id} value={preset.id}>{preset.displayName}</option>)}
-            </select>
-          </label>
-          {canManage && <button className="btn btn-primary justify-self-start">Save organisation defaults</button>}
-          <p data-form-status className="text-sm text-stone-500" />
-        </form>
+        <AgentDefaultsForm defaults={defaults} organisationName={data.organisation.name} canManage={canManage} certifierPresets={certifierPresets} />
 
         <div className="space-y-4">
           <div className="panel rounded-lg p-5">

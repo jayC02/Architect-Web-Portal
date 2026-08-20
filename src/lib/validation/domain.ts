@@ -116,9 +116,9 @@ const formCheckboxBoolean = z.preprocess(
   (value) => value === true || value === 'true' || value === 'on',
   z.boolean(),
 );
-const typeOfWorkKeysSchema = z.preprocess(
+export const typeOfWorkKeysSchema = z.preprocess(
   (value) => Array.isArray(value) ? value : value === undefined || value === null || value === '' ? [] : [value],
-  z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1, 'Choose at least one type of work.').max(TYPE_OF_WORK_KEYS.length),
+  z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1, 'Select at least one type of work.').max(TYPE_OF_WORK_KEYS.length),
 );
 const optionalNonNegativeInteger = z.preprocess(
   (value) => value === '' || value === null ? undefined : value,

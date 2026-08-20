@@ -2,6 +2,7 @@
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AutomationLaunchButton from '@/components/automation/AutomationLaunchButton';
 import DesktopAutomationLiveCard from '@/components/automation/DesktopAutomationLiveCard';
+import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import {
   type DesktopAutomationJob,
 } from '@/server/services/desktop-automation-status.service';
@@ -16,6 +17,7 @@ interface Props {
   preparationReady?: boolean;
   missingCount?: number;
   connectedAgent?: boolean;
+  recoveryContext: FailureRecoveryContext;
 }
 
 const {
@@ -28,6 +30,7 @@ const {
   preparationReady = false,
   missingCount = 0,
   connectedAgent = false,
+  recoveryContext,
 } = Astro.props;
 const preparationActionLabel = type === AutomationJobType.BUILDING_WARRANT
   ? 'Complete Building Warrant details'
@@ -52,8 +55,10 @@ const description = preparationReady
     progressMessage: job.progressMessage,
     resultSummary: job.resultSummary,
     error: job.error,
+    resultData: job.resultData,
+    lastCheckpoint: job.lastCheckpoint,
     stale: Boolean(job.agentHeartbeatAt && Date.now() - job.agentHeartbeatAt.getTime() > 90_000),
-  }} applicationType={type} />
+  }} applicationType={type} recoveryContext={recoveryContext} />
 ) : <section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="min-w-0">

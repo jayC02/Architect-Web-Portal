@@ -8,6 +8,7 @@ const completionRoute = source('src/pages/api/planning/[id]/complete-details.ts'
 const preparationPage = source('src/pages/planning/[id]/preparation.astro');
 const statusPanel = source('src/components/automation/DesktopAutomationStatus.astro');
 const liveStatusPanel = source('src/components/automation/DesktopAutomationLiveCard.tsx');
+const failureRecovery = source('src/components/automation/AutomationFailureRecovery.tsx');
 const launchButton = source('src/components/automation/AutomationLaunchButton.tsx');
 
 assert.match(
@@ -22,8 +23,8 @@ assert.match(
 );
 assert.doesNotMatch(
   restartRoute,
-  /oldJob\.(documentSnapshot|resultData|resultSummary|lastCheckpoint)/,
-  'restart never copies the old execution snapshot or proposal resume state',
+  /oldJob\.(documentSnapshot|resultSummary|lastCheckpoint)/,
+  'restart never copies the old execution snapshot or proposal resume state; resultData is read only as the safety gate',
 );
 assert.match(
   restartRoute,
@@ -61,7 +62,7 @@ assert.match(
 );
 assert.doesNotMatch(statusPanel, /RestartAutomationJobButton|startedStatuses/);
 assert.doesNotMatch(liveStatusPanel, /Restart desktop automation/, 'running and fee-paused cards do not offer a competing restart action');
-assert.match(liveStatusPanel, /Retry application/, 'the failure card owns the state-driven retry action');
+assert.match(failureRecovery, /Retry application/, 'the contextual failure recovery owns the state-driven retry action');
 assert.match(liveStatusPanel, /setCurrentJobId\(result\.job\.id\)/, 'the retry state replaces the failed projection live');
 assert.doesNotMatch(launchButton, /RestartAutomationJobButton|Restart desktop automation/, 'the old generic restart control is removed');
 

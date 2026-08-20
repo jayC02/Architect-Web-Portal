@@ -17,6 +17,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       id: true, status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true, progressPercent: true,
       etaSeconds: true, progressMessage: true, progressUpdatedAt: true, agentHeartbeatAt: true,
       resultSummary: true, error: true,
+      resultData: true, lastCheckpoint: true,
     },
   });
   if (!job) throw new HttpError(404, 'Automation job not found.');

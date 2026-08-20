@@ -19,6 +19,7 @@ import { prisma } from '@/lib/db/prisma';
 import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
+import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import {
   desktopAutomationJobSelect,
@@ -144,6 +145,9 @@ const [projectFeePlan, feePlanTemplates] = canViewFinance ? await Promise.all([
     orderBy: [{ name: 'asc' }, { version: 'desc' }],
   }),
 ]) : [null, []];
+const organisationDefaults = await prisma.organisationDefaults.findUnique({
+  where: { organisationId: auth.organisation.id },
+});
 const agreedFeeTotal = projectFeePlan?.milestones
   .filter((milestone) => milestone.enabled && milestone.state !== 'WAIVED')
   .reduce((total, milestone) => total.plus(milestone.amount), new Prisma.Decimal(0)) ?? null;
@@ -302,6 +306,28 @@ const siteEditorRecord = project.site ? {
   localAuthority: project.site.localAuthority,
   notes: project.site.notes,
 } : null;
+const agentDefaultsRecord = organisationDefaults ? {
+  practiceName: organisationDefaults.practiceName,
+  agentFirstName: organisationDefaults.agentFirstName,
+  agentLastName: organisationDefaults.agentLastName,
+  agentEmail: organisationDefaults.agentEmail,
+  agentPhone: organisationDefaults.agentPhone,
+} : null;
+const warrantPreparation = latestWarrant?.preparationData && typeof latestWarrant.preparationData === 'object' && !Array.isArray(latestWarrant.preparationData)
+  ? latestWarrant.preparationData as Record<string, unknown>
+  : {};
+const warrantTypeOfWorkKeys = latestWarrant
+  ? normaliseTypeOfWorkKeys(warrantPreparation.typeOfWorkKeys, latestWarrant.presetKey ?? project.projectType)
+  : [];
+const sharedRecoveryContext = {
+  client: clientEditorRecord,
+  site: siteEditorRecord,
+  documentsHref: `/projects/${project.id}#documents`,
+  typeOfWorkOptions: TYPE_OF_WORK_DEFINITIONS.map(({ key, label }) => ({ key, label })),
+  agentDefaults: agentDefaultsRecord,
+  organisationName: auth.organisation.name,
+  canManageAgentDefaults: ['OWNER', 'ADMIN'].includes(auth.membership.role),
+};
 const activeDeadlines = deadlines.filter((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED);
 const completedDeadlines = deadlines.filter((deadline) => deadline.status === DeadlineStatus.COMPLETED);
 const overdueCount = activeDeadlines.filter((deadline) => isProjectDateOverdue(deadline.dueDate)).length;
@@ -401,6 +427,12 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         desktopPreparationReady={planningDesktop.preparationReady}
         desktopMissingCount={planningDesktop.missingCount}
         connectedAgent={planningAgentConnected}
+        recoveryContext={{
+          ...sharedRecoveryContext,
+          applicationId: latestPlanning?.id ?? null,
+          portalHref: latestPlanning?.portalUrl ?? null,
+          typeOfWorkKeys: [],
+        }}
       />
       <ApplicationSummaryCard
         id="building-warrant"
@@ -420,6 +452,12 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         desktopPreparationReady={warrantDesktop.preparationReady}
         desktopMissingCount={warrantDesktop.missingCount}
         connectedAgent={warrantAgentConnected}
+        recoveryContext={{
+          ...sharedRecoveryContext,
+          applicationId: latestWarrant?.id ?? null,
+          portalHref: latestWarrant?.portalUrl ?? null,
+          typeOfWorkKeys: warrantTypeOfWorkKeys,
+        }}
       />
     </div>
   </section>

@@ -2,6 +2,7 @@
 import { AutomationJobType } from '@prisma/client';
 import { Building2 } from 'lucide-react';
 import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
+import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import type { DesktopAutomationJob } from '@/server/services/desktop-automation-status.service';
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
   desktopPreparationReady?: boolean;
   desktopMissingCount?: number;
   connectedAgent?: boolean;
+  recoveryContext: FailureRecoveryContext;
 }
 
 const {
@@ -42,6 +44,7 @@ const {
   desktopPreparationReady = false,
   desktopMissingCount = 0,
   connectedAgent = false,
+  recoveryContext,
 } = Astro.props;
 ---
 <section id={id} class="flex h-full scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white">
@@ -93,6 +96,7 @@ const {
       preparationReady={desktopPreparationReady}
       missingCount={desktopMissingCount}
       connectedAgent={connectedAgent}
+      recoveryContext={recoveryContext}
     />
   </footer>
 </section>

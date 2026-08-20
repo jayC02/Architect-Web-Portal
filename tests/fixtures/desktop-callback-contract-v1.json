@@ -109,6 +109,14 @@
         "safeRetryPoint": "browser",
         "errorCode": "BROWSER_COMPONENT_STARTUP_FAILED",
         "errorSummary": "Architect Pro couldn't start its browser automation component.",
+        "failureCategory": "BROWSER_COMPONENT_STARTUP_FAILED",
+        "errorHeadline": null,
+        "stageDescription": null,
+        "progressionMessage": null,
+        "nextAction": null,
+        "recoveryAction": "retry",
+        "retrySafe": true,
+        "recoveryFields": [],
         "timings": {
           "totalSeconds": 75.0,
           "stageDurationsSeconds": { "workflow": 74.0 }
@@ -147,6 +155,14 @@
         "safeRetryPoint": null,
         "errorCode": "PORTAL_TIMEOUT",
         "errorSummary": "The portal took too long to confirm the current step.",
+        "failureCategory": "PORTAL_TIMEOUT",
+        "errorHeadline": null,
+        "stageDescription": null,
+        "progressionMessage": null,
+        "nextAction": null,
+        "recoveryAction": "review_portal",
+        "retrySafe": false,
+        "recoveryFields": [],
         "timings": {
           "totalSeconds": 44.0,
           "stageDurationsSeconds": { "workflow": 42.0 }
