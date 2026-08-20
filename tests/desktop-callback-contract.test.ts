@@ -25,6 +25,12 @@ assert.equal(fee.status, 'AWAITING_PORTAL_REVIEW');
 assert.equal((fee.result as Record<string, unknown>).outcome, 'awaiting_user_portal_review');
 assert.equal((fee.result as Record<string, unknown>).currentSection, 'fee');
 
+const prepared = fixtures.find((fixture) => fixture.name === 'successful_final_review')!.callback;
+assert.equal(prepared.status, 'COMPLETED');
+assert.equal((prepared.result as Record<string, unknown>).outcome, 'completed_to_final_review');
+assert.equal((prepared.result as Record<string, unknown>).currentSection, 'final_review');
+assert.equal((prepared.result as Record<string, unknown>).userActionRequired, null);
+
 assert.throws(
   () => desktopJobStatusSchema.parse({ ...fee, version: 2 }),
   /Unsupported desktop callback version/,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ExternalLink, LoaderCircle, Play } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, LoaderCircle, Play } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 
 export type DesktopJobProjection = {
@@ -22,6 +22,7 @@ type Props = {
   detailsHref: string;
   initial: DesktopJobProjection;
   connectedAgent: boolean;
+  applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
 };
 
 const runningStatuses = new Set(['CLAIMED', 'IN_PROGRESS']);
@@ -36,6 +37,7 @@ const stageLabel = (stage: string | null) => ({
   ownership: 'Completing ownership and certificates',
   documents: 'Uploading supporting documents',
   declaration: 'Completing the declaration',
+  final_review: 'Finalising the application',
   fee: 'Opening the fee page',
   address_selection: 'Confirming the property address',
 }[stage ?? ''] ?? 'Preparing the application');
@@ -48,7 +50,7 @@ const etaLabel = (seconds: number | null) => {
   return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
 };
 
-export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent }: Props) {
+export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent, applicationType }: Props) {
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
   const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | ''>('');
@@ -60,6 +62,8 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
   const addressAction = job.progressStage === 'address_selection' && job.progressStageState === 'user_action_required';
   const active = runningStatuses.has(job.status) || (job.status === 'READY' && Boolean(job.executionAuthorisedAt));
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
+  const isWarrant = applicationType === 'BUILDING_WARRANT';
+  const viewLabel = isWarrant ? 'View Warrant' : 'View Householder';
 
   useEffect(() => {
     if (!active && !awaitingFee) return;
@@ -109,14 +113,40 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     setWorking('reveal'); setError(''); setNotice('');
     try {
       await apiRequest(`/api/automation-jobs/${currentJobId}/reveal-browser`, { method: 'POST' });
-      setNotice('Sent to your Agent. The existing fee browser will come to the front.');
+      setNotice(job.status === 'COMPLETED'
+        ? `Sent to your Agent. ${viewLabel} will open on this computer.`
+        : 'Sent to your Agent. The existing fee browser will come to the front.');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'The fee browser could not be opened.');
+      setError(requestError instanceof Error ? requestError.message : 'The application could not be opened.');
     } finally { setWorking(''); }
   };
 
   const progress = Math.max(0, Math.min(100, job.progressPercent ?? 0));
   const eta = useMemo(() => awaitingFee || addressAction || job.stale ? null : etaLabel(job.etaSeconds), [addressAction, awaitingFee, job.etaSeconds, job.stale]);
+
+  if (job.status === 'COMPLETED') return (
+    <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
+      <div className="flex gap-3">
+        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Automation complete</p>
+          <h3 className="mt-1 text-lg font-semibold text-ink">{isWarrant ? 'Building Warrant prepared' : 'Householder prepared'}</h3>
+        </div>
+      </div>
+      <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600">
+        Architect Pro has completed the application. Review it in {isWarrant ? 'eBuilding Standards' : 'ePlanning'} and submit it whenever you're ready.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
+          {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
+          {working === 'reveal' ? 'Opening…' : viewLabel}
+        </button>
+        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
+      </div>
+      {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
+    </section>
+  );
 
   if (awaitingFee) return (
     <section className="border-l-4 border-l-amber-500 bg-amber-50/70 p-4 sm:px-5" aria-live="polite">
@@ -184,7 +214,7 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     </section>
   );
 
-  const finalTitle = job.status === 'COMPLETED' ? 'Application prepared' : job.status === 'CANCELLED' ? 'Automation cancelled' : 'Needs your attention';
+  const finalTitle = job.status === 'CANCELLED' ? 'Automation cancelled' : 'Needs your attention';
   const finalMessage = job.status === 'CANCELLED' ? 'The previous run stopped safely. Review the application before starting again.' : job.resultSummary || 'Review the application before continuing.';
   return <section className="p-4 sm:px-5"><p className="font-semibold text-ink">{finalTitle}</p><p className="mt-1 text-sm text-stone-600">{finalMessage}</p><a className="mt-3 inline-flex text-sm font-semibold text-moss hover:text-ink" href={manageHref}>View application</a></section>;
 }

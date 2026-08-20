@@ -30,6 +30,7 @@ const transitions: Record<AutomationJobStatus, ReadonlySet<AutomationJobStatus>>
   IN_PROGRESS: new Set([
     AutomationJobStatus.NEEDS_REVIEW,
     AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+    AutomationJobStatus.COMPLETED,
     AutomationJobStatus.FAILED_RETRYABLE,
     AutomationJobStatus.FAILED_FINAL,
     AutomationJobStatus.CANCELLED,

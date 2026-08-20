@@ -160,7 +160,7 @@ assert.equal(desktopAutomationPresentation(AutomationJobStatus.READY).label, 'Re
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.NEEDS_INPUT).label, 'Needs your attention');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).label, 'Agent running');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.IN_PROGRESS).actionLabel, 'Resume in desktop');
-assert.equal(desktopAutomationPresentation(AutomationJobStatus.COMPLETED).label, 'Completed');
+assert.equal(desktopAutomationPresentation(AutomationJobStatus.COMPLETED).label, 'Application prepared');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.FAILED_FINAL).label, 'Could not complete');
 assert.equal(desktopAutomationPresentation(AutomationJobStatus.CANCELLED).label, 'Cancelled');
 
@@ -172,6 +172,7 @@ const liveCard = fs.readFileSync('src/components/automation/DesktopAutomationLiv
 const statusRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/status.ts', 'utf8');
 const revealRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/reveal-browser.ts', 'utf8');
 const revealAckRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/reveal-browser.ts', 'utf8');
+const viewRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/view.ts', 'utf8');
 const heartbeatRoute = fs.readFileSync('src/pages/api/desktop/heartbeat.ts', 'utf8');
 const enrollmentPanel = fs.readFileSync('src/components/integrations/DesktopAccessIntegration.tsx', 'utf8');
 const projectFees = fs.readFileSync('src/components/projects/ProjectFees.astro', 'utf8');
@@ -210,6 +211,9 @@ assert.match(liveCard, /job\.status === 'READY'[\s\S]*Queued/, 'the live card co
 assert.match(liveCard, /new Set\(\['CLAIMED', 'IN_PROGRESS'\]\)/, 'the live card covers claimed and running states');
 assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*Complete the fee in the browser/, 'awaiting-fee has explicit non-failure copy');
 assert.match(liveCard, /Continue fee in browser/, 'awaiting-fee exposes the primary browser handoff action');
+assert.match(liveCard, /job\.status === 'COMPLETED'[\s\S]*Automation complete/, 'verified preparation renders as a positive completed state');
+assert.match(liveCard, /View Householder/, 'Householder completion uses its workflow-specific CTA');
+assert.match(liveCard, /View Warrant/, 'Building Warrant completion uses its workflow-specific CTA');
 assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning application details/, 'fee and running states do not expose competing restart or preparation actions');
 assert.match(liveCard, /connectedAgent[\s\S]*Run application/, 'the connected Agent path is the primary ready-state action');
 assert.match(liveCard, /failedStatuses[\s\S]*Automation stopped[\s\S]*Stage:/, 'structured failures are prominent and name the stage');
@@ -219,9 +223,13 @@ assert.match(liveCard, /setCurrentJobId\(result\.job\.id\)[\s\S]*setJob\(result\
 assert.match(statusRoute, /organisationId: organisation\.id/, 'live projections remain organisation scoped');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
 
-assert.match(revealRoute, /organisationId: organisation\.id[\s\S]*AWAITING_PORTAL_REVIEW[\s\S]*browserRevealRequestedAt/, 'browser reveal requests are organisation scoped and only target paused jobs');
+assert.match(revealRoute, /organisationId: organisation\.id[\s\S]*AutomationJobStatus\.COMPLETED[\s\S]*AutomationJobStatus\.AWAITING_PORTAL_REVIEW[\s\S]*browserRevealRequestedAt/, 'browser open requests are organisation scoped for prepared and legacy fee-paused jobs');
+assert.match(revealRoute, /Desktop Agent isn't connected\. Open Architect Pro Agent to view this application\./, 'an offline Agent returns a clear recovery message');
 assert.match(heartbeatRoute, /claimedByAgentId: agent\.id[\s\S]*agentRunId: body\.agentRunId[\s\S]*REVEAL_BROWSER/, 'reveal commands preserve the claimed Agent and run identity');
+assert.match(heartbeatRoute, /organisationId: agent\.organisationId[\s\S]*claimedByAgentId: agent\.id[\s\S]*status: AutomationJobStatus\.COMPLETED[\s\S]*OPEN_APPLICATION/, 'completed View commands remain scoped to the preparing Agent and original job');
 assert.match(revealAckRoute, /browserRevealRequestedAt\.toISOString\(\) !== body\.requestedAt/, 'stale reveal acknowledgements cannot consume a newer command');
+assert.match(viewRoute, /organisationId: agent\.organisationId[\s\S]*claimedByAgentId: agent\.id[\s\S]*status: AutomationJobStatus\.COMPLETED/, 'fresh-session job data is Agent-authenticated, organisation scoped, and completed-only');
+assert.doesNotMatch(viewRoute, /createProposal|createApplication|prisma\.[a-zA-Z]+\.create/, 'View never creates a proposal, application, or database record');
 
 assert.match(enrollmentPanel, /Install and open[\s\S]*Paste the code[\s\S]*Confirm connection/, 'Agent enrolment explains the complete three-step sequence');
 assert.match(enrollmentPanel, /connectedAgents\.length[\s\S]*Connect Desktop Agent/, 'raw enrolment is demoted after an Agent connects');

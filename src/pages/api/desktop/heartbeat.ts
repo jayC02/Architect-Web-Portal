@@ -58,6 +58,34 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         }];
       }
     }
+    const completed = await tx.automationJob.findFirst({
+      where: {
+        organisationId: agent.organisationId,
+        claimedByAgentId: agent.id,
+        status: AutomationJobStatus.COMPLETED,
+        browserRevealRequestedAt: { not: null },
+      },
+      orderBy: { browserRevealRequestedAt: 'desc' },
+      select: {
+        id: true,
+        type: true,
+        agentRunId: true,
+        browserRevealRequestedAt: true,
+        browserRevealAcknowledgedAt: true,
+      },
+    });
+    if (completed?.agentRunId
+      && completed.browserRevealRequestedAt
+      && (!completed.browserRevealAcknowledgedAt
+        || completed.browserRevealRequestedAt > completed.browserRevealAcknowledgedAt)) {
+      return [{
+        type: 'OPEN_APPLICATION',
+        jobId: completed.id,
+        applicationType: completed.type,
+        agentRunId: completed.agentRunId,
+        requestedAt: completed.browserRevealRequestedAt.toISOString(),
+      }];
+    }
     return [];
   });
   await reconcileStaleAgentJobs({ organisationId: agent.organisationId, now });

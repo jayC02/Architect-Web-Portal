@@ -116,13 +116,12 @@ assert.doesNotThrow(() => assertAutomationJobTransition(
   AutomationJobStatus.IN_PROGRESS,
   AutomationJobStatus.AWAITING_PORTAL_REVIEW,
 ));
-assert.throws(
+assert.doesNotThrow(
   () => assertAutomationJobTransition(
     AutomationJobStatus.IN_PROGRESS,
     AutomationJobStatus.COMPLETED,
   ),
-  /cannot move/,
-  'desktop completion must stop at portal review rather than implying submission',
+  'verified automated preparation completes without implying regulatory submission',
 );
 assert.throws(
   () => assertAutomationJobTransition(

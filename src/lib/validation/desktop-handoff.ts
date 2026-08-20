@@ -37,6 +37,7 @@ export const desktopJobStatusSchema = z.object({
   occurredAt: z.string().datetime({ offset: true }),
   status: z.enum([
     AutomationJobStatus.IN_PROGRESS,
+    AutomationJobStatus.COMPLETED,
     AutomationJobStatus.AWAITING_PORTAL_REVIEW,
     AutomationJobStatus.FAILED_RETRYABLE,
     AutomationJobStatus.FAILED_FINAL,

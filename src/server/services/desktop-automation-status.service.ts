@@ -215,9 +215,9 @@ export const desktopAutomationPresentation = (status: AutomationJobStatus) => {
   if (status === AutomationJobStatus.COMPLETED) {
     return {
       kind: 'completed' as const,
-      label: 'Completed',
-      description: 'The desktop workflow has completed this application run.',
-      actionLabel: 'View application',
+      label: 'Application prepared',
+      description: 'Architect Pro completed the automated application. It remains a government portal draft until you submit it.',
+      actionLabel: 'View prepared application',
     };
   }
   if (

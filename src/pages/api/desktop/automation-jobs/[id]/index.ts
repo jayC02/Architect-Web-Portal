@@ -132,7 +132,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
           body.status === AutomationJobStatus.FAILED_RETRYABLE
           || body.status === AutomationJobStatus.FAILED_FINAL
         ) ? (body.error || body.result?.errorSummary || 'Desktop automation stopped unexpectedly.') : null,
-        completedAt: body.status === AutomationJobStatus.FAILED_FINAL ? new Date() : null,
+        completedAt: (
+          body.status === AutomationJobStatus.COMPLETED
+          || body.status === AutomationJobStatus.FAILED_FINAL
+        ) ? new Date() : null,
       },
     });
     if (!update.count) throw new HttpError(409, 'Automation job changed while the desktop result was being saved.');
@@ -163,7 +166,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
           completedDate: null,
         },
       });
-    } else if (body.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW) {
+    } else if (
+      body.status === AutomationJobStatus.AWAITING_PORTAL_REVIEW
+      || body.status === AutomationJobStatus.COMPLETED
+    ) {
       await tx.deadline.updateMany({
         where: {
           organisationId: access.organisationId,

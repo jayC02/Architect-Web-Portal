@@ -46,7 +46,7 @@ assert.match(exchangeRoute, /handoffCodeHash:\s*null/, 'redeemed handoff codes a
 assert.match(exchangeRoute, /status:\s*job\.status === AutomationJobStatus\.READY \? AutomationJobStatus\.CLAIMED : job\.status/, 'resume preserves claimed or in-progress status');
 assert.match(tokenAuth, /assertDesktopJobAccess/, 'desktop API access can be restricted to the selected job');
 assert.match(tokenAuth, /createHash\('sha256'\)/, 'desktop access tokens must be stored as hashes');
-assert.match(desktopIntegration, /Single-use enrollment code/, 'settings clearly labels the short-lived Agent enrollment secret');
+assert.match(desktopIntegration, /Copy one-time code/, 'settings clearly labels the short-lived Agent enrollment secret');
 assert.match(desktopIntegration, /Windows Credential Manager/, 'settings explains secure durable credential storage');
 assert.doesNotMatch(desktopIntegration, /apa_[A-Za-z0-9_-]+/, 'settings never embeds a durable Agent credential');
 assert.match(automationJobService, /typeOfWorkKey:\s*typeOfWorkKey\(project\.projectType\)/, 'v2 snapshots carry a stable type-of-work key');
@@ -55,7 +55,8 @@ assert.match(automationJobService, /typeOfWorkLabels:\s*typeOfWorkLabels\(typeOf
 assert.match(automationJobService, /const presetLabel = typeOfWorkLabel\(presetKey\)/, 'Building Warrant snapshots carry the matching preset label');
 assert.match(desktopCallbackRoute, /idempotencyKey/, 'desktop callbacks require an idempotency key');
 assert.match(desktopCallbackRoute, /AutomationJobEvent/, 'desktop callbacks are recorded in the audit event table');
-assert.match(desktopCallbackRoute, /AWAITING_PORTAL_REVIEW/, 'desktop completion stops at explicit portal review');
+assert.match(desktopCallbackRoute, /AutomationJobStatus\.COMPLETED/, 'verified automated preparation is durably completed');
+assert.match(desktopCallbackRoute, /AWAITING_PORTAL_REVIEW/, 'historical fee handoffs remain supported');
 assert.match(desktopCallbackRoute, /automation-job:\$\{id\}:retry/, 'retry deadlines use a stable source key');
 assert.match(lifecycleService, /assertAutomationJobTransition/, 'job transitions are enforced through one lifecycle service');
 
