@@ -32,6 +32,7 @@ type Props = {
 
 const runningStatuses = new Set(['CLAIMED', 'IN_PROGRESS']);
 const failedStatuses = new Set(['FAILED', 'FAILED_RETRYABLE', 'FAILED_FINAL']);
+const visualCountdownDurationSeconds = 90;
 
 const stageLabel = (stage: string | null) => ({
   validation: 'Checking the prepared application',
@@ -49,12 +50,21 @@ const stageLabel = (stage: string | null) => ({
   agent_details: 'Completing agent details',
 }[stage ?? ''] ?? 'Preparing the application');
 
-const etaLabel = (seconds: number | null) => {
-  if (seconds === null) return null;
-  if (seconds <= 15) return 'Finishing up…';
-  if (seconds < 60) return 'Less than a minute remaining';
-  const minutes = Math.max(1, Math.round(seconds / 60));
-  return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
+const executionStartTime = (executionAuthorisedAt: string | null) => {
+  if (!executionAuthorisedAt) return null;
+  const timestamp = Date.parse(executionAuthorisedAt);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const visualCountdownLabel = (seconds: number) => {
+  if (seconds <= 0) return 'Finishing up…';
+  if (seconds === visualCountdownDurationSeconds) return 'About 90 seconds remaining';
+  if (seconds < 60) return `About ${seconds} second${seconds === 1 ? '' : 's'} remaining`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (remainingSeconds === 0) return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
+  return `About ${minutes} min ${remainingSeconds} sec remaining`;
 };
 
 export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
@@ -63,6 +73,13 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
   const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | ''>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [visualClock, setVisualClock] = useState(() => ({
+    jobId,
+    startAt: (runningStatuses.has(initial.status) || (initial.status === 'READY' && Boolean(initial.executionAuthorisedAt)))
+      ? executionStartTime(initial.executionAuthorisedAt) ?? Date.now()
+      : null,
+  }));
+  const [visualNow, setVisualNow] = useState(() => Date.now());
 
   const awaitingFee = job.status === 'AWAITING_PORTAL_REVIEW'
     || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required');
@@ -71,6 +88,33 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
   const isWarrant = applicationType === 'BUILDING_WARRANT';
   const viewLabel = isWarrant ? 'View Warrant' : 'View Householder';
+  const visualCountdownActive = active && !awaitingFee && !addressAction;
+
+  useEffect(() => {
+    setVisualClock((current) => {
+      const authorisedStartAt = executionStartTime(job.executionAuthorisedAt);
+      if (current.jobId !== currentJobId) {
+        return {
+          jobId: currentJobId,
+          startAt: active ? authorisedStartAt ?? Date.now() : null,
+        };
+      }
+      if (authorisedStartAt !== null && current.startAt !== authorisedStartAt) {
+        return { ...current, startAt: authorisedStartAt };
+      }
+      if (active && current.startAt === null) {
+        return { ...current, startAt: Date.now() };
+      }
+      return current;
+    });
+  }, [active, currentJobId, job.executionAuthorisedAt]);
+
+  useEffect(() => {
+    if (!visualCountdownActive || visualClock.startAt === null) return;
+    setVisualNow(Date.now());
+    const timer = window.setInterval(() => setVisualNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [visualClock.startAt, visualCountdownActive]);
 
   useEffect(() => {
     if (!active && !awaitingFee) return;
@@ -131,7 +175,10 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
   };
 
   const progress = Math.max(0, Math.min(100, job.progressPercent ?? 0));
-  const eta = useMemo(() => awaitingFee || addressAction || job.stale ? null : etaLabel(job.etaSeconds), [addressAction, awaitingFee, job.etaSeconds, job.stale]);
+  const visualRemaining = visualCountdownActive && visualClock.startAt !== null
+    ? Math.max(0, visualCountdownDurationSeconds - Math.floor((visualNow - visualClock.startAt) / 1_000))
+    : null;
+  const visualEta = visualRemaining === null ? null : visualCountdownLabel(visualRemaining);
   const failure = useMemo(
     () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint),
     [job.lastCheckpoint, job.progressStage, job.resultData, job.status],
@@ -197,7 +244,7 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     <section className="p-4 sm:px-5" aria-live="polite">
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-moss">{addressAction ? 'Action required' : job.status === 'READY' ? 'Queued' : 'Agent running'}</p><h3 className="mt-1 font-semibold text-ink">{job.stale ? 'Agent connection lost' : addressAction ? 'Confirm the property address' : stageLabel(job.progressStage)}</h3><p className="mt-1 text-sm text-stone-600">{job.progressMessage || (job.status === 'READY' ? 'Waiting for your Agent to claim the application.' : 'Chrome is running securely in the background.')}</p></div><span className="text-sm font-semibold text-moss">{progress}%</span></div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full rounded-full bg-moss transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
-      {eta && <p className="mt-2 text-xs text-stone-500">{eta}</p>}
+      {visualEta && <p className="mt-2 text-xs text-stone-500" aria-live="off">{visualEta}</p>}
       {addressAction && <p className="mt-3 text-sm font-medium text-amber-800">Choose the correct address in the Agent. The browser remains paused safely.</p>}
       <div className="mt-3"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a></div>
     </section>

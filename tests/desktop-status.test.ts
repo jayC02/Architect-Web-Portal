@@ -210,6 +210,13 @@ assert.match(statusPanel, /Complete Planning application details/, 'Planning nee
 assert.match(statusPanel, /canPrepare && !preparationReady[\s\S]*AutomationLaunchButton[\s\S]*destination="preparation"/, 'an application without a job creates one before opening focused preparation');
 assert.match(launchButton, /destination === 'preparation' \? result\.preparationRedirectTo : result\.redirectTo/, 'the preparation action follows the exact route returned for the created or reused job');
 assert.match(liveCard, /setInterval\([\s\S]*3_000/, 'active application state polls the existing projection path without a page refresh');
+assert.match(liveCard, /visualCountdownDurationSeconds = 90/, 'the web presentation countdown starts from a ninety-second estimate');
+assert.match(liveCard, /About 90 seconds remaining/, 'the visual countdown uses the requested initial copy');
+assert.match(liveCard, /executionStartTime\(initial\.executionAuthorisedAt\)/, 'the visual countdown can reuse the existing authorisation timestamp');
+assert.match(liveCard, /setInterval\(\(\) => setVisualNow\(Date\.now\(\)\), 1_000\)/, 'the visual countdown ticks locally about once per second');
+assert.match(liveCard, /Math\.max\(0, visualCountdownDurationSeconds/, 'the visual countdown never renders negative time');
+assert.match(liveCard, /Finishing up…/, 'the visual countdown switches to finishing-up copy after ninety seconds');
+assert.match(liveCard, /active && !awaitingFee && !addressAction/, 'paused-for-action states remove the visual countdown');
 assert.match(liveCard, /job\.status === 'READY'[\s\S]*Queued/, 'the live card covers authorised and queued state');
 assert.match(liveCard, /new Set\(\['CLAIMED', 'IN_PROGRESS'\]\)/, 'the live card covers claimed and running states');
 assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*Complete the fee in the browser/, 'awaiting-fee has explicit non-failure copy');
