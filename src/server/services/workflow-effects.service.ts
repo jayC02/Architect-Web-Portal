@@ -13,10 +13,12 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
-import { syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calendar';
+import {
+  reconcileLifecycleCalendarMilestoneBestEffort,
+  syncDeadlineToGoogleBestEffort,
+} from '@/lib/integrations/google-calendar';
 import {
   LIFECYCLE_EVENT_HANDLER_KEYS,
-  PROJECT_CREATED_HANDLER_KEYS,
   type LifecycleHandlerKey,
   type ProjectCreatedHandlerKey,
 } from '@/server/services/lifecycle-events.service';
@@ -163,6 +165,9 @@ export const LIFECYCLE_EFFECT_HANDLERS: Record<LifecycleHandlerKey, EffectHandle
 const CONTROLLED_HANDLER_KEYS = new Set<LifecycleHandlerKey>(
   Object.values(LIFECYCLE_EVENT_HANDLER_KEYS).flat(),
 );
+const MAX_LIFECYCLE_HANDLER_COUNT = Math.max(
+  ...Object.values(LIFECYCLE_EVENT_HANDLER_KEYS).map((handlers) => handlers.length),
+);
 
 const candidateWhere = (
   now: Date,
@@ -244,9 +249,11 @@ export const drainWorkflowEffects = async (input: {
   handlerOverrides?: Partial<Record<LifecycleHandlerKey, EffectHandler>>;
   database?: PrismaClient;
   calendarSync?: typeof syncDeadlineToGoogleBestEffort;
+  calendarMilestoneSync?: typeof reconcileLifecycleCalendarMilestoneBestEffort;
 } = {}) => {
   const database = input.database ?? prisma;
   const calendarSync = input.calendarSync ?? syncDeadlineToGoogleBestEffort;
+  const calendarMilestoneSync = input.calendarMilestoneSync ?? reconcileLifecycleCalendarMilestoneBestEffort;
   const now = input.now ?? new Date();
   const random = input.random ?? Math.random;
   const effects = await claimWorkflowEffects({ ...input, now });
@@ -258,7 +265,7 @@ export const drainWorkflowEffects = async (input: {
       if (!CONTROLLED_HANDLER_KEYS.has(handlerKey) || !handler) {
         throw new PermanentWorkflowEffectError(`Unknown workflow effect handler: ${effect.handlerKey}`);
       }
-      await handler(effect, { database, calendarSync });
+      await handler(effect, { database, calendarSync, calendarMilestoneSync });
       await database.workflowEffect.updateMany({
         where: {
           id: effect.id,
@@ -313,7 +320,7 @@ export const drainWorkflowEffectsBestEffort = async (input: {
   lifecycleEventId: string;
 }) => {
   try {
-    return await drainWorkflowEffects({ ...input, limit: PROJECT_CREATED_HANDLER_KEYS.length });
+    return await drainWorkflowEffects({ ...input, limit: MAX_LIFECYCLE_HANDLER_COUNT });
   } catch (error) {
     console.error('Workflow effect drain failed', { ...input, error });
     return { claimed: 0, completed: 0, retryable: 0, failedFinal: 0 };

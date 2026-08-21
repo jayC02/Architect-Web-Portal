@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {
   CompletionCertificateStatus,
+  DeadlineManagedBy,
   DeadlinePriority,
   DeadlineStatus,
   DeadlineType,
@@ -16,6 +17,7 @@ import { syncDeadlineToGoogleBestEffort } from '@/lib/integrations/google-calend
 import { HttpError } from '@/lib/utils/http';
 import {
   drainLifecycleEventsBestEffort,
+  updateBuildingWarrantInTransaction,
   updatePlanningApplicationInTransaction,
 } from '@/server/services/application-lifecycle.service';
 import { resolvePlanningCorrespondenceReviewAction } from '@/server/services/gmail-planning-lifecycle.service';
@@ -234,12 +236,26 @@ export const applyGmailSuggestion = async ({
         suggestion.existingValue,
         value,
       );
-      await prisma.$transaction([
-        prisma.buildingWarrantApplication.update({
-          where: { id: application.id },
-          data: warrantData(suggestion.fieldName, value),
-        }),
-        prisma.gmailUpdateSuggestion.update({
+      const applied = await prisma.$transaction(async (tx) => {
+        const lifecycleEventIds: string[] = [];
+        if (suggestion.fieldName === 'status') {
+          warrantData(suggestion.fieldName, value);
+          const transition = await updateBuildingWarrantInTransaction(tx, {
+            organisationId,
+            buildingWarrantApplicationId: application.id,
+            actorUserId: reviewedById ?? null,
+            source: LifecycleEventSource.GMAIL,
+            occurredAt: suggestion.trackedEmail.sentAt,
+            data: { status: value as WarrantStatus },
+          });
+          lifecycleEventIds.push(...transition.lifecycleEventIds);
+        } else {
+          await tx.buildingWarrantApplication.update({
+            where: { id: application.id },
+            data: warrantData(suggestion.fieldName, value),
+          });
+        }
+        await tx.gmailUpdateSuggestion.update({
           where: { id: suggestion.id },
           data: {
             buildingWarrantApplicationId: application.id,
@@ -251,12 +267,14 @@ export const applyGmailSuggestion = async ({
             appliedAt: new Date(),
             error: null,
           },
-        }),
-        prisma.trackedEmail.update({
+        });
+        await tx.trackedEmail.update({
           where: { id: suggestion.trackedEmailId },
           data: { buildingWarrantApplicationId: application.id, processingStatus: 'PROCESSED' },
-        }),
-      ]);
+        });
+        return lifecycleEventIds;
+      });
+      await drainLifecycleEventsBestEffort(organisationId, applied);
     } else if (suggestion.updateType === GmailUpdateType.DEADLINE) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'The deadline suggestion is invalid.');
       const deadlineValue = value as Record<string, unknown>;
@@ -283,6 +301,7 @@ export const applyGmailSuggestion = async ({
           projectId: project.id,
           planningApplicationId: suggestion.planningApplicationId,
           buildingWarrantApplicationId: suggestion.buildingWarrantApplicationId,
+          managedBy: DeadlineManagedBy.GMAIL,
         },
         create: {
           organisationId,
@@ -296,6 +315,7 @@ export const applyGmailSuggestion = async ({
           status: DeadlineStatus.UPCOMING,
           priority: DeadlinePriority.MEDIUM,
           sourceKey,
+          managedBy: DeadlineManagedBy.GMAIL,
         },
       });
       deadlineId = deadline.id;

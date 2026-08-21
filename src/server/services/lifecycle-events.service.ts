@@ -53,11 +53,24 @@ export const PLANNING_APPROVED_HANDLER_KEYS = [
   'planning.deadline.approved',
   'planning.stage.approved',
   'warrant.activity.activated-after-planning',
+  'planning.calendar.decision',
   'finance.fee-milestone.evaluate',
+] as const;
+
+export const PLANNING_REFUSED_HANDLER_KEYS = [
+  'planning.action.refused',
+  'planning.activity.refused',
+  'planning.calendar.decision',
 ] as const;
 
 export const BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS = [
   'finance.fee-milestone.evaluate',
+] as const;
+
+export const BUILDING_WARRANT_GRANTED_HANDLER_KEYS = [
+  'warrant.action.granted',
+  'warrant.activity.granted',
+  'warrant.calendar.decision',
 ] as const;
 
 export const BUILDING_WARRANT_READY_HANDLER_KEYS = [
@@ -81,9 +94,11 @@ export type LifecycleHandlerKey =
   | typeof PLANNING_VALIDATED_HANDLER_KEYS[number]
   | typeof PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS[number]
   | typeof PLANNING_APPROVED_HANDLER_KEYS[number]
+  | typeof PLANNING_REFUSED_HANDLER_KEYS[number]
   | typeof BUILDING_WARRANT_READY_HANDLER_KEYS[number]
   | typeof BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS[number]
-  | typeof BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS[number];
+  | typeof BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS[number]
+  | typeof BUILDING_WARRANT_GRANTED_HANDLER_KEYS[number];
 
 export const LIFECYCLE_EVENT_HANDLER_KEYS: Record<LifecycleEventType, readonly LifecycleHandlerKey[]> = {
   [LifecycleEventType.PROJECT_CREATED]: PROJECT_CREATED_HANDLER_KEYS,
@@ -94,9 +109,11 @@ export const LIFECYCLE_EVENT_HANDLER_KEYS: Record<LifecycleEventType, readonly L
   [LifecycleEventType.PLANNING_VALIDATED]: PLANNING_VALIDATED_HANDLER_KEYS,
   [LifecycleEventType.PLANNING_INFORMATION_REQUESTED]: PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS,
   [LifecycleEventType.PLANNING_APPROVED]: PLANNING_APPROVED_HANDLER_KEYS,
+  [LifecycleEventType.PLANNING_REFUSED]: PLANNING_REFUSED_HANDLER_KEYS,
   [LifecycleEventType.BUILDING_WARRANT_READY]: BUILDING_WARRANT_READY_HANDLER_KEYS,
   [LifecycleEventType.BUILDING_WARRANT_READINESS_REVOKED]: BUILDING_WARRANT_READINESS_REVOKED_HANDLER_KEYS,
   [LifecycleEventType.BUILDING_WARRANT_SUBMITTED]: BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS,
+  [LifecycleEventType.BUILDING_WARRANT_GRANTED]: BUILDING_WARRANT_GRANTED_HANDLER_KEYS,
 };
 
 type ProjectCreatedEventInput = {
@@ -234,7 +251,8 @@ export const emitPlanningLifecycleEvent = (
       | 'PLANNING_SUBMITTED'
       | 'PLANNING_VALIDATED'
       | 'PLANNING_INFORMATION_REQUESTED'
-      | 'PLANNING_APPROVED'>;
+      | 'PLANNING_APPROVED'
+      | 'PLANNING_REFUSED'>;
     source: Extract<LifecycleEventSource, 'APPLICATION_PREFLIGHT' | 'APPLICATION_STATUS' | 'GMAIL'>;
     actorUserId?: string | null;
     occurredAt?: Date;
@@ -252,7 +270,9 @@ export const emitPlanningLifecycleEvent = (
         ? 'validated'
         : input.eventType === LifecycleEventType.PLANNING_INFORMATION_REQUESTED
           ? 'information-requested'
-          : 'approved';
+          : input.eventType === LifecycleEventType.PLANNING_REFUSED
+            ? 'refused'
+            : 'approved';
   return emitLifecycleEvent(tx, {
     organisationId: input.organisationId,
     projectId: input.projectId,
@@ -317,6 +337,29 @@ export const emitBuildingWarrantSubmittedLifecycleEvent = (
   actorUserId: input.actorUserId,
   occurredAt: input.occurredAt ?? new Date(),
   idempotencyKey: `warrant:${input.buildingWarrantApplicationId}:submitted`,
+});
+
+export const emitBuildingWarrantGrantedLifecycleEvent = (
+  tx: Prisma.TransactionClient,
+  input: {
+    organisationId: string;
+    projectId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId?: string | null;
+    occurredAt?: Date;
+    source?: Extract<LifecycleEventSource, 'APPLICATION_STATUS' | 'GMAIL'>;
+  },
+) => emitLifecycleEvent(tx, {
+  organisationId: input.organisationId,
+  projectId: input.projectId,
+  aggregateType: LifecycleAggregateType.BUILDING_WARRANT_APPLICATION,
+  aggregateId: input.buildingWarrantApplicationId,
+  eventType: LifecycleEventType.BUILDING_WARRANT_GRANTED,
+  payload: { projectId: input.projectId, buildingWarrantApplicationId: input.buildingWarrantApplicationId },
+  source: input.source ?? LifecycleEventSource.APPLICATION_STATUS,
+  actorUserId: input.actorUserId,
+  occurredAt: input.occurredAt ?? new Date(),
+  idempotencyKey: `warrant:${input.buildingWarrantApplicationId}:granted`,
 });
 
 export const expandUndispatchedLifecycleEvents = async (

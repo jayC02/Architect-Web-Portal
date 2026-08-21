@@ -217,6 +217,16 @@ const syncDeadline = async (
   if (result.attempted && !result.synced) throw new Error('Google Calendar deadline reconciliation failed.');
 };
 
+const syncMilestone = async (
+  effect: EffectWithEvent,
+  kind: Parameters<EffectParameters['calendarMilestoneSync']>[1],
+  aggregateId: string,
+  calendarMilestoneSync: EffectParameters['calendarMilestoneSync'],
+) => {
+  const result = await calendarMilestoneSync(effect.organisationId, kind, aggregateId);
+  if (result.attempted && !result.synced) throw new Error('Google Calendar milestone reconciliation failed.');
+};
+
 type EffectParameters = Parameters<EffectHandler>[1];
 const planningHasProgressed = (status: PlanningStatus) => !new Set<PlanningStatus>([
   PlanningStatus.NOT_STARTED,
@@ -473,6 +483,11 @@ const planningApprovedAction: EffectHandler = async (effect, { database }) => {
 const planningApprovedActivity: EffectHandler = async (effect, { database }) => {
   await appendActivity(effect, database, ProjectActivityEventType.PLANNING_APPROVED, 'Planning approved');
 };
+const planningDecisionCalendar: EffectHandler = async (effect, { database, calendarMilestoneSync }) => {
+  const { application } = await loadPlanning(effect, database);
+  if (application.status !== PlanningStatus.APPROVED && application.status !== PlanningStatus.REFUSED) return;
+  await syncMilestone(effect, 'PLANNING_DECISION', application.id, calendarMilestoneSync);
+};
 const planningApprovedDeadline: EffectHandler = async (effect, { database, calendarSync }) => {
   const { project, application } = await loadPlanning(effect, database);
   const planningDeadline = await completeWorkflowDeadline(database, effect.organisationId, workflowSourceKeys.planningFinalReview(application.id), effect.lifecycleEvent.occurredAt);
@@ -535,6 +550,33 @@ const warrantActivatedAfterPlanningActivity: EffectHandler = async (effect, { da
     `Building Warrant activated after Planning approval — ${readiness.state === 'READY' ? 'ready' : readiness.state === 'INCOMPLETE' ? `${readiness.missingCount} confirmations needed` : 'project information needed'}`,
     'warrant-activated',
   );
+};
+
+const planningRefusedAction: EffectHandler = async (effect, { database }) => {
+  const { project, application } = await loadPlanning(effect, database);
+  await database.actionItem.updateMany({
+    where: {
+      organisationId: effect.organisationId,
+      projectId: project.id,
+      status: ActionItemStatus.OPEN,
+      kind: { in: [ActionItemKind.PLANNING_PREPARATION, ActionItemKind.PLANNING_FINAL_REVIEW] },
+    },
+    data: { status: ActionItemStatus.RESOLVED, resolvedAt: effect.lifecycleEvent.occurredAt },
+  });
+  await ensureAction(effect, database, {
+    projectId: project.id,
+    kind: ActionItemKind.PLANNING_CORRESPONDENCE,
+    title: 'Planning refused — review decision',
+    summary: 'Review the decision notice and agree the next Planning action.',
+    actionUrl: `/projects/${project.id}#planning`,
+    dedupeKey: `planning:${application.id}:decision-review`,
+    targetKey: WorkflowTargetKey.PLANNING_FINAL_REVIEW,
+    priority: ActionItemPriority.HIGH,
+    reopen: true,
+  });
+};
+const planningRefusedActivity: EffectHandler = async (effect, { database }) => {
+  await appendActivity(effect, database, ProjectActivityEventType.PLANNING_REFUSED, 'Planning refused');
 };
 
 const warrantReadyAction: EffectHandler = async (effect, { database }) => {
@@ -606,6 +648,21 @@ const warrantReadinessRevokedDeadline: EffectHandler = async (effect, { database
   await syncDeadline(effect, reopened, calendarSync);
 };
 
+const warrantGrantedAction: EffectHandler = async (effect, { database }) => {
+  const { application } = await loadWarrant(effect, database);
+  await resolveAction(database, effect.organisationId, workflowActionKeys.warrantAction(application.id), effect.lifecycleEvent.occurredAt);
+  await resolveAction(database, effect.organisationId, workflowActionKeys.warrantFinalReview(application.id), effect.lifecycleEvent.occurredAt);
+};
+const warrantGrantedActivity: EffectHandler = async (effect, { database }) => {
+  await loadWarrant(effect, database);
+  await appendActivity(effect, database, ProjectActivityEventType.BUILDING_WARRANT_GRANTED, 'Building Warrant granted');
+};
+const warrantDecisionCalendar: EffectHandler = async (effect, { database, calendarMilestoneSync }) => {
+  const { application } = await loadWarrant(effect, database);
+  if (application.status !== WarrantStatus.GRANTED) return;
+  await syncMilestone(effect, 'BUILDING_WARRANT_DECISION', application.id, calendarMilestoneSync);
+};
+
 export const PHASE_2_EFFECT_HANDLERS: Partial<Record<LifecycleHandlerKey, EffectHandler>> = {
   'project.action.document-review-completed': documentReviewAction,
   'project.activity.document-review-completed': documentReviewActivity,
@@ -626,9 +683,15 @@ export const PHASE_2_EFFECT_HANDLERS: Partial<Record<LifecycleHandlerKey, Effect
   'planning.deadline.approved': planningApprovedDeadline,
   'planning.stage.approved': planningApprovedStage,
   'warrant.activity.activated-after-planning': warrantActivatedAfterPlanningActivity,
+  'planning.calendar.decision': planningDecisionCalendar,
+  'planning.action.refused': planningRefusedAction,
+  'planning.activity.refused': planningRefusedActivity,
   'warrant.action.ready': warrantReadyAction,
   'warrant.activity.ready': warrantReadyActivity,
   'warrant.deadline.ready': warrantReadyDeadline,
   'warrant.action.readiness-revoked': warrantReadinessRevokedAction,
   'warrant.deadline.readiness-revoked': warrantReadinessRevokedDeadline,
+  'warrant.action.granted': warrantGrantedAction,
+  'warrant.activity.granted': warrantGrantedActivity,
+  'warrant.calendar.decision': warrantDecisionCalendar,
 };

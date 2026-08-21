@@ -17,6 +17,10 @@ import {
 import {
   DOCUMENT_REVIEW_COMPLETED_HANDLER_KEYS,
   PLANNING_APPROVED_HANDLER_KEYS,
+  PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS,
+  PLANNING_READY_HANDLER_KEYS,
+  PLANNING_REFUSED_HANDLER_KEYS,
+  PROJECT_CREATED_HANDLER_KEYS,
   emitDocumentReviewCompletedLifecycleEvent,
 } from '../src/server/services/lifecycle-events.service';
 import {
@@ -210,6 +214,12 @@ const calendarSync = async (organisationId: string, deadlineId: string) => {
   calendarSyncs.push(`${organisationId}:${deadlineId}`);
   return { attempted: true, synced: true };
 };
+const calendarMilestones = new Map<string, { kind: string; aggregateId: string }>();
+const calendarMilestoneSync = async (organisationId: string, kind: string, aggregateId: string) => {
+  const scope = kind === 'PLANNING_DECISION' ? 'planning' : 'warrant';
+  calendarMilestones.set(`${organisationId}:${scope}:${aggregateId}:decision`, { kind, aggregateId });
+  return { attempted: true, synced: true };
+};
 
 const makeEffect = (id: string, eventType: LifecycleEventType, payload: Record<string, unknown>) => ({
   id: `effect_${id}`,
@@ -233,7 +243,11 @@ const runHandlers = async (keys: readonly string[], effect: any, sync = calendar
     if (key === 'finance.fee-milestone.evaluate') continue;
     const handler = PHASE_2_EFFECT_HANDLERS[key as keyof typeof PHASE_2_EFFECT_HANDLERS];
     assert.ok(handler, `handler registered for ${key}`);
-    await handler(effect, { database: database as PrismaClient, calendarSync: sync });
+    await handler(effect, {
+      database: database as PrismaClient,
+      calendarSync: sync,
+      calendarMilestoneSync: calendarMilestoneSync as never,
+    });
   }
 };
 
@@ -269,6 +283,19 @@ assert.match(permissionsSource, /requireOrganisationRole/);
 assert.match(permissionsSource, /OrganisationRole\.OWNER/);
 assert.match(permissionsSource, /OrganisationRole\.ADMIN/);
 assert.doesNotMatch(permissionsSource, /OrganisationRole\.MEMBER/);
+
+for (const [eventName, handlerKeys] of [
+  ['PROJECT_CREATED', PROJECT_CREATED_HANDLER_KEYS],
+  ['DOCUMENT_REVIEW_COMPLETED', DOCUMENT_REVIEW_COMPLETED_HANDLER_KEYS],
+  ['PLANNING_READY', PLANNING_READY_HANDLER_KEYS],
+  ['PLANNING_INFORMATION_REQUESTED', PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS],
+] as const) {
+  assert.equal(
+    handlerKeys.some((key) => key.includes('.calendar.')),
+    false,
+    `${eventName} has no generic Calendar milestone projection`,
+  );
+}
 
 // The reviewed-draft boundary emits one event and one controlled effect set.
 const reviewInput = {
@@ -347,6 +374,18 @@ await runHandlers(
 assert.equal(store.deadlines.find((value) => value.sourceKey === workflowSourceKeys.planningFinalReview('planning_a')).status, DeadlineStatus.COMPLETED);
 assert.deepEqual(new Set(store.deadlines.map((value) => value.sourceKey)), beforeSubmissionSources);
 
+// An information request without a trusted response date stays in Action Items and Activity only.
+store.planning[0].status = PlanningStatus.FURTHER_INFORMATION_REQUESTED;
+const deadlinesBeforeUndatedRequest = store.deadlines.length;
+await runHandlers(PLANNING_INFORMATION_REQUESTED_HANDLER_KEYS, makeEffect(
+  'planning_information_requested',
+  LifecycleEventType.PLANNING_INFORMATION_REQUESTED,
+  { projectId: 'project_a', planningApplicationId: 'planning_a', trackedEmailId: 'email_information_request' },
+));
+assert.equal(store.deadlines.length, deadlinesBeforeUndatedRequest, 'no Calendar date is invented for an undated information request');
+assert.equal(store.actions.filter((value) => value.dedupeKey === 'planning:planning_a:information-requested').length, 1);
+assert.equal(calendarMilestones.size, 0);
+
 // Approval reuses the existing Warrant and creates one continuation projection.
 store.planning[0].status = PlanningStatus.APPROVED;
 const approved = makeEffect('planning_approved', LifecycleEventType.PLANNING_APPROVED, {
@@ -361,6 +400,17 @@ assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionK
 assert.equal(store.projects[0].stage, ProjectStage.BUILDING_WARRANT, 'active Planning project advances once to Building Warrant');
 assert.match(store.actions.find((value) => value.dedupeKey === workflowActionKeys.warrantAction('warrant_a')).title, /needs project information/);
 assert.equal(store.activities.filter((value) => value.eventType === 'BUILDING_WARRANT_ACTIVATED').length, 1);
+assert.equal(calendarMilestones.size, 1, 'reprocessing Planning approval reconciles one logical calendar milestone');
+assert.ok(calendarMilestones.has('org_a:planning:planning_a:decision'));
+
+store.planning[0].status = PlanningStatus.REFUSED;
+await runHandlers(PLANNING_REFUSED_HANDLER_KEYS, makeEffect('planning_refused', LifecycleEventType.PLANNING_REFUSED, {
+  projectId: 'project_a', planningApplicationId: 'planning_a',
+}));
+assert.equal(calendarMilestones.size, 1, 'Planning refusal reconciles the existing decision milestone rather than duplicating it');
+assert.equal(store.activities.filter((value) => value.eventType === 'PLANNING_REFUSED').length, 1);
+assert.equal(store.actions.filter((value) => value.dedupeKey === 'planning:planning_a:decision-review').length, 1);
+store.planning[0].status = PlanningStatus.APPROVED;
 
 store.jobs = [{
   id: 'job_ready', projectId: 'project_a', type: AutomationJobType.BUILDING_WARRANT,
@@ -433,6 +483,16 @@ assert.equal(warrantFinal.calculatedDueDate.toISOString(), '2026-08-25T09:00:00.
 await resetWorkflowDeadlineToCalculated(database, 'org_a', warrantFinal.id);
 assert.equal(warrantFinal.dueDate.toISOString(), warrantFinal.calculatedDueDate.toISOString());
 assert.equal(warrantFinal.manualOverrideAt, null);
+
+store.warrants[0].status = WarrantStatus.GRANTED;
+await runHandlers(
+  ['warrant.action.granted', 'warrant.activity.granted', 'warrant.calendar.decision'],
+  makeEffect('warrant_granted', LifecycleEventType.BUILDING_WARRANT_GRANTED, {
+    projectId: 'project_a', buildingWarrantApplicationId: 'warrant_a',
+  }),
+);
+assert.ok(calendarMilestones.has('org_a:warrant:warrant_a:decision'), 'Building Warrant grant creates one managed milestone');
+assert.equal(store.activities.filter((value) => value.eventType === 'BUILDING_WARRANT_GRANTED').length, 1);
 
 // Disconnected Calendar is a no-op; an attempted failure remains retryable.
 const disconnected = makeEffect('warrant_disconnected', LifecycleEventType.BUILDING_WARRANT_READY, {

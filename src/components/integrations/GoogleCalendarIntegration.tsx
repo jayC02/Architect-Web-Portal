@@ -53,7 +53,7 @@ export default function GoogleCalendarIntegration() {
   useEffect(() => {
     void load();
     const params = new URLSearchParams(window.location.search);
-    if (params.get('google') === 'connected') setMessage('Google Calendar connected and existing deadlines synced.');
+    if (params.get('google') === 'connected') setMessage('Google Calendar connected and important project dates synced.');
     if (params.get('google') === 'error') setError(params.get('message') || 'Google Calendar connection failed.');
     if (params.get('gmail') === 'connected') setMessage('Gmail tracking connected. Run the first sync when you are ready.');
     if (params.get('gmail') === 'error') setError(params.get('message') || 'Gmail connection failed.');
@@ -67,7 +67,7 @@ export default function GoogleCalendarIntegration() {
     try {
       const result = await apiRequest<{ synced?: number; removed?: number }>(`/api/integrations/google-calendar/${action}`, { method: 'POST' });
       setMessage(action === 'sync'
-        ? `${result.synced ?? 0} deadline${result.synced === 1 ? '' : 's'} synced with Google Calendar.`
+        ? `${result.synced ?? 0} important calendar event${result.synced === 1 ? '' : 's'} synced.`
         : 'Google Calendar disconnected.');
       await load();
     } catch (requestError) {
@@ -137,7 +137,7 @@ export default function GoogleCalendarIntegration() {
                 </span>
               </div>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
-                Portal deadlines are the source of truth. Active deadlines are added to the connected account's primary calendar and updated automatically.
+                Architect Pro syncs only important dated commitments and major actionable outcomes to the connected account's primary calendar.
               </p>
             </div>
           </div>
@@ -176,7 +176,7 @@ export default function GoogleCalendarIntegration() {
             <p className="mt-2 flex items-center gap-2 text-sm font-medium text-ink"><Clock3 size={15} aria-hidden="true" /> {formatDateTime(google?.lastSyncedAt ?? null)}</p>
           </div>
           <div className="bg-white p-5">
-            <p className="text-xs font-semibold uppercase text-stone-500">Synced deadlines</p>
+            <p className="text-xs font-semibold uppercase text-stone-500">Managed calendar events</p>
             <p className="mt-2 flex items-center gap-2 text-sm font-medium text-ink"><CheckCircle2 size={15} aria-hidden="true" /> {google?.syncedEventCount ?? 0} active event{google?.syncedEventCount === 1 ? '' : 's'}</p>
           </div>
         </div>

@@ -1,5 +1,14 @@
 import crypto from 'node:crypto';
-import { CalendarConnectionStatus, CalendarProvider, DeadlineStatus, type CalendarConnection } from '@prisma/client';
+import {
+  CalendarConnectionStatus,
+  CalendarProvider,
+  DeadlineManagedBy,
+  DeadlineStatus,
+  DeadlineType,
+  PlanningStatus,
+  WarrantStatus,
+  type CalendarConnection,
+} from '@prisma/client';
 import { absoluteUrl } from '@/lib/config';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
@@ -47,6 +56,18 @@ type GoogleEventResponse = {
 };
 
 type DeadlineForSync = Awaited<ReturnType<typeof loadDeadlineForSync>>;
+
+export type CalendarMilestoneKind = 'PLANNING_DECISION' | 'BUILDING_WARRANT_DECISION';
+
+export type ManagedCalendarMilestone = {
+  organisationId: string;
+  syncKey: string;
+  title: string;
+  description: string;
+  location?: string | null;
+  startsAt: Date;
+  actionUrl: string;
+};
 
 const requiredEnvironmentValue = (name: string) => {
   const value = process.env[name]?.trim();
@@ -238,6 +259,9 @@ const googleRequest = async <T>(accessToken: string, path: string, init: Request
   return parseGoogleResponse<T>(response);
 };
 
+const withoutGoogleNotifications = (path: string) =>
+  `${path}${path.includes('?') ? '&' : '?'}sendUpdates=none`;
+
 const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
 const nextDay = (value: Date) => {
   const result = new Date(value);
@@ -245,14 +269,89 @@ const nextDay = (value: Date) => {
   return result;
 };
 
+const readableDate = (value: Date) => new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+}).format(value);
+
+const importantManualDeadlineTypes = new Set<DeadlineType>([
+  DeadlineType.PLANNING_DECISION,
+  DeadlineType.WARRANT_RESPONSE,
+  DeadlineType.WARRANT_EXPIRY,
+  DeadlineType.COMPLETION_CERTIFICATE,
+  DeadlineType.CLIENT_ACTION,
+  DeadlineType.INSPECTION,
+  DeadlineType.CUSTOM,
+]);
+
+const importantCanonicalDeadlineTypes = new Set<DeadlineType>([
+  DeadlineType.PLANNING_DECISION,
+  DeadlineType.WARRANT_RESPONSE,
+  DeadlineType.WARRANT_EXPIRY,
+  DeadlineType.COMPLETION_CERTIFICATE,
+  DeadlineType.INSPECTION,
+]);
+
+export const isGoogleCalendarDeadlineEligible = (deadline: {
+  managedBy: DeadlineManagedBy;
+  type: DeadlineType;
+  sourceKey: string | null;
+}) => {
+  if (deadline.type === DeadlineType.INTERNAL_TASK) return false;
+  if (deadline.sourceKey?.startsWith('automation-job:')) return false;
+  if (deadline.managedBy === DeadlineManagedBy.WORKFLOW) return false;
+  if (deadline.managedBy === DeadlineManagedBy.MANUAL) return importantManualDeadlineTypes.has(deadline.type);
+  if (deadline.managedBy === DeadlineManagedBy.GMAIL) {
+    if (!deadline.sourceKey?.startsWith('gmail:')) return false;
+    if (importantCanonicalDeadlineTypes.has(deadline.type)) return true;
+    return deadline.type === DeadlineType.CUSTOM && deadline.sourceKey.endsWith(':informationResponse');
+  }
+  return importantCanonicalDeadlineTypes.has(deadline.type);
+};
+
+const deadlineActionUrl = (deadline: NonNullable<DeadlineForSync>) => {
+  if (!deadline.projectId) return absoluteUrl('/deadlines');
+  if (deadline.planningApplicationId) return absoluteUrl(`/projects/${deadline.projectId}#planning`);
+  if (deadline.buildingWarrantApplicationId) return absoluteUrl(`/projects/${deadline.projectId}#building-warrant`);
+  return absoluteUrl(`/projects/${deadline.projectId}`);
+};
+
+const deadlineSummary = (deadline: NonNullable<DeadlineForSync>) => {
+  const date = readableDate(deadline.dueDate);
+  if (deadline.sourceKey?.endsWith(':informationResponse') && deadline.planningApplicationId) {
+    return `Planning information due — ${date}`;
+  }
+  if (deadline.type === DeadlineType.WARRANT_RESPONSE) return `Building Warrant response due — ${date}`;
+  if (deadline.type === DeadlineType.WARRANT_EXPIRY) return `Building Warrant expires — ${date}`;
+  if (deadline.type === DeadlineType.PLANNING_DECISION) return `Planning decision due — ${date}`;
+  return deadline.title;
+};
+
 export const buildGoogleDeadlineEvent = (deadline: NonNullable<DeadlineForSync>) => {
-  const projectUrl = deadline.projectId ? absoluteUrl(`/projects/${deadline.projectId}`) : absoluteUrl('/deadlines');
-  const details = [
+  const projectUrl = deadlineActionUrl(deadline);
+  const address = deadline.project?.siteAddress || deadline.project?.name;
+  const isPlanningInformationRequest = deadline.sourceKey?.endsWith(':informationResponse')
+    && Boolean(deadline.planningApplicationId);
+  const details = isPlanningInformationRequest ? [
+    `${deadline.project?.localAuthority || 'The planning authority'} has requested further information for ${address}.`,
+    `Response due: ${readableDate(deadline.dueDate)}`,
+    deadline.planningApplication?.applicationReference
+      ? `Application: ${deadline.planningApplication.applicationReference}`
+      : null,
+    `Open Planning application:\n${projectUrl}`,
+  ].filter(Boolean).join('\n\n') : [
     deadline.description,
-    deadline.project ? `Project: ${deadline.project.name}` : null,
-    `Type: ${deadline.type.replaceAll('_', ' ').toLowerCase()}`,
-    `Priority: ${deadline.priority.toLowerCase()}`,
-    `Open in Architect Web Portal: ${projectUrl}`,
+    address ? `Project/site: ${address}` : null,
+    deadline.planningApplication?.applicationReference
+      ? `Planning application: ${deadline.planningApplication.applicationReference}`
+      : null,
+    deadline.buildingWarrantApplication?.warrantReference
+      ? `Building Warrant: ${deadline.buildingWarrantApplication.warrantReference}`
+      : null,
+    `Due: ${readableDate(deadline.dueDate)}`,
+    `Open in Architect Pro:\n${projectUrl}`,
   ].filter(Boolean).join('\n\n');
   const reminderMinutes = deadline.reminderDate
     ? Math.round((deadline.dueDate.getTime() - deadline.reminderDate.getTime()) / 60_000)
@@ -262,7 +361,7 @@ export const buildGoogleDeadlineEvent = (deadline: NonNullable<DeadlineForSync>)
     : { useDefault: true };
 
   return {
-    summary: deadline.project ? `${deadline.title} - ${deadline.project.name}` : deadline.title,
+    summary: deadlineSummary(deadline),
     description: details,
     location: deadline.project?.siteAddress ?? undefined,
     start: { date: dateOnly(deadline.dueDate) },
@@ -274,6 +373,7 @@ export const buildGoogleDeadlineEvent = (deadline: NonNullable<DeadlineForSync>)
       private: {
         architectPortalDeadlineId: deadline.id,
         architectPortalOrganisationId: deadline.organisationId,
+        architectPortalManaged: 'true',
       },
     },
   };
@@ -281,7 +381,11 @@ export const buildGoogleDeadlineEvent = (deadline: NonNullable<DeadlineForSync>)
 
 const loadDeadlineForSync = (organisationId: string, deadlineId: string) => prisma.deadline.findFirst({
   where: { id: deadlineId, organisationId },
-  include: { project: { select: { id: true, name: true, siteAddress: true } } },
+  include: {
+    project: { select: { id: true, name: true, siteAddress: true, localAuthority: true } },
+    planningApplication: { select: { id: true, applicationReference: true } },
+    buildingWarrantApplication: { select: { id: true, warrantReference: true } },
+  },
 });
 
 const activeDeadlineStatuses: DeadlineStatus[] = [
@@ -296,6 +400,105 @@ export const googleDeadlineSyncKey = (organisationId: string, deadlineId: string
 export const googleDeadlineEventId = (organisationId: string, deadlineId: string) =>
   `ap${crypto.createHash('sha256').update(`${organisationId}:${deadlineId}`).digest('hex')}`;
 
+export const googleCalendarMilestoneSyncKey = (
+  organisationId: string,
+  scope: 'planning' | 'warrant',
+  aggregateId: string,
+) => `${organisationId}:GOOGLE:${scope}:${aggregateId}:decision`;
+
+export const googleManagedEventId = (syncKey: string) =>
+  `ap${crypto.createHash('sha256').update(syncKey).digest('hex')}`;
+
+export const buildPlanningDecisionMilestone = (input: {
+  organisationId: string;
+  planningApplicationId: string;
+  projectId: string;
+  projectName: string;
+  siteAddress: string | null;
+  applicationReference: string | null;
+  decisionDate: Date;
+  status: 'APPROVED' | 'REFUSED';
+}): ManagedCalendarMilestone => {
+  const approved = input.status === 'APPROVED';
+  const actionUrl = absoluteUrl(`/projects/${input.projectId}#${approved ? 'building-warrant' : 'planning'}`);
+  const place = input.siteAddress || input.projectName;
+  return {
+    organisationId: input.organisationId,
+    syncKey: googleCalendarMilestoneSyncKey(input.organisationId, 'planning', input.planningApplicationId),
+    title: approved
+      ? 'Planning approved — Building Warrant ready'
+      : 'Planning refused — review decision',
+    startsAt: input.decisionDate,
+    location: input.siteAddress,
+    actionUrl,
+    description: [
+      `Planning permission has been ${approved ? 'approved' : 'refused'} for ${place}.`,
+      `Decision: ${approved ? 'Approved' : 'Refused'}`,
+      input.applicationReference ? `Application: ${input.applicationReference}` : null,
+      `Decision date: ${readableDate(input.decisionDate)}`,
+      approved
+        ? 'The project is now ready to progress to Building Warrant.'
+        : 'Review the decision notice and agree the next Planning action.',
+      `${approved ? 'Open Building Warrant area' : 'Open Planning application'}:\n${actionUrl}`,
+    ].filter(Boolean).join('\n\n'),
+  };
+};
+
+export const buildBuildingWarrantGrantedMilestone = (input: {
+  organisationId: string;
+  buildingWarrantApplicationId: string;
+  projectId: string;
+  projectName: string;
+  siteAddress: string | null;
+  warrantReference: string | null;
+  grantedDate: Date;
+}): ManagedCalendarMilestone => {
+  const actionUrl = absoluteUrl(`/projects/${input.projectId}#building-warrant`);
+  const place = input.siteAddress || input.projectName;
+  return {
+    organisationId: input.organisationId,
+    syncKey: googleCalendarMilestoneSyncKey(input.organisationId, 'warrant', input.buildingWarrantApplicationId),
+    title: 'Building Warrant granted',
+    startsAt: input.grantedDate,
+    location: input.siteAddress,
+    actionUrl,
+    description: [
+      `Building Warrant has been granted for ${place}.`,
+      'Decision: Granted',
+      input.warrantReference ? `Application: ${input.warrantReference}` : null,
+      `Decision date: ${readableDate(input.grantedDate)}`,
+      'Review the grant conditions and progress the next project action.',
+      `Open Building Warrant:\n${actionUrl}`,
+    ].filter(Boolean).join('\n\n'),
+  };
+};
+
+const buildGoogleMilestoneEvent = (milestone: ManagedCalendarMilestone) => ({
+  summary: milestone.title,
+  description: milestone.description,
+  location: milestone.location ?? undefined,
+  start: { date: dateOnly(milestone.startsAt) },
+  end: { date: dateOnly(nextDay(milestone.startsAt)) },
+  transparency: 'transparent',
+  visibility: 'default',
+  reminders: { useDefault: true },
+  extendedProperties: {
+    private: {
+      architectPortalOrganisationId: milestone.organisationId,
+      architectPortalSyncKey: milestone.syncKey,
+      architectPortalManaged: 'true',
+    },
+  },
+});
+
+export const isArchitectProManagedCalendarRecord = (
+  record: { organisationId: string; deadlineId: string | null; syncKey: string | null },
+  organisationId: string,
+) => record.organisationId === organisationId && (
+  Boolean(record.deadlineId)
+  || Boolean(record.syncKey?.startsWith(`${organisationId}:GOOGLE:`))
+);
+
 const markConnectionFailure = async (connectionId: string, error: unknown) => {
   const message = error instanceof Error ? error.message.slice(0, 500) : 'Google Calendar sync failed.';
   await prisma.calendarConnection.updateMany({
@@ -306,7 +509,9 @@ const markConnectionFailure = async (connectionId: string, error: unknown) => {
 
 const deleteGoogleEvent = async (accessToken: string, providerEventId: string) => {
   try {
-    await googleRequest<void>(accessToken, `/calendars/primary/events/${encodeURIComponent(providerEventId)}`, { method: 'DELETE' });
+    await googleRequest<void>(accessToken, withoutGoogleNotifications(
+      `/calendars/primary/events/${encodeURIComponent(providerEventId)}`,
+    ), { method: 'DELETE' });
   } catch (error) {
     if ((error as HttpError & { googleStatus?: number }).googleStatus !== 404) throw error;
   }
@@ -322,15 +527,10 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
     },
   });
 
-  if (!activeDeadlineStatuses.includes(deadline.status)) {
+  if (!activeDeadlineStatuses.includes(deadline.status) || !isGoogleCalendarDeadlineEligible(deadline)) {
     if (existing?.providerEventId) await deleteGoogleEvent(accessToken, existing.providerEventId);
-    if (existing) {
-      await prisma.syncedCalendarEvent.update({
-        where: { id: existing.id },
-        data: { providerEventId: null, syncStatus: 'DELETED', lastSyncedAt: new Date() },
-      });
-    }
-    return 'deleted' as const;
+    if (existing) await prisma.syncedCalendarEvent.delete({ where: { id: existing.id } });
+    return existing ? 'deleted' as const : 'ignored' as const;
   }
 
   const eventBody = buildGoogleDeadlineEvent(deadline);
@@ -339,7 +539,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
     try {
       googleEvent = await googleRequest<GoogleEventResponse>(
         accessToken,
-        `/calendars/primary/events/${encodeURIComponent(existing.providerEventId)}`,
+        withoutGoogleNotifications(`/calendars/primary/events/${encodeURIComponent(existing.providerEventId)}`),
         { method: 'PUT', body: JSON.stringify(eventBody) },
       );
     } catch (error) {
@@ -349,7 +549,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
   if (!googleEvent) {
     const deterministicEventId = googleDeadlineEventId(deadline.organisationId, deadline.id);
     try {
-      googleEvent = await googleRequest<GoogleEventResponse>(accessToken, '/calendars/primary/events', {
+      googleEvent = await googleRequest<GoogleEventResponse>(accessToken, withoutGoogleNotifications('/calendars/primary/events'), {
         method: 'POST',
         body: JSON.stringify({ id: deterministicEventId, ...eventBody }),
       });
@@ -357,7 +557,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
       if ((error as HttpError & { googleStatus?: number }).googleStatus !== 409) throw error;
       googleEvent = await googleRequest<GoogleEventResponse>(
         accessToken,
-        `/calendars/primary/events/${encodeURIComponent(deterministicEventId)}`,
+        withoutGoogleNotifications(`/calendars/primary/events/${encodeURIComponent(deterministicEventId)}`),
         { method: 'PUT', body: JSON.stringify(eventBody) },
       );
     }
@@ -370,7 +570,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
       calendarConnectionId: connection.id,
       syncKey,
       providerEventId: googleEvent.id,
-      title: deadline.title,
+      title: eventBody.summary,
       startsAt: deadline.dueDate,
       endsAt: nextDay(deadline.dueDate),
       syncStatus: 'SYNCED',
@@ -383,7 +583,7 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
       provider: CalendarProvider.GOOGLE,
       syncKey,
       providerEventId: googleEvent.id,
-      title: deadline.title,
+      title: eventBody.summary,
       startsAt: deadline.dueDate,
       endsAt: nextDay(deadline.dueDate),
       syncStatus: 'SYNCED',
@@ -391,6 +591,132 @@ const syncDeadlineWithToken = async (connection: CalendarConnection, accessToken
     },
   });
   return 'synced' as const;
+};
+
+const syncMilestoneWithToken = async (
+  connection: CalendarConnection,
+  accessToken: string,
+  milestone: ManagedCalendarMilestone,
+) => {
+  const existing = await prisma.syncedCalendarEvent.findUnique({ where: { syncKey: milestone.syncKey } });
+  if (existing && (
+    existing.organisationId !== milestone.organisationId
+    || existing.provider !== CalendarProvider.GOOGLE
+  )) {
+    throw new Error('Calendar milestone sync key is bound outside its organisation or provider.');
+  }
+
+  const eventBody = buildGoogleMilestoneEvent(milestone);
+  let googleEvent: GoogleEventResponse | null = null;
+  if (existing?.providerEventId) {
+    try {
+      googleEvent = await googleRequest<GoogleEventResponse>(
+        accessToken,
+        withoutGoogleNotifications(`/calendars/primary/events/${encodeURIComponent(existing.providerEventId)}`),
+        { method: 'PUT', body: JSON.stringify(eventBody) },
+      );
+    } catch (error) {
+      if ((error as HttpError & { googleStatus?: number }).googleStatus !== 404) throw error;
+    }
+  }
+  if (!googleEvent) {
+    const deterministicEventId = googleManagedEventId(milestone.syncKey);
+    try {
+      googleEvent = await googleRequest<GoogleEventResponse>(
+        accessToken,
+        withoutGoogleNotifications('/calendars/primary/events'),
+        { method: 'POST', body: JSON.stringify({ id: deterministicEventId, ...eventBody }) },
+      );
+    } catch (error) {
+      if ((error as HttpError & { googleStatus?: number }).googleStatus !== 409) throw error;
+      googleEvent = await googleRequest<GoogleEventResponse>(
+        accessToken,
+        withoutGoogleNotifications(`/calendars/primary/events/${encodeURIComponent(deterministicEventId)}`),
+        { method: 'PUT', body: JSON.stringify(eventBody) },
+      );
+    }
+  }
+  if (!googleEvent.id) throw new HttpError(502, 'Google Calendar did not return an event id.');
+
+  await prisma.syncedCalendarEvent.upsert({
+    where: { syncKey: milestone.syncKey },
+    update: {
+      calendarConnectionId: connection.id,
+      deadlineId: null,
+      providerEventId: googleEvent.id,
+      title: milestone.title,
+      startsAt: milestone.startsAt,
+      endsAt: nextDay(milestone.startsAt),
+      syncStatus: 'SYNCED',
+      lastSyncedAt: new Date(),
+    },
+    create: {
+      organisationId: milestone.organisationId,
+      calendarConnectionId: connection.id,
+      deadlineId: null,
+      provider: CalendarProvider.GOOGLE,
+      syncKey: milestone.syncKey,
+      providerEventId: googleEvent.id,
+      title: milestone.title,
+      startsAt: milestone.startsAt,
+      endsAt: nextDay(milestone.startsAt),
+      syncStatus: 'SYNCED',
+      lastSyncedAt: new Date(),
+    },
+  });
+};
+
+const removeMilestoneWithToken = async (
+  organisationId: string,
+  accessToken: string,
+  syncKey: string,
+) => {
+  const existing = await prisma.syncedCalendarEvent.findFirst({
+    where: { organisationId, provider: CalendarProvider.GOOGLE, syncKey },
+  });
+  if (!existing) return false;
+  if (existing.providerEventId) await deleteGoogleEvent(accessToken, existing.providerEventId);
+  await prisma.syncedCalendarEvent.delete({ where: { id: existing.id } });
+  return true;
+};
+
+const loadCalendarMilestone = async (
+  organisationId: string,
+  kind: CalendarMilestoneKind,
+  aggregateId: string,
+) => {
+  if (kind === 'PLANNING_DECISION') {
+    const application = await prisma.planningApplication.findFirst({
+      where: { id: aggregateId, organisationId },
+      include: { project: { select: { id: true, name: true, siteAddress: true } } },
+    });
+    if (!application || !new Set<PlanningStatus>([PlanningStatus.APPROVED, PlanningStatus.REFUSED]).has(application.status)) return null;
+    return buildPlanningDecisionMilestone({
+      organisationId,
+      planningApplicationId: application.id,
+      projectId: application.project.id,
+      projectName: application.project.name,
+      siteAddress: application.project.siteAddress,
+      applicationReference: application.applicationReference,
+      decisionDate: application.decisionDate ?? application.updatedAt,
+      status: application.status === PlanningStatus.APPROVED ? 'APPROVED' : 'REFUSED',
+    });
+  }
+
+  const application = await prisma.buildingWarrantApplication.findFirst({
+    where: { id: aggregateId, organisationId },
+    include: { project: { select: { id: true, name: true, siteAddress: true } } },
+  });
+  if (!application || application.status !== WarrantStatus.GRANTED) return null;
+  return buildBuildingWarrantGrantedMilestone({
+    organisationId,
+    buildingWarrantApplicationId: application.id,
+    projectId: application.project.id,
+    projectName: application.project.name,
+    siteAddress: application.project.siteAddress,
+    warrantReference: application.warrantReference,
+    grantedDate: application.grantedDate ?? application.updatedAt,
+  });
 };
 
 const getConnectedGoogleCalendar = (organisationId: string) => prisma.calendarConnection.findFirst({
@@ -417,6 +743,38 @@ export const syncDeadlineToGoogleBestEffort = async (organisationId: string, dea
     return { attempted: true, synced: true };
   } catch (error) {
     console.error('Google Calendar deadline sync failed', { organisationId, deadlineId, error });
+    await markConnectionFailure(connection.id, error);
+    return { attempted: true, synced: false };
+  }
+};
+
+export const reconcileLifecycleCalendarMilestoneBestEffort = async (
+  organisationId: string,
+  kind: CalendarMilestoneKind,
+  aggregateId: string,
+) => {
+  const connection = await getConnectedGoogleCalendar(organisationId);
+  if (!connection) return { attempted: false };
+  try {
+    const accessToken = await getGoogleAccessToken(connection);
+    const milestone = await loadCalendarMilestone(organisationId, kind, aggregateId);
+    if (milestone) {
+      await syncMilestoneWithToken(connection, accessToken, milestone);
+    } else {
+      const scope = kind === 'PLANNING_DECISION' ? 'planning' : 'warrant';
+      await removeMilestoneWithToken(
+        organisationId,
+        accessToken,
+        googleCalendarMilestoneSyncKey(organisationId, scope, aggregateId),
+      );
+    }
+    await prisma.calendarConnection.update({
+      where: { id: connection.id },
+      data: { status: CalendarConnectionStatus.CONNECTED, lastSyncedAt: new Date(), syncError: null },
+    });
+    return { attempted: true, synced: true };
+  } catch (error) {
+    console.error('Google Calendar milestone reconciliation failed', { organisationId, kind, aggregateId, error });
     await markConnectionFailure(connection.id, error);
     return { attempted: true, synced: false };
   }
@@ -450,27 +808,73 @@ export const syncAllGoogleDeadlines = async (organisationId: string) => {
   if (!connection) throw new HttpError(409, 'Connect Google Calendar before syncing deadlines.');
   try {
     const accessToken = await getGoogleAccessToken(connection);
-    const [deadlines, existingEvents] = await Promise.all([
+    const [deadlines, planningDecisions, warrantDecisions] = await Promise.all([
       prisma.deadline.findMany({
         where: { organisationId },
-        include: { project: { select: { id: true, name: true, siteAddress: true } } },
+        include: {
+          project: { select: { id: true, name: true, siteAddress: true, localAuthority: true } },
+          planningApplication: { select: { id: true, applicationReference: true } },
+          buildingWarrantApplication: { select: { id: true, warrantReference: true } },
+        },
         orderBy: { dueDate: 'asc' },
       }),
-      prisma.syncedCalendarEvent.findMany({
-        where: { organisationId, provider: CalendarProvider.GOOGLE },
-        include: { deadline: { select: { id: true, status: true } } },
+      prisma.planningApplication.findMany({
+        where: { organisationId, status: { in: [PlanningStatus.APPROVED, PlanningStatus.REFUSED] } },
+        include: { project: { select: { id: true, name: true, siteAddress: true } } },
+      }),
+      prisma.buildingWarrantApplication.findMany({
+        where: { organisationId, status: WarrantStatus.GRANTED },
+        include: { project: { select: { id: true, name: true, siteAddress: true } } },
       }),
     ]);
     let synced = 0;
     let removed = 0;
+    let milestones = 0;
+    const activeSyncKeys = new Set<string>();
     for (const deadline of deadlines) {
       const result = await syncDeadlineWithToken(connection, accessToken, deadline);
-      if (result === 'synced') synced += 1;
-      else removed += 1;
+      if (result === 'synced') {
+        synced += 1;
+        activeSyncKeys.add(googleDeadlineSyncKey(organisationId, deadline.id));
+      } else if (result === 'deleted') removed += 1;
     }
-    const deadlineIds = new Set(deadlines.map((deadline) => deadline.id));
+    for (const application of planningDecisions) {
+      const milestone = buildPlanningDecisionMilestone({
+        organisationId,
+        planningApplicationId: application.id,
+        projectId: application.project.id,
+        projectName: application.project.name,
+        siteAddress: application.project.siteAddress,
+        applicationReference: application.applicationReference,
+        decisionDate: application.decisionDate ?? application.updatedAt,
+        status: application.status === PlanningStatus.APPROVED ? 'APPROVED' : 'REFUSED',
+      });
+      await syncMilestoneWithToken(connection, accessToken, milestone);
+      activeSyncKeys.add(milestone.syncKey);
+      synced += 1;
+      milestones += 1;
+    }
+    for (const application of warrantDecisions) {
+      const milestone = buildBuildingWarrantGrantedMilestone({
+        organisationId,
+        buildingWarrantApplicationId: application.id,
+        projectId: application.project.id,
+        projectName: application.project.name,
+        siteAddress: application.project.siteAddress,
+        warrantReference: application.warrantReference,
+        grantedDate: application.grantedDate ?? application.updatedAt,
+      });
+      await syncMilestoneWithToken(connection, accessToken, milestone);
+      activeSyncKeys.add(milestone.syncKey);
+      synced += 1;
+      milestones += 1;
+    }
+    const existingEvents = await prisma.syncedCalendarEvent.findMany({
+      where: { organisationId, provider: CalendarProvider.GOOGLE },
+    });
     for (const event of existingEvents) {
-      if (event.deadlineId && deadlineIds.has(event.deadlineId)) continue;
+      if (!isArchitectProManagedCalendarRecord(event, organisationId)) continue;
+      if (event.syncKey && activeSyncKeys.has(event.syncKey)) continue;
       if (event.providerEventId) await deleteGoogleEvent(accessToken, event.providerEventId);
       await prisma.syncedCalendarEvent.delete({ where: { id: event.id } });
       removed += 1;
@@ -479,7 +883,7 @@ export const syncAllGoogleDeadlines = async (organisationId: string) => {
       where: { id: connection.id },
       data: { status: CalendarConnectionStatus.CONNECTED, lastSyncedAt: new Date(), syncError: null },
     });
-    return { synced, removed };
+    return { synced, milestones, removed };
   } catch (error) {
     await markConnectionFailure(connection.id, error);
     throw error;

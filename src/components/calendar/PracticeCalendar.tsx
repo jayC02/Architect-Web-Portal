@@ -123,7 +123,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
     setIntegrationError('');
     try {
       const result = await apiRequest<{ synced?: number }>('/api/integrations/google-calendar/sync', { method: 'POST' });
-      setSyncMessage(`${result.synced ?? 0} deadline${result.synced === 1 ? '' : 's'} synced with Google Calendar.`);
+      setSyncMessage(`${result.synced ?? 0} important calendar event${result.synced === 1 ? '' : 's'} synced.`);
       await load();
     } catch (requestError) {
       setIntegrationError(requestError instanceof Error ? requestError.message : 'Google Calendar could not be synced.');
@@ -139,7 +139,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
           <div>
             <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">Schedule</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-normal text-ink">Calendar</h1>
-            <p className="mt-2 text-sm text-stone-500">Project deadlines and reminders, with Google Calendar sync status in one place.</p>
+            <p className="mt-2 text-sm text-stone-500">Important project dates, with Google Calendar sync status in one place.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canManageIntegration && linked && !loading && (
@@ -162,7 +162,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
             </span>
             <div>
               <p className="font-semibold text-ink">Connect Google Calendar</p>
-              <p className="mt-0.5 text-sm text-stone-600">Keep project deadlines available in your Google Calendar automatically.</p>
+              <p className="mt-0.5 text-sm text-stone-600">Sync important deadlines and major actionable outcomes to Google Calendar.</p>
             </div>
           </div>
           {canManageIntegration ? (
