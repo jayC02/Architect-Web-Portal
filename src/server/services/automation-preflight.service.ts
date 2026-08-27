@@ -48,6 +48,11 @@ type SnapshotInput = {
       registrationBPart2: string | null;
       approvedBody: string | null;
     } | null;
+    feeCalculation?: {
+      calculationStatus: 'CALCULATED' | 'NEEDS_INFORMATION';
+      missingInputs?: string[];
+      explanation: string[];
+    };
   } | null;
   documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus }>;
 };
@@ -132,6 +137,15 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
     requireValue('buildingWarrant.certifier.registrationBPart1', snapshot.buildingWarrant?.certifier?.registrationBPart1, 'Choose Registration number B Part 1.');
     requireValue('buildingWarrant.certifier.registrationBPart2', snapshot.buildingWarrant?.certifier?.registrationBPart2, 'Enter Registration number B Part 2.');
     requireValue('buildingWarrant.certifier.approvedBody', snapshot.buildingWarrant?.certifier?.approvedBody, 'Enter the name of the approved body.');
+    if (snapshot.buildingWarrant?.feeCalculation?.calculationStatus !== 'CALCULATED') {
+      missing.push({
+        code: 'missing_building_warrant_fee',
+        field: 'buildingWarrant.feeCalculation',
+        message: snapshot.buildingWarrant?.feeCalculation?.explanation[0]
+          ?? 'Complete the Building Standards fee inputs.',
+        severity: 'error',
+      });
+    }
   } else {
     if (!snapshot.planning || !meaningfulDescription(snapshot.planning.description)) {
       missing.push({

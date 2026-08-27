@@ -99,6 +99,18 @@ export const POST: APIRoute = (context) =>
         preparationData: {
           ...preparationData,
           typeOfWorkKeys: body.typeOfWorkKeys,
+          ...(body.workStartedBeforeApplication !== undefined
+            ? { workStartedBeforeApplication: body.workStartedBeforeApplication }
+            : {}),
+          ...(body.disabledPersonsFacilitiesOnly !== undefined
+            ? { disabledPersonsFacilitiesOnly: body.disabledPersonsFacilitiesOnly }
+            : {}),
+          ...(body.certifierOfDesignCertificateAvailable !== undefined
+            ? { certifierOfDesignCertificateAvailable: body.certifierOfDesignCertificateAvailable }
+            : {}),
+          ...(body.certifierOfConstructionCertificateAvailable !== undefined
+            ? { certifierOfConstructionCertificateAvailable: body.certifierOfConstructionCertificateAvailable }
+            : {}),
           applicantIsOwner: body.applicantIsOwner,
           applicationIsStaged: body.applicationIsStaged,
           intendedLifeFiveYearsOrLess: body.intendedLifeFiveYearsOrLess,

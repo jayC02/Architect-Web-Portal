@@ -40,6 +40,10 @@ type ApiErrorPayload = {
 
 const buildingConfirmationQuestions = [
   ['applicantIsOwner', 'Is the applicant the legal owner?'],
+  ['workStartedBeforeApplication', 'Did work start before the original application?'],
+  ['disabledPersonsFacilitiesOnly', 'Is all work solely for disabled-person facilities?'],
+  ['certifierOfDesignCertificateAvailable', 'Will the appropriate Certifier of Design certificate be provided?'],
+  ['certifierOfConstructionCertificateAvailable', 'Will the appropriate Certifier of Construction certificate be provided?'],
   ['applicationIsStaged', 'Is the application staged?'],
   ['intendedLifeFiveYearsOrLess', 'Is the intended life of the building five years or less?'],
   ['fireAndRescueServiceEnforcingAuthority', 'Is Fire and Rescue Service the enforcing authority?'],

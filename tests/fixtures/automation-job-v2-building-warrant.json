@@ -97,6 +97,10 @@
     "warrantReference": null,
     "unusualAnswers": {
       "applicantIsOwner": true,
+      "workStartedBeforeApplication": false,
+      "disabledPersonsFacilitiesOnly": false,
+      "certifierOfDesignCertificateAvailable": false,
+      "certifierOfConstructionCertificateAvailable": false,
       "applicationIsStaged": false,
       "intendedLifeFiveYearsOrLess": false,
       "fireAndRescueServiceEnforcingAuthority": true,
@@ -109,6 +113,21 @@
       "restrictPublicInspection": false
     },
     "certifier": null,
+    "feeCalculation": {
+      "calculationStatus": "CALCULATED",
+      "scheduleVersion": "BUILDING_STANDARDS_2026",
+      "effectiveFrom": "2026-04-01",
+      "submissionType": "BUILDING_WARRANT",
+      "valueOfWorksMinorUnits": 3500000,
+      "calculationBasisMinorUnits": 3500000,
+      "baseFeeMinorUnits": 86500,
+      "multiplierPercent": 100,
+      "subtotalMinorUnits": 86500,
+      "adjustments": [],
+      "totalFeeMinorUnits": 86500,
+      "specialRule": null,
+      "explanation": ["Calculated fee: £865.00."]
+    },
     "updatedAt": "2026-07-26T12:00:00.000Z"
   },
   "documents": [

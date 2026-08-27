@@ -62,6 +62,9 @@ export const PATCH: APIRoute = (context) =>
       && !Array.isArray(existingPreparation.certifier)
       ? existingPreparation.certifier as Prisma.JsonObject
       : {};
+    const savedAnswers = Object.fromEntries(
+      Object.entries(unusualAnswers).filter(([, value]) => value !== undefined),
+    );
     await prisma.buildingWarrantApplication.update({
       where: { id: application.id },
       data: {
@@ -74,7 +77,7 @@ export const PATCH: APIRoute = (context) =>
         preparationData: {
           ...existingPreparation,
           typeOfWorkKeys,
-          ...unusualAnswers,
+          ...savedAnswers,
           ...(preset ? {
             certifier: {
               ...existingCertifier,

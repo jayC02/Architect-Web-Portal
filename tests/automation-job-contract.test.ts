@@ -302,5 +302,35 @@ const sharedV2Fixture = JSON.parse(readFileSync(
 ));
 assert.doesNotThrow(() => automationJobSnapshotV2Schema.parse(sharedV2Fixture));
 assert.doesNotThrow(() => assertSafeAutomationSnapshot(sharedV2Fixture));
+const feeSnapshot = structuredClone(sharedV2Fixture);
+feeSnapshot.buildingWarrant.feeCalculation = {
+  calculationStatus: 'CALCULATED',
+  scheduleVersion: 'BUILDING_STANDARDS_2026',
+  effectiveFrom: '2026-04-01',
+  submissionType: 'BUILDING_WARRANT',
+  valueOfWorksMinorUnits: 4_000_000,
+  calculationBasisMinorUnits: 4_000_000,
+  baseFeeMinorUnits: 86_500,
+  multiplierPercent: 100,
+  subtotalMinorUnits: 86_500,
+  adjustments: [{
+    type: 'CERTIFIER_OF_DESIGN',
+    label: 'Certifier of Design discount',
+    amountMinorUnits: -10_500,
+  }],
+  totalFeeMinorUnits: 76_000,
+  specialRule: null,
+  explanation: ['Calculated fee: £760.00.'],
+};
+const parsedFeeSnapshot = automationJobSnapshotV2Schema.parse(feeSnapshot);
+assert.equal(parsedFeeSnapshot.buildingWarrant?.feeCalculation?.calculationStatus, 'CALCULATED');
+if (parsedFeeSnapshot.buildingWarrant?.feeCalculation?.calculationStatus === 'CALCULATED') {
+  assert.equal(parsedFeeSnapshot.buildingWarrant.feeCalculation.totalFeeMinorUnits, 76_000);
+}
+const automationJobService = readFileSync(
+  new URL('../src/server/services/automation-jobs.service.ts', import.meta.url),
+  'utf8',
+);
+assert.match(automationJobService, /calculateBuildingStandardsFee\([\s\S]*feeCalculation,[\s\S]*automationJobSnapshotV2Schema\.parse/, 'fresh immutable snapshots calculate, store, then validate the fee result');
 
 console.log('automation job contract tests passed');

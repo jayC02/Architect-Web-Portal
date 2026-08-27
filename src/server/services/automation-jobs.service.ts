@@ -9,6 +9,10 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
+  calculateBuildingStandardsFee,
+  decimalMoneyToMinorUnits,
+} from '@/lib/fees/building-standards-fee';
+import {
   normaliseTypeOfWorkKeys,
   typeOfWorkKey,
   typeOfWorkLabel,
@@ -298,6 +302,28 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const savedRegistrationBPart1 = nullableString(savedCertifier.registrationBPart1) ?? selectedCertifier?.registrationBPart1 ?? null;
   const savedCertifierValue = (key: string, fallback: string | null | undefined) =>
     nullableString(savedCertifier[key]) ?? fallback ?? null;
+  const certifierOfDesignSelected = Boolean(
+    savedRegistrationAPart1
+    || savedRegistrationBPart1
+    || savedCertifierValue('certifierName', selectedCertifier?.certifierName),
+  );
+  const feeCalculation = calculateBuildingStandardsFee({
+    effectiveDate: input.createdAt ?? new Date(),
+    submissionType: 'BUILDING_WARRANT',
+    valueOfWorksMinorUnits: decimalMoneyToMinorUnits(warrant?.estimatedValue?.toString()),
+    workStartedBeforeApplication: warrantAnswers.workStartedBeforeApplication ?? null,
+    conversionOnly: typeOfWorkKeys.length === 1 && typeOfWorkKeys[0] === 'conversion_change_of_use',
+    demolitionOnly: typeOfWorkKeys.length === 1 && typeOfWorkKeys[0] === 'demolition',
+    disabledPersonsFacilitiesOnly: warrantAnswers.disabledPersonsFacilitiesOnly ?? null,
+    certifierOfDesign: {
+      selected: certifierOfDesignSelected,
+      certificateAvailable: warrantAnswers.certifierOfDesignCertificateAvailable ?? null,
+    },
+    certifierOfConstruction: {
+      selected: warrantAnswers.approvedCertifierOfConstruction,
+      certificateAvailable: warrantAnswers.certifierOfConstructionCertificateAvailable ?? null,
+    },
+  });
   const sourceType = inferSourceType(input);
   const sourceUpdatedAt = maxDate([
     project.updatedAt,
@@ -491,6 +517,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         certifierName: savedCertifierValue('certifierName', selectedCertifier?.certifierName),
         approvedBody: savedCertifierValue('approvedBody', selectedCertifier?.approvedBody),
       } : null,
+      feeCalculation,
       updatedAt: asIso(warrant?.updatedAt),
     },
     documents: documents.map(mapDocument),

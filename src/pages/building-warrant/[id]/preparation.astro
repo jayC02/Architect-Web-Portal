@@ -3,6 +3,10 @@ import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 import { prisma } from '@/lib/db/prisma';
+import {
+  calculateBuildingStandardsFee,
+  decimalMoneyToMinorUnits,
+} from '@/lib/fees/building-standards-fee';
 import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
@@ -82,6 +86,30 @@ const registrationBPart1 = savedValue('registrationBPart1') ?? selectedPreset?.r
 const registrationBPart2 = savedValue('registrationBPart2') ?? selectedPreset?.registrationBPart2 ?? '';
 const approvedBody = savedValue('approvedBody') ?? selectedPreset?.approvedBody ?? '';
 const schemeType = savedValue('schemeType') ?? selectedPreset?.schemeType ?? '';
+const designCertifierSelected = Boolean(
+  registrationAPart1 || registrationAPart2 || registrationBPart1 || registrationBPart2 || certifierName,
+);
+const feeCalculation = calculateBuildingStandardsFee({
+  effectiveDate: new Date(),
+  submissionType: 'BUILDING_WARRANT',
+  valueOfWorksMinorUnits: decimalMoneyToMinorUnits(application.estimatedValue?.toString()),
+  workStartedBeforeApplication: warrantAnswers.workStartedBeforeApplication ?? null,
+  conversionOnly: selectedTypeOfWorkKeys.length === 1 && selectedTypeOfWorkKeys[0] === 'conversion_change_of_use',
+  demolitionOnly: selectedTypeOfWorkKeys.length === 1 && selectedTypeOfWorkKeys[0] === 'demolition',
+  disabledPersonsFacilitiesOnly: warrantAnswers.disabledPersonsFacilitiesOnly ?? null,
+  certifierOfDesign: {
+    selected: designCertifierSelected,
+    certificateAvailable: warrantAnswers.certifierOfDesignCertificateAvailable ?? null,
+  },
+  certifierOfConstruction: {
+    selected: warrantAnswers.approvedCertifierOfConstruction,
+    certificateAvailable: warrantAnswers.certifierOfConstructionCertificateAvailable ?? null,
+  },
+});
+const feeMoney = (minorUnits: number) => new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'GBP',
+}).format(minorUnits / 100);
 const parsedSnapshot = automationJobSnapshotV2Schema.safeParse(job?.dataSnapshot);
 const remainingRequirements = parsedSnapshot.success ? parsedSnapshot.data.preflight.missing : [];
 const incompleteSave = Astro.url.searchParams.get('incomplete') === '1';
@@ -130,6 +158,28 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
           <label class="block"><span class="label">Current use</span><input required maxlength="160" name="currentUse" value={application.currentUse ?? ''} class="field" /></label>
           <label class="block"><span class="label">Proposed use</span><input required maxlength="160" name="proposedUse" value={application.proposedUse ?? ''} class="field" /></label>
         </div>
+        <fieldset class="mt-5 border-t border-stone-200 pt-5">
+          <legend class="text-base font-semibold text-ink">Fee information</legend>
+          <p class="mt-1 text-sm text-stone-500">Architect Pro uses these answers to calculate the application fee. Desktop uses the saved result and does not recalculate it.</p>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="label">Had work started before the original application?</span>
+              <select required name="workStartedBeforeApplication" class="field">
+                <option value="">Choose Yes or No</option>
+                <option value="true" selected={warrantAnswers.workStartedBeforeApplication === true}>Yes</option>
+                <option value="false" selected={warrantAnswers.workStartedBeforeApplication === false}>No</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="label">Is all work solely for qualifying disabled-person facilities?</span>
+              <select required name="disabledPersonsFacilitiesOnly" class="field">
+                <option value="">Choose Yes or No</option>
+                <option value="true" selected={warrantAnswers.disabledPersonsFacilitiesOnly === true}>Yes</option>
+                <option value="false" selected={warrantAnswers.disabledPersonsFacilitiesOnly === false}>No</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
       </section>
       <section class="mt-7 border-t border-stone-200 pt-6" aria-labelledby="additional-details-heading">
         <h2 id="additional-details-heading" class="text-xl font-semibold">Additional warrant questions</h2>
@@ -167,6 +217,24 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
         <label class="block"><span class="label">Registration number B Part 2</span><input required maxlength="80" name="registrationBPart2" value={registrationBPart2} class="field" /></label>
         <label class="block"><span class="label">Name of Approved Body</span><input required maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
       </div>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="label">Will the appropriate Certifier of Design certificate be provided?</span>
+          <select required name="certifierOfDesignCertificateAvailable" class="field">
+            <option value="">Choose Yes or No</option>
+            <option value="true" selected={warrantAnswers.certifierOfDesignCertificateAvailable === true}>Yes</option>
+            <option value="false" selected={warrantAnswers.certifierOfDesignCertificateAvailable === false}>No</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="label">Will the appropriate Certifier of Construction certificate be provided?</span>
+          <select name="certifierOfConstructionCertificateAvailable" class="field">
+            <option value="">Choose Yes or No</option>
+            <option value="true" selected={warrantAnswers.certifierOfConstructionCertificateAvailable === true}>Yes</option>
+            <option value="false" selected={warrantAnswers.certifierOfConstructionCertificateAvailable === false}>No</option>
+          </select>
+        </label>
+      </div>
       </section>
       <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
@@ -174,9 +242,36 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
     <aside class="panel rounded-lg p-5" aria-label="Building Warrant application summary">
       <h2 class="text-lg font-semibold">Application summary</h2>
       <dl class="mt-4 space-y-3 text-sm"><div><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div><dt class="text-stone-500">Application</dt><dd>Building Warrant</dd></div><div><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
+      <section class="mt-5 border-t border-stone-200 pt-5" aria-labelledby="calculated-fee-heading" data-fee-summary>
+        <p class="label">2026 Building Standards fee</p>
+        <h2 id="calculated-fee-heading" class="mt-1 text-lg font-semibold text-ink">Calculated application fee</h2>
+        <div class:list={['mt-3', feeCalculation.calculationStatus === 'CALCULATED' ? '' : 'hidden']} data-fee-calculated>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between gap-4"><dt class="text-stone-500">Base fee</dt><dd class="font-medium text-ink" data-fee-base>{feeCalculation.calculationStatus === 'CALCULATED' ? feeMoney(feeCalculation.baseFeeMinorUnits) : '—'}</dd></div>
+            <div class:list={['flex justify-between gap-4', feeCalculation.calculationStatus === 'CALCULATED' && feeCalculation.multiplierPercent !== 100 ? '' : 'hidden']} data-fee-multiplier-row><dt class="text-stone-500" data-fee-multiplier-label>{feeCalculation.calculationStatus === 'CALCULATED' ? `${feeCalculation.multiplierPercent}% multiplier` : 'Multiplier'}</dt><dd class="font-medium text-ink" data-fee-subtotal>{feeCalculation.calculationStatus === 'CALCULATED' ? feeMoney(feeCalculation.subtotalMinorUnits) : '—'}</dd></div>
+          </dl>
+          <dl class="mt-2 space-y-2 text-sm" data-fee-adjustments>
+            {feeCalculation.calculationStatus === 'CALCULATED' && feeCalculation.adjustments.map((adjustment) => <div class="flex justify-between gap-4"><dt class="text-stone-500">{adjustment.label}</dt><dd class="font-medium text-ink">{feeMoney(adjustment.amountMinorUnits)}</dd></div>)}
+          </dl>
+          <div class="mt-3 flex items-end justify-between gap-4 border-t border-stone-200 pt-3"><span class="text-sm font-semibold text-ink">Calculated fee</span><strong class="text-2xl font-semibold text-ink" aria-live="polite" data-fee-total>{feeCalculation.calculationStatus === 'CALCULATED' ? feeMoney(feeCalculation.totalFeeMinorUnits) : '—'}</strong></div>
+          <details class="mt-3 text-sm text-stone-600">
+            <summary class="cursor-pointer font-semibold text-moss">How was this calculated?</summary>
+            <ul class="mt-2 list-disc space-y-1 pl-5" data-fee-explanation>{feeCalculation.explanation.map((line) => <li>{line}</li>)}</ul>
+          </details>
+        </div>
+        <div class:list={['mt-3 border-l-4 border-amber-600 bg-amber-50 px-3 py-3 text-sm text-amber-950', feeCalculation.calculationStatus === 'NEEDS_INFORMATION' ? '' : 'hidden']} role="status" aria-live="polite" data-fee-needs-information>
+          <p class="font-semibold">Fee cannot be calculated yet</p>
+          <p class="mt-1" data-fee-message>{feeCalculation.explanation[0]}</p>
+        </div>
+      </section>
     </aside>
   </div>
   <script>
+    import {
+      calculateBuildingStandardsFee,
+      decimalMoneyToMinorUnits,
+    } from '@/lib/fees/building-standards-fee';
+
     const profile = document.querySelector('select[name="selectedCertifierPresetId"]');
     const profileFields = {
       schemeType: document.querySelector('[name="schemeType"]'),
@@ -197,6 +292,89 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
           field.value = value;
         }
       }
+      updateFee();
     });
+
+    const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
+    const summary = document.querySelector<HTMLElement>('[data-fee-summary]');
+    const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+    const fieldValue = (name: string) => {
+      const field = form?.elements.namedItem(name);
+      if (field instanceof RadioNodeList) return field.value;
+      if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) {
+        return field.value;
+      }
+      return '';
+    };
+    const readBoolean = (name: string) => {
+      const field = form?.querySelector(`[name="${name}"]`);
+      if (!(field instanceof HTMLSelectElement) || !field.value) return null;
+      return field.value === 'true';
+    };
+    const setText = (selector: string, value: string) => {
+      const element = summary?.querySelector(selector);
+      if (element) element.textContent = value;
+    };
+    const updateFee = () => {
+      if (!(form instanceof HTMLFormElement) || !summary) return;
+      const workTypes = Array.from(form.querySelectorAll('input[name="typeOfWorkKeys"]:checked'))
+        .filter((item) => item instanceof HTMLInputElement)
+        .map((item) => item.value);
+      const hasDesignCertifier = ['registrationAPart1', 'registrationAPart2', 'registrationBPart1', 'registrationBPart2', 'certifierName']
+        .some((name) => fieldValue(name).trim());
+      const constructionField = form.elements.namedItem('approvedCertifierOfConstruction');
+      const result = calculateBuildingStandardsFee({
+        effectiveDate: new Date(),
+        submissionType: 'BUILDING_WARRANT',
+        valueOfWorksMinorUnits: decimalMoneyToMinorUnits(fieldValue('estimatedValue')),
+        workStartedBeforeApplication: readBoolean('workStartedBeforeApplication'),
+        conversionOnly: workTypes.length === 1 && workTypes[0] === 'conversion_change_of_use',
+        demolitionOnly: workTypes.length === 1 && workTypes[0] === 'demolition',
+        disabledPersonsFacilitiesOnly: readBoolean('disabledPersonsFacilitiesOnly'),
+        certifierOfDesign: {
+          selected: hasDesignCertifier,
+          certificateAvailable: readBoolean('certifierOfDesignCertificateAvailable'),
+        },
+        certifierOfConstruction: {
+          selected: constructionField instanceof HTMLInputElement && constructionField.checked,
+          certificateAvailable: readBoolean('certifierOfConstructionCertificateAvailable'),
+        },
+      });
+      const calculated = summary.querySelector('[data-fee-calculated]');
+      const needsInformation = summary.querySelector('[data-fee-needs-information]');
+      calculated?.classList.toggle('hidden', result.calculationStatus !== 'CALCULATED');
+      needsInformation?.classList.toggle('hidden', result.calculationStatus !== 'NEEDS_INFORMATION');
+      if (result.calculationStatus === 'NEEDS_INFORMATION') {
+        setText('[data-fee-message]', result.explanation[0] || 'Complete the fee information above.');
+        return;
+      }
+      setText('[data-fee-base]', gbp.format(result.baseFeeMinorUnits / 100));
+      setText('[data-fee-multiplier-label]', `${result.multiplierPercent}% multiplier`);
+      setText('[data-fee-subtotal]', gbp.format(result.subtotalMinorUnits / 100));
+      summary.querySelector('[data-fee-multiplier-row]')?.classList.toggle('hidden', result.multiplierPercent === 100);
+      setText('[data-fee-total]', gbp.format(result.totalFeeMinorUnits / 100));
+      const adjustments = summary.querySelector('[data-fee-adjustments]');
+      adjustments?.replaceChildren(...result.adjustments.map((adjustment) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between gap-4';
+        const label = document.createElement('dt');
+        label.className = 'text-stone-500';
+        label.textContent = adjustment.label;
+        const amount = document.createElement('dd');
+        amount.className = 'font-medium text-ink';
+        amount.textContent = gbp.format(adjustment.amountMinorUnits / 100);
+        row.append(label, amount);
+        return row;
+      }));
+      const explanation = summary.querySelector('[data-fee-explanation]');
+      explanation?.replaceChildren(...result.explanation.map((line) => {
+        const item = document.createElement('li');
+        item.textContent = line;
+        return item;
+      }));
+    };
+    form?.addEventListener('input', updateFee);
+    form?.addEventListener('change', updateFee);
+    updateFee();
   </script>
 </AppShell>
