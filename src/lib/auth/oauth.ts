@@ -1,10 +1,13 @@
 import crypto from 'node:crypto';
 import type { APIContext } from 'astro';
 import { createOpaqueToken, safeEqual } from '@/lib/auth/tokens';
+import { safeReturnTo } from '@/lib/auth/return-to';
 
 const GOOGLE_STATE_COOKIE = 'architect_google_oauth_state';
 const GOOGLE_PKCE_COOKIE = 'architect_google_oauth_pkce';
+const GOOGLE_RETURN_TO_COOKIE = 'architect_google_oauth_return_to';
 export const GOOGLE_SIGNUP_COOKIE = 'architect_google_signup';
+const GOOGLE_SIGNUP_RETURN_TO_COOKIE = 'architect_google_signup_return_to';
 const OAUTH_TTL_MS = 10 * 60 * 1000;
 
 type OAuthState = {
@@ -78,7 +81,7 @@ const secureCookie = () => ({
   maxAge: Math.floor(OAUTH_TTL_MS / 1000),
 });
 
-export const createGoogleAuthorizationUrl = (context: APIContext) => {
+export const createGoogleAuthorizationUrl = (context: APIContext, returnTo?: string | null) => {
   const config = getGoogleAuthConfig();
   const nonce = createOpaqueToken(24);
   const codeVerifier = createOpaqueToken(64);
@@ -87,6 +90,7 @@ export const createGoogleAuthorizationUrl = (context: APIContext) => {
 
   context.cookies.set(GOOGLE_STATE_COOKIE, nonce, secureCookie());
   context.cookies.set(GOOGLE_PKCE_COOKIE, codeVerifier, secureCookie());
+  context.cookies.set(GOOGLE_RETURN_TO_COOKIE, safeReturnTo(returnTo), secureCookie());
 
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', config.clientId);
@@ -103,22 +107,29 @@ export const createGoogleAuthorizationUrl = (context: APIContext) => {
 export const consumeGoogleOAuthCookies = (context: APIContext, state: string) => {
   const nonce = context.cookies.get(GOOGLE_STATE_COOKIE)?.value;
   const codeVerifier = context.cookies.get(GOOGLE_PKCE_COOKIE)?.value;
+  const returnTo = safeReturnTo(context.cookies.get(GOOGLE_RETURN_TO_COOKIE)?.value);
   context.cookies.delete(GOOGLE_STATE_COOKIE, { path: '/' });
   context.cookies.delete(GOOGLE_PKCE_COOKIE, { path: '/' });
+  context.cookies.delete(GOOGLE_RETURN_TO_COOKIE, { path: '/' });
 
   const { stateSecret } = getGoogleAuthConfig();
   if (!nonce || !codeVerifier || !verifySignedOAuthState(state, nonce, stateSecret)) {
     throw new Error('Google sign-in request could not be verified.');
   }
-  return codeVerifier;
+  return { codeVerifier, returnTo };
 };
 
-export const setPendingGoogleSignupCookie = (context: APIContext, token: string) => {
+export const setPendingGoogleSignupCookie = (context: APIContext, token: string, returnTo = '/dashboard') => {
   context.cookies.set(GOOGLE_SIGNUP_COOKIE, token, secureCookie());
+  context.cookies.set(GOOGLE_SIGNUP_RETURN_TO_COOKIE, safeReturnTo(returnTo), secureCookie());
 };
 
 export const clearPendingGoogleSignupCookie = (context: APIContext) => {
   context.cookies.delete(GOOGLE_SIGNUP_COOKIE, { path: '/' });
+  context.cookies.delete(GOOGLE_SIGNUP_RETURN_TO_COOKIE, { path: '/' });
 };
+
+export const pendingGoogleSignupReturnTo = (context: APIContext) =>
+  safeReturnTo(context.cookies.get(GOOGLE_SIGNUP_RETURN_TO_COOKIE)?.value);
 
 export const oauthSignupExpiresAt = () => new Date(Date.now() + OAUTH_TTL_MS);

@@ -4,6 +4,7 @@ import type { APIRoute } from 'astro';
 import {
   clearPendingGoogleSignupCookie,
   GOOGLE_SIGNUP_COOKIE,
+  pendingGoogleSignupReturnTo,
 } from '@/lib/auth/oauth';
 import { resolveOrganisationSlug } from '@/lib/auth/organisation';
 import { createSession } from '@/lib/auth/session';
@@ -102,7 +103,8 @@ export const POST: APIRoute = (context) =>
       return user.id;
     });
 
+    const returnTo = pendingGoogleSignupReturnTo(context);
     clearPendingGoogleSignupCookie(context);
     await createSession(userId, context);
-    return jsonResponse(201, { redirectTo: '/dashboard' });
+    return jsonResponse(201, { redirectTo: returnTo });
   }, context);

@@ -178,6 +178,7 @@ const revealAckRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[i
 const viewRoute = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/view.ts', 'utf8');
 const heartbeatRoute = fs.readFileSync('src/pages/api/desktop/heartbeat.ts', 'utf8');
 const enrollmentPanel = fs.readFileSync('src/components/integrations/DesktopAccessIntegration.tsx', 'utf8');
+const enrollmentFlow = fs.readFileSync('src/components/integrations/AgentSetupFlow.tsx', 'utf8');
 const projectFees = fs.readFileSync('src/components/projects/ProjectFees.astro', 'utf8');
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const launchButton = fs.readFileSync('src/components/automation/AutomationLaunchButton.tsx', 'utf8');
@@ -241,8 +242,11 @@ assert.match(revealAckRoute, /browserRevealRequestedAt\.toISOString\(\) !== body
 assert.match(viewRoute, /organisationId: agent\.organisationId[\s\S]*claimedByAgentId: agent\.id[\s\S]*status: AutomationJobStatus\.COMPLETED/, 'fresh-session job data is Agent-authenticated, organisation scoped, and completed-only');
 assert.doesNotMatch(viewRoute, /createProposal|createApplication|prisma\.[a-zA-Z]+\.create/, 'View never creates a proposal, application, or database record');
 
-assert.match(enrollmentPanel, /Install and open[\s\S]*Paste the code[\s\S]*Confirm connection/, 'Agent enrolment explains the complete three-step sequence');
-assert.match(enrollmentPanel, /connectedAgents\.length[\s\S]*Connect Desktop Agent/, 'raw enrolment is demoted after an Agent connects');
+assert.match(enrollmentPanel, /AgentSetupFlow/, 'Agent settings use the shared automatic enrollment flow');
+assert.match(enrollmentFlow, /Download & connect Agent/, 'Agent enrollment offers one clear setup action');
+assert.match(enrollmentFlow, /connect automatically/, 'Agent enrollment explains the automatic browser connection');
+assert.doesNotMatch(enrollmentFlow, /Paste the code|Copy one-time code/i, 'Agent enrollment never asks users to move a secret manually');
+assert.match(enrollmentPanel, /activeAgent[\s\S]*connectedAgent=\{activeAgent\}/, 'connected or offline Agent state is passed into the shared flow');
 assert.match(projectFees, /Agreed[\s\S]*Invoiced[\s\S]*Paid[\s\S]*Outstanding[\s\S]*Overdue/, 'fees render the compact finance summary');
 assert.match(projectFees, /Ready to invoice[\s\S]*Draft created[\s\S]*Waived[\s\S]*Needs attention/, 'milestones use semantic states');
 assert.match(projectFees, /milestone\.state === 'ELIGIBLE'[\s\S]*Create Xero draft/, 'Xero draft creation stays inside the eligible milestone action area');

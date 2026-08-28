@@ -24,7 +24,7 @@ export const GET: APIRoute = async (context) => {
     const state = context.url.searchParams.get('state');
     if (!code || !state) return loginError(context);
 
-    const codeVerifier = consumeGoogleOAuthCookies(context, state);
+    const { codeVerifier, returnTo } = consumeGoogleOAuthCookies(context, state);
     const profile = await exchangeGoogleCode(code, codeVerifier);
 
     const linkedProvider = await prisma.authProvider.findUnique({
@@ -39,7 +39,7 @@ export const GET: APIRoute = async (context) => {
 
     if (linkedProvider) {
       await createSession(linkedProvider.userId, context);
-      return context.redirect('/dashboard');
+      return context.redirect(returnTo);
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -70,7 +70,7 @@ export const GET: APIRoute = async (context) => {
         },
       });
       await createSession(existingUser.id, context);
-      return context.redirect('/dashboard');
+      return context.redirect(returnTo);
     }
 
     const signupToken = createOpaqueToken();
@@ -98,7 +98,7 @@ export const GET: APIRoute = async (context) => {
         expiresAt: oauthSignupExpiresAt(),
       },
     });
-    setPendingGoogleSignupCookie(context, signupToken);
+    setPendingGoogleSignupCookie(context, signupToken, returnTo);
     return context.redirect('/auth/google/complete');
   } catch (error) {
     console.error('Google authentication callback failed.', error instanceof Error ? error.message : '');

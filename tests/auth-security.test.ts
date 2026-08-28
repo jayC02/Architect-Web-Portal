@@ -8,6 +8,7 @@ import {
   verifySignedOAuthState,
 } from '../src/lib/auth/oauth';
 import { createOpaqueToken, hashOpaqueToken } from '../src/lib/auth/tokens';
+import { safeReturnTo } from '../src/lib/auth/return-to';
 import {
   completeGoogleSignupSchema,
   forgotPasswordSchema,
@@ -43,6 +44,11 @@ assert.equal(authorizationUrl.searchParams.get('code_challenge_method'), 'S256')
 assert.ok(authorizationUrl.searchParams.get('code_challenge'));
 assert.ok(authorizationUrl.searchParams.get('state'));
 assert.equal(authorizationUrl.toString().includes('server-only-google-secret'), false);
+
+assert.equal(safeReturnTo('/desktop-agent/connect?port=49152'), '/desktop-agent/connect?port=49152');
+assert.equal(safeReturnTo('https://attacker.example'), '/dashboard');
+assert.equal(safeReturnTo('//attacker.example/path'), '/dashboard');
+assert.equal(safeReturnTo('/\\attacker.example'), '/dashboard');
 
 const firstToken = createOpaqueToken();
 const secondToken = createOpaqueToken();
@@ -103,7 +109,8 @@ assert.match(landingPage, /AuthEntryScreen/);
 assert.match(loginPage, /getSessionUser\(Astro\)/);
 assert.match(loginPage, /AuthEntryScreen/);
 assert.match(registerPage, /getSessionUser\(Astro\)/);
-assert.match(authEntryScreen, /<GoogleAuthButton \/>/);
+assert.match(authEntryScreen, /<GoogleAuthButton \{returnTo\} \/>/);
+assert.match(authEntryScreen, /data-redirect=\{returnTo\}/);
 assert.match(authEntryScreen, /data-action="\/api\/auth\/login"/);
 assert.match(authEntryScreen, /href="\/forgot-password"/);
 assert.match(authEntryScreen, /href="\/register"/);

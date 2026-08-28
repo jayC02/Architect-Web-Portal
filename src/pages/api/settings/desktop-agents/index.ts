@@ -6,7 +6,7 @@ import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
-import { requireOrganisationRole } from '@/server/permissions/authz';
+import { requireOrganisation, requireOrganisationRole } from '@/server/permissions/authz';
 import {
   agentEnrollmentExpiry,
   agentEnrollmentTokenHash,
@@ -15,9 +15,13 @@ import {
 import { healthyAgentCutoff } from '@/server/services/desktop-agent.service';
 
 export const GET: APIRoute = (context) => withErrorHandling(async () => {
-  const { organisation } = await requireOrganisationRole(context, ['OWNER', 'ADMIN']);
+  const { organisation, membership, user } = await requireOrganisation(context);
+  const canManageAll = membership.role === 'OWNER' || membership.role === 'ADMIN';
   const agents = await prisma.agentRegistration.findMany({
-    where: { organisationId: organisation.id },
+    where: {
+      organisationId: organisation.id,
+      ...(canManageAll ? {} : { enrolledByUserId: user.id }),
+    },
     select: {
       id: true, machineName: true, agentVersion: true, capabilities: true, enabled: true,
       revokedAt: true, lastSeenAt: true, operatingState: true, createdAt: true,
@@ -27,6 +31,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const healthyAfter = healthyAgentCutoff();
   return jsonResponse(200, {
     agents: agents.map((agent) => ({ ...agent, connected: Boolean(agent.enabled && !agent.revokedAt && agent.lastSeenAt && agent.lastSeenAt > healthyAfter) })),
+    canManageAll,
   });
 }, context);
 
@@ -46,4 +51,3 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   });
   return jsonResponse(201, { token, organisationId: organisation.id, expiresAt: expiresAt.toISOString() });
 }, context);
-

@@ -14,13 +14,45 @@ export const agentCapabilitiesSchema = z.object({
   progressContractVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),
 }).strict();
 
-export const agentEnrollmentExchangeSchema = z.object({
+export const legacyAgentEnrollmentExchangeSchema = z.object({
   token: z.string().trim().regex(/^ape_[A-Za-z0-9_-]{40,100}$/),
   organisationId: z.string().trim().min(8).max(120),
   installationId: z.string().uuid(),
   machineName: z.string().trim().min(1).max(120),
   agentVersion: z.string().trim().min(1).max(40),
   capabilities: agentCapabilitiesSchema,
+}).strict();
+
+const pkceValueSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{43,128}$/);
+const loopbackStateSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{32,128}$/);
+
+export const agentSetupAuthorisationSchema = z.object({
+  installationId: z.string().uuid(),
+  codeChallenge: pkceValueSchema,
+  state: loopbackStateSchema,
+  port: z.number().int().min(1).max(65_535),
+  confirmed: z.boolean().optional().default(false),
+}).strict();
+
+export const pkceAgentEnrollmentExchangeSchema = z.object({
+  grant: z.string().trim().regex(/^ape_[A-Za-z0-9_-]{40,100}$/),
+  codeVerifier: pkceValueSchema,
+  installationId: z.string().uuid(),
+  machineName: z.string().trim().min(1).max(120),
+  agentVersion: z.string().trim().min(1).max(40),
+  capabilities: agentCapabilitiesSchema,
+}).strict();
+
+export const agentEnrollmentExchangeSchema = z.union([
+  legacyAgentEnrollmentExchangeSchema,
+  pkceAgentEnrollmentExchangeSchema,
+]);
+
+export const agentConnectionQuerySchema = z.object({
+  installationId: z.string().uuid(),
+  codeChallenge: pkceValueSchema,
+  state: loopbackStateSchema,
+  port: z.coerce.number().int().min(1).max(65_535),
 }).strict();
 
 export const agentHeartbeatSchema = z.object({
@@ -53,4 +85,3 @@ export const desktopProgressSchema = z.object({
 }).strict();
 
 export type AgentCapabilities = z.infer<typeof agentCapabilitiesSchema>;
-

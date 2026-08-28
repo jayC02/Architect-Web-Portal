@@ -449,6 +449,7 @@ model User {
   xeroProjectInvoiceLinks  XeroProjectInvoiceLink[] @relation("XeroProjectInvoiceLinkCreatedBy")
   enrolledAgents           AgentRegistration[]      @relation("AgentRegistrationEnrolledBy")
   agentEnrollmentTokens    AgentEnrollmentToken[]   @relation("AgentEnrollmentTokenCreatedBy")
+  agentSetupIntents        AgentSetupIntent[]       @relation("AgentSetupIntentCreatedBy")
   feePlanTemplates         FeePlanTemplate[]        @relation("FeePlanTemplateCreatedBy")
   projectFeePlans          ProjectFeePlan[]         @relation("ProjectFeePlanCreatedBy")
   lifecycleEvents          LifecycleEvent[]         @relation("LifecycleEventActor")
@@ -566,6 +567,7 @@ model Organisation {
   workflowTargets       WorkflowTarget[]
   agentRegistrations    AgentRegistration[]
   agentEnrollmentTokens AgentEnrollmentToken[]
+  agentSetupIntents     AgentSetupIntent[]
   financeSettings       OrganisationFinanceSettings?
   feePlanTemplates      FeePlanTemplate[]
   projectFeePlans       ProjectFeePlan[]
@@ -1121,6 +1123,8 @@ model AgentEnrollmentToken {
   organisationId  String
   createdByUserId String
   tokenHash       String    @unique
+  installationId  String?
+  codeChallenge   String?
   expiresAt       DateTime
   usedAt          DateTime?
   createdAt       DateTime  @default(now())
@@ -1130,6 +1134,21 @@ model AgentEnrollmentToken {
 
   @@index([organisationId, expiresAt, usedAt])
   @@index([createdByUserId])
+}
+
+model AgentSetupIntent {
+  id              String    @id @default(cuid())
+  organisationId  String
+  createdByUserId String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("AgentSetupIntentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, createdByUserId, expiresAt, usedAt])
 }
 
 model AutomationJobEvent {

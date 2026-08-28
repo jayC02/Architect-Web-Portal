@@ -46,7 +46,8 @@ assert.match(exchangeRoute, /handoffCodeHash:\s*null/, 'redeemed handoff codes a
 assert.match(exchangeRoute, /status:\s*job\.status === AutomationJobStatus\.READY \? AutomationJobStatus\.CLAIMED : job\.status/, 'resume preserves claimed or in-progress status');
 assert.match(tokenAuth, /assertDesktopJobAccess/, 'desktop API access can be restricted to the selected job');
 assert.match(tokenAuth, /createHash\('sha256'\)/, 'desktop access tokens must be stored as hashes');
-assert.match(desktopIntegration, /Copy one-time code/, 'settings clearly labels the short-lived Agent enrollment secret');
+assert.match(desktopIntegration, /AgentSetupFlow/, 'settings uses the shared automatic Agent setup flow');
+assert.doesNotMatch(desktopIntegration, /Copy one-time code|paste.*code/i, 'settings must not require copied enrollment secrets');
 assert.match(desktopIntegration, /Windows Credential Manager/, 'settings explains secure durable credential storage');
 assert.doesNotMatch(desktopIntegration, /apa_[A-Za-z0-9_-]+/, 'settings never embeds a durable Agent credential');
 assert.match(automationJobService, /typeOfWorkKey:\s*typeOfWorkKey\(project\.projectType\)/, 'v2 snapshots carry a stable type-of-work key');

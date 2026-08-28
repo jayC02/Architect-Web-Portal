@@ -15,11 +15,11 @@ if (!auth) return Astro.redirect('/login');
     <h1 class="mt-2 text-3xl font-semibold">Integrations</h1>
     <p class="mt-1 text-sm text-stone-500">Connect practice services and keep operational records aligned.</p>
   </div>
-  {['OWNER', 'ADMIN'].includes(auth.membership.role) && <XeroIntegration client:load />}
   <div class="mt-5">
-  <GoogleCalendarIntegration client:load />
+    <DesktopAccessIntegration client:load />
   </div>
   <div class="mt-5">
-    <DesktopAccessIntegration client:load canManage={['OWNER', 'ADMIN'].includes(auth.membership.role)} />
+    <GoogleCalendarIntegration client:load />
   </div>
+  {['OWNER', 'ADMIN'].includes(auth.membership.role) && <div class="mt-5"><XeroIntegration client:load /></div>}
 </AppShell>

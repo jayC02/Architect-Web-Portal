@@ -63,7 +63,7 @@ assert.match(reviewUi, /const acceptDocument/, 'review-required documents have a
 assert.match(reviewUi, /documentStatus: 'APPROVED'/, 'accepting marks the document reviewed');
 assert.match(reviewUi, />Accept</, 'review-required rows expose Accept');
 assert.match(reviewUi, />Change</, 'review-required rows expose Change');
-assert.match(reviewUi, />Cancel</, 'category changes can be cancelled');
+assert.match(reviewUi, />\s*Cancel\s*</, 'category changes can be cancelled');
 assert.match(reviewUi, /More than one document is marked as a Location Plan/, 'Location Plan conflicts explain the required manual choice');
 assert.match(reviewUi, /clientAddressSameAsSite/, 'same-as-site address flow is visible');
 assert.match(reviewUi, /withSiteAddress[\s\S]*buildingNumber: site\.buildingNumber/, 'same-as-site copies the structured Site building number');
@@ -76,6 +76,7 @@ assert.match(reviewUi, /saveImmediately\.current/, 'discrete changes save immedi
 assert.match(reviewUi, /previousIssueCount/, 'sections stay open when a field becomes valid while typing');
 assert.match(reviewUi, /Create Project/, 'one clear completion action remains');
 assert.doesNotMatch(reviewUi, /Save application draft|Create and open in desktop/, 'old competing actions are removed');
-assert.match(commitRoute, /redirectTo: `\/projects\//, 'commit still redirects to the resulting Project');
+assert.match(commitRoute, /const projectUrl = `\/projects\/\$\{encodeURIComponent\(result\.projectId\)\}`/, 'commit still builds a redirect to the resulting Project');
+assert.match(commitRoute, /redirectTo,/, 'commit returns the resulting Project redirect');
 
 console.log('application draft review UI tests passed');

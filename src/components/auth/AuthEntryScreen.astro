@@ -7,9 +7,10 @@ import PublicFooter from '@/components/layout/PublicFooter.astro';
 interface Props {
   message?: string | null;
   authError?: string | null;
+  returnTo?: string;
 }
 
-const { message = null, authError = null } = Astro.props;
+const { message = null, authError = null, returnTo = '/dashboard' } = Astro.props;
 ---
 
 <main class="min-h-screen overflow-x-hidden bg-paper">
@@ -25,7 +26,7 @@ const { message = null, authError = null } = Astro.props;
           data-field-errors
           data-action="/api/auth/login"
           data-method="POST"
-          data-redirect="/dashboard"
+          data-redirect={returnTo}
           data-pending-message="Signing in..."
           method="post"
           action="/api/auth/login"
@@ -39,7 +40,7 @@ const { message = null, authError = null } = Astro.props;
           {message && <p class="mb-5 border-l-2 border-moss pl-3 text-sm leading-6 text-stone-600" role="status">{message}</p>}
           {authError && <p class="mb-5 border-l-2 border-red-700 pl-3 text-sm leading-6 text-red-800" role="alert">{authError}</p>}
 
-          <GoogleAuthButton />
+          <GoogleAuthButton {returnTo} />
 
           <div class="my-5 flex items-center gap-3" aria-hidden="true">
             <span class="h-px flex-1 bg-stone-200"></span>

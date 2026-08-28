@@ -59,7 +59,7 @@ assert.doesNotMatch(commit, /saveUploadedDocument|readStoredDocumentBytes/, 'com
 assert.doesNotMatch(newApplication, /FormData|XMLHttpRequest|request\.send/, 'the new application page does not build or submit a combined file package');
 assert.match(newApplication, /createSingleFlight/, 'concurrent workers share one authoritative draft creation');
 assert.match(newApplication, /APPLICATION_UPLOAD_LIMITS\.uploadConcurrency/, 'the browser uses the central upload concurrency limit');
-assert.match(newApplication, /Could not upload.*completed uploads have been kept/, 'per-file failures keep successful files available');
+assert.match(newApplication, /Unable to upload document:.*completed uploads have been kept/, 'per-file failures keep successful files available');
 
 const syntheticPackage = Array.from({ length: 8 }, (_, index) => 1_900_000 + index * 1_000);
 const syntheticTotal = syntheticPackage.reduce((total, bytes) => total + bytes, 0);
