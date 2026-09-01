@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ExternalLink, LoaderCircle, Play } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, LoaderCircle, Play, X } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import AgentSetupFlow from '@/components/integrations/AgentSetupFlow';
 
@@ -78,6 +78,17 @@ export function RunAutomationJobButton({ jobId }: { jobId: string }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [needsAgent, setNeedsAgent] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (needsAgent && dialog && !dialog.open) dialog.showModal();
+  }, [needsAgent]);
+
+  const closeSetup = () => {
+    dialogRef.current?.close();
+    setNeedsAgent(false);
+  };
 
   const run = async () => {
     setWorking(true);
@@ -103,7 +114,16 @@ export function RunAutomationJobButton({ jobId }: { jobId: string }) {
         {working ? 'Authorising...' : queued ? 'Application queued' : 'Run application'}
       </button>
       {message && <p role="status" className="mt-2 max-w-xs text-sm font-medium text-moss">{message}</p>}
-      {needsAgent && <div className="mt-4 max-w-xl"><AgentSetupFlow compact onConnected={() => { setNeedsAgent(false); setMessage('Connected. Your queued application will start automatically.'); }} /></div>}
+      <dialog ref={dialogRef} onCancel={closeSetup} className="settings-dialog m-auto w-[min(36rem,calc(100%-2rem))] rounded-xl bg-white p-0 text-ink shadow-2xl backdrop:bg-ink/40">
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div><h2 className="text-xl font-semibold">Desktop Agent required</h2><p className="mt-2 max-w-lg text-sm leading-6 text-stone-600">Architect Pro uses a small Windows app to complete this application securely on the government portal.</p><p className="mt-2 text-sm font-medium text-stone-700">Setup normally takes about a minute.</p></div>
+            <button type="button" onClick={closeSetup} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" aria-label="Cancel Desktop Agent setup"><X size={20} aria-hidden="true" /></button>
+          </div>
+          <div className="mt-5"><AgentSetupFlow compact onConnected={() => { setMessage('Connected. Your queued application will start automatically.'); }} /></div>
+          <div className="mt-5 flex justify-end border-t border-stone-200 pt-4"><button type="button" className="btn btn-secondary" onClick={closeSetup}>Cancel</button></div>
+        </div>
+      </dialog>
       {error && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p>}
     </div>
   );

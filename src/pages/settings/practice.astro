@@ -1,0 +1,24 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { AgentDefaultsForm } from '@/components/live/DirectoryEditor';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const defaults = await prisma.organisationDefaults.findUnique({
+  where: { organisationId: auth.organisation.id },
+});
+const canManage = ['OWNER', 'ADMIN'].includes(auth.membership.role);
+---
+<AppShell title="Practice" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-7 max-w-3xl">
+    <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
+    <h1 class="mt-3 text-3xl font-semibold text-ink">Practice</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Keep the practice and contact details reused when preparing applications up to date.</p>
+  </div>
+  <div class="max-w-4xl">
+    <AgentDefaultsForm defaults={defaults} organisationName={auth.organisation.name} canManage={canManage} submitLabel="Save practice details" />
+  </div>
+</AppShell>

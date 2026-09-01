@@ -1,0 +1,23 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import CertifierSettings from '@/components/settings/CertifierSettings';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+
+const certifierPresets = await prisma.organisationCertifierPreset.findMany({
+  where: { organisationId: auth.organisation.id },
+  orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
+});
+const canManage = ['OWNER', 'ADMIN'].includes(auth.membership.role);
+---
+<AppShell title="Certifiers" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-7 max-w-3xl">
+    <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
+    <h1 class="mt-3 text-3xl font-semibold text-ink">Certifiers</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Save certifier details once and reuse them when preparing Building Warrant applications.</p>
+  </div>
+  <CertifierSettings client:load initialPresets={certifierPresets} canManage={canManage} />
+</AppShell>

@@ -1,15 +1,29 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
-import LiveDataPanel from '@/components/live/LiveDataPanel';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import { ArrowRight, Building2, Link2, SlidersHorizontal, UserRoundCheck } from 'lucide-react';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 ---
 <AppShell title="Settings" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-6">
-    <h1 class="text-3xl font-semibold">Settings</h1>
-    <p class="mt-1 text-sm text-stone-500">Organisation configuration and integration foundations.</p>
+  <div class="mb-7 max-w-2xl">
+    <h1 class="text-3xl font-semibold text-ink">Settings</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Manage your practice and Architect Pro connections.</p>
   </div>
-  <LiveDataPanel client:idle variant="settingsOverview" endpoint="/api/settings/overview" />
+  <nav aria-label="Settings areas" class="grid gap-4 md:grid-cols-2">
+    {[
+      { title: 'Practice', description: 'Practice details and default application contact', href: '/settings/practice', icon: Building2 },
+      { title: 'Certifiers', description: 'Saved Building Standards certifiers', href: '/settings/certifiers', icon: UserRoundCheck },
+      { title: 'Integrations', description: 'Desktop Agent, Google Calendar, Gmail and Xero', href: '/settings/integrations', icon: Link2 },
+      { title: 'Preferences', description: 'Simple user-facing behaviour and notifications', href: '/settings/preferences', icon: SlidersHorizontal },
+    ].map(({ title, description, href, icon: Icon }) => (
+      <a href={href} class="group panel flex min-h-40 flex-col rounded-lg p-5 transition hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_16px_42px_rgba(32,35,31,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40 sm:p-6">
+        <span class="flex h-10 w-10 items-center justify-center rounded-md bg-stone-100 text-stone-700"><Icon size={20} aria-hidden="true" /></span>
+        <span class="mt-5 text-lg font-semibold text-ink">{title}</span>
+        <span class="mt-1 text-sm leading-6 text-stone-500">{description}</span>
+        <span class="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-semibold text-ink">Manage <ArrowRight size={15} aria-hidden="true" class="transition group-hover:translate-x-0.5" /></span>
+      </a>
+    ))}
+  </nav>
 </AppShell>

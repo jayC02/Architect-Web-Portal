@@ -13,7 +13,7 @@ if (!auth) return Astro.redirect('/login');
   <div class="mb-6">
     <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
     <h1 class="mt-2 text-3xl font-semibold">Integrations</h1>
-    <p class="mt-1 text-sm text-stone-500">Connect practice services and keep operational records aligned.</p>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Manage desktop automation and the services connected to your practice.</p>
   </div>
   <div class="mt-5">
     <DesktopAccessIntegration client:load />
@@ -22,4 +22,5 @@ if (!auth) return Astro.redirect('/login');
     <GoogleCalendarIntegration client:load />
   </div>
   {['OWNER', 'ADMIN'].includes(auth.membership.role) && <div class="mt-5"><XeroIntegration client:load /></div>}
+  <p class="mt-6 text-sm text-stone-500">Troubleshooting a previous application run? <a href="/automation-jobs" class="font-semibold text-ink hover:text-moss">View automation history</a>.</p>
 </AppShell>

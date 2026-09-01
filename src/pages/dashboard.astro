@@ -1,6 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import PracticeCalendar from '@/components/calendar/PracticeCalendar';
+import DesktopAutomationSetupCard from '@/components/dashboard/DesktopAutomationSetupCard';
 import LiveDataPanel from '@/components/live/LiveDataPanel';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
@@ -40,6 +41,8 @@ const deadlineRange = [7, 14, 30].includes(selectedRange) ? selectedRange : 14;
   </div>
 
   <LiveDataPanel client:idle variant="dashboard" endpoint={`/api/dashboard/summary?deadlineRange=${deadlineRange}`} />
+
+  <DesktopAutomationSetupCard client:idle />
 
   <div class="mt-6">
     <PracticeCalendar client:visible compact />
