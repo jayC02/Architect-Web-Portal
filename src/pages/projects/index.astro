@@ -1,6 +1,7 @@
 ﻿---
 import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus, type Prisma } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
+import ProjectsSectionNavigation from '@/components/projects/ProjectsSectionNavigation.astro';
 import { prisma } from '@/lib/db/prisma';
 import { formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
@@ -119,19 +120,18 @@ const attentionTextClass = (count: number) => count > 0 ? 'font-semibold text-am
 const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-moss' : 'text-stone-500';
 ---
 <AppShell title="Projects" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-    <div>
+  <div class="mb-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
       <h1 class="text-3xl font-semibold tracking-tight">Projects</h1>
       <p class="mt-1 text-sm text-stone-500">A clean register of project records, deadlines and document actions.</p>
-      <nav aria-label="Project directories" class="mt-2 flex items-center gap-4 text-sm">
-        <a href="/clients" class="font-semibold text-stone-600 hover:text-ink">Clients</a>
-        <a href="/sites" class="font-semibold text-stone-600 hover:text-ink">Sites</a>
-      </nav>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="/projects/new" class="btn btn-secondary">Create manually</a>
+        <a href="/applications/new" class="btn btn-primary">New application</a>
+      </div>
     </div>
-    <div class="flex flex-wrap gap-2">
-      <a href="/projects/new" class="btn btn-secondary">Create manually</a>
-      <a href="/applications/new" class="btn btn-primary">New application</a>
-    </div>
+    <ProjectsSectionNavigation active="projects" />
   </div>
 
   <form method="GET" class="panel mb-5 rounded-lg p-4">

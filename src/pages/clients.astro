@@ -1,6 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import LiveDataPanel from '@/components/live/LiveDataPanel';
+import ProjectsSectionNavigation from '@/components/projects/ProjectsSectionNavigation.astro';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
@@ -11,6 +12,7 @@ if (!auth) return Astro.redirect('/login');
   <div class="mb-6">
     <h1 class="text-3xl font-semibold">Clients</h1>
     <p class="mt-1 text-sm text-stone-500">Re-use client information across projects.</p>
+    <ProjectsSectionNavigation active="clients" />
   </div>
   <LiveDataPanel client:load variant="clients" endpoint="/api/clients" />
 </AppShell>

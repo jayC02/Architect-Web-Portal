@@ -25,7 +25,9 @@ test('primary navigation is simplified across desktop, secondary routes and mobi
   }
 
   await page.goto(`${baseUrl}/projects`);
-  await expect(page.getByRole('navigation', { name: 'Project directories' }).getByRole('link')).toHaveText(['Clients', 'Sites']);
+  const projectDirectories = page.getByRole('navigation', { name: 'Project directories' });
+  await expect(projectDirectories.getByRole('link')).toHaveText(['Projects', 'Clients', 'Sites']);
+  await expect(projectDirectories.getByRole('link', { name: 'Projects' })).toHaveAttribute('aria-current', 'page');
 
   for (const [path, parent] of [
     ['/clients', 'Projects'],
@@ -37,6 +39,10 @@ test('primary navigation is simplified across desktop, secondary routes and mobi
     const response = await page.goto(`${baseUrl}${path}`);
     expect(response?.status()).toBeLessThan(400);
     await expect(desktopShell.getByRole('link', { name: parent, exact: true })).toHaveAttribute('aria-current', 'page');
+    if (path === '/clients' || path === '/sites') {
+      const activeDirectory = path === '/clients' ? 'Clients' : 'Sites';
+      await expect(page.getByRole('navigation', { name: 'Project directories' }).getByRole('link', { name: activeDirectory })).toHaveAttribute('aria-current', 'page');
+    }
   }
 
   await page.setViewportSize({ width: 390, height: 844 });

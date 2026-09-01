@@ -1,0 +1,31 @@
+---
+interface Props {
+  active: 'projects' | 'clients' | 'sites';
+}
+
+const { active } = Astro.props;
+const items = [
+  { key: 'projects', label: 'Projects', href: '/projects' },
+  { key: 'clients', label: 'Clients', href: '/clients' },
+  { key: 'sites', label: 'Sites', href: '/sites' },
+] as const;
+---
+<nav aria-label="Project directories" class="mt-4 flex flex-wrap gap-2">
+  {items.map((item) => {
+    const isActive = item.key === active;
+    return (
+      <a
+        href={item.href}
+        aria-current={isActive ? 'page' : undefined}
+        class:list={[
+          'inline-flex min-h-10 items-center justify-center rounded-md border px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30 focus-visible:ring-offset-2',
+          isActive
+            ? 'border-ink bg-ink text-paper shadow-[0_8px_20px_rgba(32,35,31,0.12)] hover:bg-stone-700'
+            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50 hover:text-ink',
+        ]}
+      >
+        {item.label}
+      </a>
+    );
+  })}
+</nav>
