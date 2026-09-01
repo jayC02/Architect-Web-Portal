@@ -4,15 +4,11 @@ import BrandLogo from '@/components/brand/BrandLogo.astro';
 import type { OrganisationRole } from '@prisma/client';
 import {
   CalendarDays,
-  CalendarClock,
   FilePlus2,
   FolderKanban,
   LayoutDashboard,
   LogOut,
-  MapPinned,
   Settings,
-  Users,
-  Mail,
   CircleDollarSign,
 } from 'lucide-react';
 
@@ -24,20 +20,42 @@ interface Props {
 }
 
 const { title, user, organisation, role } = Astro.props;
-const nav = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'New application', href: '/applications/new', icon: FilePlus2 },
-  { label: 'Projects', href: '/projects', icon: FolderKanban },
-  { label: 'Clients', href: '/clients', icon: Users },
-  { label: 'Sites', href: '/sites', icon: MapPinned },
-  { label: 'Deadlines', href: '/deadlines', icon: CalendarClock },
-  { label: 'Calendar', href: '/calendar', icon: CalendarDays },
-  ...(['OWNER', 'ADMIN'].includes(role) ? [{ label: 'Finance', href: '/finance', icon: CircleDollarSign }] : []),
-  { label: 'Email Updates', href: '/email-updates', icon: Mail },
-  { label: 'Settings', href: '/settings', icon: Settings },
+type NavigationItem = {
+  label: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  activePrefixes: string[];
+};
+
+const newApplication: NavigationItem = {
+  label: 'New application',
+  href: '/applications/new',
+  icon: FilePlus2,
+  activePrefixes: ['/applications'],
+};
+const primaryNav: NavigationItem[] = [
+  { label: 'Today', href: '/dashboard', icon: LayoutDashboard, activePrefixes: ['/dashboard', '/email-updates'] },
+  {
+    label: 'Projects',
+    href: '/projects',
+    icon: FolderKanban,
+    activePrefixes: ['/projects', '/clients', '/sites', '/planning', '/building-warrant', '/automation-job'],
+  },
+  { label: 'Calendar', href: '/calendar', icon: CalendarDays, activePrefixes: ['/calendar', '/deadlines'] },
+  ...(['OWNER', 'ADMIN'].includes(role)
+    ? [{ label: 'Finance', href: '/finance', icon: CircleDollarSign, activePrefixes: ['/finance'] }]
+    : []),
 ];
+const settingsNav: NavigationItem = {
+  label: 'Settings',
+  href: '/settings',
+  icon: Settings,
+  activePrefixes: ['/settings', '/automation-jobs'],
+};
 const pathname = Astro.url.pathname;
-const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+const isActive = ({ activePrefixes }: NavigationItem) => activePrefixes.some((prefix) =>
+  pathname === prefix || pathname.startsWith(`${prefix}/`),
+);
 ---
 <BaseLayout title={`${title} | Architect Pro`} noindex={true}>
   <div class="min-h-screen bg-paper">
@@ -48,15 +66,36 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
           <span class="mt-1 block truncate text-xs text-stone-500">{organisation.name}</span>
         </a>
       </div>
-      <nav class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-2">
-        {nav.map(({ label, href, icon: Icon }) => (
-          <a class:list={['app-link', isActive(href) ? 'app-link-active' : '']} href={href}>
-            <span class="flex items-center gap-3">
-              <Icon size={17} />
-              <span>{label}</span>
-            </span>
-          </a>
-        ))}
+      <div class="px-4 pb-3">
+        <a
+          class:list={['btn btn-primary w-full justify-start gap-3', isActive(newApplication) && 'ring-2 ring-moss/30 ring-offset-2']}
+          href={newApplication.href}
+          aria-current={isActive(newApplication) ? 'page' : undefined}
+        >
+          <FilePlus2 size={17} aria-hidden="true" />
+          <span>New application</span>
+        </a>
+      </div>
+      <nav aria-label="Primary navigation" class="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-2">
+        {primaryNav.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a class:list={['app-link', isActive(item) ? 'app-link-active' : '']} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
+              <span class="flex items-center gap-3">
+                <Icon size={17} aria-hidden="true" />
+                <span>{item.label}</span>
+              </span>
+            </a>
+          );
+        })}
+      </nav>
+      <nav aria-label="Secondary navigation" class="mx-4 border-t border-stone-200 py-3">
+        <a class:list={['app-link', isActive(settingsNav) ? 'app-link-active' : '']} href={settingsNav.href} aria-current={isActive(settingsNav) ? 'page' : undefined}>
+          <span class="flex items-center gap-3">
+            <Settings size={17} aria-hidden="true" />
+            <span>Settings</span>
+          </span>
+        </a>
       </nav>
       <div class="mx-4 mb-4 mt-3 rounded-xl border border-stone-200 bg-white p-4 shadow-[0_14px_40px_rgba(32,35,31,0.06)]">
         <div class="flex items-start gap-3">
@@ -77,14 +116,27 @@ const isActive = (href: string) => pathname === href || pathname.startsWith(`${h
           <a href="/dashboard" class="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
             <BrandLogo variant="mark" class="h-8 w-8" />
           </a>
-          <button data-logout class="btn btn-secondary gap-2"><LogOut size={16} /> Sign out</button>
-        </div>
-        <nav class="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {nav.map(({ label, href, icon: Icon }) => (
-            <a class:list={['shrink-0 rounded-md border px-3 py-2 text-sm transition', isActive(href) ? 'border-ink bg-ink text-paper' : 'border-stone-200 bg-white text-stone-700']} href={href}>
-              <span class="flex items-center gap-2"><Icon size={15} /> {label}</span>
+          <div class="flex items-center gap-2">
+            <a
+              class:list={['btn btn-primary min-h-10 gap-2 px-3', isActive(newApplication) && 'ring-2 ring-moss/30 ring-offset-2']}
+              href={newApplication.href}
+              aria-current={isActive(newApplication) ? 'page' : undefined}
+            >
+              <FilePlus2 size={16} aria-hidden="true" />
+              <span>New application</span>
             </a>
-          ))}
+            <button data-logout class="btn btn-secondary h-10 w-10 gap-2 px-0 sm:w-auto sm:px-4"><LogOut size={16} aria-hidden="true" /><span class="sr-only sm:not-sr-only">Sign out</span></button>
+          </div>
+        </div>
+        <nav aria-label="Mobile navigation" class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {[...primaryNav, settingsNav].map((item) => {
+            const Icon = item.icon;
+            return (
+              <a class:list={['min-w-0 rounded-md border px-2 py-2 text-center text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', isActive(item) ? 'border-ink bg-ink text-paper' : 'border-stone-200 bg-white text-stone-700']} href={item.href} aria-current={isActive(item) ? 'page' : undefined}>
+                <span class="flex items-center justify-center gap-2"><Icon size={15} aria-hidden="true" /><span class="truncate">{item.label}</span></span>
+              </a>
+            );
+          })}
         </nav>
       </header>
       <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
