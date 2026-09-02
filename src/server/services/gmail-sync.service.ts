@@ -86,12 +86,16 @@ const loadProjectCandidates = async (organisationId: string) => {
         status: { not: 'ARCHIVED' },
         OR: [
           { planningApplications: { some: { status: { in: [
+            PlanningStatus.NOT_STARTED,
+            PlanningStatus.DRAFTING,
             PlanningStatus.SUBMITTED,
             PlanningStatus.VALIDATED,
             PlanningStatus.IN_REVIEW,
             PlanningStatus.FURTHER_INFORMATION_REQUESTED,
           ] } } } },
           { warrantApplications: { some: { status: { in: [
+            WarrantStatus.NOT_STARTED,
+            WarrantStatus.DRAFTING,
             WarrantStatus.SUBMITTED,
             WarrantStatus.IN_REVIEW,
             WarrantStatus.FURTHER_INFORMATION_REQUESTED,
@@ -203,6 +207,23 @@ const readMessage = (accessToken: string, id: string, format: 'metadata' | 'full
     for (const header of ['From', 'To', 'Cc', 'Subject', 'Date']) query.append('metadataHeaders', header);
   }
   return gmailRequest<GmailMessagePayload>(accessToken, `/users/me/messages/${encodeURIComponent(id)}?${query}`);
+};
+
+export const isUnavailableGmailMessageError = (error: unknown) =>
+  typeof error === 'object'
+  && error !== null
+  && 'googleStatus' in error
+  && (error as { googleStatus?: unknown }).googleStatus === 404;
+
+const readMessageIfAvailable = async (accessToken: string, id: string, format: 'metadata' | 'full') => {
+  try {
+    return await readMessage(accessToken, id, format);
+  } catch (error) {
+    // Gmail history may retain message-added events after the message has been
+    // deleted. Those IDs can never be processed and must not pin the cursor.
+    if (isUnavailableGmailMessageError(error)) return null;
+    throw error;
+  }
 };
 
 const readAttachmentBytes = async (accessToken: string, messageId: string, attachmentId: string) => {
@@ -484,6 +505,7 @@ export const syncOrganisationGmail = async (organisationId: string) => {
   let reviewed = 0;
   let skipped = 0;
   let failed = 0;
+  let unavailable = 0;
   try {
     const accessToken = await getGoogleAccessToken(connection);
     const candidates = await loadProjectCandidates(organisationId);
@@ -516,12 +538,24 @@ export const syncOrganisationGmail = async (organisationId: string) => {
         continue;
       }
       try {
-        const metadata = parseGmailMessage(await readMessage(accessToken, messageId, 'metadata'));
+        const metadataPayload = await readMessageIfAvailable(accessToken, messageId, 'metadata');
+        if (!metadataPayload) {
+          unavailable += 1;
+          skipped += 1;
+          continue;
+        }
+        const metadata = parseGmailMessage(metadataPayload);
         if (!isLikelyProjectEmail(metadata, candidates as GmailProjectCandidate[]) && !officialProjectMessage(metadata)) {
           skipped += 1;
           continue;
         }
-        const parsed = parseGmailMessage(await readMessage(accessToken, messageId, 'full'));
+        const fullPayload = await readMessageIfAvailable(accessToken, messageId, 'full');
+        if (!fullPayload) {
+          unavailable += 1;
+          skipped += 1;
+          continue;
+        }
+        const parsed = parseGmailMessage(fullPayload);
         const result = await persistCandidateMessage(organisationId, connection, accessToken, parsed, candidates);
         imported += 1;
         if (result.tracked.processingStatus === GmailProcessingStatus.NEEDS_REVIEW) reviewed += 1;
@@ -545,6 +579,12 @@ export const syncOrganisationGmail = async (organisationId: string) => {
         });
       }
     }
+    if (unavailable) {
+      console.warn('Skipped Gmail history messages that are no longer available', {
+        organisationId,
+        unavailable,
+      });
+    }
     if (!failed) {
       const profile = await gmailRequest<{ historyId?: string }>(accessToken, '/users/me/profile');
       proposedHistoryId = profile.historyId ?? proposedHistoryId;
@@ -559,7 +599,7 @@ export const syncOrganisationGmail = async (organisationId: string) => {
       },
     });
     if (!failed) await resolveGmailReconnectAction(organisationId);
-    return { imported, needsReview: reviewed, skipped, failed };
+    return { imported, needsReview: reviewed, skipped, unavailable, failed };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : 'Gmail sync failed.';
     await prisma.calendarConnection.updateMany({
