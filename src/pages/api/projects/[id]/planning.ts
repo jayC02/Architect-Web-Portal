@@ -4,7 +4,7 @@ import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
-import { planningApplicationSchema } from '@/lib/validation/domain';
+import { planningApplicationCreateSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
@@ -33,7 +33,7 @@ export const POST: APIRoute = (context) =>
     const projectId = context.params.id;
     if (!projectId) throw new HttpError(400, 'Project id is required.');
     await requireProjectAccess(organisation.id, projectId);
-    const body = await parseBody(context.request, planningApplicationSchema);
+    const body = await parseBody(context.request, planningApplicationCreateSchema);
     const application = await prisma.planningApplication.create({
       data: { ...body, organisationId: organisation.id, projectId },
     });

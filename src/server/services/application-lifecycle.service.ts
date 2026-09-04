@@ -110,6 +110,84 @@ export const updatePlanningApplicationInTransaction = async (
     return { application, lifecycleEventIds };
 };
 
+const submissionEligiblePlanningStatuses = [
+  PlanningStatus.NOT_STARTED,
+  PlanningStatus.DRAFTING,
+] as const;
+
+export const confirmPlanningApplicationSubmitted = async (
+  input: {
+    organisationId: string;
+    planningApplicationId: string;
+    actorUserId: string;
+    occurredAt?: Date;
+  },
+  database: PrismaClient = prisma,
+) => {
+  const occurredAt = input.occurredAt ?? new Date();
+  const result = await database.$transaction((tx) => confirmPlanningApplicationSubmittedInTransaction(tx, {
+    ...input,
+    occurredAt,
+  }));
+  await drainLifecycleEventsBestEffort(input.organisationId, result.lifecycleEventIds);
+  return { application: result.application, changed: result.changed };
+};
+
+export const confirmPlanningApplicationSubmittedInTransaction = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organisationId: string;
+    planningApplicationId: string;
+    actorUserId: string;
+    occurredAt: Date;
+  },
+) => {
+    const occurredAt = input.occurredAt;
+    const existing = await tx.planningApplication.findFirst({
+      where: { id: input.planningApplicationId, organisationId: input.organisationId },
+      select: { id: true, projectId: true, status: true, submissionDate: true },
+    });
+    if (!existing) throw new HttpError(404, 'Planning application not found.');
+    if (!new Set<PlanningStatus>(submissionEligiblePlanningStatuses).has(existing.status)) {
+      return { application: existing, changed: false, lifecycleEventIds: [] as string[] };
+    }
+
+    const updated = await tx.planningApplication.updateMany({
+      where: {
+        id: existing.id,
+        organisationId: input.organisationId,
+        status: { in: [...submissionEligiblePlanningStatuses] },
+      },
+      data: {
+        status: PlanningStatus.SUBMITTED,
+        submissionDate: existing.submissionDate ?? occurredAt,
+      },
+    });
+    if (!updated.count) {
+      const current = await tx.planningApplication.findFirst({
+        where: { id: existing.id, organisationId: input.organisationId },
+        select: { id: true, projectId: true, status: true, submissionDate: true },
+      });
+      if (!current) throw new HttpError(404, 'Planning application not found.');
+      return { application: current, changed: false, lifecycleEventIds: [] as string[] };
+    }
+
+    const application = await tx.planningApplication.findUniqueOrThrow({
+      where: { id: existing.id },
+      select: { id: true, projectId: true, status: true, submissionDate: true },
+    });
+    const event = await emitPlanningLifecycleEvent(tx, {
+      organisationId: input.organisationId,
+      projectId: existing.projectId,
+      planningApplicationId: existing.id,
+      eventType: LifecycleEventType.PLANNING_SUBMITTED,
+      source: LifecycleEventSource.APPLICATION_STATUS,
+      actorUserId: input.actorUserId,
+      occurredAt,
+    });
+    return { application, changed: true, lifecycleEventIds: [event.id] };
+};
+
 export const updateBuildingWarrantWithLifecycle = async (
   input: {
     organisationId: string;
@@ -162,6 +240,7 @@ export const updateBuildingWarrantInTransaction = async (
       buildingWarrantApplicationId: existing.id,
       actorUserId: input.actorUserId,
       occurredAt: input.occurredAt,
+      source: input.source,
     })).id);
   }
   if (existing.status !== WarrantStatus.GRANTED && application.status === WarrantStatus.GRANTED) {
@@ -175,6 +254,83 @@ export const updateBuildingWarrantInTransaction = async (
     })).id);
   }
   return { application, lifecycleEventIds };
+};
+
+const submissionEligibleWarrantStatuses = [
+  WarrantStatus.NOT_STARTED,
+  WarrantStatus.DRAFTING,
+] as const;
+
+export const confirmBuildingWarrantSubmitted = async (
+  input: {
+    organisationId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId: string;
+    occurredAt?: Date;
+  },
+  database: PrismaClient = prisma,
+) => {
+  const occurredAt = input.occurredAt ?? new Date();
+  const result = await database.$transaction((tx) => confirmBuildingWarrantSubmittedInTransaction(tx, {
+    ...input,
+    occurredAt,
+  }));
+  await drainLifecycleEventsBestEffort(input.organisationId, result.lifecycleEventIds);
+  return { application: result.application, changed: result.changed };
+};
+
+export const confirmBuildingWarrantSubmittedInTransaction = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organisationId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId: string;
+    occurredAt: Date;
+  },
+) => {
+    const occurredAt = input.occurredAt;
+    const existing = await tx.buildingWarrantApplication.findFirst({
+      where: { id: input.buildingWarrantApplicationId, organisationId: input.organisationId },
+      select: { id: true, projectId: true, status: true, submissionDate: true },
+    });
+    if (!existing) throw new HttpError(404, 'Building Warrant application not found.');
+    if (!new Set<WarrantStatus>(submissionEligibleWarrantStatuses).has(existing.status)) {
+      return { application: existing, changed: false, lifecycleEventIds: [] as string[] };
+    }
+
+    const updated = await tx.buildingWarrantApplication.updateMany({
+      where: {
+        id: existing.id,
+        organisationId: input.organisationId,
+        status: { in: [...submissionEligibleWarrantStatuses] },
+      },
+      data: {
+        status: WarrantStatus.SUBMITTED,
+        submissionDate: existing.submissionDate ?? occurredAt,
+      },
+    });
+    if (!updated.count) {
+      const current = await tx.buildingWarrantApplication.findFirst({
+        where: { id: existing.id, organisationId: input.organisationId },
+        select: { id: true, projectId: true, status: true, submissionDate: true },
+      });
+      if (!current) throw new HttpError(404, 'Building Warrant application not found.');
+      return { application: current, changed: false, lifecycleEventIds: [] as string[] };
+    }
+
+    const application = await tx.buildingWarrantApplication.findUniqueOrThrow({
+      where: { id: existing.id },
+      select: { id: true, projectId: true, status: true, submissionDate: true },
+    });
+    const event = await emitBuildingWarrantSubmittedLifecycleEvent(tx, {
+      organisationId: input.organisationId,
+      projectId: existing.projectId,
+      buildingWarrantApplicationId: existing.id,
+      actorUserId: input.actorUserId,
+      occurredAt,
+      source: LifecycleEventSource.APPLICATION_STATUS,
+    });
+    return { application, changed: true, lifecycleEventIds: [event.id] };
 };
 
 export const recordAutomationReadinessTransition = async (

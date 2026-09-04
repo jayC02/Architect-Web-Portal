@@ -19,6 +19,7 @@ interface Props {
   projectId: string;
   applicationKind: 'PLANNING' | 'BUILDING_WARRANT';
   applicationId?: string;
+  applicationStatus: string;
   desktopJob?: DesktopAutomationJob | null;
   desktopPreparationReady?: boolean;
   desktopMissingCount?: number;
@@ -40,6 +41,7 @@ const {
   projectId,
   applicationKind,
   applicationId,
+  applicationStatus,
   desktopJob,
   desktopPreparationReady = false,
   desktopMissingCount = 0,
@@ -90,6 +92,7 @@ const {
       projectId={projectId}
       type={applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_PLANNING : AutomationJobType.BUILDING_WARRANT}
       applicationId={applicationId}
+      applicationStatus={applicationStatus}
       applicationLabel={applicationKind === 'PLANNING' ? 'Householder application' : 'Building Warrant application'}
       manageHref={manageHref}
       job={desktopJob}

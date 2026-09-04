@@ -423,6 +423,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         projectId={project.id}
         applicationKind="PLANNING"
         applicationId={latestPlanning?.id}
+        applicationStatus={latestPlanning?.status ?? 'NOT_STARTED'}
         desktopJob={planningDesktop.job}
         desktopPreparationReady={planningDesktop.preparationReady}
         desktopMissingCount={planningDesktop.missingCount}
@@ -448,6 +449,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         projectId={project.id}
         applicationKind="BUILDING_WARRANT"
         applicationId={latestWarrant?.id}
+        applicationStatus={latestWarrant?.status ?? 'NOT_STARTED'}
         desktopJob={warrantDesktop.job}
         desktopPreparationReady={warrantDesktop.preparationReady}
         desktopMissingCount={warrantDesktop.missingCount}

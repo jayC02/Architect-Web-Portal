@@ -16,6 +16,7 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
 import { assertAutomationJobTransition } from '@/server/services/automation-lifecycle.service';
+import { reconcilePreparedApplicationReview } from '@/server/services/prepared-application-review.service';
 
 const selectableStatuses = [
   AutomationJobStatus.READY,
@@ -78,7 +79,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         organisationId: access.organisationId,
         claimedDeviceId: access.id,
       },
-      select: { id: true, status: true, projectId: true },
+      select: { id: true, status: true, projectId: true, type: true, dataSnapshot: true },
     });
     if (!job) throw new HttpError(409, 'Automation job is not claimed by this desktop device.');
 
@@ -140,6 +141,26 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (!update.count) throw new HttpError(409, 'Automation job changed while the desktop result was being saved.');
+    if ([
+      AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+      AutomationJobStatus.COMPLETED,
+      AutomationJobStatus.FAILED_RETRYABLE,
+      AutomationJobStatus.FAILED_FINAL,
+      AutomationJobStatus.CANCELLED,
+    ].includes(body.status)) {
+      const projection = await reconcilePreparedApplicationReview(tx, {
+        organisationId: access.organisationId,
+        job: { ...job, status: body.status },
+        occurredAt: new Date(body.occurredAt),
+      });
+      if (projection.outcome === 'identity-unavailable' || projection.outcome === 'application-unavailable') {
+        console.warn('Desktop result could not project prepared application review state.', {
+          organisationId: access.organisationId,
+          jobId: job.id,
+          outcome: projection.outcome,
+        });
+      }
+    }
     const retryDeadlineSource = `automation-job:${id}:retry`;
     if (body.status === AutomationJobStatus.FAILED_RETRYABLE) {
       await tx.deadline.upsert({

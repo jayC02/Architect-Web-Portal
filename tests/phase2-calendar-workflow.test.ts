@@ -21,6 +21,7 @@ import {
   PLANNING_READY_HANDLER_KEYS,
   PLANNING_REFUSED_HANDLER_KEYS,
   PROJECT_CREATED_HANDLER_KEYS,
+  BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS,
   emitDocumentReviewCompletedLifecycleEvent,
 } from '../src/server/services/lifecycle-events.service';
 import {
@@ -351,7 +352,7 @@ assert.equal(store.deadlines.find((value) => value.sourceKey === workflowSourceK
 assert.equal(store.deadlines.filter((value) => value.sourceKey === workflowSourceKeys.planningPreparation('planning_a')).length, 1);
 assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionKeys.planningPreparation('planning_a')).length, 1);
 
-// Planning ready advances preparation to one final-review projection.
+// Planning ready completes preparation work without inventing prepared-review work or a date.
 const planningReadyKeys = ['planning.action.ready', 'planning.activity.ready', 'planning.deadline.ready'] as const;
 const planningReady = makeEffect('planning_ready', LifecycleEventType.PLANNING_READY, {
   projectId: 'project_a', planningApplicationId: 'planning_a',
@@ -359,10 +360,19 @@ const planningReady = makeEffect('planning_ready', LifecycleEventType.PLANNING_R
 await runHandlers(planningReadyKeys, planningReady);
 await runHandlers(planningReadyKeys, planningReady);
 assert.equal(store.deadlines.find((value) => value.sourceKey === workflowSourceKeys.planningPreparation('planning_a')).status, DeadlineStatus.COMPLETED);
-assert.equal(store.deadlines.filter((value) => value.sourceKey === workflowSourceKeys.planningFinalReview('planning_a')).length, 1);
-assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionKeys.planningFinalReview('planning_a')).length, 1);
+assert.equal(store.deadlines.filter((value) => value.sourceKey === workflowSourceKeys.planningFinalReview('planning_a')).length, 0);
+assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionKeys.planningFinalReview('planning_a')).length, 0);
 
-// Submission resolves final review and creates no synthetic regulatory deadline.
+// Submission still resolves historical final-review work and creates no synthetic regulatory deadline.
+store.actions.push({
+  id: 'action_planning_legacy_review', organisationId: 'org_a', projectId: 'project_a',
+  dedupeKey: workflowActionKeys.planningFinalReview('planning_a'), status: ActionItemStatus.OPEN, resolvedAt: null,
+});
+await ensureWorkflowDeadline(database, {
+  organisationId: 'org_a', projectId: 'project_a', planningApplicationId: 'planning_a',
+  sourceKey: workflowSourceKeys.planningFinalReview('planning_a'), title: 'Legacy Planning review',
+  description: 'Historical final review deadline', targetKey: WorkflowTargetKey.PLANNING_FINAL_REVIEW, occurredAt,
+});
 store.planning[0].status = PlanningStatus.SUBMITTED;
 const beforeSubmissionSources = new Set(store.deadlines.map((value) => value.sourceKey));
 await runHandlers(
@@ -454,7 +464,7 @@ assert.equal(store.projects[0].stage, ProjectStage.PLANNING, 'on-hold project do
 store.projects[0].status = ProjectStatus.ACTIVE;
 store.projects[0].stage = ProjectStage.BUILDING_WARRANT;
 
-// Warrant readiness resolves continuation and creates one final-review reminder.
+// Warrant readiness resolves continuation without creating a final-review action or deadline.
 const warrantReady = makeEffect('warrant_ready', LifecycleEventType.BUILDING_WARRANT_READY, {
   projectId: 'project_a', buildingWarrantApplicationId: 'warrant_a',
 });
@@ -462,10 +472,19 @@ const warrantReadyKeys = ['warrant.action.ready', 'warrant.activity.ready', 'war
 await runHandlers(warrantReadyKeys, warrantReady);
 await runHandlers(warrantReadyKeys, warrantReady);
 assert.equal(store.deadlines.find((value) => value.sourceKey === workflowSourceKeys.warrantAction('warrant_a')).status, DeadlineStatus.COMPLETED);
-assert.equal(store.deadlines.filter((value) => value.sourceKey === workflowSourceKeys.warrantFinalReview('warrant_a')).length, 1);
-assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionKeys.warrantFinalReview('warrant_a')).length, 1);
+assert.equal(store.deadlines.filter((value) => value.sourceKey === workflowSourceKeys.warrantFinalReview('warrant_a')).length, 0);
+assert.equal(store.actions.filter((value) => value.dedupeKey === workflowActionKeys.warrantFinalReview('warrant_a')).length, 0);
 
-// Manual effective dates survive recalculation and can be reset explicitly.
+// Legacy manual effective dates survive recalculation and can be reset explicitly.
+await ensureWorkflowDeadline(database, {
+  organisationId: 'org_a', projectId: 'project_a', buildingWarrantApplicationId: 'warrant_a',
+  sourceKey: workflowSourceKeys.warrantFinalReview('warrant_a'), title: 'Legacy Warrant review',
+  description: 'Historical final review deadline', targetKey: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW, occurredAt,
+});
+store.actions.push({
+  id: 'action_warrant_legacy_review', organisationId: 'org_a', projectId: 'project_a',
+  dedupeKey: workflowActionKeys.warrantFinalReview('warrant_a'), status: ActionItemStatus.OPEN, resolvedAt: null,
+});
 const warrantFinal = store.deadlines.find((value) => value.sourceKey === workflowSourceKeys.warrantFinalReview('warrant_a'));
 const manualDate = new Date('2026-09-01T09:00:00.000Z');
 await applyManualWorkflowDeadlineOverride(database, {
@@ -483,6 +502,22 @@ assert.equal(warrantFinal.calculatedDueDate.toISOString(), '2026-08-25T09:00:00.
 await resetWorkflowDeadlineToCalculated(database, 'org_a', warrantFinal.id);
 assert.equal(warrantFinal.dueDate.toISOString(), warrantFinal.calculatedDueDate.toISOString());
 assert.equal(warrantFinal.manualOverrideAt, null);
+
+// Building Warrant submission now closes legacy review work while preserving the finance effect.
+assert.deepEqual(BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS, [
+  'warrant.action.submitted',
+  'warrant.deadline.submitted',
+  'finance.fee-milestone.evaluate',
+]);
+store.warrants[0].status = WarrantStatus.SUBMITTED;
+await runHandlers(
+  BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS,
+  makeEffect('warrant_submitted', LifecycleEventType.BUILDING_WARRANT_SUBMITTED, {
+    projectId: 'project_a', buildingWarrantApplicationId: 'warrant_a',
+  }),
+);
+assert.equal(store.actions.find((value) => value.dedupeKey === workflowActionKeys.warrantFinalReview('warrant_a')).status, ActionItemStatus.RESOLVED);
+assert.equal(warrantFinal.status, DeadlineStatus.COMPLETED);
 
 store.warrants[0].status = WarrantStatus.GRANTED;
 await runHandlers(

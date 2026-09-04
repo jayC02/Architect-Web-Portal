@@ -14,6 +14,7 @@ import { persistApplicationPreparationDraft } from '@/server/services/applicatio
 import {
   drainLifecycleEventsBestEffort,
   recordAutomationReadinessTransition,
+  updateBuildingWarrantWithLifecycle,
 } from '@/server/services/application-lifecycle.service';
 import { findOrCreateCertifierProfile } from '@/server/services/certifier-presets.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
@@ -77,8 +78,10 @@ export const POST: APIRoute = (context) =>
     });
 
     const preparationData = jsonObject(application.preparationData);
-    await prisma.buildingWarrantApplication.update({
-      where: { id: application.id },
+    await updateBuildingWarrantWithLifecycle({
+      organisationId: organisation.id,
+      buildingWarrantApplicationId: application.id,
+      actorUserId: user.id,
       data: {
         warrantReference: body.warrantReference,
         warrantType: body.warrantType,

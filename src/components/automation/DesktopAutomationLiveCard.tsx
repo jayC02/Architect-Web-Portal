@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, LoaderCircle, Play } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ExternalLink, LoaderCircle, Play, X } from 'lucide-react';
 import AutomationFailureRecovery, { type FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { apiRequest } from '@/lib/api/http';
@@ -22,6 +22,8 @@ export type DesktopJobProjection = {
 
 type Props = {
   jobId: string;
+  applicationId: string;
+  applicationStatus: string;
   manageHref: string;
   detailsHref: string;
   initial: DesktopJobProjection;
@@ -67,12 +69,15 @@ const visualCountdownLabel = (seconds: number) => {
   return `About ${minutes} min ${remainingSeconds} sec remaining`;
 };
 
-export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
+export default function DesktopAutomationLiveCard({ jobId, applicationId, applicationStatus, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
-  const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | ''>('');
+  const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | 'submit' | ''>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const submissionDialogRef = useRef<HTMLDialogElement>(null);
+  const markSubmittedButtonRef = useRef<HTMLButtonElement>(null);
+  const submissionInFlightRef = useRef(false);
   const [visualClock, setVisualClock] = useState(() => ({
     jobId,
     startAt: (runningStatuses.has(initial.status) || (initial.status === 'READY' && Boolean(initial.executionAuthorisedAt)))
@@ -174,6 +179,41 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     } finally { setWorking(''); }
   };
 
+  const closeSubmissionDialog = () => {
+    submissionDialogRef.current?.close();
+    markSubmittedButtonRef.current?.focus();
+  };
+
+  const openSubmissionDialog = () => {
+    setError('');
+    setNotice('');
+    submissionDialogRef.current?.showModal();
+  };
+
+  const markSubmitted = async () => {
+    if (submissionInFlightRef.current) return;
+    if (!applicationId) {
+      setError('This prepared job is not linked to an application record.');
+      return;
+    }
+    submissionInFlightRef.current = true;
+    setWorking('submit');
+    setError('');
+    try {
+      const endpoint = isWarrant
+        ? `/api/building-warrant/${applicationId}/mark-submitted`
+        : `/api/planning/${applicationId}/mark-submitted`;
+      await apiRequest(endpoint, { method: 'POST', json: {} });
+      submissionDialogRef.current?.close();
+      window.location.reload();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Submission could not be recorded.');
+    } finally {
+      submissionInFlightRef.current = false;
+      setWorking('');
+    }
+  };
+
   const progress = Math.max(0, Math.min(100, job.progressPercent ?? 0));
   const visualRemaining = visualCountdownActive && visualClock.startAt !== null
     ? Math.max(0, visualCountdownDurationSeconds - Math.floor((visualNow - visualClock.startAt) / 1_000))
@@ -183,45 +223,97 @@ export default function DesktopAutomationLiveCard({ jobId, manageHref, detailsHr
     () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint),
     [job.lastCheckpoint, job.progressStage, job.resultData, job.status],
   );
+  const applicationHasProgressed = !['NOT_STARTED', 'DRAFTING'].includes(applicationStatus);
+  const humanApplicationStatus = applicationStatus
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+  const submissionDialog = (
+    <dialog ref={submissionDialogRef} onCancel={closeSubmissionDialog} aria-labelledby={`confirm-submission-${applicationId}`} className="settings-dialog m-auto w-[min(34rem,calc(100%-2rem))] rounded-xl bg-white p-0 text-ink shadow-2xl backdrop:bg-ink/40">
+      <div className="p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id={`confirm-submission-${applicationId}`} className="text-xl font-semibold">Confirm submission</h2>
+            <p className="mt-2 max-w-lg text-sm leading-6 text-stone-600">
+              Confirm that you have submitted this application through {isWarrant ? 'eBuilding Standards' : 'ePlanning'}. Architect Pro will record it as submitted and begin tracking the council stage.
+            </p>
+          </div>
+          <button type="button" onClick={closeSubmissionDialog} disabled={working === 'submit'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" aria-label="Cancel submission confirmation">
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+        {error && <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">{error}</p>}
+        <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-stone-200 pt-4">
+          <button type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={closeSubmissionDialog}>Cancel</button>
+          <button type="button" className="btn btn-primary gap-2" disabled={working === 'submit'} onClick={() => void markSubmitted()}>
+            {working === 'submit' && <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />}
+            {working === 'submit' ? 'Recording…' : 'Confirm submitted'}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+
+  if (applicationHasProgressed) return (
+    <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
+      <div className="flex gap-3">
+        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Application lifecycle</p>
+          <h3 className="mt-1 text-lg font-semibold text-ink">{applicationStatus === 'SUBMITTED' ? 'Submitted — waiting for council' : humanApplicationStatus}</h3>
+        </div>
+      </div>
+      <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600">
+        {applicationStatus === 'SUBMITTED'
+          ? 'Architect Pro has recorded the manual portal submission. No prepared-review action remains.'
+          : 'This application has progressed beyond portal preparation. Its canonical application status now takes priority.'}
+      </p>
+      <div className="mt-4"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
+    </section>
+  );
 
   if (job.status === 'COMPLETED') return (
     <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
       <div className="flex gap-3">
         <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Automation complete</p>
-          <h3 className="mt-1 text-lg font-semibold text-ink">{isWarrant ? 'Building Warrant prepared' : 'Householder prepared'}</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Prepared application</p>
+          <h3 className="mt-1 text-lg font-semibold text-ink">Prepared — needs your review</h3>
         </div>
       </div>
       <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600">
-        Architect Pro has completed the application. Review it in {isWarrant ? 'eBuilding Standards' : 'ePlanning'} and submit it whenever you're ready.
+        Architect Pro prepared this application but did not submit it. {isWarrant ? 'Complete payment, review and submit it in eBuilding Standards.' : 'Review and submit it in ePlanning.'}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-          {working === 'reveal' ? 'Opening…' : viewLabel}
+          {working === 'reveal' ? 'Opening…' : `Review in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
+        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
+      {submissionDialog}
     </section>
   );
 
   if (awaitingFee) return (
     <section className="border-l-4 border-l-amber-500 bg-amber-50/70 p-4 sm:px-5" aria-live="polite">
-      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Needs your attention</p>
-      <h3 className="mt-1 text-lg font-semibold text-ink">Complete the fee in the browser</h3>
-      <p className="mt-1 max-w-2xl text-sm leading-5 text-stone-600">Automated preparation is complete. Review the portal and complete or submit the fee yourself.</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Prepared application</p>
+      <h3 className="mt-1 text-lg font-semibold text-ink">Prepared — needs your review</h3>
+      <p className="mt-1 max-w-2xl text-sm leading-5 text-stone-600">Architect Pro prepared the portal draft and calculated the fee. Complete payment, review and submit it yourself in eBuilding Standards.</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-          {working === 'reveal' ? 'Opening browser…' : 'Continue fee in browser'}
+          {working === 'reveal' ? 'Opening browser…' : 'Continue in eBuilding Standards'}
         </button>
+        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-amber-900">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
+      {submissionDialog}
     </section>
   );
 

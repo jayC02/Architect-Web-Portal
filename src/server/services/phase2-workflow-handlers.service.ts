@@ -316,18 +316,8 @@ const documentReviewDeadline: EffectHandler = async (effect, { database, calenda
 };
 
 const planningReadyAction: EffectHandler = async (effect, { database }) => {
-  const { project, application } = await loadPlanning(effect, database);
+  const { application } = await loadPlanning(effect, database);
   await resolveAction(database, effect.organisationId, workflowActionKeys.planningPreparation(application.id), effect.lifecycleEvent.occurredAt);
-  if (planningHasProgressed(application.status)) return;
-  await ensureAction(effect, database, {
-    projectId: project.id,
-    kind: ActionItemKind.PLANNING_FINAL_REVIEW,
-    title: 'Planning ready — final review and run',
-    summary: 'Review the prepared Planning application before running it in desktop.',
-    actionUrl: `/projects/${project.id}#planning`,
-    dedupeKey: workflowActionKeys.planningFinalReview(application.id),
-    targetKey: WorkflowTargetKey.PLANNING_FINAL_REVIEW,
-  });
 };
 
 const planningReadyActivity: EffectHandler = async (effect, { database }) => {
@@ -335,21 +325,9 @@ const planningReadyActivity: EffectHandler = async (effect, { database }) => {
 };
 
 const planningReadyDeadline: EffectHandler = async (effect, { database, calendarSync }) => {
-  const { project, application } = await loadPlanning(effect, database);
+  const { application } = await loadPlanning(effect, database);
   const completed = await completeWorkflowDeadline(database, effect.organisationId, workflowSourceKeys.planningPreparation(application.id), effect.lifecycleEvent.occurredAt);
   await syncDeadline(effect, completed, calendarSync);
-  if (planningHasProgressed(application.status)) return;
-  const created = await ensureWorkflowDeadline(database, {
-    organisationId: effect.organisationId,
-    projectId: project.id,
-    planningApplicationId: application.id,
-    sourceKey: workflowSourceKeys.planningFinalReview(application.id),
-    title: 'Planning ready — final review and run',
-    description: 'Internal practice target for final review and running the prepared Planning application.',
-    targetKey: WorkflowTargetKey.PLANNING_FINAL_REVIEW,
-    occurredAt: effect.lifecycleEvent.occurredAt,
-  });
-  await syncDeadline(effect, created, calendarSync);
 };
 
 const planningReadinessRevokedAction: EffectHandler = async (effect, { database }) => {
@@ -580,38 +558,27 @@ const planningRefusedActivity: EffectHandler = async (effect, { database }) => {
 };
 
 const warrantReadyAction: EffectHandler = async (effect, { database }) => {
-  const { project, application } = await loadWarrant(effect, database);
+  const { application } = await loadWarrant(effect, database);
   await resolveAction(database, effect.organisationId, workflowActionKeys.warrantAction(application.id), effect.lifecycleEvent.occurredAt);
-  if (warrantHasProgressed(application.status)) return;
-  await ensureAction(effect, database, {
-    projectId: project.id,
-    kind: ActionItemKind.BUILDING_WARRANT_FINAL_REVIEW,
-    title: 'Building Warrant ready — final review and run',
-    summary: 'Review the prepared Building Warrant application before running it in desktop.',
-    actionUrl: `/projects/${project.id}#building-warrant`,
-    dedupeKey: workflowActionKeys.warrantFinalReview(application.id),
-    targetKey: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW,
-  });
 };
 const warrantReadyActivity: EffectHandler = async (effect, { database }) => {
   await appendActivity(effect, database, ProjectActivityEventType.BUILDING_WARRANT_READY, 'Building Warrant ready');
 };
 const warrantReadyDeadline: EffectHandler = async (effect, { database, calendarSync }) => {
-  const { project, application } = await loadWarrant(effect, database);
+  const { application } = await loadWarrant(effect, database);
   const completed = await completeWorkflowDeadline(database, effect.organisationId, workflowSourceKeys.warrantAction(application.id), effect.lifecycleEvent.occurredAt);
   await syncDeadline(effect, completed, calendarSync);
-  if (warrantHasProgressed(application.status)) return;
-  const created = await ensureWorkflowDeadline(database, {
-    organisationId: effect.organisationId,
-    projectId: project.id,
-    buildingWarrantApplicationId: application.id,
-    sourceKey: workflowSourceKeys.warrantFinalReview(application.id),
-    title: 'Building Warrant ready — final review and run',
-    description: 'Internal practice target for final review and running the prepared Building Warrant application.',
-    targetKey: WorkflowTargetKey.BUILDING_WARRANT_FINAL_REVIEW,
-    occurredAt: effect.lifecycleEvent.occurredAt,
-  });
-  await syncDeadline(effect, created, calendarSync);
+};
+
+const warrantSubmittedAction: EffectHandler = async (effect, { database }) => {
+  const { application } = await loadWarrant(effect, database);
+  await resolveAction(database, effect.organisationId, workflowActionKeys.warrantFinalReview(application.id), effect.lifecycleEvent.occurredAt);
+};
+
+const warrantSubmittedDeadline: EffectHandler = async (effect, { database, calendarSync }) => {
+  const { application } = await loadWarrant(effect, database);
+  const completed = await completeWorkflowDeadline(database, effect.organisationId, workflowSourceKeys.warrantFinalReview(application.id), effect.lifecycleEvent.occurredAt);
+  await syncDeadline(effect, completed, calendarSync);
 };
 
 const warrantReadinessRevokedAction: EffectHandler = async (effect, { database }) => {
@@ -691,6 +658,8 @@ export const PHASE_2_EFFECT_HANDLERS: Partial<Record<LifecycleHandlerKey, Effect
   'warrant.deadline.ready': warrantReadyDeadline,
   'warrant.action.readiness-revoked': warrantReadinessRevokedAction,
   'warrant.deadline.readiness-revoked': warrantReadinessRevokedDeadline,
+  'warrant.action.submitted': warrantSubmittedAction,
+  'warrant.deadline.submitted': warrantSubmittedDeadline,
   'warrant.action.granted': warrantGrantedAction,
   'warrant.activity.granted': warrantGrantedActivity,
   'warrant.calendar.decision': warrantDecisionCalendar,

@@ -155,8 +155,11 @@ export const decideAutomaticPlanningTransition = (input: {
   aiClassification?: GmailPlanningClassification | null;
 }): AutomaticTransitionDecision => {
   const targetStatus = planningStatusForClassification(input.classification.classification);
+  const initialSubmissionRequiresReview = targetStatus === PlanningStatus.SUBMITTED
+    && new Set<PlanningStatus>([PlanningStatus.NOT_STARTED, PlanningStatus.DRAFTING]).has(input.currentStatus);
   const gates: Array<[boolean, string]> = [
     [Boolean(targetStatus), 'The classification has no automatic Planning transition.'],
+    [!initialSubmissionRequiresReview, 'Initial submission confirmation requires user review.'],
     [input.uniqueProjectMatch, 'The email does not uniquely match one project.'],
     [input.exactApplicationReference, 'An exact Planning application reference is required.'],
     [input.expectedAuthority, 'The sender is not trusted evidence for the expected authority.'],

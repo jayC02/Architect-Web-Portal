@@ -11,6 +11,7 @@ interface Props {
   projectId: string;
   type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
   applicationId?: string | null;
+  applicationStatus: string;
   applicationLabel: string;
   manageHref: string;
   job?: DesktopAutomationJob | null;
@@ -24,6 +25,7 @@ const {
   projectId,
   type,
   applicationId,
+  applicationStatus,
   applicationLabel,
   manageHref,
   job = null,
@@ -44,7 +46,7 @@ const description = preparationReady
     : `Complete the ${applicationLabel.toLowerCase()} details before desktop preparation.`;
 ---
 {job ? (
-  <DesktopAutomationLiveCard client:load jobId={job.id} manageHref={manageHref} detailsHref={`/automation-job/${job.id}`} connectedAgent={connectedAgent} initial={{
+  <DesktopAutomationLiveCard client:load jobId={job.id} applicationId={applicationId ?? ''} applicationStatus={applicationStatus} manageHref={manageHref} detailsHref={`/automation-job/${job.id}`} connectedAgent={connectedAgent} initial={{
     id: job.id,
     status: job.status,
     executionAuthorisedAt: job.executionAuthorisedAt?.toISOString() ?? null,

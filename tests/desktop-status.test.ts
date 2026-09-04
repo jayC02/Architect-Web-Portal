@@ -220,9 +220,12 @@ assert.match(liveCard, /Finishing up…/, 'the visual countdown switches to fini
 assert.match(liveCard, /active && !awaitingFee && !addressAction/, 'paused-for-action states remove the visual countdown');
 assert.match(liveCard, /job\.status === 'READY'[\s\S]*Queued/, 'the live card covers authorised and queued state');
 assert.match(liveCard, /new Set\(\['CLAIMED', 'IN_PROGRESS'\]\)/, 'the live card covers claimed and running states');
-assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*Complete the fee in the browser/, 'awaiting-fee has explicit non-failure copy');
-assert.match(liveCard, /Continue fee in browser/, 'awaiting-fee exposes the primary browser handoff action');
-assert.match(liveCard, /job\.status === 'COMPLETED'[\s\S]*Automation complete/, 'verified preparation renders as a positive completed state');
+assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*calculated the fee[\s\S]*Complete payment, review and submit it yourself/, 'awaiting-fee clearly leaves payment and submission with the architect');
+assert.match(liveCard, /Continue in eBuilding Standards/, 'awaiting-fee exposes the primary browser handoff action');
+assert.match(liveCard, /job\.status === 'COMPLETED'[\s\S]*Prepared — needs your review/, 'verified preparation renders as a positive prepared state');
+assert.match(liveCard, /Mark as submitted/, 'prepared applications expose an explicit submission action');
+assert.match(liveCard, /Confirm submission/, 'submission requires explicit confirmation');
+assert.match(liveCard, /applicationHasProgressed[\s\S]*Submitted — waiting for council/, 'canonical application status takes precedence over stale job completion');
 assert.match(liveCard, /View Householder/, 'Householder completion uses its workflow-specific CTA');
 assert.match(liveCard, /View Warrant/, 'Building Warrant completion uses its workflow-specific CTA');
 assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning application details/, 'fee and running states do not expose competing restart or preparation actions');

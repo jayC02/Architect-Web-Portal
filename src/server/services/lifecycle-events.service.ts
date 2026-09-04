@@ -64,6 +64,8 @@ export const PLANNING_REFUSED_HANDLER_KEYS = [
 ] as const;
 
 export const BUILDING_WARRANT_SUBMITTED_HANDLER_KEYS = [
+  'warrant.action.submitted',
+  'warrant.deadline.submitted',
   'finance.fee-milestone.evaluate',
 ] as const;
 
@@ -325,6 +327,7 @@ export const emitBuildingWarrantSubmittedLifecycleEvent = (
     buildingWarrantApplicationId: string;
     actorUserId?: string | null;
     occurredAt?: Date;
+    source?: Extract<LifecycleEventSource, 'APPLICATION_STATUS' | 'GMAIL'>;
   },
 ) => emitLifecycleEvent(tx, {
   organisationId: input.organisationId,
@@ -333,7 +336,7 @@ export const emitBuildingWarrantSubmittedLifecycleEvent = (
   aggregateId: input.buildingWarrantApplicationId,
   eventType: LifecycleEventType.BUILDING_WARRANT_SUBMITTED,
   payload: { projectId: input.projectId, buildingWarrantApplicationId: input.buildingWarrantApplicationId },
-  source: LifecycleEventSource.APPLICATION_STATUS,
+  source: input.source ?? LifecycleEventSource.APPLICATION_STATUS,
   actorUserId: input.actorUserId,
   occurredAt: input.occurredAt ?? new Date(),
   idempotencyKey: `warrant:${input.buildingWarrantApplicationId}:submitted`,

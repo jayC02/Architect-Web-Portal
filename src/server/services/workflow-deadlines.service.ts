@@ -104,7 +104,7 @@ export const completeWorkflowDeadline = async (
     where: { organisationId_sourceKey: { organisationId, sourceKey } },
   });
   if (!deadline) return null;
-  if (deadline.status === DeadlineStatus.COMPLETED) return deadline;
+  if (deadline.status === DeadlineStatus.COMPLETED || deadline.status === DeadlineStatus.CANCELLED) return deadline;
   return database.deadline.update({
     where: { id: deadline.id },
     data: { status: DeadlineStatus.COMPLETED, completedDate: completedAt },

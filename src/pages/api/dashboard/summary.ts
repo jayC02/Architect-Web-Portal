@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus } from '@prisma/client';
+import { ActionItemKind, ActionItemStatus, AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { getProjectNextAction } from '@/lib/projects/next-action';
@@ -41,8 +41,8 @@ export const GET: APIRoute = (context) =>
       SELECT
         (SELECT COUNT(*)::int FROM "Project" WHERE "organisationId" = ${orgId} AND "status" NOT IN ('COMPLETED', 'ARCHIVED')) AS "activeProjects",
         (SELECT COUNT(*)::int FROM "Deadline" WHERE "organisationId" = ${orgId} AND "status" NOT IN ('COMPLETED', 'CANCELLED') AND "dueDate" <= ${deadlineEnd}) AS "upcomingDeadlineCount",
-        (SELECT COUNT(*)::int FROM "PlanningApplication" WHERE "organisationId" = ${orgId} AND ("status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR ("status" IN ('SUBMITTED', 'VALIDATED') AND ("updatedAt" <= ${staleDate} OR "decisionTargetDate" <= ${actionSoon})))) AS "planningActionCount",
-        (SELECT COUNT(*)::int FROM "BuildingWarrantApplication" WHERE "organisationId" = ${orgId} AND ("status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR ("status" = 'SUBMITTED' AND ("firstResponseTargetDate" <= ${actionSoon} OR "updatedAt" <= ${staleDate})) OR ("status" = 'GRANTED' AND "completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED')))) AS "warrantActionCount",
+        (SELECT COUNT(*)::int FROM "PlanningApplication" a WHERE a."organisationId" = ${orgId} AND (a."status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (a."status" IN ('SUBMITTED', 'VALIDATED') AND (a."updatedAt" <= ${staleDate} OR a."decisionTargetDate" <= ${actionSoon})))) AS "planningActionCount",
+        (SELECT COUNT(*)::int FROM "BuildingWarrantApplication" w WHERE w."organisationId" = ${orgId} AND (w."status" IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (w."status" = 'SUBMITTED' AND (w."firstResponseTargetDate" <= ${actionSoon} OR w."updatedAt" <= ${staleDate})) OR (w."status" = 'GRANTED' AND w."completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED')))) AS "warrantActionCount",
         COALESCE((SELECT jsonb_agg(to_jsonb(deadline_row)) FROM (
           SELECT d.id, d.title, d.type, d.status, d.priority, d."dueDate", CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object('id', p.id, 'name', p.name) END AS project
           FROM "Deadline" d LEFT JOIN "Project" p ON p.id = d."projectId"
@@ -52,13 +52,25 @@ export const GET: APIRoute = (context) =>
         COALESCE((SELECT jsonb_agg(to_jsonb(planning_row)) FROM (
           SELECT a.id, a."projectId", a."applicationReference", a.status, a."submissionDate", a."validDate", a."decisionTargetDate", a."updatedAt", jsonb_build_object('id', p.id, 'name', p.name) AS project
           FROM "PlanningApplication" a JOIN "Project" p ON p.id = a."projectId"
-          WHERE a."organisationId" = ${orgId} AND (a.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (a.status IN ('SUBMITTED', 'VALIDATED') AND (a."updatedAt" <= ${staleDate} OR a."decisionTargetDate" <= ${actionSoon})))
+          WHERE a."organisationId" = ${orgId}
+            AND (a.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (a.status IN ('SUBMITTED', 'VALIDATED') AND (a."updatedAt" <= ${staleDate} OR a."decisionTargetDate" <= ${actionSoon})))
+            AND NOT (a.status = 'DRAFTING' AND EXISTS (
+              SELECT 1 FROM "ActionItem" ai
+              WHERE ai."organisationId" = ${orgId} AND ai.status = 'OPEN' AND ai.kind = 'PLANNING_FINAL_REVIEW'
+                AND ai."dedupeKey" = ('planning:' || a.id || ':final-review')
+            ))
           ORDER BY a."decisionTargetDate" ASC NULLS LAST, a."updatedAt" ASC LIMIT 6
         ) planning_row), '[]'::jsonb) AS "planningAwaitingAction",
         COALESCE((SELECT jsonb_agg(to_jsonb(warrant_row)) FROM (
           SELECT w.id, w."projectId", w."warrantReference", w."warrantType", w.status, w."submissionDate", w."firstResponseTargetDate", w."grantedDate", w."expiryDate", w."updatedAt", jsonb_build_object('id', p.id, 'name', p.name) AS project
           FROM "BuildingWarrantApplication" w JOIN "Project" p ON p.id = w."projectId"
-          WHERE w."organisationId" = ${orgId} AND (w.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (w.status = 'SUBMITTED' AND (w."firstResponseTargetDate" <= ${actionSoon} OR w."updatedAt" <= ${staleDate})) OR (w.status = 'GRANTED' AND w."completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED')))
+          WHERE w."organisationId" = ${orgId}
+            AND (w.status IN ('DRAFTING', 'FURTHER_INFORMATION_REQUESTED', 'IN_REVIEW') OR (w.status = 'SUBMITTED' AND (w."firstResponseTargetDate" <= ${actionSoon} OR w."updatedAt" <= ${staleDate})) OR (w.status = 'GRANTED' AND w."completionCertificateStatus" NOT IN ('ACCEPTED', 'NOT_REQUIRED')))
+            AND NOT (w.status = 'DRAFTING' AND EXISTS (
+              SELECT 1 FROM "ActionItem" ai
+              WHERE ai."organisationId" = ${orgId} AND ai.status = 'OPEN' AND ai.kind = 'BUILDING_WARRANT_FINAL_REVIEW'
+                AND ai."dedupeKey" = ('warrant:' || w.id || ':final-review')
+            ))
           ORDER BY w."firstResponseTargetDate" ASC NULLS LAST, w."updatedAt" ASC LIMIT 6
         ) warrant_row), '[]'::jsonb) AS "warrantsAwaitingAction",
         COALESCE((SELECT jsonb_agg(to_jsonb(project_row)) FROM (
@@ -71,9 +83,26 @@ export const GET: APIRoute = (context) =>
         ) project_row), '[]'::jsonb) AS "missingLocationPlanProjects"
     `);
 
-    const [documentsNeedingReview, automationJobsReady, pipelineProjects, documentStatusCounts, overdueDeadlineCount, activeProjects, documentReviewProjects, automationReadyProjects] = await Promise.all([
+    const [documentsNeedingReview, automationJobsReady, preparedReviewActions, pipelineProjects, documentStatusCounts, overdueDeadlineCount, activeProjects, documentReviewProjects, automationReadyProjects] = await Promise.all([
       prisma.projectDocument.count({ where: { organisationId: orgId, status: DocumentStatus.IN_REVIEW } }),
       prisma.automationJob.count({ where: { organisationId: orgId, status: AutomationJobStatus.READY } }),
+      prisma.actionItem.findMany({
+        where: {
+          organisationId: orgId,
+          status: ActionItemStatus.OPEN,
+          kind: { in: [ActionItemKind.PLANNING_FINAL_REVIEW, ActionItemKind.BUILDING_WARRANT_FINAL_REVIEW] },
+        },
+        orderBy: [{ priority: 'desc' }, { availableAt: 'asc' }],
+        take: 10,
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          summary: true,
+          actionUrl: true,
+          project: { select: { id: true, name: true } },
+        },
+      }),
       prisma.project.findMany({ where: { organisationId: orgId, status: { not: ProjectStatus.ARCHIVED } }, select: { stage: true, status: true } }),
       prisma.projectDocument.groupBy({ by: ['status'], where: { organisationId: orgId }, _count: { _all: true } }),
       prisma.deadline.count({ where: { organisationId: orgId, status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] }, dueDate: { lt: today } } }),
@@ -199,6 +228,15 @@ export const GET: APIRoute = (context) =>
         href: `/documents/upload?projectId=${warning.project.id}`,
         tone: 'warning',
         priority: 2,
+      })),
+      ...preparedReviewActions.map((action) => ({
+        id: `prepared-review-${action.id}`,
+        type: 'Needs your review',
+        projectName: action.project?.name ?? 'Project',
+        reason: action.title,
+        href: action.actionUrl,
+        tone: 'warning',
+        priority: 1,
       })),
       ...planningAwaitingAction.map((item: any) => ({
         id: `planning-${item.id}`,

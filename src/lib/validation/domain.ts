@@ -345,6 +345,27 @@ export const buildingWarrantSchema = z.object({
   notes: optionalText(3000),
 });
 
+const preSubmissionPlanningStatuses = new Set<PlanningStatus>([
+  PlanningStatus.NOT_STARTED,
+  PlanningStatus.DRAFTING,
+]);
+const preSubmissionWarrantStatuses = new Set<WarrantStatus>([
+  WarrantStatus.NOT_STARTED,
+  WarrantStatus.DRAFTING,
+]);
+
+export const planningApplicationCreateSchema = planningApplicationSchema.refine(
+  (value) => preSubmissionPlanningStatuses.has(value.status),
+  { path: ['status'], message: 'Create the application as not started or drafting, then record submission through its lifecycle.' },
+);
+
+export const buildingWarrantCreateSchema = buildingWarrantSchema.refine(
+  (value) => preSubmissionWarrantStatuses.has(value.status),
+  { path: ['status'], message: 'Create the application as not started or drafting, then record submission through its lifecycle.' },
+);
+
+export const markApplicationSubmittedSchema = z.object({}).strict();
+
 export const deadlineSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: optionalText(3000),
