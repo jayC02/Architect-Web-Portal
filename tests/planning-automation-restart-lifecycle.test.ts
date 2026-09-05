@@ -4,6 +4,8 @@ import fs from 'node:fs';
 const source = (path: string) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const restartRoute = source('src/pages/api/automation-jobs/[id]/restart.ts');
+const restartService = source('src/server/services/automation-job-restart.service.ts');
+const restartImplementation = `${restartRoute}\n${restartService}`;
 const callbackRoute = source('src/pages/api/desktop/automation-jobs/[id]/index.ts');
 const normalCreateRoute = source('src/pages/api/automation-jobs/index.ts');
 const projectCreateRoute = source('src/pages/api/projects/[id]/automation-jobs.ts');
@@ -21,7 +23,7 @@ const failureRecovery = source('src/components/automation/AutomationFailureRecov
 const launchButton = source('src/components/automation/AutomationLaunchButton.tsx');
 
 assert.match(
-  restartRoute,
+  restartImplementation,
   /buildFreshAutomationJob\(\{[\s\S]*const \{ jobId: newJobId, snapshot \} = freshJob/,
   'restart creates a distinct job and immutable snapshot through the shared fresh-job path',
 );
@@ -29,33 +31,33 @@ assert.match(snapshotService, /buildFreshAutomationJob[\s\S]*randomUUID\(\)[\s\S
 assert.match(normalCreateRoute, /buildFreshAutomationJob/, 'normal job creation shares the fresh-job builder');
 assert.match(projectCreateRoute, /buildFreshAutomationJob/, 'project Run Application preparation shares the fresh-job builder');
 assert.match(
-  restartRoute,
+  restartImplementation,
   /planningApplicationId: oldJob\.type === AutomationJobType\.BUILDING_WARRANT[\s\S]*buildingWarrantApplicationId: oldJob\.type === AutomationJobType\.BUILDING_WARRANT/,
   'retry preserves the exact application identity for Planning and shared Building Warrant snapshots',
 );
 assert.doesNotMatch(
-  restartRoute,
+  restartImplementation,
   /oldJob\.(documentSnapshot|resultSummary|lastCheckpoint)|documentIds:/,
   'restart never copies old form values, document selection or execution state',
 );
 assert.match(
-  restartRoute,
+  restartImplementation,
   /oldJob\.status !== AutomationJobStatus\.FAILED_RETRYABLE \|\| !recovery\.retrySafe/,
   'only a runner-confirmed safe new attempt can enter the retry path',
 );
-assert.doesNotMatch(restartRoute, /transaction\.automationJob\.update/, 'retry never mutates the failed historical job');
-assert.doesNotMatch(restartRoute, /oldJob\.completedAt|data: \{ completedAt:/, 'retry does not consume or rewrite Job A');
+assert.doesNotMatch(restartImplementation, /transaction\.automationJob\.update/, 'retry never mutates the failed historical job');
+assert.doesNotMatch(restartImplementation, /oldJob\.completedAt|data: \{ completedAt:/, 'retry does not consume or rewrite Job A');
 assert.match(callbackRoute, /COMPLETED[\s\S]*FAILED_RETRYABLE[\s\S]*FAILED_FINAL[\s\S]*\? new Date\(\) : null/, 'retryable failures are finalized when their callback is stored');
-assert.match(restartRoute, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive/, 'concurrent retries execute the transaction lock without deserializing its void result');
-assert.match(restartRoute, /existingActive[\s\S]*already has an active automation attempt/, 'a second active run is rejected');
+assert.match(restartImplementation, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive/, 'concurrent retries execute the transaction lock without deserializing its void result');
+assert.match(restartImplementation, /existingActive[\s\S]*already has an active automation attempt/, 'a second active run is rejected');
 assert.match(
-  restartRoute,
+  restartImplementation,
   /status: AutomationJobStatus\.READY,[\s\S]*executionAuthorisedAt: authorisedAt/,
   'the replacement is queued and authorised for automatic Agent discovery',
 );
-assert.match(restartRoute, /organisationId: organisation\.id/, 'retry lookup and mutation remain organisation scoped');
-assert.match(restartRoute, /agentSupportsJob[\s\S]*ensureWaitingForAgentAction/, 'retry uses the existing automatic Agent compatibility and waiting flow');
-assert.doesNotMatch(restartRoute, /preparationRedirectTo/, 'retry does not send the user back through manual preparation');
+assert.match(restartImplementation, /organisationId: (?:input\.)?organisation\.id/, 'retry lookup and mutation remain organisation scoped');
+assert.match(restartImplementation, /agentSupportsJob[\s\S]*ensureWaitingForAgentAction/, 'retry uses the existing automatic Agent compatibility and waiting flow');
+assert.doesNotMatch(restartImplementation, /preparationRedirectTo/, 'retry does not send the user back through manual preparation');
 assert.doesNotMatch(statusService.match(/reusableAutomationJobStatuses = \[[\s\S]*?\] as const/)?.[0] ?? '', /FAILED/, 'failed jobs are historical and are never reused as normal prepared jobs');
 assert.doesNotMatch(prepareRoute.match(/refreshableStatuses = \[[\s\S]*?\]/)?.[0] ?? '', /FAILED/, 'generic prepare cannot rewrite a failed job snapshot');
 assert.doesNotMatch(preparationMutation.match(/editableJobStatuses = new Set[\s\S]*?\]\)/)?.[0] ?? '', /FAILED/, 'full preparation editing cannot rewrite a failed job snapshot');

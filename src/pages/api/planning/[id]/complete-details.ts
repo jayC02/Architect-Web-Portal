@@ -17,6 +17,7 @@ import {
   updatePlanningApplicationWithLifecycle,
 } from '@/server/services/application-lifecycle.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
+import { authoriseAutomationJobRun } from '@/server/services/automation-job-run.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 
 const refreshableStatuses = [
@@ -24,6 +25,7 @@ const refreshableStatuses = [
   AutomationJobStatus.PREFLIGHT_REQUIRED,
   AutomationJobStatus.NEEDS_INPUT,
   AutomationJobStatus.STALE,
+  AutomationJobStatus.READY,
 ];
 
 const jsonObject = (value: unknown): Record<string, unknown> =>
@@ -153,10 +155,15 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   await persistApplicationPreparationDraft(job.id, organisation.id);
   await drainLifecycleEventsBestEffort(organisation.id, [readinessLifecycleEvent?.id]);
 
+  const runResult = status === AutomationJobStatus.READY
+    ? await authoriseAutomationJobRun({ organisationId: organisation.id, jobId: job.id })
+    : null;
+
   return jsonResponse(200, {
     ok: true,
     status,
     preflight: snapshot.preflight,
+    ...(runResult ? { queued: true, ...runResult } : {}),
     redirectTo: `/projects/${application.projectId}`,
   });
 }, context);

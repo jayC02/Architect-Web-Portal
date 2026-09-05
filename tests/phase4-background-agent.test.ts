@@ -30,6 +30,7 @@ assert.equal(desktopProgressSchema.safeParse({ ...validProgress, progress: { ...
 const claim = fs.readFileSync('src/pages/api/desktop/queue/[id]/claim.ts', 'utf8');
 const progress = fs.readFileSync('src/pages/api/desktop/automation-jobs/[id]/progress.ts', 'utf8');
 const run = fs.readFileSync('src/pages/api/automation-jobs/[id]/run.ts', 'utf8');
+const runService = fs.readFileSync('src/server/services/automation-job-run.service.ts', 'utf8');
 const credential = fs.readFileSync('src/server/auth/agent-credential.ts', 'utf8');
 const agentService = fs.readFileSync('src/server/services/desktop-agent.service.ts', 'utf8');
 assert.match(claim, /automationJob\.updateMany/, 'queue claims use a compare-and-set update');
@@ -38,7 +39,8 @@ assert.match(claim, /status: AutomationJobStatus\.READY/, 'only ready work is cl
 assert.match(claim, /agentRunId/, 'a unique run identity is bound during claim');
 assert.match(progress, /lastProgressSequence: \{ lt: body\.sequence \}/, 'out-of-order progress cannot replace a newer projection');
 assert.match(agentService, /stage === 'address_selection'/, 'address selection remains a first-class user action state');
-assert.match(run, /ensureWaitingForAgentAction/, 'offline execution creates a durable action');
+assert.match(run, /authoriseAutomationJobRun/, 'the run endpoint uses the shared authorisation path');
+assert.match(runService, /ensureWaitingForAgentAction/, 'offline execution creates a durable action');
 assert.match(credential, /createHash\('sha256'\)/, 'durable Agent credentials are stored as hashes in the portal');
 assert.doesNotMatch(credential, /credential:\s*rawCredential/, 'raw durable Agent credentials are not persisted');
 

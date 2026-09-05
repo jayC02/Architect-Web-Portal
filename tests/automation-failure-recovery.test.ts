@@ -6,6 +6,8 @@ const source = (path: string) => fs.readFileSync(path, 'utf8');
 const liveCard = source('src/components/automation/DesktopAutomationLiveCard.tsx');
 const recovery = source('src/components/automation/AutomationFailureRecovery.tsx');
 const restart = source('src/pages/api/automation-jobs/[id]/restart.ts');
+const restartService = source('src/server/services/automation-job-restart.service.ts');
+const restartImplementation = `${restart}\n${restartService}`;
 const statusRoute = source('src/pages/api/automation-jobs/[id]/status.ts');
 const callbackRoute = source('src/pages/api/desktop/automation-jobs/[id]/index.ts');
 const typeOfWorkRoute = source('src/pages/api/building-warrant/[id]/type-of-work.ts');
@@ -51,11 +53,11 @@ assert.match(recovery, /documentsHref[\s\S]*Review documents/, 'document recover
 assert.match(recovery, /review_portal[\s\S]*View Warrant[\s\S]*View Householder/, 'uncertain outcomes expose workflow-specific portal review, not retry');
 assert.match(recovery, /portal:mutation-success[\s\S]*onRetry\(\)[\s\S]*setEditor\(null\)/, 'successful canonical save queues retry and closes recovery');
 
-assert.match(restart, /readAutomationFailureMetadata[\s\S]*!recovery\.retrySafe/, 'restart requires positive new-run safety metadata');
-assert.match(restart, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive[\s\S]*already has an active automation attempt/, 'restart serializes and blocks duplicate active attempts without deserializing the void lock result');
-assert.match(restart, /buildFreshAutomationJob[\s\S]*const \{ jobId: newJobId, snapshot \}/, 'retry creates a fresh snapshot for a distinct job');
-assert.doesNotMatch(restart, /transaction\.automationJob\.update/, 'failed history remains untouched during retry');
-assert.match(restart, /executionAuthorisedAt: authorisedAt/, 'fresh retry is authorised for automatic Agent claim');
+assert.match(restartImplementation, /readAutomationFailureMetadata[\s\S]*!recovery\.retrySafe/, 'restart requires positive new-run safety metadata');
+assert.match(restartImplementation, /\$executeRaw\(Prisma\.sql`[\s\S]*pg_advisory_xact_lock[\s\S]*existingActive[\s\S]*already has an active automation attempt/, 'restart serializes and blocks duplicate active attempts without deserializing the void lock result');
+assert.match(restartImplementation, /buildFreshAutomationJob[\s\S]*const \{ jobId: newJobId, snapshot \}/, 'retry creates a fresh snapshot for a distinct job');
+assert.doesNotMatch(restartImplementation, /transaction\.automationJob\.update/, 'failed history remains untouched during retry');
+assert.match(restartImplementation, /executionAuthorisedAt: authorisedAt/, 'fresh retry is authorised for automatic Agent claim');
 assert.match(statusRoute, /resultData: true, lastCheckpoint: true/, 'live polling returns structured recovery metadata');
 assert.match(callbackRoute, /resultData: body\.result/, 'callback projection stores the structured result');
 

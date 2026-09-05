@@ -62,7 +62,7 @@ const documentCount = await prisma.projectDocument.count({
   </div>
 
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-    <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" class="panel rounded-lg p-5">
+    <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" data-pending-message="Saving and starting automation..." class="panel rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
       <section aria-labelledby="planning-questions-heading">
       <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
@@ -77,7 +77,7 @@ const documentCount = await prisma.projectDocument.count({
         <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} class="field" /></label>
       </div>
       </section>
-      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
+      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and run application</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
 
     <aside class="panel rounded-lg p-5" aria-label="Planning application summary">
