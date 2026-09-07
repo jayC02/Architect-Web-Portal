@@ -6,6 +6,7 @@ import {
   PlanningStatus,
   WarrantStatus,
   type ProjectDocument,
+  type Prisma,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -209,44 +210,44 @@ const mapDocument = (document: ProjectDocument) => ({
   updatedAt: document.updatedAt.toISOString(),
 });
 
-export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapshotInput) => {
-  const project = await prisma.project.findFirst({
+export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapshotInput, database: Prisma.TransactionClient = prisma) => {
+  const project = await database.project.findFirst({
     where: { id: input.projectId, organisationId: input.organisationId },
     include: { client: true, site: true },
   });
   if (!project) throw new HttpError(404, 'Project not found.');
 
   const [defaults, requestedPlanning, requestedWarrant, latestPlanning, latestWarrant, sortBatch] = await Promise.all([
-    prisma.organisationDefaults.findUnique({
+    database.organisationDefaults.findUnique({
       where: { organisationId: input.organisationId },
       include: { defaultCertifierPreset: true },
     }),
     input.planningApplicationId
-      ? prisma.planningApplication.findFirst({
+      ? database.planningApplication.findFirst({
           where: { id: input.planningApplicationId, organisationId: input.organisationId, projectId: project.id },
         })
       : Promise.resolve(null),
     input.buildingWarrantApplicationId
-      ? prisma.buildingWarrantApplication.findFirst({
+      ? database.buildingWarrantApplication.findFirst({
           where: { id: input.buildingWarrantApplicationId, organisationId: input.organisationId, projectId: project.id },
           include: { selectedCertifierPreset: true },
         })
       : Promise.resolve(null),
     !input.planningApplicationId && input.type !== AutomationJobType.BUILDING_WARRANT
-      ? prisma.planningApplication.findFirst({
+      ? database.planningApplication.findFirst({
           where: { organisationId: input.organisationId, projectId: project.id },
           orderBy: { updatedAt: 'desc' },
         })
       : Promise.resolve(null),
     !input.buildingWarrantApplicationId && input.type === AutomationJobType.BUILDING_WARRANT
-      ? prisma.buildingWarrantApplication.findFirst({
+      ? database.buildingWarrantApplication.findFirst({
           where: { organisationId: input.organisationId, projectId: project.id },
           include: { selectedCertifierPreset: true },
           orderBy: { updatedAt: 'desc' },
         })
       : Promise.resolve(null),
     input.documentSortBatchId
-      ? prisma.documentSortBatch.findFirst({
+      ? database.documentSortBatch.findFirst({
           where: { id: input.documentSortBatchId, organisationId: input.organisationId, projectId: project.id },
           include: { items: true },
         })
@@ -261,7 +262,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const warrant = requestedWarrant ?? latestWarrant;
   const batchIds = sortBatch?.items.map((item) => item.documentId).filter((id): id is string => Boolean(id)) ?? [];
   const selectedIds = uniqueIds(input.documentIds).length ? uniqueIds(input.documentIds) : uniqueIds(batchIds);
-  const documents = await prisma.projectDocument.findMany({
+  const documents = await database.projectDocument.findMany({
     where: {
       organisationId: input.organisationId,
       projectId: project.id,
@@ -554,6 +555,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
  */
 export const buildFreshAutomationJob = async (
   input: Omit<BuildAutomationJobSnapshotInput, 'jobId' | 'createdAt'>,
+  database: Prisma.TransactionClient = prisma,
 ) => {
   const jobId = randomUUID();
   const createdAt = new Date();
@@ -561,7 +563,7 @@ export const buildFreshAutomationJob = async (
     ...input,
     jobId,
     createdAt,
-  });
+  }, database);
   return { jobId, createdAt, snapshot };
 };
 

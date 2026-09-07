@@ -7,7 +7,8 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopJobClaimSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth, assertDesktopTokenActive } from '@/server/auth/desktop-token';
+import { lockOrganisationExecution, assertExecutionAvailable } from '@/server/services/desktop-execution.service';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertRateLimit(context, rateLimitPolicies.desktop, 'desktop-job:claim');
@@ -17,7 +18,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertDesktopJobAccess(access, id);
   await parseBody(context.request, desktopJobClaimSchema);
 
-  const existing = await prisma.automationJob.findFirst({
+  await prisma.$transaction(async (tx) => {
+  await lockOrganisationExecution(tx, access.organisationId);
+  await assertDesktopTokenActive(tx, access);
+  await assertExecutionAvailable(tx, access.organisationId, id);
+  const existing = await tx.automationJob.findFirst({
     where: { id, organisationId: access.organisationId },
     select: { id: true, status: true, claimedDeviceId: true },
   });
@@ -29,7 +34,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     throw new HttpError(409, 'This automation job is no longer ready to be claimed.');
   }
 
-  const claimed = await prisma.automationJob.updateMany({
+  const claimed = await tx.automationJob.updateMany({
     where: {
       id,
       organisationId: access.organisationId,
@@ -44,5 +49,6 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
   });
   if (!claimed.count) throw new HttpError(409, 'This automation job was claimed by another device.');
+  });
   return jsonResponse(200, { ok: true, status: AutomationJobStatus.CLAIMED });
 }, context);

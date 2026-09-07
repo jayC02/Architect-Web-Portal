@@ -7,7 +7,8 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopProgressSchema } from '@/lib/validation/desktop-agent';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth, assertDesktopTokenActive } from '@/server/auth/desktop-token';
+import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
 import { agentLeaseExpiry, heartbeatStateForProgress } from '@/server/services/desktop-agent.service';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
@@ -21,16 +22,19 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const now = new Date();
   const isFee = body.status === 'USER_ACTION_REQUIRED' && body.progress.stage === 'fee';
   const result = await prisma.$transaction(async (tx) => {
+    await lockOrganisationExecution(tx, access.organisationId);
+    await assertDesktopTokenActive(tx, access);
     const updated = await tx.automationJob.updateMany({
       where: {
         id,
         organisationId: access.organisationId,
+        claimedDeviceId: access.id,
         agentRunId: body.agentRunId,
         lastProgressSequence: { lt: body.sequence },
-        status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS, AutomationJobStatus.AWAITING_PORTAL_REVIEW] },
+        status: { in: [AutomationJobStatus.IN_PROGRESS, AutomationJobStatus.AWAITING_PORTAL_REVIEW] },
       },
       data: {
-        status: isFee ? AutomationJobStatus.AWAITING_PORTAL_REVIEW : AutomationJobStatus.IN_PROGRESS,
+        status: isFee ? AutomationJobStatus.AWAITING_PORTAL_REVIEW : undefined,
         progressStage: body.progress.stage,
         progressStageState: body.progress.stageState,
         progressPercent: body.progress.percent,
@@ -71,4 +75,3 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   });
   return jsonResponse(200, { ok: true, ...result });
 }, context);
-

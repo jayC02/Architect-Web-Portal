@@ -7,6 +7,7 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopHandoffExchangeSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import { lockOrganisationExecution, assertExecutionAvailable } from '@/server/services/desktop-execution.service';
 import {
   createDesktopTokenValue,
   desktopHandoffCodeHash,
@@ -17,8 +18,6 @@ import {
 
 const exchangeableStatuses = [
   AutomationJobStatus.READY,
-  AutomationJobStatus.CLAIMED,
-  AutomationJobStatus.IN_PROGRESS,
 ];
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
@@ -50,6 +49,9 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     if (!job) {
       throw new HttpError(410, 'This desktop link has expired or has already been used. Return to the portal and open the job again.');
     }
+
+    await lockOrganisationExecution(tx, job.organisationId);
+    await assertExecutionAvailable(tx, job.organisationId);
 
     await tx.desktopAccessToken.updateMany({
       where: { automationJobId: job.id, revokedAt: null },

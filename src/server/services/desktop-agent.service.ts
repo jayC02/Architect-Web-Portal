@@ -7,8 +7,10 @@ import {
   AutomationJobType,
   type AgentRegistration,
   type PrismaClient,
+  type Prisma,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
 import { DESKTOP_CALLBACK_CONTRACT_VERSION } from '@/lib/validation/desktop-handoff';
 import {
   DESKTOP_PROGRESS_CONTRACT_VERSION,
@@ -40,7 +42,7 @@ export const waitingAgentActionKey = (jobId: string) => `automation:${jobId}:wai
 export const connectionLostActionKey = (jobId: string) => `automation:${jobId}:connection-lost`;
 
 export const ensureWaitingForAgentAction = async (
-  database: PrismaClient,
+  database: PrismaClient | Prisma.TransactionClient,
   job: { id: string; organisationId: string; projectId: string; type: AutomationJobType },
   title = 'Waiting for Architect Pro Agent',
 ) => database.actionItem.upsert({
@@ -58,7 +60,7 @@ export const ensureWaitingForAgentAction = async (
   },
 });
 
-export const resolveAgentAction = (database: PrismaClient, organisationId: string, dedupeKey: string, now = new Date()) =>
+export const resolveAgentAction = (database: PrismaClient | Prisma.TransactionClient, organisationId: string, dedupeKey: string, now = new Date()) =>
   database.actionItem.updateMany({
     where: { organisationId, dedupeKey, status: ActionItemStatus.OPEN },
     data: { status: ActionItemStatus.RESOLVED, resolvedAt: now },
@@ -78,15 +80,17 @@ export const reconcileStaleAgentJobs = async (input: {
       leaseExpiresAt: { lte: now },
       status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] },
     },
-    select: { id: true, organisationId: true, projectId: true, type: true, status: true, claimedByAgentId: true },
+    select: { id: true, organisationId: true, projectId: true, type: true, status: true, claimedByAgentId: true, claimedDeviceId: true },
     take: 50,
   });
   let returnedReady = 0;
   let needsReview = 0;
   for (const job of expired) {
+    await database.$transaction(async (tx) => {
+    await lockOrganisationExecution(tx, job.organisationId);
     if (job.status === AutomationJobStatus.CLAIMED) {
-      const released = await database.automationJob.updateMany({
-        where: { id: job.id, status: AutomationJobStatus.CLAIMED, claimedByAgentId: job.claimedByAgentId, leaseExpiresAt: { lte: now } },
+      const released = await tx.automationJob.updateMany({
+        where: { id: job.id, status: AutomationJobStatus.CLAIMED, claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId, leaseExpiresAt: { lte: now } },
         data: {
           status: AutomationJobStatus.READY,
           claimedByAgentId: null,
@@ -99,13 +103,13 @@ export const reconcileStaleAgentJobs = async (input: {
         },
       });
       if (released.count) {
-        await database.desktopAccessToken.updateMany({ where: { automationJobId: job.id, revokedAt: null }, data: { revokedAt: now } });
-        await ensureWaitingForAgentAction(database, job);
+        if (job.claimedDeviceId) await tx.desktopAccessToken.updateMany({ where: { id: job.claimedDeviceId, revokedAt: null }, data: { revokedAt: now } });
+        await ensureWaitingForAgentAction(tx, job);
         returnedReady += 1;
       }
-      continue;
+      return;
     }
-    const stopped = await database.automationJob.updateMany({
+    const stopped = await tx.automationJob.updateMany({
       where: { id: job.id, status: AutomationJobStatus.IN_PROGRESS, claimedByAgentId: job.claimedByAgentId, leaseExpiresAt: { lte: now } },
       data: {
         status: AutomationJobStatus.NEEDS_REVIEW,
@@ -117,7 +121,7 @@ export const reconcileStaleAgentJobs = async (input: {
     });
     if (stopped.count) {
       const dedupeKey = connectionLostActionKey(job.id);
-      await database.actionItem.upsert({
+      await tx.actionItem.upsert({
         where: { organisationId_dedupeKey: { organisationId: job.organisationId, dedupeKey } },
         update: { status: ActionItemStatus.OPEN, resolvedAt: null },
         create: {
@@ -133,6 +137,7 @@ export const reconcileStaleAgentJobs = async (input: {
       });
       needsReview += 1;
     }
+    });
   }
   return { returnedReady, needsReview };
 };
@@ -140,4 +145,3 @@ export const reconcileStaleAgentJobs = async (input: {
 export const heartbeatStateForProgress = (stage: string) => stage === 'address_selection' || stage === 'fee'
   ? AgentOperatingState.USER_ACTION_REQUIRED
   : AgentOperatingState.RUNNING;
-

@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import type { APIContext } from 'astro';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
+import { assertRegisteredAgentActive } from '@/server/services/desktop-execution.service';
 
 const TOKEN_PREFIX = 'apd_';
 const TOKEN_LIFETIME_MS = 180 * 24 * 60 * 60 * 1000;
@@ -71,11 +73,31 @@ export const requireDesktopAuth = async (context: APIContext) => {
   if (!access || access.revokedAt || access.expiresAt <= new Date()) {
     throw new HttpError(401, 'Desktop access has expired or been revoked.');
   }
+  await assertDesktopTokenActive(prisma, access);
 
   if (!access.lastUsedAt || Date.now() - access.lastUsedAt.getTime() > 5 * 60 * 1000) {
     void prisma.desktopAccessToken.update({ where: { id: access.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
   }
   return access;
+};
+
+// Re-read inside mutation transactions as well as at HTTP authentication time.
+export const assertDesktopTokenActive = async (
+  tx: Prisma.TransactionClient, access: { id: string; organisationId: string },
+) => {
+  const token = await tx.desktopAccessToken.findFirst({
+    where: { id: access.id, organisationId: access.organisationId, revokedAt: null, expiresAt: { gt: new Date() } },
+    include: { automationJob: { select: { organisationId: true, claimedDeviceId: true, claimedByAgentId: true } } },
+  });
+  if (!token) throw new HttpError(401, 'Desktop access has expired or been revoked.');
+  if (token.automationJobId) {
+    const job = token.automationJob;
+    if (!job || job.organisationId !== access.organisationId || job.claimedDeviceId !== token.id) {
+      throw new HttpError(401, 'This desktop credential no longer owns the automation attempt.');
+    }
+    if (job.claimedByAgentId) await assertRegisteredAgentActive(tx, access.organisationId, job.claimedByAgentId);
+  }
+  return token;
 };
 
 export const assertDesktopJobAccess = (access: { automationJobId?: string | null }, jobId: string) => {

@@ -107,6 +107,12 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   });
 
   if (!job) {
+    if (body.jobId) {
+      throw new HttpError(409, 'Application details were saved, but this automation attempt is no longer available for preparation. Its snapshot was not changed. Return to the project to review the current attempt.', {
+        applicationDetailsSaved: true,
+        automationSnapshotUpdated: false,
+      });
+    }
     return jsonResponse(200, { ok: true, redirectTo: `/projects/${application.projectId}` });
   }
 
@@ -127,8 +133,24 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     ? AutomationJobStatus.READY
     : AutomationJobStatus.NEEDS_INPUT;
   const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
-    await tx.automationJob.update({
-      where: { id: job.id },
+    // A claim or another preparation save may win while the snapshot is built.
+    // Enforce eligibility at the write boundary, not only at the earlier read.
+    const refreshed = await tx.automationJob.updateMany({
+      where: {
+        id: job.id,
+        organisationId: organisation.id,
+        projectId: application.projectId,
+        type: job.type,
+        status: job.status,
+        updatedAt: job.updatedAt,
+        snapshotHash: job.snapshotHash,
+        claimedAt: null,
+        claimedDeviceId: null,
+        claimedByUserId: null,
+        claimedByAgentId: null,
+        agentRunId: null,
+        completedAt: null,
+      },
       data: {
         status,
         payloadVersion: 2,
@@ -141,6 +163,12 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         error: null,
       },
     });
+    if (refreshed.count !== 1) {
+      throw new HttpError(409, 'Application details were saved, but the automation attempt changed before its snapshot could be refreshed. The current attempt was not changed or requeued. Return to the project to review it.', {
+        applicationDetailsSaved: true,
+        automationSnapshotUpdated: false,
+      });
+    }
     return recordAutomationReadinessTransition(tx, {
       organisationId: organisation.id,
       projectId: application.projectId,

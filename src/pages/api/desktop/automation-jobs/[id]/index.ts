@@ -14,7 +14,8 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { desktopJobStatusSchema } from '@/lib/validation/desktop-handoff';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
-import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
+import { assertDesktopJobAccess, requireDesktopAuth, assertDesktopTokenActive } from '@/server/auth/desktop-token';
+import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
 import { assertAutomationJobTransition } from '@/server/services/automation-lifecycle.service';
 import { reconcilePreparedApplicationReview } from '@/server/services/prepared-application-review.service';
 
@@ -73,13 +74,15 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   const body = await parseBody(context.request, desktopJobStatusSchema);
   if (body.jobId !== id) throw new HttpError(400, 'Desktop callback job id does not match the requested job.');
   const outcome = await prisma.$transaction(async (tx) => {
+    await lockOrganisationExecution(tx, access.organisationId);
+    await assertDesktopTokenActive(tx, access);
     const job = await tx.automationJob.findFirst({
       where: {
         id,
         organisationId: access.organisationId,
         claimedDeviceId: access.id,
       },
-      select: { id: true, status: true, projectId: true, type: true, dataSnapshot: true },
+      select: { id: true, status: true, projectId: true, type: true, dataSnapshot: true, claimedByAgentId: true, leaseExpiresAt: true },
     });
     if (!job) throw new HttpError(409, 'Automation job is not claimed by this desktop device.');
 
@@ -87,8 +90,20 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       SELECT "id"
       FROM "AutomationJobEvent"
       WHERE "idempotencyKey" = ${body.callbackId}
+        AND "organisationId" = ${access.organisationId}
+        AND "automationJobId" = ${id}
+        AND "eventType" = ${body.eventType}
       LIMIT 1
     `);
+    if (body.eventType === 'started') {
+      if (body.status !== AutomationJobStatus.IN_PROGRESS
+        || (job.status !== AutomationJobStatus.CLAIMED && !(duplicate.length && job.status === AutomationJobStatus.IN_PROGRESS))
+        || (job.claimedByAgentId && (!job.leaseExpiresAt || job.leaseExpiresAt <= new Date()))) {
+        throw new HttpError(409, 'This claim is no longer authorised to start. Review the application in Architect Pro.');
+      }
+    } else if (job.status === AutomationJobStatus.CLAIMED && body.status === AutomationJobStatus.IN_PROGRESS) {
+      throw new HttpError(409, 'A started acknowledgement is required before progress.');
+    }
     if (duplicate.length) return { duplicate: true, status: job.status };
 
     assertAutomationJobTransition(job.status, body.status);

@@ -8,6 +8,7 @@ import { agentClaimSchema } from '@/lib/validation/desktop-agent';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireAgentAuth } from '@/server/auth/agent-credential';
+import { lockOrganisationExecution, assertExecutionAvailable, assertRegisteredAgentActive } from '@/server/services/desktop-execution.service';
 import {
   createDesktopTokenValue,
   desktopJobTokenExpiry,
@@ -31,6 +32,9 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const jobToken = createDesktopTokenValue();
   const expiresAt = desktopJobTokenExpiry();
   const result = await prisma.$transaction(async (tx) => {
+    await lockOrganisationExecution(tx, agent.organisationId);
+    await assertRegisteredAgentActive(tx, agent.organisationId, agent.id, agent.credentialHash);
+    await assertExecutionAvailable(tx, agent.organisationId);
     const job = await tx.automationJob.findFirst({
       where: { id, organisationId: agent.organisationId, status: AutomationJobStatus.READY, executionAuthorisedAt: { not: null } },
       select: { id: true, organisationId: true, projectId: true, type: true, payloadVersion: true, createdById: true },
@@ -79,4 +83,3 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     jobAccessExpiresAt: expiresAt.toISOString(),
   });
 }, context);
-

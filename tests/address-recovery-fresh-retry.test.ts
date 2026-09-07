@@ -11,12 +11,12 @@ const restartService = readFileSync('src/server/services/automation-job-restart.
 assert.match(correctionRoute, /requireDesktopAuth/, 'postcode correction requires Desktop authentication');
 assert.match(correctionRoute, /assertDesktopJobAccess/, 'job-scoped tokens cannot correct another job');
 assert.match(
-  correctionRoute,
-  /claimedDeviceId: access\.id[\s\S]*status: AutomationJobStatus\.FAILED_RETRYABLE/,
+  restartService,
+  /claimedDeviceId: input\.desktopAccess\.id[\s\S]*oldJob\.status !== AutomationJobStatus\.FAILED_RETRYABLE/,
   'only the device-owned safely failed run can request correction',
 );
 assert.match(
-  correctionRoute,
+  restartService,
   /automationJobSnapshotV2Schema\.safeParse\(oldJob\.dataSnapshot\)[\s\S]*snapshot\.data\.site\.id/,
   'the immutable snapshot is read only to identify the canonical Site',
 );
@@ -25,7 +25,8 @@ assert.doesNotMatch(
   /automationJob\.(?:update|updateMany)[\s\S]*dataSnapshot/,
   'postcode correction never patches the frozen AutomationJob snapshot',
 );
-assert.match(correctionRoute, /prisma\.site\.updateMany/, 'the canonical Site receives the corrected postcode');
+assert.match(restartService, /transaction\.site\.updateMany/, 'the canonical Site receives the corrected postcode in the retry transaction');
+assert.doesNotMatch(correctionRoute, /site\.updateMany/, 'the endpoint cannot partially commit the Site before retry');
 assert.match(correctionRoute, /restartFailedAutomationJob/, 'correction uses the shared fresh-job retry service');
 assert.match(restartRoute, /restartFailedAutomationJob/, 'manual web retries use the same fresh-job service');
 assert.match(restartService, /buildFreshAutomationJob/, 'the retry builds a new immutable snapshot');
