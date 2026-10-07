@@ -13,28 +13,17 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
     progressPercent: true, progressMessage: true, progressUpdatedAt: true,
     project: { select: { id: true, name: true } },
   } as const;
-  const [active, recent] = await Promise.all([
-    prisma.automationJob.findMany({
-      where: {
-        organisationId: organisation.id,
-        OR: [
-          { status: 'READY', executionAuthorisedAt: { not: null } },
-          { status: { in: ['CLAIMED', 'IN_PROGRESS'] } },
-        ],
-      },
-      select,
-      orderBy: [{ executionAuthorisedAt: 'asc' }, { createdAt: 'asc' }],
-    }),
-    prisma.automationJob.findMany({
-      where: {
-        organisationId: organisation.id,
-        status: { in: ['NEEDS_REVIEW', 'AWAITING_PORTAL_REVIEW', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'FAILED', 'COMPLETED'] },
-      },
-      select,
-      orderBy: { updatedAt: 'desc' },
-      take: 10,
-    }),
-  ]);
-  return jsonResponse(200, { active, recent });
+  const active = await prisma.automationJob.findMany({
+    where: {
+      organisationId: organisation.id,
+      OR: [
+        { status: 'READY', executionAuthorisedAt: { not: null } },
+        { status: { in: ['CLAIMED', 'IN_PROGRESS'] } },
+      ],
+    },
+    select,
+    orderBy: [{ executionAuthorisedAt: 'asc' }, { createdAt: 'asc' }],
+  });
+  active.sort((left, right) => Number(left.status === 'READY') - Number(right.status === 'READY'));
+  return jsonResponse(200, { active });
 }, context);
-

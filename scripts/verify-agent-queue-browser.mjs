@@ -1,0 +1,35 @@
+import { chromium } from 'playwright';
+import assert from 'node:assert/strict';
+const browser = await chromium.launch({channel:'chrome',headless:true});
+const page = await browser.newPage({viewport:{width:1365,height:900}});
+const errors=[];page.on('pageerror',error=>errors.push(error.message));
+try {
+ await page.goto('http://127.0.0.1:4329');
+ await page.getByRole('button',{name:'Job queue (3)'}).waitFor();
+ await page.getByRole('button',{name:'Job queue (3)'}).click();
+ assert.equal(await page.getByText('Old review project').count(),0);
+ assert.equal(await page.getByRole('progressbar').getAttribute('value'),'42');
+ assert.equal(await page.getByRole('button',{name:/Remove.*from queue/}).count(),2);
+ await page.getByRole('button',{name:'Remove Oak House Rear extension warrant from queue'}).click();
+ await page.getByRole('button',{name:'Job queue (2)'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Remove Oak House Rear extension warrant from queue'}).count(),0);
+ const requests=await page.evaluate(async()=>(await(await fetch('/fixture/inspection')).json()).deleting);
+ assert.deepEqual(requests,['warrant-a']);
+ assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-controls')),'agent-job-queue');
+ console.log('Verified active count, hidden historic results, running progress, waiting-job removal and focus');
+ await page.evaluate(async()=>{await fetch('/fixture/reenqueue');window.dispatchEvent(new CustomEvent('portal:mutation-success'));});
+ await page.getByRole('button',{name:'Job queue (3)'}).waitFor();
+ await page.getByRole('button',{name:'Remove Hill Cottage Garage conversion from queue'}).click();
+ await page.getByRole('alert').waitFor();
+ assert.match(await page.getByRole('alert').innerText(),/already started/);
+ assert.equal(await page.getByRole('button',{name:'Job queue (3)'}).count(),1);
+ console.log('Verified explicit re-queue is visible and failed removal keeps the row');
+ await page.keyboard.press('Escape');
+ assert.equal(await page.getByRole('region',{name:'Agent job queue'}).count(),0);
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Job queue (3)'}).click();
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ assert.equal(await page.getByRole('link',{name:'Download updated Agent source code'}).getAttribute('href'),'/downloads/ArchitectProAgentSource-4.2.0.zip');
+ assert.deepEqual(errors,[]);
+ console.log('Verified mobile fit, keyboard dismissal, Agent guide/source link and no runtime errors');
+} finally {await browser.close();}
