@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import config from '../tailwind.config.mjs';
-const js = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Queue from './src/components/automation/AgentQueueDropdown';import AgentSetup from './src/components/integrations/AgentSetupFlow';createRoot(document.getElementById('root')).render(<main className="p-4"><div className="flex justify-end"><Queue/></div><h1>Projects</h1><AgentSetup connectedAgent={{id:"test-agent",machineName:"Test PC",agentVersion:"4.2.1",connected:new URLSearchParams(location.search).get("connected")!=="false",usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:"READY"}}/></main>);`, resolveDir: process.cwd(), loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"test"'}});
+const js = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Queue from './src/components/automation/AgentQueueDropdown';import AgentSetup from './src/components/integrations/AgentSetupFlow';createRoot(document.getElementById('root')).render(<><header data-mobile-navigation-header style={{height:128}} className="sticky top-0 z-20 flex h-32 items-center bg-paper px-4 lg:hidden">Mobile navigation</header><main className="p-4" style={{minHeight:2400}}><div className="flex justify-end"><Queue/></div><h1>Projects</h1><AgentSetup connectedAgent={{id:"test-agent",machineName:"Test PC",agentVersion:"4.2.1",connected:new URLSearchParams(location.search).get("connected")!=="false",usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:"READY"}}/></main></>);`, resolveDir: process.cwd(), loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"test"'}});
 const css=await postcss([tailwindcss(config)]).process(readFileSync('src/styles/global.css','utf8'),{from:'src/styles/global.css'});
 const initialJobs=[{id:'planning-a',title:'Rear extension',type:'HOUSEHOLDER_PLANNING',status:'IN_PROGRESS',progressPercent:42,progressMessage:'Uploading documents',project:{id:'a',name:'Oak House'}},{id:'warrant-a',title:'Rear extension warrant',type:'BUILDING_WARRANT',status:'READY',progressPercent:null,project:{id:'a',name:'Oak House'}},{id:'planning-b',title:'Garage conversion',type:'HOUSEHOLDER_PLANNING',status:'READY',progressPercent:null,project:{id:'b',name:'Hill Cottage'}}];
 let jobs=structuredClone(initialJobs);
@@ -12,6 +12,7 @@ let deleting=[];
 let latestVersion='4.2.1';let setups=0;let downloads=0;
 createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
+ if(url.pathname==='/fixture/progress'){jobs[0].progressPercent=56;res.end('ok');return;}
  if(url.pathname==='/fixture/reenqueue'){jobs=structuredClone(initialJobs);res.end('ok');return;}
  if(url.pathname==='/fixture/inspection'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobs,deleting,setups,downloads}));return;}
  if(url.pathname==='/'){latestVersion=url.searchParams.get('latest')||'4.2.1';}

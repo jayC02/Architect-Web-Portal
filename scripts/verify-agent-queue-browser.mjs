@@ -11,17 +11,46 @@ try {
  console.log('Verified update control detects current release without reinstalling or reconnecting');
 
  await page.getByRole('button',{name:'Job queue (3)'}).waitFor();
- await page.getByRole('button',{name:'Job queue (3)'}).click();
- assert.equal(await page.getByText('Old review project').count(),0);
+
+ const queueButton=page.getByRole('button',{name:'Job queue (3)'});
+ assert.equal(await page.locator('[data-queue-position="inline"]').count(),1);
+ const initialHeight=await page.evaluate(()=>document.documentElement.scrollHeight);
+ await queueButton.focus();
+ await page.evaluate(()=>{window.originalQueueButton=document.querySelector('button[aria-controls="agent-job-queue"]');window.scrollTo(0,500);});
+ await page.locator('[data-queue-position="floating"]').waitFor();
+ assert.equal(await queueButton.count(),1);
+ assert.equal(await page.evaluate(()=>document.activeElement===window.originalQueueButton),true);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollHeight),initialHeight);
  assert.equal(await page.getByRole('progressbar').getAttribute('value'),'42');
+ const floatingBox=await page.locator('[data-queue-position="floating"]').boundingBox();
+ assert.equal(floatingBox.y,16);
+ assert(floatingBox.x>1000);
+ await page.evaluate(async()=>{await fetch('/fixture/progress');window.dispatchEvent(new CustomEvent('portal:mutation-success'));});
+ await page.waitForFunction(()=>document.querySelector('progress').value===56);
+ await page.screenshot({path:'output/agent-queue-floating-desktop.png'});
+ await queueButton.click();
+ await page.getByRole('region',{name:'Agent job queue'}).waitFor();
+ await page.evaluate(()=>window.scrollTo(0,0));
+ await page.locator('[data-queue-position="inline"]').waitFor();
+ assert.equal(await queueButton.getAttribute('aria-expanded'),'true');
+ assert.equal(await page.getByRole('region',{name:'Agent job queue'}).count(),1);
+ assert.equal(await page.evaluate(()=>document.querySelector('button[aria-controls="agent-job-queue"]')===window.originalQueueButton),true);
+ console.log('Verified floating progress, preserved page layout/focus and open dropdown when returning to header');
+
+ assert.equal(await page.getByText('Old review project').count(),0);
+ assert.equal(await page.getByRole('progressbar').getAttribute('value'),'56');
  assert.equal(await page.getByRole('button',{name:/Remove.*from queue/}).count(),2);
+ await page.evaluate(()=>window.scrollTo(0,500));
+ await page.locator('[data-queue-position="floating"]').waitFor();
  await page.getByRole('button',{name:'Remove Oak House Rear extension warrant from queue'}).click();
  await page.getByRole('button',{name:'Job queue (2)'}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Remove Oak House Rear extension warrant from queue'}).count(),0);
  const requests=await page.evaluate(async()=>(await(await fetch('/fixture/inspection')).json()).deleting);
  assert.deepEqual(requests,['warrant-a']);
  assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-controls')),'agent-job-queue');
- console.log('Verified active count, hidden historic results, running progress, waiting-job removal and focus');
+ await page.evaluate(()=>window.scrollTo(0,0));
+ await page.locator('[data-queue-position="inline"]').waitFor();
+ console.log('Verified active count, hidden historic results, live progress and removal/focus in floating queue');
  await page.evaluate(async()=>{await fetch('/fixture/reenqueue');window.dispatchEvent(new CustomEvent('portal:mutation-success'));});
  await page.getByRole('button',{name:'Job queue (3)'}).waitFor();
  await page.getByRole('button',{name:'Remove Hill Cottage Garage conversion from queue'}).click();
@@ -35,6 +64,25 @@ try {
  await page.getByRole('button',{name:'Job queue (3)'}).click();
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  assert.equal(await page.getByRole('link',{name:'Download updated Agent source code'}).getAttribute('href'),'/downloads/ArchitectProAgentSource-4.2.1.zip');
+ await page.evaluate(()=>window.scrollTo(0,500));
+ await page.locator('[data-queue-position="floating"]').waitFor();
+ const mobileBox=await queueButton.boundingBox();
+ const navigationBox=await page.locator('[data-mobile-navigation-header]').boundingBox();
+ assert(mobileBox.y>=navigationBox.y+navigationBox.height+12);
+ const panel=page.getByRole('region',{name:'Agent job queue'});
+ const panelBox=await panel.boundingBox();
+ assert(panelBox.x>=0 && panelBox.x+panelBox.width<=390);
+ assert(panelBox.y+panelBox.height<=844);
+ await page.screenshot({path:'output/agent-queue-floating-mobile.png'});
+ await page.setViewportSize({width:844,height:390});
+ await page.waitForFunction(()=>document.querySelector('#agent-job-queue').getBoundingClientRect().bottom<=innerHeight);
+ await page.keyboard.press('Escape');
+ await page.evaluate(()=>window.scrollTo(0,0));
+ await page.locator('[data-queue-position="inline"]').waitFor();
+ assert.equal(await queueButton.count(),1);
+ await page.setViewportSize({width:390,height:844});
+ console.log('Verified floating queue below mobile navigation, portrait/landscape fit and restoration');
+
 
  await page.goto('http://127.0.0.1:4329/?connected=false');
  const downloaded=page.waitForEvent('download');
