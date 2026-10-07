@@ -32,6 +32,7 @@ type SnapshotInput = {
     address: { addressLine1: string | null; townCity: string | null; postcode: string | null };
   };
   planning: {
+    feeMinorUnits?: number | null;
     description: string | null;
     answers: { soleOwner: boolean | null; agriculturalHolding: boolean | null };
   } | null;
@@ -154,6 +155,9 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
         message: 'Enter a description of the proposed work.',
         severity: 'error',
       });
+    }
+    if (snapshot.planning?.feeMinorUnits == null) {
+      missing.push({ code: 'missing_planning_fee', field: 'planning.feeMinorUnits', message: 'Enter the planning application fee in pounds.', severity: 'error' });
     }
     if (snapshot.planning?.answers.soleOwner === null) {
       missing.push({

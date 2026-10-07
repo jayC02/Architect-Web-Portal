@@ -1,3 +1,4 @@
+import { recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 import {
   ActionItemKind,
   ActionItemPriority,
@@ -37,6 +38,11 @@ export const agentSupportsJob = (
 };
 
 export const healthyAgentCutoff = (now = new Date()) => new Date(now.getTime() - AGENT_HEALTHY_MS);
+export const healthyAgentWhere = (organisationId: string, now = new Date()) => ({
+  organisationId, enabled: true, revokedAt: null, lastSeenAt: { gt: healthyAgentCutoff(now) },
+});
+export const isHealthyAgent = (agent: Pick<AgentRegistration, 'enabled' | 'revokedAt' | 'lastSeenAt'>, now = new Date()) =>
+  Boolean(agent.enabled && !agent.revokedAt && agent.lastSeenAt && agent.lastSeenAt > healthyAgentCutoff(now));
 export const agentLeaseExpiry = (now = new Date()) => new Date(now.getTime() + AGENT_LEASE_MS);
 export const waitingAgentActionKey = (jobId: string) => `automation:${jobId}:waiting-agent`;
 export const connectionLostActionKey = (jobId: string) => `automation:${jobId}:connection-lost`;
@@ -89,6 +95,7 @@ export const reconcileStaleAgentJobs = async (input: {
     await database.$transaction(async (tx) => {
     await lockOrganisationExecution(tx, job.organisationId);
     if (job.status === AutomationJobStatus.CLAIMED) {
+      await recordAutomationOwnership(tx, { organisationId: job.organisationId, jobId: job.id }, { reason: 'claim_expired', state: 'INTERRUPTED' });
       const released = await tx.automationJob.updateMany({
         where: { id: job.id, status: AutomationJobStatus.CLAIMED, claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId, leaseExpiresAt: { lte: now } },
         data: {
@@ -120,6 +127,7 @@ export const reconcileStaleAgentJobs = async (input: {
       },
     });
     if (stopped.count) {
+      await recordAutomationOwnership(tx, { organisationId: job.organisationId, jobId: job.id }, { reason: 'connection_lost' });
       const dedupeKey = connectionLostActionKey(job.id);
       await tx.actionItem.upsert({
         where: { organisationId_dedupeKey: { organisationId: job.organisationId, dedupeKey } },

@@ -1,3 +1,4 @@
+import { recordAuthorisedSnapshot } from '@/server/services/automation-state-model.service';
 import {
   AutomationJobStatus,
   AutomationJobType,
@@ -154,6 +155,7 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
       },
       select: retryJobSelect,
     });
+    await recordAuthorisedSnapshot(transaction, { organisationId: input.organisation.id, jobId: created.id });
     await transaction.deadline.updateMany({
       where: {
         organisationId: input.organisation.id,

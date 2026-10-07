@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import * as prismaTypes from '@prisma/client';
+import { recordAuthorisedSnapshot } from '../src/server/services/automation-state-model.service';
 import { HttpError } from '../src/lib/utils/http';
 import { readAutomationFailureMetadata } from '../src/lib/automation/failure-recovery';
 
@@ -12,7 +13,7 @@ const file = 'src/server/services/automation-job-restart.service.ts';
 const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 function harness(options: { active?: boolean; stale?: boolean; preflight?: boolean; insertFails?: boolean; eventFails?: boolean; revoked?: boolean; category?: string } = {}) {
   const original = { id: 'old', organisationId: 'org_a', projectId: 'project_a', type: 'HOUSEHOLDER_PLANNING', claimedDeviceId: 'token_a', status: 'FAILED_RETRYABLE', resultData: { retrySafe: true, failureCategory: options.category ?? 'ADDRESS_RESOLUTION_FAILED' }, dataSnapshot: { site: { id: 'site_a', updatedAt: '2026-09-01T10:00:00.000Z', postcode: 'G41 5BZ' } } };
-  let state: any = { old: structuredClone(original), postcode: 'G41 5BZ', siteVersion: options.stale ? 'newer' : original.dataSnapshot.site.updatedAt, jobs: [], event: null, deadline: 'OPEN' };
+  let state: any = { old: structuredClone(original), postcode: 'G41 5BZ', siteVersion: options.stale ? 'newer' : original.dataSnapshot.site.updatedAt, jobs: [], journal: [], event: null, deadline: 'OPEN' };
   let tail = Promise.resolve();
   let builds = 0;
   const tx: any = {
@@ -31,7 +32,12 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
       if (where.updatedAt.toISOString() !== state.siteVersion) return { count: 0 };
       state.postcode = data.postcode; state.siteVersion = 'changed'; return { count: 1 };
     } },
-    automationJobEvent: { findUnique: async () => state.event, create: async ({ data }: any) => { if (options.eventFails) throw new Error('event failed'); state.event = structuredClone(data); } },
+    automationJobEvent: {
+      upsert: async ({where, create}: any) => {
+        const existing = state.journal.find((entry: any) => entry.idempotencyKey === where.idempotencyKey);
+        if (existing) return existing;
+        state.journal.push(structuredClone(create)); return create;
+      }, findUnique: async () => state.event, create: async ({ data }: any) => { if (options.eventFails) throw new Error('event failed'); state.event = structuredClone(data); } },
     deadline: { updateMany: async () => { state.deadline = 'CANCELLED'; } },
     $executeRaw: async () => {},
   };
@@ -47,6 +53,7 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
     agentRegistration: { findMany: async () => [] },
   };
   const modules: any = {
+    '@/server/services/automation-state-model.service': { recordAuthorisedSnapshot },
     '@prisma/client': prismaTypes, '@/lib/db/prisma': { prisma: database }, '@/lib/utils/http': { HttpError },
     '@/lib/automation/failure-recovery': { readAutomationFailureMetadata },
     '@/lib/validation/automation-job': { automationJobSnapshotV2Schema: { safeParse: (data: any) => ({ success: true, data }) } },

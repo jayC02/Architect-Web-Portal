@@ -67,6 +67,7 @@ const documentCount = await prisma.projectDocument.count({
       <section aria-labelledby="planning-questions-heading">
       <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
       <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+      <label class="mt-4 block"><span class="label">Planning application fee (£)</span><input required type="number" min="0" max="9999999.99" step="0.01" name="applicationFee" value={numberValue('applicationFee')} class="field" /><span class="mt-1 block text-xs text-stone-500">Enter the fee to leave ready in the government portal. Enter 0 only when no fee is payable.</span></label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>
         <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label>

@@ -224,6 +224,7 @@ export const automationJobSnapshotV2Schema = z.object({
     updatedAt: z.string().datetime().nullable(),
   }),
   planning: z.object({
+    feeMinorUnits: z.number().int().nonnegative().max(999999999).nullable().optional(),
     recordId: nullableText,
     description: nullableText,
     status: z.nativeEnum(PlanningStatus).nullable(),

@@ -13,7 +13,7 @@ import {
   agentEnrollmentTokenHash,
   createAgentEnrollmentToken,
 } from '@/server/auth/agent-credential';
-import { agentSupportsJob, healthyAgentCutoff } from '@/server/services/desktop-agent.service';
+import { agentSupportsJob, isHealthyAgent } from '@/server/services/desktop-agent.service';
 
 export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const { organisation, membership, user } = await requireOrganisation(context);
@@ -29,10 +29,9 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
     },
     orderBy: { createdAt: 'desc' },
   });
-  const healthyAfter = healthyAgentCutoff();
   return jsonResponse(200, {
     agents: agents.map((agent) => {
-      const connected = Boolean(agent.enabled && !agent.revokedAt && agent.lastSeenAt && agent.lastSeenAt > healthyAfter);
+      const connected = isHealthyAgent(agent);
       const usable = connected && [AutomationJobType.HOUSEHOLDER_PLANNING, AutomationJobType.BUILDING_WARRANT]
         .some((type) => agentSupportsJob(agent, { type, payloadVersion: 2 }));
       return { ...agent, connected, usable };

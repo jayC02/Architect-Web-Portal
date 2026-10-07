@@ -19,6 +19,7 @@
     "prebuild": "prisma generate",
     "start": "node ./dist/server/entry.mjs",
     "test:orchestration": "tsx tests/desktop-callback-contract.test.ts && tsx tests/lifecycle-orchestration.test.ts && tsx tests/phase2-calendar-workflow.test.ts && tsx tests/submission-state-workflow.test.ts && tsx tests/phase3-gmail-lifecycle.test.ts && tsx tests/phase4-background-agent.test.ts && tsx tests/phase5-xero-milestones.test.ts",
+    "test:state-model": "tsx tests/automation-state-model.test.ts",
     "test:submission-state": "tsx tests/submission-state-workflow.test.ts",
     "test:submission-state:browser": "playwright test tests/submission-state-dialog.spec.ts --workers=1",
     "test:fees": "tsx tests/building-standards-fee.test.ts",

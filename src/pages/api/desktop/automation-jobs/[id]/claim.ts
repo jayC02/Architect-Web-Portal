@@ -1,3 +1,4 @@
+import { recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -49,6 +50,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
   });
   if (!claimed.count) throw new HttpError(409, 'This automation job was claimed by another device.');
+  await recordAutomationOwnership(tx, { organisationId: access.organisationId, jobId: id }, { reason: 'claimed' });
   });
   return jsonResponse(200, { ok: true, status: AutomationJobStatus.CLAIMED });
 }, context);

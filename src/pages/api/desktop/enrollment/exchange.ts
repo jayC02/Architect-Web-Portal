@@ -6,6 +6,8 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { agentEnrollmentExchangeSchema } from '@/lib/validation/desktop-agent';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
+import { assertAgentConnectionResettable } from '@/server/services/desktop-agent-reset.service';
 import {
   agentCredentialHash,
   agentCredentialPrefix,
@@ -38,10 +40,15 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       data: { usedAt: now },
     });
     if (!consumed.count) throw new HttpError(410, 'This enrollment token has expired or already been used.');
-    const existing = await tx.agentRegistration.findUnique({ where: { installationId: body.installationId } });
-    if (existing && existing.organisationId !== enrollment.organisationId && existing.enabled && !existing.revokedAt) {
-      throw new HttpError(403, 'This Agent installation is already enrolled with another organisation.');
+    let existing = await tx.agentRegistration.findUnique({ where: { installationId: body.installationId } });
+    if (existing) {
+      await lockOrganisationExecution(tx, existing.organisationId);
+      existing = await tx.agentRegistration.findUnique({ where: { installationId: body.installationId } });
     }
+    if (existing && existing.organisationId !== enrollment.organisationId && existing.enabled && !existing.revokedAt) {
+      throw new HttpError(403, 'This computer is connected to another Architect Pro practice. Choose Reset & reconnect in the Agent. If its old connection is no longer available, ask an administrator of the previous practice to disconnect this computer in Settings, then try again.');
+    }
+    if (existing) await assertAgentConnectionResettable(tx, existing.organisationId, existing.id);
     const data = {
       organisationId: enrollment.organisationId,
       enrolledByUserId: enrollment.createdByUserId,
@@ -52,6 +59,9 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       credentialPrefix: agentCredentialPrefix(credential),
       enabled: true,
       revokedAt: null,
+      lastSeenAt: null,
+      operatingState: 'DISCONNECTED' as const,
+      currentJobId: null,
     };
     return existing
       ? tx.agentRegistration.update({ where: { id: existing.id }, data })

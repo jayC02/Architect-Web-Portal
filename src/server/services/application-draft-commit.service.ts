@@ -118,6 +118,7 @@ const planningAnswers = (review: ApplicationDraftReview) => ({
   } : {}),
   soleOwner: review.confirmations.soleOwner as boolean,
   agriculturalHolding: review.confirmations.agriculturalHolding as boolean,
+  applicationFee: review.confirmations.applicationFee as number,
   applicantOverride: review.applicantDifferentFromClient
     ? personSnapshotOverride(review.applicant)
     : null,

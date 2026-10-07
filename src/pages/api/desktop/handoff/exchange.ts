@@ -1,3 +1,4 @@
+import { recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -91,6 +92,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     if (!claimed.count) {
       throw new HttpError(410, 'This desktop link has already been used. Return to the portal and open the job again.');
     }
+    await recordAutomationOwnership(tx, { organisationId: job.organisationId, jobId: job.id }, { reason: 'handoff_claimed' });
     return access;
   });
 

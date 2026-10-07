@@ -1593,6 +1593,14 @@ export default function ApplicationDraftReview({
                     />
                   ))
                 : null}
+              {planning && <label className="block">
+                <span className="label">Planning application fee (£)</span>
+                <input className="field" required type="number" min="0" max="9999999.99" step="0.01"
+                  value={typeof review.confirmations.applicationFee === 'number' ? review.confirmations.applicationFee : ''}
+                  onChange={event => updateConfirmation('applicationFee', event.target.value === '' ? null : Number(event.target.value))} />
+                <span className="mt-1 block text-xs text-stone-500">This amount will be entered in the government portal for your review. Enter 0 only when no fee is payable.</span>
+                {issueFor('confirmations.applicationFee') && <span className="text-xs text-red-700">{issueFor('confirmations.applicationFee')}</span>}
+              </label>}
               {planning && review.confirmations.newOrAlteredVehicleAccess === true ? (
                 <>
                   <Field

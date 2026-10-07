@@ -149,6 +149,7 @@ const householderReview = applicationDraftReviewSchema.parse({
     typeOfWorkKeys: [],
   },
   confirmations: {
+    applicationFee: 325.50,
     discussedWithPlanningAuthority: false,
     treesOnOrAdjacentToSite: false,
     newOrAlteredVehicleAccess: false,

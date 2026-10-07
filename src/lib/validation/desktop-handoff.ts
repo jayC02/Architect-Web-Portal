@@ -60,6 +60,7 @@ export const desktopJobStatusSchema = z.object({
       'failed_final',
       'cancelled',
     ]),
+    browserSessionId: z.string().trim().min(1).max(200).optional(),
     lastCompletedStep: z.string().trim().max(100).nullable().optional(),
     currentSection: z.string().trim().max(100).nullable().optional(),
     documentsUploaded: z.number().int().nonnegative().max(500).optional(),

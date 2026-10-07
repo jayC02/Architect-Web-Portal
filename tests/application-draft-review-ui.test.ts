@@ -33,11 +33,14 @@ const review = applicationDraftReviewSchema.parse({
     addressLine1: '2 Practice Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G2 2BB', country: 'United Kingdom', saveAsOrganisationDefault: false,
   },
   application: { description: 'A specific description of proposed work.', currentUse: null, proposedUse: null, estimatedValue: null, presetKey: null, selectedCertifierPresetId: null },
-  confirmations: { discussedWithPlanningAuthority: false, treesOnOrAdjacentToSite: false, newOrAlteredVehicleAccess: false, soleOwner: true, agriculturalHolding: false },
+  confirmations: { applicationFee: 325.50, discussedWithPlanningAuthority: false, treesOnOrAdjacentToSite: false, newOrAlteredVehicleAccess: false, soleOwner: true, agriculturalHolding: false },
   documents: [{ id: 'location-plan', documentType: DocumentType.LOCATION_PLAN, documentStatus: DocumentStatus.APPROVED, revision: null, drawingNumber: null, drawingTitle: null }],
 });
 
 assert.deepEqual(evaluateClientApplicationDraftReadiness(review), [], 'complete local review is ready immediately');
+for (const applicationFee of [null, -1, 12.345, '325']) {
+  assert.ok(evaluateClientApplicationDraftReadiness({ ...review, confirmations: { ...review.confirmations, applicationFee } }).some(issue => issue.key === 'confirmations.applicationFee'));
+}
 const autoRouteReview = { ...review, selectedApplicationType: ApplicationDraftType.AUTO };
 assert.ok(
   !evaluateClientApplicationDraftReadiness(autoRouteReview).some((issue) => issue.key === 'selectedApplicationType'),

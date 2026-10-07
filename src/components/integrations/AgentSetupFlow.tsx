@@ -64,6 +64,12 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
   };
 
   useEffect(() => () => stopPolling(), []);
+  useEffect(() => {
+    setAgent(connectedAgent);
+    setState((current) => current === 'setting_up' ? current
+      : connectedAgent?.connected && connectedAgent.usable && !connectedAgent.revokedAt ? 'connected'
+      : current === 'failed' ? current : 'idle');
+  }, [connectedAgent]);
 
   const checkConnection = async () => {
     try {
@@ -108,7 +114,7 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
 
   const openAgent = () => { window.location.href = 'architectpro://agent'; };
 
-  if (state === 'connected' && agent) {
+  if (state === 'connected' && agent?.connected && agent.usable && !agent.revokedAt) {
     return <div role="status" className={compact ? 'rounded-md border border-emerald-200 bg-emerald-50 p-4' : 'border-t border-emerald-200 bg-emerald-50 px-5 py-5'}><div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 shrink-0 text-emerald-700" size={20} aria-hidden="true" /><div className="min-w-0"><p className="font-semibold text-emerald-950">Connected and ready</p><p className="mt-1 text-sm text-emerald-900">{agent.machineName} · Agent {agent.agentVersion} · {lastSeenLabel(agent.lastSeenAt)}</p><div className="mt-4 flex flex-wrap gap-2"><button type="button" className="btn btn-secondary gap-2" onClick={openAgent}><ExternalLink size={16} aria-hidden="true" />Open Agent</button><button type="button" className="btn btn-secondary gap-2" onClick={() => void start()}><Download size={16} aria-hidden="true" />Reinstall / update</button></div></div></div></div>;
   }
 

@@ -1,3 +1,4 @@
+import { recordAuthorisedSnapshot } from '@/server/services/automation-state-model.service';
 import { AutomationJobStatus, type PrismaClient } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
@@ -31,17 +32,20 @@ export const authoriseAutomationJobRun = async (input: {
   });
   if (!job) throw new HttpError(409, 'This application is not ready to run.');
 
-  const authorised = await database.automationJob.updateMany({
-    where: {
-      id: input.jobId,
-      organisationId: input.organisationId,
-      status: AutomationJobStatus.READY,
-    },
-    data: { executionAuthorisedAt: authorisedAt },
+  await database.$transaction(async (tx) => {
+    const authorised = await tx.automationJob.updateMany({
+      where: {
+        id: input.jobId,
+        organisationId: input.organisationId,
+        status: AutomationJobStatus.READY,
+      },
+      data: { executionAuthorisedAt: authorisedAt },
+    });
+    if (!authorised.count) {
+      throw new HttpError(409, 'This application changed before it could be authorised.');
+    }
+    await recordAuthorisedSnapshot(tx, { organisationId: input.organisationId, jobId: input.jobId });
   });
-  if (!authorised.count) {
-    throw new HttpError(409, 'This application changed before it could be authorised.');
-  }
 
   const agents = await database.agentRegistration.findMany({
     where: {

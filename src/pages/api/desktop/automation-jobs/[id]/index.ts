@@ -1,3 +1,4 @@
+import { recordAutomationOwnership, readExecutionSnapshot, STATE_MODEL_VERSION } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { randomUUID } from 'node:crypto';
@@ -29,6 +30,7 @@ const selectableStatuses = [
 
 const serialiseJob = (job: any) => ({
   ...job,
+  stateModel: { version: STATE_MODEL_VERSION, retainedBrowserMetadata: true },
   documents: Array.isArray(job.documentSnapshot?.documents)
     ? job.documentSnapshot.documents.map((document: any) => ({
         ...document,
@@ -59,10 +61,17 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       id: true, projectId: true, type: true, status: true, sourceType: true, title: true,
       payloadVersion: true, dataSnapshot: true, documentSnapshot: true,
       claimedAt: true, createdAt: true, updatedAt: true,
+      claimedDeviceId: true, agentRunId: true, executionAuthorisedAt: true,
     },
   });
   if (!job) throw new HttpError(404, 'Automation job not found or unavailable.');
-  return jsonResponse(200, { job: serialiseJob(job) });
+  const archived = await readExecutionSnapshot(prisma, { organisationId: access.organisationId, jobId: id }, job);
+  const payload = archived?.payload as { dataSnapshot: Prisma.JsonValue; documentSnapshot: Prisma.JsonValue; payloadVersion: number } | undefined;
+  // Transport remains v1/v2. Current editable data cannot replace authorised input.
+  const { claimedDeviceId: _credential, agentRunId: _run, executionAuthorisedAt: _authorised, ...wireJob } = job;
+  return jsonResponse(200, { job: serialiseJob(payload ? {
+    ...wireJob, dataSnapshot: payload.dataSnapshot, documentSnapshot: payload.documentSnapshot, payloadVersion: payload.payloadVersion,
+  } : wireJob) });
 }, context);
 
 export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
@@ -156,6 +165,9 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (!update.count) throw new HttpError(409, 'Automation job changed while the desktop result was being saved.');
+    await recordAutomationOwnership(tx, { organisationId: access.organisationId, jobId: id }, {
+      reason: body.eventType, eventId: body.callbackId, browserSessionId: body.result?.browserSessionId,
+    });
     if ([
       AutomationJobStatus.AWAITING_PORTAL_REVIEW,
       AutomationJobStatus.COMPLETED,

@@ -1,3 +1,4 @@
+import { recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -72,6 +73,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (!claimed.count) throw new HttpError(409, 'Another Architect Pro Agent claimed this application first.');
+    await recordAutomationOwnership(tx, { organisationId: agent.organisationId, jobId: job.id }, { reason: 'claimed' });
     await tx.agentRegistration.update({ where: { id: agent.id }, data: { currentJobId: job.id, operatingState: 'RUNNING', lastSeenAt: now } });
     await resolveAgentAction(tx as never, job.organisationId, waitingAgentActionKey(job.id), now);
     return job;

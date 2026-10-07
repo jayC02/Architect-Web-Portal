@@ -27,6 +27,7 @@ export const PATCH: APIRoute = (context) =>
       proposedParkingSpaces,
       soleOwner,
       agriculturalHolding,
+      applicationFee,
     } = body;
     const application = await prisma.planningApplication.findFirst({
       where: { id, organisationId: organisation.id },
@@ -51,6 +52,7 @@ export const PATCH: APIRoute = (context) =>
           proposedParkingSpaces: newOrAlteredVehicleAccess ? proposedParkingSpaces : null,
           soleOwner,
           agriculturalHolding,
+          applicationFee,
         } as Prisma.InputJsonValue,
         status: PlanningStatus.DRAFTING,
         preparedAt: new Date(),

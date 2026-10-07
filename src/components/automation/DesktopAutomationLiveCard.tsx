@@ -72,6 +72,7 @@ const visualCountdownLabel = (seconds: number) => {
 export default function DesktopAutomationLiveCard({ jobId, applicationId, applicationStatus, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
+  const [agentOnline, setAgentOnline] = useState<boolean | null>(connectedAgent);
   const [working, setWorking] = useState<'run' | 'retry' | 'reveal' | 'submit' | ''>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -80,7 +81,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   const submissionInFlightRef = useRef(false);
   const [visualClock, setVisualClock] = useState(() => ({
     jobId,
-    startAt: (runningStatuses.has(initial.status) || (initial.status === 'READY' && Boolean(initial.executionAuthorisedAt)))
+    startAt: runningStatuses.has(initial.status)
       ? executionStartTime(initial.executionAuthorisedAt) ?? Date.now()
       : null,
   }));
@@ -89,7 +90,8 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   const awaitingFee = job.status === 'AWAITING_PORTAL_REVIEW'
     || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required');
   const addressAction = job.progressStage === 'address_selection' && job.progressStageState === 'user_action_required';
-  const active = runningStatuses.has(job.status) || (job.status === 'READY' && Boolean(job.executionAuthorisedAt));
+  const active = runningStatuses.has(job.status);
+  const queued = job.status === 'READY' && Boolean(job.executionAuthorisedAt);
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
   const isWarrant = applicationType === 'BUILDING_WARRANT';
   const viewLabel = isWarrant ? 'View Warrant' : 'View Householder';
@@ -122,25 +124,27 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   }, [visualClock.startAt, visualCountdownActive]);
 
   useEffect(() => {
-    if (!active && !awaitingFee) return;
+    if (!active && !awaitingFee && job.status !== 'READY') return;
     let mounted = true;
     const poll = async () => {
       try {
-        const response = await apiRequest<{ job: DesktopJobProjection }>(`/api/automation-jobs/${currentJobId}/status`);
-        if (mounted) setJob(response.job);
+        const response = await apiRequest<{ job: DesktopJobProjection; compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/status`);
+        if (mounted) { setJob(response.job); setAgentOnline(response.compatibleAgentOnline); }
       } catch {
+        if (mounted) setAgentOnline(null);
         // Keep the last verified projection; the next lightweight poll retries.
       }
     };
     const timer = window.setInterval(() => void poll(), awaitingFee ? 5_000 : 3_000);
     void poll();
     return () => { mounted = false; window.clearInterval(timer); };
-  }, [active, awaitingFee, currentJobId]);
+  }, [active, awaitingFee, currentJobId, job.status]);
 
   const run = async () => {
     setWorking('run'); setError(''); setNotice('');
     try {
       const result = await apiRequest<{ compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/run`, { method: 'POST' });
+      setAgentOnline(result.compatibleAgentOnline);
       setJob((current) => ({ ...current, executionAuthorisedAt: new Date().toISOString() }));
       setNotice(result.compatibleAgentOnline
         ? 'Queued. Your connected Agent will start automatically.'
@@ -157,6 +161,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       if (!result.job.id) throw new Error('The retry job was not returned.');
       setCurrentJobId(result.job.id);
       setJob(result.job);
+      setAgentOnline(result.compatibleAgentOnline);
       setNotice(result.compatibleAgentOnline
         ? 'Queued. Your connected Agent will start automatically.'
         : 'Queued. Open or connect a compatible Architect Pro Agent to continue.');
@@ -329,6 +334,18 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {failure.category ?? 'AUTOMATION_FAILED'} · {failure.stage ?? 'stage not reported'}</p></details>
+    </section>
+  );
+
+  if (queued) return (
+    <section className="p-4 sm:px-5" aria-live="polite">
+      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Queued</p>
+      <h3 className="mt-1 font-semibold text-ink">{agentOnline === null ? 'Checking Agent connection' : agentOnline ? 'Waiting for Architect Pro Agent' : 'Agent disconnected'}</h3>
+      <p className="mt-1 text-sm text-stone-600">{agentOnline === null ? 'Connection status is temporarily unavailable. Your application remains queued.' : agentOnline ? 'Your Agent is connected and should start this application shortly.' : 'Reconnect Architect Pro Agent to continue this application.'}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {agentOnline === false && <a className="btn btn-primary" href="/settings/integrations#desktop-agent">Reconnect Agent</a>}
+        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a>
+      </div>
     </section>
   );
 

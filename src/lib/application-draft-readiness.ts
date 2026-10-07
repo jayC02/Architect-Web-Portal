@@ -86,6 +86,10 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
     for (const [key, label] of buildingConfirmationKeys) if (typeof review.confirmations[key] !== 'boolean') issues.push({ key: `confirmations.${key}`, section: 'confirmations', label, message: 'Confirm Yes or No.', legal: true });
   }
   if (planning) {
+    const fee = review.confirmations.applicationFee;
+    if (typeof fee !== 'number' || !Number.isFinite(fee) || fee < 0 || fee > 9999999.99 || Math.abs(fee * 100 - Math.round(fee * 100)) > 0.000001) {
+      issues.push({ key: 'confirmations.applicationFee', section: 'confirmations', label: 'Planning application fee', message: 'Enter the planning fee in pounds, with at most two decimal places.' });
+    }
     for (const [key, label] of [['soleOwner', 'Sole owner of all land'], ['agriculturalHolding', 'Agricultural holding']] as const) if (typeof review.confirmations[key] !== 'boolean') issues.push({ key: `confirmations.${key}`, section: 'confirmations', label, message: 'Confirm Yes or No.', legal: true });
     if (review.confirmations.newOrAlteredVehicleAccess === true) {
       addMissing(issues, 'confirmations', 'confirmations.currentParkingSpaces', 'Current parking spaces', review.confirmations.currentParkingSpaces, 'Enter the current number of parking spaces.');

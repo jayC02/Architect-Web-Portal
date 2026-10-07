@@ -151,6 +151,12 @@ export const BUILDING_WARRANT_CONFIRMATION_DEFAULTS = Object.freeze(
   buildingWarrantPreparationSchema.parse({}),
 );
 
+export const planningApplicationFeeSchema = z.preprocess(
+  value => value === '' || value == null ? undefined : value,
+  z.coerce.number().finite().nonnegative().max(9999999.99)
+    .refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 0.000001, 'Enter a fee with at most two decimal places.').optional(),
+);
+
 export const householderPreparationSchema = z.object({
   discussedWithPlanningAuthority: yesNoAnswer,
   treesOnOrAdjacentToSite: yesNoAnswer,
@@ -159,6 +165,7 @@ export const householderPreparationSchema = z.object({
   proposedParkingSpaces: z.coerce.number().int().nonnegative().optional(),
   soleOwner: z.boolean().optional(),
   agriculturalHolding: z.boolean().optional(),
+  applicationFee: z.number().finite().nonnegative().max(9999999.99).optional(),
 }).superRefine((value, context) => {
   if (!value.newOrAlteredVehicleAccess) return;
   if (value.currentParkingSpaces === undefined) {
@@ -178,6 +185,7 @@ export const householderPreparationUpdateSchema = z.object({
   proposedParkingSpaces: optionalNonNegativeInteger,
   soleOwner: formBoolean,
   agriculturalHolding: formBoolean,
+  applicationFee: planningApplicationFeeSchema,
 }).superRefine((value, context) => {
   if (!value.newOrAlteredVehicleAccess) return;
   if (value.currentParkingSpaces === undefined) {

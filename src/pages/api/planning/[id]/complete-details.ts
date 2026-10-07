@@ -77,6 +77,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     proposedParkingSpaces,
     soleOwner,
     agriculturalHolding,
+    applicationFee,
   } = body;
   await updatePlanningApplicationWithLifecycle({
     organisationId: organisation.id,
@@ -100,6 +101,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         proposedParkingSpaces: newOrAlteredVehicleAccess ? proposedParkingSpaces : null,
         soleOwner,
         agriculturalHolding,
+        applicationFee,
       } as Prisma.InputJsonValue,
       status: applicationStatus,
       preparedAt: new Date(),

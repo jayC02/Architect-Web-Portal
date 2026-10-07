@@ -10,6 +10,7 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { applicationPreparationDraftSchema } from '@/lib/validation/document-intelligence';
 import { buildApplicationPreparationDraft } from '@/server/services/application-preparation.service';
+import { editablePreparationStatuses } from '@/lib/automation/preparation-editability';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -23,12 +24,13 @@ const job = await prisma.automationJob.findFirst({
   },
 });
 if (!job) return Astro.redirect('/automation-jobs');
+const canEdit = editablePreparationStatuses.has(job.status);
 
 const parsed = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
 const snapshot = parsed.success ? parsed.data : null;
 const savedDraft = applicationPreparationDraftSchema.safeParse(job.preparationDraft);
 const draft = snapshot
-  ? savedDraft.success ? savedDraft.data : await buildApplicationPreparationDraft(job.id, auth.organisation.id)
+  ? savedDraft.success ? savedDraft.data : canEdit ? await buildApplicationPreparationDraft(job.id, auth.organisation.id) : null
   : null;
 const [defaults, documents, certifierPresets] = await Promise.all([
   prisma.organisationDefaults.findUnique({ where: { organisationId: auth.organisation.id } }),
@@ -71,12 +73,6 @@ const human = (value: string) => value.toLowerCase().replaceAll('_', ' ').replac
 const attentionDocumentIds = new Set(draft?.documentSummary.unresolvedClassifications ?? []);
 const blockers = snapshot?.preflight.missing.length ?? 0;
 const isReady = job.status === AutomationJobStatus.READY && snapshot?.preflight.status === 'READY';
-const canEdit = !new Set<AutomationJobStatus>([
-  AutomationJobStatus.CLAIMED,
-  AutomationJobStatus.IN_PROGRESS,
-  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
-  AutomationJobStatus.COMPLETED,
-]).has(job.status);
 const preparation = snapshot?.buildingWarrant?.unusualAnswers;
 const planning = snapshot?.planning?.answers;
 const documentTypes = Object.values(DocumentType);
@@ -150,7 +146,12 @@ const suggestedClientName = currentApplicant
       <a class="btn btn-secondary inline-flex items-center gap-2" href={`/projects/${job.projectId}`}><FolderOpen size={16} />Open project</a>
     </header>
 
-    {!snapshot || !draft ? (
+    {!canEdit ? <section class="panel mt-6 rounded-lg p-6">
+      <h2 class="text-xl font-semibold">{appLabel} — run details</h2>
+      <p class="mt-3 text-sm text-stone-600">This attempt is read-only. Its saved application details cannot be changed.</p>
+      <dl class="mt-4 space-y-2 text-sm"><div><dt class="font-semibold">Status</dt><dd>{human(job.status)}</dd></div><div><dt class="font-semibold">Last update</dt><dd>{job.resultSummary || job.progressMessage || 'No further update has been received.'}</dd></div></dl>
+      <a class="btn btn-secondary mt-5" href={`/projects/${job.projectId}`}>Back to project</a>
+    </section> : !snapshot || !draft ? (
       <section class="panel mt-6 rounded-lg p-6">
         <h2 class="font-semibold">Manual desktop review available</h2>
         <p class="mt-2 text-sm text-stone-600">This older job cannot use the consolidated preparation page. It remains available through the desktop app.</p>
@@ -340,6 +341,7 @@ const suggestedClientName = currentApplicant
               <input type="hidden" name="soleOwner" value="false" /><input type="hidden" name="agriculturalHolding" value="false" />
             </> : <>
               <label class="block"><span class="label">Is the applicant the sole owner of all land?</span><select class="field" name="soleOwner"><option value="true" selected={planning?.soleOwner === true}>Yes</option><option value="false" selected={planning?.soleOwner === false}>No</option></select></label>
+              <label class="block"><span class="label">Planning application fee (£)</span><input required class="field" name="applicationFee" type="number" min="0" max="9999999.99" step="0.01" value={snapshot?.planning?.feeMinorUnits == null ? '' : (snapshot.planning.feeMinorUnits / 100).toFixed(2)} /></label>
               <label class="block"><span class="label">Is any land part of an agricultural holding?</span><select class="field" name="agriculturalHolding"><option value="false" selected={planning?.agriculturalHolding === false}>No</option><option value="true" selected={planning?.agriculturalHolding === true}>Yes</option></select></label>
               <label class="block"><span class="label">Discussed with planning authority?</span><select class="field" name="discussedWithPlanningAuthority"><option value="false" selected={!planning?.discussedWithPlanningAuthority}>No</option><option value="true" selected={planning?.discussedWithPlanningAuthority}>Yes</option></select></label>
               <label class="block"><span class="label">Trees on or adjacent to site?</span><select class="field" name="treesOnOrAdjacentToSite"><option value="false" selected={!planning?.treesOnOrAdjacentToSite}>No</option><option value="true" selected={planning?.treesOnOrAdjacentToSite}>Yes</option></select></label>

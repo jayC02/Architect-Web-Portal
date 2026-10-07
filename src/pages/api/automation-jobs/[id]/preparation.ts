@@ -12,7 +12,7 @@ import { TYPE_OF_WORK_KEYS, type TypeOfWorkKey } from '@/lib/projects/type-of-wo
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
-import { clientSchema, organisationDefaultsSchema, siteSchema } from '@/lib/validation/domain';
+import { clientSchema, organisationDefaultsSchema, siteSchema, planningApplicationFeeSchema } from '@/lib/validation/domain';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
@@ -22,6 +22,7 @@ import {
   recordAutomationReadinessTransition,
 } from '@/server/services/application-lifecycle.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
+import { editablePreparationStatuses } from '@/lib/automation/preparation-editability';
 
 const optionalText = (limit: number) => z.preprocess(
   (value) => typeof value === 'string' && value.trim() === '' ? undefined : value,
@@ -40,7 +41,7 @@ const optionalNonNegativeInteger = z.preprocess(
   z.coerce.number().int().nonnegative().max(999).optional(),
 );
 
-const preparationFormSchema = z.object({
+export const preparationFormSchema = (jobType: AutomationJobType) => z.object({
   projectName: z.string().trim().min(1).max(160),
   projectType: optionalText(120),
   siteAddressLine1: z.string().trim().min(1).max(160),
@@ -73,7 +74,10 @@ const preparationFormSchema = z.object({
   agentPostcode: optionalText(20),
   agentCountry: optionalText(100),
   description: z.string().trim().min(1).max(2000),
-  typeOfWorkKeys: z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]])).min(1).max(TYPE_OF_WORK_KEYS.length),
+  typeOfWorkKeys: jobType === AutomationJobType.BUILDING_WARRANT
+    ? z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]], { errorMap: () => ({ message: 'Choose a valid Building Warrant Type of Work.' }) }))
+      .min(1, 'Choose at least one Type of Work for this Building Warrant.').max(TYPE_OF_WORK_KEYS.length)
+    : z.array(z.string()).default([]),
   estimatedValue: optionalMoney,
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
@@ -91,6 +95,7 @@ const preparationFormSchema = z.object({
   restrictPublicInspection: formBoolean,
   soleOwner: formBoolean,
   agriculturalHolding: formBoolean,
+  applicationFee: planningApplicationFeeSchema,
   discussedWithPlanningAuthority: formBoolean,
   treesOnOrAdjacentToSite: formBoolean,
   newOrAlteredVehicleAccess: formBoolean,
@@ -109,14 +114,6 @@ const preparationFormSchema = z.object({
 const jsonObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-const editableJobStatuses = new Set<AutomationJobStatus>([
-  AutomationJobStatus.DRAFT,
-  AutomationJobStatus.PREFLIGHT_REQUIRED,
-  AutomationJobStatus.NEEDS_INPUT,
-  AutomationJobStatus.READY,
-  AutomationJobStatus.STALE,
-]);
-
 export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
   assertRateLimit(context, rateLimitPolicies.mutation, 'automation-job:preparation');
@@ -128,7 +125,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     include: { project: { include: { client: true, site: true } } },
   });
   if (!job) throw new HttpError(404, 'Prepared application not found.');
-  if (!editableJobStatuses.has(job.status)) {
+  if (!editablePreparationStatuses.has(job.status)) {
     throw new HttpError(409, 'This prepared application can no longer be edited.');
   }
   const oldSnapshot = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
@@ -139,9 +136,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     ...Object.fromEntries(form.entries()),
     typeOfWorkKeys: form.getAll('typeOfWorkKeys').map(String),
   };
-  const parsed = preparationFormSchema.safeParse(raw);
+  const parsed = preparationFormSchema(job.type).safeParse(raw);
   if (!parsed.success) {
-    throw new HttpError(400, 'Check the highlighted application details.', parsed.error.flatten().fieldErrors);
+    const { typeOfWorkKeys, ...fields } = parsed.error.flatten().fieldErrors;
+    throw new HttpError(400, 'Check the highlighted application details.', { ...fields, ...(typeOfWorkKeys ? { 'Type of Work': typeOfWorkKeys } : {}) });
   }
   const value = parsed.data;
 
@@ -277,6 +275,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
           ...previous,
           soleOwner: value.soleOwner,
           agriculturalHolding: value.agriculturalHolding,
+          applicationFee: value.applicationFee,
           discussedWithPlanningAuthority: value.discussedWithPlanningAuthority,
           treesOnOrAdjacentToSite: value.treesOnOrAdjacentToSite,
           newOrAlteredVehicleAccess: value.newOrAlteredVehicleAccess,
@@ -321,8 +320,13 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     ? AutomationJobStatus.READY
     : AutomationJobStatus.NEEDS_INPUT;
   const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
-    await tx.automationJob.updateMany({
-      where: { id: job.id, organisationId: organisation.id },
+    const saved = await tx.automationJob.updateMany({
+      where: {
+        id: job.id, organisationId: organisation.id, status: job.status,
+        updatedAt: job.updatedAt, snapshotHash: job.snapshotHash,
+        claimedAt: null, claimedDeviceId: null, claimedByAgentId: null,
+        claimedByUserId: null, agentRunId: null, completedAt: null,
+      },
       data: {
         title: refreshed.title,
         status: nextStatus,
@@ -336,6 +340,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         documentSnapshot: refreshed.documentSnapshot as Prisma.InputJsonValue,
       },
     });
+    if (!saved.count) throw new HttpError(409, 'Your application details were saved, but this preparation changed or started running. Return to the project to see its current state. The running preparation was not changed.');
     return recordAutomationReadinessTransition(tx, {
       organisationId: organisation.id,
       projectId: job.projectId,

@@ -1,3 +1,4 @@
+import { readExecutionSnapshot } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -32,10 +33,12 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       claimedDeviceId: access.id,
       status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS, AutomationJobStatus.NEEDS_REVIEW] },
     },
-    select: { documentSnapshot: true },
+    select: { documentSnapshot: true, claimedDeviceId: true, agentRunId: true, claimedAt: true, executionAuthorisedAt: true },
   });
   if (!job) throw new HttpError(404, 'Claimed automation job not found.');
-  const snapshot = job.documentSnapshot as { documents?: Array<{ id?: string }> } | null;
+  const archived = await readExecutionSnapshot(prisma, { organisationId: access.organisationId, jobId }, job);
+  const payload = archived?.payload as { documentSnapshot?: unknown } | undefined;
+  const snapshot = (payload?.documentSnapshot ?? job.documentSnapshot) as { documents?: Array<{ id?: string }> } | null;
   if (!snapshot?.documents?.some((document) => document.id === id)) {
     throw new HttpError(404, 'Document is not part of this automation job.');
   }

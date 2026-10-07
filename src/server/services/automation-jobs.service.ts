@@ -480,6 +480,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
     planning: input.type === AutomationJobType.BUILDING_WARRANT ? null : {
       recordId: planning?.id ?? null,
       description: planning?.description ?? planning?.notes ?? null,
+      feeMinorUnits: planningAnswers.applicationFee === undefined ? null : Math.round(planningAnswers.applicationFee * 100),
       status: planning?.status ?? null,
       applicationReference: planning?.applicationReference ?? null,
       answers: {

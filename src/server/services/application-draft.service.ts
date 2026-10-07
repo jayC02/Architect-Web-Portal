@@ -739,6 +739,10 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     review.selectedApplicationType === ApplicationDraftType.HOUSEHOLDER_PLANNING
     || review.selectedApplicationType === ApplicationDraftType.PLANNING_APPLICATION
   ) {
+    const fee = review.confirmations.applicationFee;
+    if (typeof fee !== 'number' || !Number.isFinite(fee) || fee < 0 || fee > 9999999.99 || Math.abs(fee * 100 - Math.round(fee * 100)) > 0.000001) {
+      issues.push({ key: 'confirmations.applicationFee', section: 'confirmations', label: 'Planning application fee', message: 'Enter the planning fee in pounds, with at most two decimal places.' });
+    }
     for (const [key, label] of [
       ['soleOwner', 'Sole owner of all land'],
       ['agriculturalHolding', 'Agricultural holding'],

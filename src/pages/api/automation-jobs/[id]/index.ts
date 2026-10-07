@@ -1,3 +1,4 @@
+import { recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -73,14 +74,17 @@ export const PATCH: APIRoute = (context) =>
         throw new HttpError(409, 'Project information changed after this application was prepared. Refresh the prepared job before continuing.');
       }
     }
-    const result = await prisma.automationJob.updateMany({
-      where: { id, organisationId: organisation.id },
-      data: {
-        status: body.status,
-        reviewedAt: body.status === AutomationJobStatus.READY ? new Date() : undefined,
-        completedAt: body.status === AutomationJobStatus.COMPLETED ? new Date() : undefined,
-      },
+    await prisma.$transaction(async (tx) => {
+      const result = await tx.automationJob.updateMany({
+        where: { id, organisationId: organisation.id },
+        data: {
+          status: body.status,
+          reviewedAt: body.status === AutomationJobStatus.READY ? new Date() : undefined,
+          completedAt: body.status === AutomationJobStatus.COMPLETED ? new Date() : undefined,
+        },
+      });
+      if (result.count === 0) throw new HttpError(404, 'Automation job not found.');
+      await recordAutomationOwnership(tx, { organisationId: organisation.id, jobId: id }, { reason: 'portal_status_update' });
     });
-    if (result.count === 0) throw new HttpError(404, 'Automation job not found.');
     return jsonResponse(200, { ok: true, redirectTo: '/automation-jobs' });
   }, context);
