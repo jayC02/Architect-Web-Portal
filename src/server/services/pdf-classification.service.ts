@@ -59,8 +59,8 @@ export interface PdfClassificationProvider {
 export type ProjectClassificationContext = PdfClassificationInput['projectContext'];
 
 export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
-export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v2';
-export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v2';
+export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v3';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v3';
 const MAX_AI_FILE_BYTES = APPLICATION_UPLOAD_LIMITS.maxFileBytes;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
@@ -166,9 +166,9 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
         properties: {
           key: { type: 'string', enum: [
             'project.title', 'project.typeOfWork',
-            'site.addressLine1', 'site.addressLine2', 'site.townCity', 'site.postcode', 'site.localAuthority',
+            'site.buildingNumber', 'site.addressLine1', 'site.addressLine2', 'site.townCity', 'site.postcode', 'site.localAuthority',
             'applicant.clientType', 'applicant.title', 'applicant.firstName', 'applicant.lastName',
-            'applicant.companyName', 'applicant.email', 'applicant.phone', 'applicant.addressLine1',
+            'applicant.companyName', 'applicant.email', 'applicant.phone', 'applicant.buildingNumber', 'applicant.addressLine1',
             'applicant.addressLine2', 'applicant.townCity', 'applicant.postcode', 'applicant.country',
             'agent.practiceName', 'agent.firstName', 'agent.lastName', 'agent.email', 'agent.phone',
             'agent.addressLine1', 'agent.addressLine2', 'agent.townCity', 'agent.postcode', 'agent.country',
@@ -297,6 +297,8 @@ Rules:
 - Do not invent a title, drawing number, or revision.
 - Keep evidence to one short, human-readable sentence.
 - Extract only facts supported by visible evidence, using only the permitted field keys in the schema.
+- Split site and applicant addresses into buildingNumber, addressLine1 (street without the number), addressLine2, townCity and postcode. Preserve flat identifiers and building names.
+- Check all pages, title blocks and location plans for the site postcode and local authority. Never substitute the architect or applicant address for the site, or guess a missing postcode or council.
 - Never convert a mention of ownership, listing, certification, or legal status into a confirmed declaration.
 - Include a short evidence excerpt and page number when visible.
 

@@ -1,3 +1,4 @@
+import { addressIdentity, normaliseUkAddress } from '@/lib/addresses/uk-address';
 import type { Client, Project, Site } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import type { PreparedApplicationDraft } from '@/lib/validation/application-draft';
@@ -10,7 +11,7 @@ type MatchResult = {
   reasons: string[];
 };
 
-type ClientShape = Pick<
+type ClientShape = { buildingNumber?: string | null } & Pick<
   Client,
   | 'id'
   | 'name'
@@ -25,7 +26,7 @@ type ClientShape = Pick<
   | 'postcode'
 >;
 
-type SiteShape = Pick<Site, 'id' | 'addressLine1' | 'addressLine2' | 'townCity' | 'postcode'>;
+type SiteShape = { buildingNumber?: string | null } & Pick<Site, 'id' | 'addressLine1' | 'addressLine2' | 'townCity' | 'postcode'>;
 
 type ProjectShape = Pick<Project, 'id' | 'name' | 'internalReference' | 'projectType' | 'siteId' | 'siteAddress'> & {
   site: SiteShape | null;
@@ -39,11 +40,13 @@ export type DraftMatchValues = {
     companyName?: string | null;
     firstName?: string | null;
     lastName?: string | null;
+    buildingNumber?: string | null;
     addressLine1?: string | null;
     townCity?: string | null;
     postcode?: string | null;
   };
   site: {
+    buildingNumber?: string | null;
     addressLine1?: string | null;
     townCity?: string | null;
     postcode?: string | null;
@@ -65,21 +68,6 @@ const normalizeText = (value: string | null | undefined) =>
     .replace(/\s+/g, ' ');
 
 const normalizeCompact = (value: string | null | undefined) => normalizeText(value).replace(/\s+/g, '');
-const normalizeAddress = (value: string | null | undefined) =>
-  normalizeText(value)
-    .split(' ')
-    .map((part) => ({
-      avenue: 'ave',
-      crescent: 'cres',
-      court: 'ct',
-      drive: 'dr',
-      lane: 'ln',
-      place: 'pl',
-      road: 'rd',
-      street: 'st',
-      terrace: 'ter',
-    })[part] ?? part)
-    .join(' ');
 const normalizeEmail = (value: string | null | undefined) => String(value ?? '').trim().toLowerCase();
 const normalizePhone = (value: string | null | undefined) => {
   const digits = String(value ?? '').replace(/\D/g, '');
@@ -130,12 +118,12 @@ export const scoreClientMatch = (candidate: ClientShape, input: DraftMatchValues
   }
   if (
     (
-      normalizeAddress(input.addressLine1)
-      && normalizeAddress(input.addressLine1) === normalizeAddress(candidate.addressLine1)
+      addressIdentity(input)
+      && addressIdentity(input) === addressIdentity(candidate)
     )
     || (
-      normalizeAddress(input.addressLine1)
-      && normalizeAddress(input.addressLine1) === normalizeAddress(candidate.address)
+      addressIdentity(input)
+      && addressIdentity(input) === addressIdentity({ addressLine1: candidate.address })
     )
   ) {
     score += 35;
@@ -155,8 +143,8 @@ export const scoreSiteMatch = (candidate: SiteShape, input: DraftMatchValues['si
     reasons.push('Postcode matches');
   }
   if (
-    normalizeAddress(input.addressLine1)
-    && normalizeAddress(input.addressLine1) === normalizeAddress(candidate.addressLine1)
+    addressIdentity(input)
+    && addressIdentity(input) === addressIdentity(candidate)
   ) {
     score += 50;
     reasons.push('Address line matches');
@@ -186,8 +174,8 @@ export const scoreProjectMatch = (candidate: ProjectShape, input: DraftMatchValu
   }
   const candidateAddress = candidate.site?.addressLine1 ?? candidate.siteAddress;
   if (
-    normalizeAddress(input.site.addressLine1)
-    && normalizeAddress(input.site.addressLine1) === normalizeAddress(candidateAddress)
+    addressIdentity(input.site)
+    && addressIdentity(input.site) === addressIdentity({ buildingNumber: candidate.site?.buildingNumber, addressLine1: candidateAddress })
   ) {
     score += 35;
     reasons.push('Site address matches');
@@ -224,11 +212,13 @@ export const matchValuesFromPreparation = (prepared: PreparedApplicationDraft): 
     companyName: suggestionValue(prepared.client, 'companyName'),
     firstName: suggestionValue(prepared.client, 'firstName'),
     lastName: suggestionValue(prepared.client, 'lastName'),
+    buildingNumber: suggestionValue(prepared.client, 'buildingNumber'),
     addressLine1: suggestionValue(prepared.client, 'addressLine1'),
     townCity: suggestionValue(prepared.client, 'townCity'),
     postcode: suggestionValue(prepared.client, 'postcode'),
   },
   site: {
+    buildingNumber: suggestionValue(prepared.site, 'buildingNumber'),
     addressLine1: suggestionValue(prepared.site, 'addressLine1'),
     townCity: suggestionValue(prepared.site, 'townCity'),
     postcode: suggestionValue(prepared.site, 'postcode'),
@@ -296,7 +286,7 @@ export const findApplicationDraftMatches = async (
     sites: rankedSites.map(({ record, match }) => ({
       id: record.id,
       strength: match.strength,
-      label: [record.addressLine1, record.townCity, record.postcode].filter(Boolean).join(', '),
+      label: [[normaliseUkAddress(record).buildingNumber, normaliseUkAddress(record).addressLine1].filter(Boolean).join(' '), record.townCity, record.postcode].filter(Boolean).join(', '),
       detail: record.addressLine2 ?? undefined,
       reasons: match.reasons,
     })),

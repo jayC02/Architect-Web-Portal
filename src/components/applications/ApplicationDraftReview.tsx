@@ -1,3 +1,5 @@
+import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
+import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -120,7 +122,7 @@ const text = (value: string | number | null | undefined) =>
   value === null || value === undefined || String(value).trim() === '' ? 'Not found' : String(value);
 
 const reviewWithResolvedRoute = (draft: ApplicationDraftResponse): Review | null => {
-  const review = draft.review;
+  const review = draft.review ? normaliseDraftAddresses(draft.review) : null;
   if (!review || review.selectedApplicationType !== 'AUTO') return review;
   const suggested = draft.suggestedApplicationType && draft.suggestedApplicationType !== 'AUTO'
     ? draft.suggestedApplicationType
@@ -380,7 +382,7 @@ function Evidence({
         <span key={`${source.documentId}-${source.page ?? 0}`}>
           {index > 0 ? ' | ' : ''}
           Found in{' '}
-          {source.documentId === 'project-notes' ? (
+          {['project-notes', 'site-address-lookup'].includes(source.documentId) ? (
             <strong className="font-semibold text-stone-700">{source.filename}</strong>
           ) : (
             <a
@@ -405,6 +407,7 @@ const evidenceLabels: Record<string, string> = {
   typeOfWorkKey: 'Type of work',
   typeOfWorkKeys: 'Types of work',
   summary: 'Project summary',
+  buildingNumber: 'Building number',
   addressLine1: 'Address line 1',
   addressLine2: 'Address line 2',
   townCity: 'Town or city',
@@ -457,7 +460,7 @@ function EvidenceList({
             <p className="font-semibold text-stone-700">{entry.label}</p>
             {entry.sources.slice(0, 3).map((source, index) => (
               <p key={`${entry.key}-${source.documentId}-${source.page ?? index}`}>
-                {source.documentId === 'project-notes' ? (
+                {['project-notes', 'site-address-lookup'].includes(source.documentId) ? (
                   <span>{source.filename}</span>
                 ) : (
                   <a
@@ -591,6 +594,16 @@ export default function ApplicationDraftReview({
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
   const [savingCategoryId, setSavingCategoryId] = useState<string | null>(null);
+  const [addressLookupNotice, setAddressLookupNotice] = useState('');
+  const addressEditGeneration = useRef(0);
+  const automaticAddressFields = useRef<SiteLookupResult['fields']>(Object.fromEntries(
+    ['postcode', 'localAuthority'].flatMap(key => {
+      const suggestion = initialDraft.prepared?.site[key];
+      return suggestion?.sources.some(source => source.documentId === 'site-address-lookup')
+        && suggestion.value === initialDraft.review?.site[key as keyof Review['site']]
+        ? [[key, String(suggestion.value)]] : [];
+    }),
+  ));
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const reviewRef = useRef<Review | null>(resolvedInitialReview);
   const autosaveTimer = useRef<number | null>(null);
@@ -685,6 +698,59 @@ export default function ApplicationDraftReview({
     autosaveTimer.current = window.setTimeout(() => void persistCurrentReview(), 600);
   }, [review]);
 
+  const siteLookupKey = JSON.stringify([review?.projectMode, review?.siteMode, review?.site]);
+  useEffect(() => {
+    if (!review || review.projectMode !== 'create' || review.siteMode !== 'create'
+      || !['NEEDS_REVIEW', 'READY_TO_CREATE'].includes(draft.status)
+      || (review.site.postcode && review.site.localAuthority)) return;
+    const site = review.site;
+    if (Object.entries(draft.prepared?.site ?? {}).some(([key, suggestion]) =>
+      suggestion.status === 'conflict' && String(suggestion.value ?? '') === String(site[key as keyof Review['site']] ?? ''))) {
+      setAddressLookupNotice('Resolve the conflicting address details before checking the site postcode.');
+      return;
+    }
+    if (!site.postcode && (!site.buildingNumber || !site.addressLine1 || !site.townCity)) return;
+    const controller = new AbortController();
+    const generation = addressEditGeneration.current;
+    const timer = window.setTimeout(async () => {
+      setAddressLookupNotice('Checking the site postcode and local authority...');
+      try {
+        const result = await apiJson<SiteLookupResult>(`/api/application-drafts/${draft.id}/address-lookup`, {
+          method: 'POST', body: JSON.stringify(site), signal: controller.signal,
+        });
+        const current = reviewRef.current;
+        if (controller.signal.aborted || !current || generation !== addressEditGeneration.current
+          || JSON.stringify([current.projectMode, current.siteMode, current.site]) !== siteLookupKey) return;
+        const fields = result.fields;
+        if (Object.keys(fields).length) {
+          applyReview(value => {
+            const updatedSite = { ...value.site };
+            for (const key of ['postcode', 'localAuthority'] as const) {
+              if (!updatedSite[key]?.trim() && fields[key]) {
+                updatedSite[key] = fields[key]!;
+                automaticAddressFields.current[key] = fields[key]!;
+              }
+            }
+            const client = value.clientAddressSameAsSite ? withSiteAddress(value.client, updatedSite) : value.client;
+            return { ...value, site: updatedSite, client, applicant: value.applicantDifferentFromClient ? value.applicant : client };
+          });
+        }
+        const copy: Record<SiteLookupResult['status'], string> = {
+          verified: 'Address details found. Check them before creating the application.',
+          ambiguous: 'More than one property matches. Confirm the postcode for this site.',
+          not_found: 'No exact match found. Confirm the postcode and local authority.',
+          unavailable: 'Address lookup is temporarily unavailable. You can enter the details below.',
+          not_configured: 'Enter the postcode to find the local authority automatically.',
+          incomplete: 'Add the building number, street and town to check the address.',
+        };
+        setAddressLookupNotice(copy[result.status]);
+      } catch {
+        if (!controller.signal.aborted) setAddressLookupNotice('Address lookup is temporarily unavailable. You can enter the details below.');
+      }
+    }, 700);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [siteLookupKey, draft.id, draft.status]);
+
   if (
     draft.status === 'UPLOADING'
     || draft.status === 'ANALYSING'
@@ -737,8 +803,23 @@ export default function ApplicationDraftReview({
     });
   };
   const updateSite = (key: keyof Review['site'], value: string) => {
+    addressEditGeneration.current += 1;
+    setAddressLookupNotice('');
     applyReview((current) => {
       const site = { ...current.site, [key]: value || null };
+      const automatic = automaticAddressFields.current;
+      if (['buildingNumber', 'addressLine1', 'addressLine2', 'townCity', 'country'].includes(key)) {
+        for (const field of ['postcode', 'localAuthority'] as const) {
+          if (automatic[field] && current.site[field] === automatic[field]) site[field] = null;
+          delete automatic[field];
+        }
+      } else if (key === 'postcode') {
+        if (automatic.localAuthority && current.site.localAuthority === automatic.localAuthority) site.localAuthority = null;
+        delete automatic.postcode;
+        delete automatic.localAuthority;
+      } else if (key === 'localAuthority') {
+        delete automatic.localAuthority;
+      }
       const client = current.clientAddressSameAsSite
         ? withSiteAddress(current.client, site)
         : current.client;
@@ -1261,6 +1342,9 @@ export default function ApplicationDraftReview({
                 </>
               ) : null}
             </div>
+            {review.siteMode === 'create' && addressLookupNotice ? (
+              <p className="mt-3 text-sm text-stone-500" role="status">{addressLookupNotice}</p>
+            ) : null}
             <EvidenceList draftId={draft.id} prepared={draft.prepared} sections={['site']} />
           </Section>
         ) : null}

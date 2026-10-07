@@ -1,3 +1,6 @@
+import { normaliseUkAddress } from '@/lib/addresses/uk-address';
+import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
+import { lookupSiteAddress } from '@/server/services/site-address-lookup.service';
 import { createHash } from 'node:crypto';
 import {
   ApplicationDraftDocumentStatus,
@@ -128,6 +131,22 @@ const customSuggestion = (
 ) => value === null
   ? missingSuggestion()
   : { value, status: 'suggested' as const, certainty, sources };
+
+const normalisePreparedAddress = (section: PreparedApplicationDraft['site']) => {
+  const raw = Object.fromEntries(Object.entries(section).map(([key, suggestion]) => [key,
+    suggestion.value === null ? null : String(suggestion.value),
+  ]));
+  const normalised = normaliseUkAddress(raw);
+  const result = { ...section };
+  for (const key of ['buildingNumber', 'addressLine1', 'addressLine2', 'townCity', 'postcode'] as const) {
+    const value = normalised[key] ?? null;
+    const original = section[key] ?? missingSuggestion();
+    if (value === raw[key]) continue;
+    const source = original.value !== null ? original : section.addressLine1 ?? original;
+    result[key] = value === null ? missingSuggestion() : { ...source, value };
+  }
+  return result;
+};
 
 const collectFacts = (documents: SynthesisDocument[]): Fact[] => {
   const facts: Fact[] = [];
@@ -347,13 +366,40 @@ export const synthesisePreparedApplicationDraft = async (
   const defaults = await prisma.organisationDefaults.findUnique({ where: { organisationId } });
   const facts = collectFacts(draft.documents);
   const reference = commonReference(draft.documents);
-  const siteAddress = suggestionFromFacts(facts, 'site.addressLine1');
-  const siteAddressLine2 = suggestionFromFacts(facts, 'site.addressLine2');
-  const siteTownCity = suggestionFromFacts(facts, 'site.townCity');
-  const sitePostcode = suggestionFromFacts(facts, 'site.postcode');
+  const siteFields = normalisePreparedAddress({
+    buildingNumber: suggestionFromFacts(facts, 'site.buildingNumber'),
+    addressLine1: suggestionFromFacts(facts, 'site.addressLine1'),
+    addressLine2: suggestionFromFacts(facts, 'site.addressLine2'),
+    townCity: suggestionFromFacts(facts, 'site.townCity'),
+    postcode: suggestionFromFacts(facts, 'site.postcode'),
+    country: defaultSuggestion('United Kingdom'),
+    localAuthority: suggestionFromFacts(facts, 'site.localAuthority'),
+  });
+  // Conflicting document addresses must be resolved before a property lookup.
+  if (!Object.values(siteFields).some(field => field.status === 'conflict')) {
+    const lookup = await lookupSiteAddress({
+      buildingNumber: suggestionString(siteFields, 'buildingNumber'),
+      addressLine1: suggestionString(siteFields, 'addressLine1'),
+      addressLine2: suggestionString(siteFields, 'addressLine2'),
+      townCity: suggestionString(siteFields, 'townCity'),
+      postcode: suggestionString(siteFields, 'postcode'),
+      localAuthority: suggestionString(siteFields, 'localAuthority'),
+    });
+    for (const key of ['postcode', 'localAuthority'] as const) {
+      if (siteFields[key].value !== null || !lookup.fields[key]) continue;
+      siteFields[key] = customSuggestion(lookup.fields[key]!, [{
+        documentId: 'site-address-lookup', filename: 'Verified address lookup',
+        evidence: lookup.sources[key]!,
+      }], 'high');
+    }
+  }
+  const siteAddress = siteFields.addressLine1;
+  const siteAddressLine2 = siteFields.addressLine2;
+  const siteTownCity = siteFields.townCity;
+  const sitePostcode = siteFields.postcode;
   const projectTitle = suggestionFromFacts(facts, 'project.title');
   const fullSiteAddress = formattedSiteProjectName(
-    siteAddress.value,
+    [siteFields.buildingNumber.value, siteAddress.value].filter(Boolean).join(' '),
     siteAddressLine2.value,
     siteTownCity.value,
     sitePostcode.value,
@@ -370,7 +416,8 @@ export const synthesisePreparedApplicationDraft = async (
     ?? explicitTypeOfWork(draft.notes);
   const suggestedApplicationType = inferApplicationType(draft.selectedApplicationType, draft.notes, facts, typeOfWork);
 
-  const clientFields = {
+  const clientFields = normalisePreparedAddress({
+    buildingNumber: suggestionFromFacts(facts, 'applicant.buildingNumber'),
     title: suggestionFromFacts(facts, 'applicant.title', 'Other'),
     firstName: suggestionFromFacts(facts, 'applicant.firstName'),
     lastName: suggestionFromFacts(facts, 'applicant.lastName'),
@@ -382,7 +429,7 @@ export const synthesisePreparedApplicationDraft = async (
     townCity: suggestionFromFacts(facts, 'applicant.townCity'),
     postcode: suggestionFromFacts(facts, 'applicant.postcode'),
     country: suggestionFromFacts(facts, 'applicant.country', 'United Kingdom'),
-  };
+  });
   const clientName = clientDisplayName({
     companyName: scalar(clientFields.companyName.value) as string | null,
     firstName: scalar(clientFields.firstName.value) as string | null,
@@ -434,14 +481,7 @@ export const synthesisePreparedApplicationDraft = async (
         : missingSuggestion(),
       summary: suggestionFromFacts(facts, 'application.descriptionOfWork'),
     },
-    site: {
-      addressLine1: siteAddress,
-      addressLine2: siteAddressLine2,
-      townCity: siteTownCity,
-      postcode: sitePostcode,
-      country: defaultSuggestion('United Kingdom'),
-      localAuthority: suggestionFromFacts(facts, 'site.localAuthority'),
-    },
+    site: siteFields,
     client: {
       name: clientName
         ? customSuggestion(clientName, [
@@ -1163,6 +1203,7 @@ export const saveApplicationDraftReview = async (
 ) => {
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
+  review = normaliseDraftAddresses(review);
   const documentIds = new Set(draft.documents.map((document) => document.id));
   if (
     review.documents.length !== draft.documents.length
