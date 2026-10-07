@@ -4,15 +4,21 @@ import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import config from '../tailwind.config.mjs';
-const js = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Queue from './src/components/automation/AgentQueueDropdown';import AgentSetup from './src/components/integrations/AgentSetupFlow';createRoot(document.getElementById('root')).render(<main className="p-4"><div className="flex justify-end"><Queue/></div><h1>Projects</h1><AgentSetup connectedAgent={{id:"test-agent",machineName:"Test PC",agentVersion:"4.2.0",connected:true,usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:"READY"}}/></main>);`, resolveDir: process.cwd(), loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"test"'}});
+const js = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Queue from './src/components/automation/AgentQueueDropdown';import AgentSetup from './src/components/integrations/AgentSetupFlow';createRoot(document.getElementById('root')).render(<main className="p-4"><div className="flex justify-end"><Queue/></div><h1>Projects</h1><AgentSetup connectedAgent={{id:"test-agent",machineName:"Test PC",agentVersion:"4.2.1",connected:new URLSearchParams(location.search).get("connected")!=="false",usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:"READY"}}/></main>);`, resolveDir: process.cwd(), loader:'tsx'},bundle:true,write:false,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"test"'}});
 const css=await postcss([tailwindcss(config)]).process(readFileSync('src/styles/global.css','utf8'),{from:'src/styles/global.css'});
 const initialJobs=[{id:'planning-a',title:'Rear extension',type:'HOUSEHOLDER_PLANNING',status:'IN_PROGRESS',progressPercent:42,progressMessage:'Uploading documents',project:{id:'a',name:'Oak House'}},{id:'warrant-a',title:'Rear extension warrant',type:'BUILDING_WARRANT',status:'READY',progressPercent:null,project:{id:'a',name:'Oak House'}},{id:'planning-b',title:'Garage conversion',type:'HOUSEHOLDER_PLANNING',status:'READY',progressPercent:null,project:{id:'b',name:'Hill Cottage'}}];
 let jobs=structuredClone(initialJobs);
 let deleting=[];
+let latestVersion='4.2.1';let setups=0;let downloads=0;
 createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname==='/fixture/reenqueue'){jobs=structuredClone(initialJobs);res.end('ok');return;}
- if(url.pathname==='/fixture/inspection'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobs,deleting}));return;}
+ if(url.pathname==='/fixture/inspection'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobs,deleting,setups,downloads}));return;}
+ if(url.pathname==='/'){latestVersion=url.searchParams.get('latest')||'4.2.1';}
+ if(url.pathname.startsWith('/downloads/ArchitectProAgentSetup-')){downloads++;res.setHeader('Content-Type','application/octet-stream');res.setHeader('Content-Disposition','attachment; filename="fixture-only.txt"');res.end('Test fixture only');return;}
+ if(url.pathname==='/api/settings/desktop-agents/setup'){setups++;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({release:{version:latestVersion,status:'AVAILABLE',downloadUrl:'/downloads/ArchitectProAgentSetup-'+latestVersion+'.exe',signed:true},expiresAt:new Date(Date.now()+600000).toISOString()}));return;}
+ if(url.pathname==='/api/settings/desktop-agents'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({agents:[{id:'test-agent',machineName:'Test PC',agentVersion:latestVersion,connected:true,usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:'READY'}]}));return;}
+ if(url.pathname==='/api/desktop/releases/latest'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({version:latestVersion,status:'AVAILABLE',downloadUrl:'/downloads/ArchitectProAgentSetup-'+latestVersion+'.exe'}));return;}
  const match=url.pathname.match(/^\/api\/automation-jobs\/([^/]+)\/queue$/);
  if(match&&req.method==='DELETE'){deleting.push(match[1]);res.setHeader('Content-Type','application/json');if(match[1]==='planning-b'){res.statusCode=409;res.end(JSON.stringify({error:'This job has already started. Refresh the queue.'}));return;}jobs=jobs.filter(job=>job.id!==match[1]);res.end(JSON.stringify({ok:true}));return;}
  if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(js.outputFiles[0].text);return;}

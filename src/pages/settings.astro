@@ -22,7 +22,7 @@ if (!auth) return Astro.redirect('/login');
         <span class="flex h-10 w-10 items-center justify-center rounded-md bg-stone-100 text-stone-700"><Icon size={20} aria-hidden="true" /></span>
         <span class="mt-5 text-lg font-semibold text-ink">{title}</span>
         <span class="mt-1 text-sm leading-6 text-stone-500">{description}</span>
-        <span class="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-semibold text-ink">Manage <ArrowRight size={15} aria-hidden="true" class="transition group-hover:translate-x-0.5" /></span>
+        <span class="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-semibold text-ink">Manage <ArrowRight size={15} aria-hidden="true" className="transition group-hover:translate-x-0.5" /></span>
       </a>
     ))}
   </nav>

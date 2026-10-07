@@ -5,6 +5,11 @@ const page = await browser.newPage({viewport:{width:1365,height:900}});
 const errors=[];page.on('pageerror',error=>errors.push(error.message));
 try {
  await page.goto('http://127.0.0.1:4329');
+ await page.getByRole('button',{name:'Update Agent',exact:true}).click();
+ await page.getByText('Agent 4.2.1 is already up to date.',{exact:true}).waitFor();
+ assert.equal(await page.getByText('Connected and ready',{exact:true}).count(),1);
+ console.log('Verified update control detects current release without reinstalling or reconnecting');
+
  await page.getByRole('button',{name:'Job queue (3)'}).waitFor();
  await page.getByRole('button',{name:'Job queue (3)'}).click();
  assert.equal(await page.getByText('Old review project').count(),0);
@@ -29,7 +34,24 @@ try {
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Job queue (3)'}).click();
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
- assert.equal(await page.getByRole('link',{name:'Download updated Agent source code'}).getAttribute('href'),'/downloads/ArchitectProAgentSource-4.2.0.zip');
+ assert.equal(await page.getByRole('link',{name:'Download updated Agent source code'}).getAttribute('href'),'/downloads/ArchitectProAgentSource-4.2.1.zip');
+
+ await page.goto('http://127.0.0.1:4329/?connected=false');
+ const downloaded=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Download installer',exact:true}).click();
+ await downloaded;
+ await page.getByText('Connected and ready',{exact:true}).waitFor();
+ console.log('Verified reinstall of same Agent version completes after a fresh heartbeat');
+ const before=await page.evaluate(async()=>(await(await fetch('/fixture/inspection')).json()));
+ await page.goto('http://127.0.0.1:4329/?latest=4.2.2');
+ await page.getByRole('button',{name:'Update Agent',exact:true}).click();
+ await page.getByText('Updating Agent...',{exact:true}).waitFor();
+ await page.getByText('Connected and ready',{exact:true}).waitFor();
+ const after=await page.evaluate(async()=>(await(await fetch('/fixture/inspection')).json()));
+ assert.equal(after.downloads,before.downloads);
+ assert.equal(after.setups,before.setups);
+ assert.match(await page.getByText(/Test PC.*Agent/).innerText(),/4\.2\.2/);
+ console.log('Verified in-app update handoff waits for new version without another installer download or enrollment');
  assert.deepEqual(errors,[]);
  console.log('Verified mobile fit, keyboard dismissal, Agent guide/source link and no runtime errors');
 } finally {await browser.close();}

@@ -11,7 +11,7 @@ import {
   type Prisma,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
+import { lockOrganisationExecution, releaseAgentExecution } from '@/server/services/desktop-execution.service';
 import { DESKTOP_CALLBACK_CONTRACT_VERSION } from '@/lib/validation/desktop-handoff';
 import {
   DESKTOP_PROGRESS_CONTRACT_VERSION,
@@ -71,6 +71,41 @@ export const resolveAgentAction = (database: PrismaClient | Prisma.TransactionCl
     where: { organisationId, dedupeKey, status: ActionItemStatus.OPEN },
     data: { status: ActionItemStatus.RESOLVED, resolvedAt: now },
   });
+
+/** A finished handoff cannot hold execution forever after its Agent disappears. */
+export const releaseExpiredReviewExecutions = async (input: {
+  organisationId?: string; now: Date; database: PrismaClient;
+}) => {
+  const candidates = await input.database.automationJob.findMany({
+    where: {
+      ...(input.organisationId ? { organisationId: input.organisationId } : {}),
+      status: AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+      claimedByAgentId: { not: null }, agentRunId: { not: null },
+      leaseExpiresAt: { lte: input.now },
+      events: { none: { eventType: 'execution_released' } },
+    },
+    select: { id: true, organisationId: true, claimedByAgentId: true, agentRunId: true },
+    take: 50,
+  });
+  let released = 0;
+  for (const job of candidates) {
+    await input.database.$transaction(async tx => {
+      await lockOrganisationExecution(tx, job.organisationId);
+      // A live heartbeat may have renewed the lease while we acquired the lock.
+      const current = await tx.automationJob.findFirst({
+        where: { id: job.id, organisationId: job.organisationId,
+          status: AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+          claimedByAgentId: job.claimedByAgentId, agentRunId: job.agentRunId,
+          leaseExpiresAt: { lte: input.now },
+          events: { none: { eventType: 'execution_released' } } },
+        select: { id: true },
+      });
+      if (current && job.claimedByAgentId && job.agentRunId
+        && await releaseAgentExecution(tx, job.organisationId, job.claimedByAgentId, job.id, job.agentRunId)) released++;
+    });
+  }
+  return released;
+};
 
 export const reconcileStaleAgentJobs = async (input: {
   organisationId?: string;
@@ -147,7 +182,8 @@ export const reconcileStaleAgentJobs = async (input: {
     }
     });
   }
-  return { returnedReady, needsReview };
+  const releasedReviews = await releaseExpiredReviewExecutions({ organisationId: input.organisationId, now, database });
+  return { returnedReady, needsReview, releasedReviews };
 };
 
 export const heartbeatStateForProgress = (stage: string) => stage === 'address_selection' || stage === 'fee'

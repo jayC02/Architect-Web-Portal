@@ -38,7 +38,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
           organisationId: agent.organisationId,
           claimedByAgentId: agent.id,
           agentRunId: body.agentRunId,
-          status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] },
+          status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS, AutomationJobStatus.AWAITING_PORTAL_REVIEW] },
         },
         data: { agentHeartbeatAt: now, leaseExpiresAt: agentLeaseExpiry(now) },
       });
