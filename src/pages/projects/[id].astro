@@ -376,15 +376,10 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   <nav aria-label="Project sections" class="mb-6 flex gap-7 overflow-x-auto border-b border-stone-200">
     {[
       ['Overview', '#overview'],
-      ['Planning', '#planning'],
-      ['Building Warrant', '#building-warrant'],
-      ...(canViewFinance ? [['Fees', '#fees']] : []),
+      ['Applications', '#applications'],
       ['Documents', '#documents'],
-      ['Deadlines', '#deadlines'],
-      ['Next actions', '#attention'],
+      ...(canViewFinance ? [['Finances', '#fees']] : []),
       ['Activity', '#project-activity'],
-      ['Email Activity', '#email-activity'],
-      ['Notes', '#notes'],
     ].map(([label, href], index) => <a href={href} aria-current={index === 0 ? 'page' : undefined} class:list={['shrink-0 border-b-2 px-0.5 pb-3 pt-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', index === 0 ? 'border-moss text-ink' : 'border-transparent text-stone-600 hover:border-stone-300 hover:text-ink']}>{label}</a>)}
   </nav>
 
@@ -403,7 +398,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   </section>
 
 
-  <section aria-labelledby="applications-heading" class="mt-8">
+  <section id="applications" aria-labelledby="applications-heading" class="mt-8">
     <div class="mb-4">
       <h2 id="applications-heading" class="text-2xl font-semibold leading-8 text-ink">Applications</h2>
       <p class="mt-1 text-sm text-stone-500">Your active applications</p>

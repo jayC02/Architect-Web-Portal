@@ -1,0 +1,8 @@
+---
+interface Props { title: string; description?: string; }
+const { title, description } = Astro.props;
+---
+<header class="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-5 py-4">
+  <div><h2 class="text-xl font-semibold text-ink">{title}</h2>{description && <p class="mt-1 text-sm text-stone-600">{description}</p>}</div>
+  <slot name="action" />
+</header>

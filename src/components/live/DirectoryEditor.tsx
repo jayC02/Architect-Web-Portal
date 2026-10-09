@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import EditDrawer from '@/components/ui/EditDrawer';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
 export type DirectoryRecord = Record<string, any>;
@@ -15,18 +16,7 @@ export function DirectoryDrawer({
   onClose: () => void;
   children: ReactNode;
 }) {
-  return (
-    <div className="fixed inset-0 z-50">
-      <button type="button" aria-label="Close panel" className="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]" onClick={onClose} />
-      <aside className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-stone-100 p-6">
-          <div><h2 className="text-xl font-semibold text-ink">{title}</h2><p className="mt-2 text-sm leading-6 text-stone-500">{description}</p></div>
-          <button type="button" className="rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-ink" onClick={onClose} aria-label="Close panel"><X size={18} aria-hidden="true" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
-      </aside>
-    </div>
-  );
+  return <EditDrawer title={title} description={description} onClose={onClose}>{children}</EditDrawer>;
 }
 
 export function ClientForm({
