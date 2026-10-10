@@ -30,7 +30,8 @@ assert.ok(
   'Edit project details is immediately available above the project overview',
 );
 
-assert.match(newProjectPage, /data-project-name=\{projectName\}/, 'site choices carry the complete formatted address');
+assert.match(source('src/components/ui/SearchableFormSelect.astro'), /data-project-name=\{option\.projectName\}/, 'searchable site choices carry the complete formatted address');
+assert.match(newProjectPage, /label: projectName, projectName/, 'project creation supplies the complete site label to the shared selector');
 assert.match(newProjectPage, /record\.addressLine1, record\.addressLine2, record\.townCity, record\.postcode/, 'newly entered sites use every available address component');
 assert.match(projectsApi, /body\.name\?\.trim\(\) \|\| links\.derivedSite\?\.siteAddress/, 'the server defaults a new project name to the organisation-scoped linked site address');
 

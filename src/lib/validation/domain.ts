@@ -15,6 +15,7 @@ import {
   WarrantType,
 } from '@prisma/client';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import {
   TYPE_OF_WORK_KEYS,
   TYPE_OF_WORK_OPTIONS,
@@ -67,6 +68,19 @@ export const siteSchema = z.object({
   townCity: z.string().trim().min(1).max(100),
   postcode: z.string().trim().min(2).max(20),
   localAuthority: optionalText(120),
+  uprn: optionalText(30),
+  addressProvider: optionalText(80),
+  addressVerifiedAt: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+  addressProvenance: z.preprocess(value => {
+    if (typeof value !== 'string') return value;
+    if (!value) return undefined;
+    try { return JSON.parse(value); } catch { return value; }
+  }, z.record(z.unknown()).transform(value => value as Prisma.InputJsonObject).optional()),
+  administrativeAuthority: optionalText(120),
+  planningAuthority: optionalText(120),
+  buildingStandardsAuthority: optionalText(120),
+  authorityVerification: z.enum(['legacy-unverified', 'suggested', 'confirmed']).optional(),
+  nationalPark: optionalText(160),
   notes: optionalText(2000),
 });
 

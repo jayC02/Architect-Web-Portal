@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { searchAddresses, resolveAddress } from '../src/server/services/address-provider.service';
+import { routeScottishAuthorities, applicationAuthority } from '../src/lib/addresses/authority-routing';
+const options = { apiKey: 'mock-key', licensed: true, licensee: 'mock-licensee' };
+let calls = 0;
+const mockFetch: typeof fetch = async (input, init) => {
+  calls++; const url = new URL(String(input));
+  if (url.hostname === 'api.postcodes.io') return Response.json({ result: { country: 'Scotland', admin_district: 'Highland', national_park: 'Cairngorms', quality: 1 } });
+  assert.equal(new Headers(init?.headers).get('authorization'), 'api_key="mock-key"'); assert.equal(url.searchParams.get('licensee'), 'mock-licensee');
+  return Response.json({ code: 2000, result: url.pathname.endsWith('/gbr') ? { building_number: '147A', sub_building_name: 'Flat 2', building_name: 'Rose Cottage', thoroughfare: 'High Street', line_2: 'High Street', post_town: 'Inverness', postcode: 'IV1 1AA', uprn: '000123456789' } : { hits: [{ id: 'abc', suggestion: 'Flat 2, 147A High Street' }] } });
+};
+const candidates = await searchAddresses('org-a', '147 High', { ...options, fetch: mockFetch });
+assert.equal(candidates[0].id, 'abc');
+const address = await resolveAddress('org-a', 'abc', { ...options, fetch: mockFetch });
+assert.equal(address.buildingNumber, '147A'); assert.equal(address.uprn, '000123456789');
+assert.equal(address.addressLine1, 'Flat 2, Rose Cottage, High Street'); assert.equal(address.addressLine2, null);
+assert.equal(address.planningAuthority, null); assert.equal(address.buildingStandardsAuthority, 'Highland Council');
+assert.equal(routeScottishAuthorities({ country: 'Scotland', adminDistrict: 'City of Edinburgh', nationalPark: 'Non-National Park' }).planningAuthority, 'City of Edinburgh Council');
+assert.equal(routeScottishAuthorities({ country: 'Scotland', adminDistrict: 'Highland', boundaryUncertain: true }).planningAuthority, null);
+assert.equal(applicationAuthority({ localAuthority: 'Legacy Council', planningAuthority: 'Park Authority', buildingStandardsAuthority: 'Highland Council', authorityVerification: 'confirmed' }, 'HOUSEHOLDER_PLANNING'), 'Park Authority');
+await assert.rejects(() => searchAddresses('org-b', '147 High', { ...options, licensed: false, fetch: mockFetch }), /licensing/);
+await assert.rejects(() => resolveAddress('org-b', 'invalid/slash', options), /identifier/);
+await assert.rejects(() => resolveAddress('org-b', 'outage', { ...options, fetch: async () => new Response('', { status: 503 }) }), /unavailable/);
+assert.equal(calls, 3);
+console.log('Workflow addresses: licensed adapter, flats/named buildings, string UPRN, park/boundary uncertainty, outages and manual fallback passed.');

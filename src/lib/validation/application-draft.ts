@@ -142,6 +142,15 @@ export const applicationDraftReviewSchema = z.object({
     postcode: nullableText(20),
     country: nullableText(100),
     localAuthority: nullableText(120),
+    uprn: z.string().max(30).nullable().optional(),
+    addressProvider: z.string().max(80).nullable().optional(),
+    addressVerifiedAt: z.string().datetime().nullable().optional(),
+    addressProvenance: z.record(z.unknown()).nullable().optional(),
+    administrativeAuthority: z.string().max(120).nullable().optional(),
+    planningAuthority: z.string().max(120).nullable().optional(),
+    buildingStandardsAuthority: z.string().max(120).nullable().optional(),
+    authorityVerification: z.enum(['legacy-unverified', 'suggested', 'confirmed']).optional(),
+    nationalPark: z.string().max(160).nullable().optional(),
   }).strict(),
   clientMode: z.enum(['create', 'existing']).default('create'),
   existingClientId: nullableText(120),
@@ -176,9 +185,11 @@ export type ApplicationDraftReview = z.infer<typeof applicationDraftReviewSchema
 
 export const applicationDraftUpdateSchema = z.object({
   review: applicationDraftReviewSchema,
+  revision: z.number().int().nonnegative().optional(),
 }).strict();
 
 export const applicationDraftCommitSchema = z.object({
   review: applicationDraftReviewSchema,
+  revision: z.number().int().nonnegative().optional(),
   openDesktop: z.boolean().default(false),
 }).strict();

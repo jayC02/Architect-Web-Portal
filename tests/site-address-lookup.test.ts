@@ -39,7 +39,7 @@ function mock(hits = [hit], postcodeResponse: unknown = ioResult, fail = false):
     const target = new URL(String(url));
     assert.equal(init?.signal?.aborted, false);
     if (target.hostname === 'api.ideal-postcodes.co.uk') {
-      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-key');
+      assert.equal(new Headers(init?.headers).get('authorization'), 'api_key="test-key"');
       assert.equal(target.searchParams.has('api_key'), false, 'credentials stay out of URLs');
       return Response.json({ code: 2000, result: { hits } });
     }

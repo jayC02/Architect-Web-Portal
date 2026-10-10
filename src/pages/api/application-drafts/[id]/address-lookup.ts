@@ -25,5 +25,5 @@ export const POST: APIRoute = context => withErrorHandling(async () => {
     throw new HttpError(409, 'This application draft can no longer be edited.');
   }
   const input = await parseBody(context.request, inputSchema);
-  return jsonResponse(200, await lookupSiteAddress(input));
+  return jsonResponse(200, await lookupSiteAddress(input, { organisationId: organisation.id }));
 }, context);
