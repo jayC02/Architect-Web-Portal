@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 const base = 'http://127.0.0.1:4330';
 const pdf = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [] /Count 0 >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF');
-test('isolated PDF journey, closed-page analysis, recovery, confirmation, fees and active Agent queue', async ({ page, context, browser }) => {
+test('isolated synchronous PDF journey, stored review, confirmation, fees and active Agent queue', async ({ page, context, browser }) => {
   const stamp = Date.now();
   const registration = await context.request.post(`${base}/api/auth/register`, { headers: { Origin: base }, data: { name: 'Workflow browser tester', email: `workflow-browser-${stamp}@example.test`, password: 'SyntheticFixture123!', organisationName: `Workflow isolated ${stamp}` } });
   expect(registration.status()).toBe(201);
@@ -29,13 +29,13 @@ test('isolated PDF journey, closed-page analysis, recovery, confirmation, fees a
   await page.waitForURL(/\/applications\/(?!new)[^/]+$/, { timeout: 90_000 });
   const draftId = page.url().split('/').at(-1)!;
   expect(transfers).toBe(1); expect(verifications).toBeGreaterThanOrEqual(2);
-  await page.close();
-  // With no page open, only the persisted queue and server worker can finish.
+  // Keep the original awaited analysis request open until preparation finishes.
   let draft: any;
   await expect.poll(async () => {
     const response = await context.request.get(`${base}/api/application-drafts/${draftId}`); draft = (await response.json()).draft;
     return draft?.review ? draft.status : 'waiting';
   }, { timeout: 90_000, intervals: [500,1000,2000] }).toMatch(/NEEDS_REVIEW|READY_TO_CREATE/);
+  await page.close();
   const person = { ...draft.review.client, clientType: 'INDIVIDUAL', displayName: 'Anna Campbell', title: 'Ms', firstName: 'Anna', lastName: 'Campbell', email: 'anna@example.test', phone: '07483882299', buildingNumber: '147', addressLine1: 'High Street', addressLine2: null, townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom' };
   const review = { ...draft.review, selectedApplicationType: 'HOUSEHOLDER_PLANNING', projectMode: 'create', existingProjectId: null,
     project: { name: '147 High Street extension', internalReference: `AP-${stamp}`, typeOfWorkKey: 'domestic_alteration_extension', summary: 'Rear domestic extension' },
@@ -88,26 +88,17 @@ test('isolated PDF journey, closed-page analysis, recovery, confirmation, fees a
   const jobId = finalDraft.result.automationJobId;
   const queued = await context.request.post(`${base}/api/automation-jobs/${jobId}/run`, { headers: { Origin: base } }); expect(queued.status(), await queued.text()).toBe(200);
   await current.reload();
-  // Project photos retain their supported type, while a larger PDF uses real
-  // tus-js-client chunks and resumes after an injected expired storage token.
+  // The original synchronous sorting form still supports project photos.
   await current.goto(`/documents/upload?projectId=${projectId}`);
-  let tusCreates = 0, tusHeads = 0, tusPatches = 0;
-  await current.route('http://127.0.0.1:4331/storage/v1/upload/resumable**', async route => {
-    const method = route.request().method();
-    if (method === 'POST') tusCreates++;
-    if (method === 'HEAD') tusHeads++;
-    if (method === 'PATCH' && ++tusPatches === 1) return route.fulfill({ status: 403, body: 'Storage token expired' });
-    return route.continue();
-  });
-  const largePdf = Buffer.concat([pdf, Buffer.alloc(7 * 1024 * 1024, 32)]);
   await current.locator('input[type=file]').setInputFiles([
-    { name: 'Survey.pdf', mimeType: 'application/pdf', buffer: largePdf },
+    { name: 'Survey.pdf', mimeType: 'application/pdf', buffer: pdf },
     { name: 'Site photograph.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64') },
   ]);
-  await current.getByRole('button', { name: 'Upload documents', exact: true }).click();
-  await expect(current.getByRole('listitem').filter({ hasText: 'Survey.pdf' })).toContainText('Ready', { timeout: 60_000 });
-  await expect(current.getByRole('listitem').filter({ hasText: 'Site photograph.png' })).toContainText('Ready');
-  expect(tusCreates).toBe(1); expect(tusHeads).toBeGreaterThanOrEqual(1); expect(tusPatches).toBe(2);
+  await current.getByRole('button', { name: 'Upload and review sorting', exact: true }).click();
+  await current.waitForURL(/\/files\/sort\//, { timeout: 60_000 });
+  await expect(current.locator('[data-sort-item]')).toHaveCount(2);
+  await current.getByRole('button', { name: 'Save document sorting', exact: true }).click();
+  await current.waitForURL(new RegExp(`/projects/${projectId}#documents`));
   // Cancelling fences the old identity, while explicit file reselection remains
   // possible. Even a late storage transfer cannot finalise the cancelled id.
   const uploadBase = `${base}/api/projects/${projectId}/documents`;

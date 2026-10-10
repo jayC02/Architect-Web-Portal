@@ -1,3 +1,6 @@
+// Historical PDF queue helpers. The authenticated PDF workflow no longer calls
+// these helpers; the worker entry point below is retired. Keep the additive
+// schema and existing historical records without running queued work.
 import { databaseTable } from '@/lib/db/table';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApplicationDraftDocumentStatus, ApplicationDraftStatus, Prisma, type DocumentProcessingJob } from '@prisma/client';
@@ -111,7 +114,7 @@ export async function fencedProcessingWrite(job: DocumentProcessingJob, write: (
 
 async function processClaim(job: DocumentProcessingJob, signal?: AbortSignal) {
   if (job.kind === 'PREPARE') {
-    await prepareApplicationDraft(job.draftId!, job.organisationId, { job });
+    await prepareApplicationDraft(job.draftId!, job.organisationId);
     return;
   }
   const draftDocument = job.draftDocumentId ? await prisma.applicationDraftDocument.findFirst({ where: { id: job.draftDocumentId, cancelledAt: null, draft: { organisationId: job.organisationId, status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING, ApplicationDraftStatus.CANCELLED, ApplicationDraftStatus.EXPIRED] } } } }) : null;
@@ -178,9 +181,9 @@ async function processClaim(job: DocumentProcessingJob, signal?: AbortSignal) {
   });
 }
 
-export async function runDocumentProcessingWorker(organisationId?: string) {
-  if (!processingEnabled()) return { processed: 0, skipped: true };
-  return runProcessingJobs(organisationId);
+export async function runDocumentProcessingWorker(_organisationId?: string) {
+  // Retired: PDF analysis is now awaited directly by authenticated requests.
+  return { processed: 0, skipped: true };
 }
 
 // Awaited request work: no waitUntil, cron, or scheduled worker is required.

@@ -1,6 +1,6 @@
 import SearchableSelector from '@/components/ui/SearchableSelector';
 import AddressSearch from '@/components/addresses/AddressSearch';
-import UploadQueue from '@/components/documents/UploadQueue';
+
 
 
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ExternalLink,
 
+  FilePlus2,
   FileText,
   LoaderCircle,
   Pencil,
@@ -495,43 +496,30 @@ function AnalysisState({
   onDraft: (draft: ApplicationDraftResponse) => void;
 }) {
   const [error, setError] = useState('');
-  const [working, setWorking] = useState(draft.status === 'ANALYSING' || draft.status === 'UPLOADING');
+  const [working, setWorking] = useState(draft.status === 'UPLOADING');
   const started = useRef(false);
   const total = Math.max(draft.analysis.total, draft.documents.length, 1);
   const percentage = Math.min(100, Math.round((draft.analysis.completed / total) * 100));
 
-  const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const analyse = async (force: boolean, resume = false) => {
-    started.current = true;
+  const analyse = async (force: boolean) => {
     setWorking(true);
     setError('');
     try {
-      while (alive.current) {
-        const payload = await apiJson<{ draft: ApplicationDraftResponse; processing: { mode: string; continueAfterMs: number | null } }>(
-          `/api/application-drafts/${draft.id}/analyse`,
-          { method: 'POST', body: JSON.stringify({ force, resume }) },
-        );
-        if (!alive.current) return;
-        onDraft(payload.draft);
-        if (payload.draft.status !== 'ANALYSING') { setWorking(false); return; }
-        if (payload.processing.mode !== 'inline') return;
-        if (payload.processing.continueAfterMs === null) { setWorking(false); return; }
-        await new Promise(resolve => window.setTimeout(resolve, payload.processing.continueAfterMs!));
-        force = false;
-        resume = true;
-      }
+      const payload = await apiJson<{ draft: ApplicationDraftResponse }>(
+        `/api/application-drafts/${draft.id}/analyse`,
+        { method: 'POST', body: JSON.stringify({ force }) },
+      );
+      onDraft(payload.draft);
     } catch (requestError) {
-      if (!alive.current) return;
-      setError(`${requestError instanceof Error ? requestError.message : 'The request was interrupted.'} Uploaded documents and completed results are saved. Retry preparation to continue without uploading again.`);
+      setError(requestError instanceof Error ? requestError.message : 'The application could not be prepared.');
       setWorking(false);
     }
   };
 
   useEffect(() => {
-    if (started.current || (draft.status !== 'UPLOADING' && !(draft.status === 'ANALYSING' && draft.processingMode === 'inline'))) return;
+    if (draft.status !== 'UPLOADING' || started.current) return;
     started.current = true;
-    void analyse(false, draft.status === 'ANALYSING');
+    void analyse(false);
   }, [draft.status]);
 
   useEffect(() => {
@@ -555,10 +543,10 @@ function AnalysisState({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-            {working ? 'Preparing application' : 'Preparation paused'}
+            {working ? 'Preparing application' : 'Analysis did not finish'}
           </p>
           <h2 className="mt-1 text-2xl font-semibold text-ink">
-            {working ? draft.analysis.message : 'Your documents are safe'}
+            {working ? draft.analysis.message : 'Retry using the uploaded PDFs'}
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">
             {working
@@ -579,7 +567,7 @@ function AnalysisState({
           {error ? <p className="mt-4 text-sm font-semibold text-red-700" role="alert">{error}</p> : null}
           {!working ? (
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" className="btn btn-primary gap-2" onClick={() => void analyse(true)}>
+              <button type="button" className="btn btn-primary gap-2" onClick={() => void analyse(false)}>
                 <RefreshCw size={16} />
                 Retry preparation
               </button>
@@ -1037,6 +1025,61 @@ export default function ApplicationDraftReview({
     }
   };
 
+  const addDocuments = async (files: FileList | null) => {
+    if (!files?.length) return;
+    if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+    if (!await persistCurrentReview()) return;
+    setWorking('files');
+    setError('');
+    try {
+      const queue = Array.from(files);
+      const invalid = queue.find((file) => (file.type && file.type !== 'application/pdf') || !file.name.toLowerCase().endsWith('.pdf'));
+      if (invalid) throw new Error('PDF files only.');
+      let next = 0;
+      const uploadOne = async (file: File) => {
+        const intent = await apiJson<{
+          document: { id: string };
+          upload: { url: string; token: string } | null;
+        }>(`/api/application-drafts/${draft.id}/documents/upload-intent`, {
+          method: 'POST',
+          body: JSON.stringify({ filename: file.name, mimeType: file.type, size: file.size }),
+        });
+        if (intent.upload) {
+          const response = await fetch(intent.upload.url, {
+            method: 'PUT',
+            headers: {
+              'content-type': file.type || 'application/pdf',
+              'x-upsert': 'false',
+            },
+            body: file,
+          });
+          if (!response.ok) {
+            const uploadError = await response.text().catch(() => '');
+            if (response.status !== 409 && !/already exists/i.test(uploadError)) {
+              throw new Error(`Could not upload ${file.name}.`);
+            }
+          }
+        }
+        await apiJson(`/api/application-drafts/${draft.id}/documents/${intent.document.id}/finalise`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      };
+      await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+        while (next < queue.length) await uploadOne(queue[next++]);
+      }));
+      const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
+      setDraft(payload.draft);
+      setReview(payload.draft.review);
+      setIssues(payload.draft.issues);
+      setNotice(`${queue.length} document${queue.length === 1 ? '' : 's'} uploaded. Analyse again when ready.`);
+      setWorking('');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'The documents could not be added.');
+      setWorking('');
+    }
+  };
+
   const removeDocument = async (document: DraftDocument) => {
     if (!window.confirm(`Remove ${document.originalFilename} from this draft?`)) return;
     setWorking('files');
@@ -1458,11 +1501,18 @@ export default function ApplicationDraftReview({
               />
               Show all documents
             </label>
-            <details className="w-full"><summary className="btn btn-secondary cursor-pointer">Add documents</summary>
-              <div className="mt-3"><UploadQueue pdfOnly maxFiles={Math.max(0, 20 - draft.documents.length)} baseUrl={`/api/application-drafts/${draft.id}/documents`} onComplete={() => {
-                void apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`).then(payload => { setDraft(payload.draft); setNotice('Completed documents are kept. Analyse again when ready.'); }).catch(() => setError('Files were transferred. Reload the draft to check server records.'));
-              }} /></div>
-            </details>
+            <label className="btn btn-secondary cursor-pointer gap-2">
+              {working === 'files' ? <LoaderCircle size={15} className="animate-spin" /> : <FilePlus2 size={15} />}
+              Add documents
+              <input
+                type="file"
+                multiple
+                accept=".pdf,application/pdf"
+                className="sr-only"
+                disabled={Boolean(working)}
+                onChange={(event) => void addDocuments(event.target.files)}
+              />
+            </label>
           </div>
 
           <div className="overflow-hidden rounded-lg border border-stone-200">

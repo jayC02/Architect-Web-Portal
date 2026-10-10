@@ -13,7 +13,6 @@ import {
   createSignedDirectUpload,
   deleteStoredDocument,
   getStoredDocumentMetadata,
-  readStoredDocumentBytes,
   saveUploadedDocument,
 } from '@/lib/server/upload-storage';
 import { HttpError } from '@/lib/utils/http';
@@ -219,8 +218,9 @@ export const createApplicationDraftUploadIntent = async (
       throw new HttpError(409, 'Documents cannot be changed for this application draft.');
     }
     const existing = current.documents.find((candidate) => candidate.uploadIntentKey === uploadIntentKey);
-    if (existing?.cancelledAt) throw new HttpError(409, 'This upload attempt was cancelled. Select the file again to start a new attempt.');
-    if (existing) return existing;
+    if (existing?.cancelledAt && input.clientUploadId) throw new HttpError(409, 'This upload attempt was cancelled. Select the file again to start a new attempt.');
+    if (existing?.cancelledAt) await tx.applicationDraftDocument.update({ where: { id: existing.id }, data: { uploadIntentKey: createHash('sha256').update(`cancelled:${existing.id}`).digest('hex') } });
+    else if (existing) return existing;
     const matching = input.clientSha256 ? current.documents.find(candidate => !candidate.cancelledAt && candidate.originalFilename === originalFilename && candidate.mimeType === mimeType && candidate.sizeBytes === input.size && candidate.clientSha256 === input.clientSha256) : undefined;
     if (matching) return matching;
     const activeDocuments = current.documents.filter(candidate => !candidate.cancelledAt);
@@ -295,17 +295,12 @@ export const finaliseApplicationDraftDocument = async (
   if (!document) throw new HttpError(404, 'Draft document not found.');
   if (document.cancelledAt || draft.status === ApplicationDraftStatus.CANCELLED) throw new HttpError(409, 'This upload was cancelled.');
   if (document.committedDocumentId) throw new HttpError(409, 'This document already belongs to a project.');
-  if (document.uploadStatus === ApplicationDraftDocumentUploadStatus.READY) { await startCompletedDraftUploads(draftId, organisationId); return document; }
+  if (document.uploadStatus === ApplicationDraftDocumentUploadStatus.READY) return document;
   if (!mutableStatuses.has(draft.status)) throw new HttpError(409, 'Documents cannot be changed for this application draft.');
   const metadata = await getStoredDocumentMetadata(document.storageKey);
   if (!metadata) throw new HttpError(503, 'Storage has not confirmed this upload yet. Verification will retry.', { retryAfterSeconds: 2 });
   if (metadata.sizeBytes <= 0 || metadata.sizeBytes !== document.sizeBytes) {
     throw new HttpError(400, 'Uploaded size does not match the reserved file.');
-  }
-  const bytes = await readStoredDocumentBytes(document.storageKey);
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
-  if (!bytes.subarray(0, 5).equals(Buffer.from('%PDF-')) || (document.clientSha256 && document.clientSha256.toLowerCase() !== sha256)) {
-    throw new HttpError(400, 'The uploaded file does not match the intended PDF.');
   }
   const updated = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM ${databaseTable('ApplicationDraft')} WHERE id = ${draftId} AND "organisationId" = ${organisationId} FOR UPDATE`;
@@ -313,7 +308,7 @@ export const finaliseApplicationDraftDocument = async (
     if (!current || !mutableStatuses.has(current.status)) throw new HttpError(409, 'This upload is no longer active.');
     const changed = await tx.applicationDraftDocument.updateMany({
       where: { id: document.id, draftId, cancelledAt: null, committedDocumentId: null },
-      data: { uploadStatus: ApplicationDraftDocumentUploadStatus.READY, finalisedAt: new Date(), analysisError: null, sha256 },
+      data: { uploadStatus: ApplicationDraftDocumentUploadStatus.READY, finalisedAt: new Date(), analysisError: null },
     });
     if (!changed.count) throw new HttpError(409, 'This upload was cancelled.');
     return tx.applicationDraftDocument.findUniqueOrThrow({ where: { id: document.id } });
@@ -332,19 +327,8 @@ export const finaliseApplicationDraftDocument = async (
       },
     },
   });
-  await startCompletedDraftUploads(draftId, organisationId);
   return updated;
 };
-
-async function startCompletedDraftUploads(draftId: string, organisationId: string) {
-  if (process.env.DOCUMENT_PROCESSING_ENABLED !== 'true') return;
-  const current = await getApplicationDraftForOrganisation(draftId, organisationId);
-  if (current.status !== 'UPLOADING' || !current.documents.length || current.documents.some(document => document.uploadStatus !== 'READY')) return;
-  const { enqueueDraftProcessing } = await import('./document-processing.service');
-  const { startDocumentWorker } = await import('./document-worker-start.service');
-  await enqueueDraftProcessing(draftId, organisationId);
-  startDocumentWorker(organisationId);
-}
 
 export const cancelApplicationDraft = async (
   draftId: string,
@@ -363,7 +347,6 @@ export const cancelApplicationDraft = async (
     const result = await tx.applicationDraft.updateMany({ where: { id: draft.id, organisationId, status: { notIn: ['COMMITTED', 'COMMITTING'] } }, data: { status: 'CANCELLED', documentSetRevision: { increment: 1 } } });
     if (!result.count) throw new HttpError(409, 'This application is already being created.');
     await tx.applicationDraftDocument.updateMany({ where: { draftId: draft.id, committedDocumentId: null }, data: { cancelledAt: new Date(), uploadStatus: 'FAILED' } });
-    await tx.documentProcessingJob.updateMany({ where: { draftId: draft.id, organisationId, state: { in: ['WAITING', 'RETRYING', 'RUNNING'] } }, data: { state: 'CANCELLED', leaseOwner: null, leaseExpiresAt: null } });
   });
   const temporaryDocuments = draft.documents.filter((document) => !document.committedDocumentId);
   await removeFiles(temporaryDocuments);
@@ -434,7 +417,6 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
       const changed = await tx.applicationDraft.updateMany({ where: { id: draft.id, organisationId, status: { notIn: ['COMMITTED', 'COMMITTING'] } }, data: { status: 'EXPIRED', documentSetRevision: { increment: 1 } } });
       if (!changed.count) return;
       await tx.applicationDraftDocument.updateMany({ where: { draftId: draft.id, committedDocumentId: null }, data: { cancelledAt: new Date(), uploadStatus: 'FAILED' } });
-      await tx.documentProcessingJob.updateMany({ where: { draftId: draft.id, state: { in: ['WAITING', 'RETRYING', 'RUNNING'] } }, data: { state: 'CANCELLED', leaseOwner: null, leaseExpiresAt: null } });
     });
   }
   const abandoned = await prisma.applicationDraftDocument.findMany({

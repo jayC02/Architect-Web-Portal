@@ -183,7 +183,7 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
   };
 }
 
-export async function createSignedDirectUpload(storageKey: string, sizeBytes = 0): Promise<SignedDirectUpload> {
+export async function createSignedDirectUpload(storageKey: string, _sizeBytes = 0): Promise<SignedDirectUpload> {
   if (getStorageProvider() !== 'supabase') {
     throw new HttpError(503, 'Direct document uploads are not configured.');
   }
@@ -208,7 +208,7 @@ export async function createSignedDirectUpload(storageKey: string, sizeBytes = 0
   return {
     uploadUrl: payload.url.startsWith('http') ? payload.url : `${supabaseUrl}/storage/v1${payload.url}`,
     token: payload.token,
-    method: sizeBytes > 6 * 1024 * 1024 ? 'tus' : 'put',
+    method: 'put',
     endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
     bucket: supabaseBucket,
     objectName: storageKey,

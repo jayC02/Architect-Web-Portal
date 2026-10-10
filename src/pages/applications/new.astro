@@ -90,7 +90,6 @@ const formatDate = (date: Date) =>
           <span class="mt-3 text-xs text-stone-400">PDF files only - 20 files - 25 MB per file - 75 MB per package</span>
           <input
             data-file-input
-            disabled
             class="sr-only"
             type="file"
             name="files"
@@ -99,7 +98,6 @@ const formatDate = (date: Date) =>
           />
           <input
             data-folder-input
-            disabled
             class="sr-only"
             type="file"
             name="folderFiles"
@@ -107,7 +105,7 @@ const formatDate = (date: Date) =>
             accept=".pdf,application/pdf"
           />
         </label>
-        <button type="button" data-folder-button disabled class="mt-3 text-sm font-semibold text-stone-600 hover:text-ink">
+        <button type="button" data-folder-button class="mt-3 text-sm font-semibold text-stone-600 hover:text-ink">
           Choose a folder of PDFs
         </button>
 
@@ -156,7 +154,7 @@ const formatDate = (date: Date) =>
         <p data-upload-error class="mt-4 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>
 
         <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button data-submit type="submit" disabled class="btn btn-primary gap-2 sm:min-w-64">
+          <button data-submit type="submit" class="btn btn-primary gap-2 sm:min-w-64">
             <Sparkles size={17} />
             Analyse and prepare application
           </button>
@@ -228,14 +226,12 @@ const formatDate = (date: Date) =>
   import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
   import {
     createSingleFlight,
-
+    retryTransientUpload,
     runUploadQueue,
     UploadRequestError,
     uploadPackageProgress,
     type ApplicationUploadState,
   } from '@/lib/application-upload-queue';
-
-  import { uploadDocument } from '@/lib/document-upload-controller';
 
   const form = document.querySelector<HTMLFormElement>('[data-application-upload]');
   const input = document.querySelector<HTMLInputElement>('[data-file-input]');
@@ -256,23 +252,19 @@ const formatDate = (date: Date) =>
   let selectedFiles: File[] = [];
   let draftId: string | null = null;
   let uploading = false;
-  const fileStates = new Map<string, { state: ApplicationUploadState; documentId?: string; error?: string }>();
-  const uploadsInFlight = new Set<string>();
-  const uploadControllers = new Map<string, AbortController>();
-  const cancelledFiles = new Set<string>();
   window.addEventListener('beforeunload', event => {
-    if (!selectedFiles.some(file => !['Waiting for analysis', 'Cancelled'].includes(fileStates.get(fileKey(file))?.state ?? 'Waiting'))) return;
+    if (!uploading) return;
     event.preventDefault(); event.returnValue = '';
   });
-  const transferredBytes = new Map<string, number>();
+  const fileStates = new Map<string, { state: ApplicationUploadState; documentId?: string; error?: string }>();
+  const uploadsInFlight = new Set<string>();
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const localFileKeys = new WeakMap<File, string>();
-  const fileKey = (file: File) => { let key = localFileKeys.get(file); if (!key) { key = crypto.randomUUID(); localFileKeys.set(file, key); } return key; };
+  const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
   const renderFiles = () => {
     if (!filePanel || !fileList || !fileCount) return;
@@ -301,21 +293,12 @@ const formatDate = (date: Date) =>
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-ink';
-      remove.setAttribute('aria-label', `${uploadsInFlight.has(fileKey(file)) ? 'Cancel' : 'Remove'} ${file.name}`);
+      remove.setAttribute('aria-label', `Remove ${file.name}`);
       remove.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-      remove.addEventListener('click', async () => {
-        const key = fileKey(file);
-        cancelledFiles.add(key);
-        uploadControllers.get(key)?.abort();
-        const documentId = fileStates.get(key)?.documentId;
-        if (documentId && draftId) {
-          try {
-            const response = await fetch(`/api/application-drafts/${draftId}/documents/${documentId}`, { method: 'DELETE' });
-            if (!response.ok) { showError('Transfer stopped. Retry removal to confirm server cancellation.'); return; }
-          } catch { showError('Transfer stopped. Retry removal when connected.'); return; }
-        }
-        selectedFiles = selectedFiles.filter(candidate => fileKey(candidate) !== key);
-        fileStates.set(key, { state: 'Cancelled', documentId });
+      remove.addEventListener('click', () => {
+        if (uploading || uploadsInFlight.has(fileKey(file))) return;
+        selectedFiles = selectedFiles.filter((candidate) => fileKey(candidate) !== fileKey(file));
+        fileStates.delete(fileKey(file));
         renderFiles();
       });
       if (status?.state === 'Could not upload' || status?.state === 'Could not finalise') {
@@ -324,7 +307,6 @@ const formatDate = (date: Date) =>
         retry.className = 'text-sm font-semibold text-stone-600 hover:text-ink';
         retry.textContent = 'Retry';
         retry.setAttribute('aria-label', `Retry ${file.name}`);
-        retry.disabled = uploading || uploadsInFlight.size > 0;
         retry.addEventListener('click', () => void uploadFile(file));
         row.append(icon, details, retry, remove);
       } else {
@@ -368,7 +350,6 @@ const formatDate = (date: Date) =>
   folderInput?.addEventListener('change', () => addFiles(Array.from(folderInput.files ?? [])));
   folderButton?.addEventListener('click', () => folderInput?.click());
   clearButton?.addEventListener('click', () => {
-    if (uploading || uploadsInFlight.size || draftId) { showError('Remove files individually to confirm cancellation of reserved uploads.'); return; }
     selectedFiles = [];
     if (input) input.value = '';
     renderFiles();
@@ -413,7 +394,7 @@ const formatDate = (date: Date) =>
     if (progressMessage) progressMessage.textContent = active
       ? `Uploading ${completed + active} of ${total} documents`
       : completed === total ? 'Finalising documents' : `Uploading ${completed} of ${total} documents`;
-    const percentage = total ? Math.round(selectedFiles.reduce((sum, file) => sum + (transferredBytes.get(fileKey(file)) ?? 0), 0) / Math.max(1, selectedFiles.reduce((sum, file) => sum + file.size, 0)) * 100) : 0;
+    const percentage = total ? Math.round((completed / total) * 100) : 0;
     if (progressBar) progressBar.style.width = `${percentage}%`;
     if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(percentage));
     if (progressPercent) progressPercent.textContent = `${percentage}%`;
@@ -433,33 +414,57 @@ const formatDate = (date: Date) =>
 
   const uploadFile = async (file: File) => {
     const key = fileKey(file);
-    if (cancelledFiles.has(key) || fileStates.get(key)?.state === 'Waiting for analysis' || uploadsInFlight.has(key)) return;
-    const controller = new AbortController();
-    uploadControllers.set(key, controller);
+    if (fileStates.get(key)?.state === 'Waiting for analysis' || uploadsInFlight.has(key)) return;
     uploadsInFlight.add(key);
     fileStates.set(key, { state: 'Uploading' });
     updateProgress();
     try {
       const currentDraftId = await ensureDraft();
-      controller.signal.throwIfAborted();
-      const documentId = await uploadDocument(file, `/api/application-drafts/${currentDraftId}/documents`, {
-        signal: controller.signal,
-        onProgress: progress => {
-          if (cancelledFiles.has(key)) {
-            fileStates.set(key, { state: 'Cancelled', documentId: progress.documentId });
-            if (progress.documentId) void fetch(`/api/application-drafts/${currentDraftId}/documents/${progress.documentId}`, { method: 'DELETE' }).then(response => { if (!response.ok) showError('Retry removal to confirm cancellation.'); }).catch(() => showError('Retry removal when connected.'));
-            return;
+      const documentId = await retryTransientUpload(async () => {
+        const intent = await api<{
+          document: { id: string; uploadStatus: string };
+          upload: { url: string; token: string } | null;
+          storage: { warning: boolean; blocked: boolean };
+        }>(`/api/application-drafts/${currentDraftId}/documents/upload-intent`, {
+          filename: file.name,
+          mimeType: file.type || 'application/pdf',
+          size: file.size,
+        });
+        if (intent.storage.warning) showError('Document storage is nearly full.');
+        if (intent.storage.blocked) {
+          throw new UploadRequestError('New uploads are temporarily unavailable because document storage is full.', 507);
+        }
+        if (intent.upload) {
+          const response = await fetch(intent.upload.url, {
+              method: 'PUT',
+              headers: {
+                'content-type': file.type || 'application/pdf',
+                'x-upsert': 'false',
+              },
+              body: file,
+            });
+          if (!response.ok) {
+            const uploadError = await response.text().catch(() => '');
+            if (response.status === 409 || /already exists/i.test(uploadError)) {
+              // The previous browser attempt may have reached Storage before its finalisation response was lost.
+            } else {
+              throw new UploadRequestError('Could not upload this document.', response.status);
+            }
           }
-          const state: ApplicationUploadState = progress.state === 'Ready' ? 'Waiting for analysis'
-            : progress.state === 'Verifying' ? 'Finalising'
-            : progress.state === 'Retry scheduled' || progress.state === 'Offline' ? 'Retrying upload...'
-            : progress.state === 'Failed' || progress.state === 'Action required' ? 'Could not upload' : 'Uploading';
-          fileStates.set(key, { state, documentId: progress.documentId });
-          transferredBytes.set(key, progress.bytes);
+        }
+        fileStates.set(key, { state: 'Uploaded', documentId: intent.document.id });
+        updateProgress();
+        fileStates.set(key, { state: 'Finalising', documentId: intent.document.id });
+        updateProgress();
+        await api(`/api/application-drafts/${currentDraftId}/documents/${intent.document.id}/finalise`, {});
+        return intent.document.id;
+      }, {
+        delayMs: 750,
+        onRetry: () => {
+          fileStates.set(key, { state: 'Retrying upload...' });
           updateProgress();
         },
       });
-      if (cancelledFiles.has(key)) return;
       fileStates.set(key, { state: 'Waiting for analysis', documentId });
       const hasFailedFile = selectedFiles.some((candidate) => {
         const state = fileStates.get(fileKey(candidate))?.state;
@@ -467,13 +472,11 @@ const formatDate = (date: Date) =>
       });
       if (!hasFailedFile) errorBox?.classList.add('hidden');
     } catch (uploadError) {
-      if (controller.signal.aborted) { fileStates.set(key, { ...fileStates.get(key), state: 'Cancelled' }); return; }
       const message = uploadError instanceof Error ? uploadError.message : 'Could not upload this document.';
       fileStates.set(key, { state: 'Could not upload', error: message });
       showError(`Unable to upload document: ${file.name}. Your completed uploads have been kept.`);
     } finally {
       uploadsInFlight.delete(key);
-      uploadControllers.delete(key);
       updateProgress();
     }
   };
@@ -504,16 +507,9 @@ const formatDate = (date: Date) =>
     ).ready;
     if (completed && draftId) {
       if (progressMessage) progressMessage.textContent = 'Documents finalised. Preparing analysis...';
-      try { await api(`/api/application-drafts/${draftId}/analyse`, { force: false }); }
-      catch (error) { showError(`${error instanceof Error ? error.message : 'The analysis request was interrupted.'} Your uploaded files and completed analysis are saved. Click Analyse and prepare application again to continue without re-uploading.`); if (submitButton) submitButton.disabled = false; return; }
       window.location.assign(`/applications/${draftId}`);
       return;
     }
     if (submitButton) submitButton.disabled = false;
   });
-  // File selection and native form submission wait until their handlers exist.
-  if (input) input.disabled = false;
-  if (folderInput) folderInput.disabled = false;
-  if (folderButton) folderButton.disabled = false;
-  if (submitButton) submitButton.disabled = false;
 </script>

@@ -54,7 +54,7 @@ const server = http.createServer(async (request, response) => {
   const destination = path.join(root, key);
   const json = (status, data) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(data)); };
   if (url.pathname.includes('/upload/sign/')) { json(200, { url: `/object/mock-bucket/${key}`, token: 'loopback-test-token' }); return; }
-  if (request.method === 'PUT') {
+  if (request.method === 'PUT' || request.method === 'POST') {
     const chunks = []; for await (const chunk of request) chunks.push(chunk);
     const bytes = Buffer.concat(chunks); files.set(key, { size: bytes.length, mimetype: request.headers['content-type'] });
     await fs.mkdir(path.dirname(destination), { recursive: true }); await fs.writeFile(destination, bytes);

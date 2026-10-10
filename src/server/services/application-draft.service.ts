@@ -2,8 +2,11 @@ import { normaliseUkAddress } from '@/lib/addresses/uk-address';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import { lookupSiteAddress } from '@/server/services/site-address-lookup.service';
 
+import { createHash } from 'node:crypto';
+import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import {
   ApplicationDraftDocumentStatus,
+  ApplicationDraftDocumentUploadStatus,
 
   ApplicationDraftStatus,
   ApplicationDraftType,
@@ -14,7 +17,6 @@ import {
   type Client,
   type OrganisationDefaults,
   type Site,
-  type DocumentProcessingJob,
 } from '@prisma/client';
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { prisma } from '@/lib/db/prisma';
@@ -33,6 +35,7 @@ import {
   analysisStatusForSuggestion,
   classificationAuditForSuggestion,
   classificationDetailsFromAudit,
+  classifyProjectDocumentBatch,
 
   configuredDocumentAnalysisIdentity,
   DOCUMENT_ANALYSIS_PROMPT_VERSION,
@@ -913,6 +916,77 @@ export const persistSuggestion = async (
   });
 };
 
+const copyCachedAnalysis = async (
+  target: SynthesisDocument,
+  cached: {
+    analysisStatus: ApplicationDraftDocumentStatus;
+    analysisVersion: string | null;
+    analysisProvider: string | null;
+    analysisModel: string | null;
+    analysisPromptVersion: string | null;
+    analysisSchemaVersion: string | null;
+    analysisResult: Prisma.JsonValue | null;
+    analysisError: string | null;
+    documentType: DocumentType;
+    documentStatus: DocumentStatus;
+    revision: string | null;
+    drawingNumber: string | null;
+    drawingTitle: string | null;
+    classificationSource: DocumentSortSource | null;
+    confidence: number | null;
+    classificationReason: string | null;
+  },
+) => prisma.applicationDraftDocument.update({
+  where: { id: target.id },
+  data: {
+    analysisStatus: cached.analysisStatus,
+    analysisVersion: cached.analysisVersion,
+    analysisProvider: cached.analysisProvider,
+    analysisModel: cached.analysisModel,
+    analysisPromptVersion: cached.analysisPromptVersion,
+    analysisSchemaVersion: cached.analysisSchemaVersion,
+    analysisResult: cached.analysisResult === null ? Prisma.JsonNull : cached.analysisResult,
+    analysisError: cached.analysisError,
+    ...(target.classificationSource === DocumentSortSource.MANUAL ? {} : {
+    documentType: cached.documentType,
+    documentStatus: cached.documentStatus,
+    revision: cached.revision,
+    drawingNumber: cached.drawingNumber,
+    drawingTitle: cached.drawingTitle,
+    classificationSource: cached.classificationSource,
+    confidence: cached.confidence,
+    classificationReason: cached.classificationReason,
+    }),
+  },
+});
+
+const refreshAnalysisProgress = async (draftId: string, total: number) => {
+  const grouped = await prisma.applicationDraftDocument.groupBy({
+    by: ['analysisStatus'],
+    where: { draftId, cancelledAt: null },
+    _count: { _all: true },
+  });
+  const completed = grouped
+    .filter((row) => (
+      row.analysisStatus !== ApplicationDraftDocumentStatus.PENDING
+      && row.analysisStatus !== ApplicationDraftDocumentStatus.ANALYSING
+    ))
+    .reduce((sum, row) => sum + row._count._all, 0);
+  await prisma.applicationDraft.update({
+    where: { id: draftId },
+    data: {
+      analysisSummary: {
+        phase: 'document-analysis',
+        completed,
+        total,
+        message: completed < total
+          ? `Analysing ${Math.min(completed + 1, total)} of ${total} documents`
+          : `Analysed ${total} document${total === 1 ? '' : 's'}`,
+      },
+    },
+  });
+};
+
 export const getApplicationDraftForOrganisation = async (
   draftId: string,
   organisationId: string,
@@ -934,7 +1008,7 @@ const assertDraftCanChange = (draft: DraftWithDocuments) => {
   }
 };
 
-export const prepareApplicationDraft = async (draftId: string, organisationId: string, options: { job?: DocumentProcessingJob } = {}) => {
+export const prepareApplicationDraft = async (draftId: string, organisationId: string) => {
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
   if (draft.documents.some(document => document.uploadStatus !== 'READY')) throw new HttpError(503, 'Wait for the current document transfers to finish.');
@@ -948,7 +1022,7 @@ export const prepareApplicationDraft = async (draftId: string, organisationId: s
   );
   const issues = evaluateApplicationDraftReadiness(review);
   const write = async (tx: Prisma.TransactionClient) => tx.applicationDraft.updateMany({
-    where: { id: draft.id, organisationId, documentSetRevision: options.job?.documentSetRevision ?? draft.documentSetRevision, reviewRevision: options.job?.reviewRevision ?? draft.reviewRevision, status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING, ApplicationDraftStatus.CANCELLED, ApplicationDraftStatus.EXPIRED] } },
+    where: { id: draft.id, organisationId, documentSetRevision: draft.documentSetRevision, reviewRevision: draft.reviewRevision, status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING, ApplicationDraftStatus.CANCELLED, ApplicationDraftStatus.EXPIRED] } },
     data: {
       suggestedApplicationType: result.suggestedApplicationType,
       preparedData: result.prepared as Prisma.InputJsonValue,
@@ -966,22 +1040,211 @@ export const prepareApplicationDraft = async (draftId: string, organisationId: s
       },
     },
   });
-  if (options.job) {
-    const { fencedProcessingWrite } = await import('./document-processing.service');
-    await fencedProcessingWrite(options.job, async tx => { await write(tx); });
-  } else await prisma.$transaction(async tx => { await write(tx); });
+  const changed = await prisma.$transaction(async tx => write(tx));
+  if (!changed.count) throw new HttpError(409, "The review or documents changed during analysis. Saved corrections are kept; retry using the uploaded PDFs.");
   return { prepared: result.prepared, review, issues };
 };
 
-export const analyseApplicationDraft = async (draftId: string, organisationId: string, options: { force?: boolean; resume?: boolean } = {}) => {
-  if (options.resume) {
-    const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
-    assertDraftCanChange(draft);
-    if (draft.status !== 'ANALYSING') return;
+const currentAnalysisCanBeReused = (
+  document: SynthesisDocument,
+  identity: ReturnType<typeof configuredDocumentAnalysisIdentity>,
+) =>
+  (
+    document.analysisStatus === ApplicationDraftDocumentStatus.SUCCESS
+    || document.analysisStatus === ApplicationDraftDocumentStatus.FALLBACK
+  )
+  && document.analysisVersion === DOCUMENT_ANALYSIS_VERSION
+  && document.analysisProvider === identity.provider
+  && document.analysisModel === identity.model
+  && document.analysisPromptVersion === DOCUMENT_ANALYSIS_PROMPT_VERSION
+  && document.analysisSchemaVersion === DOCUMENT_ANALYSIS_SCHEMA_VERSION
+  && document.analysisResult !== null;
+
+export const analyseApplicationDraft = async (
+  draftId: string,
+  organisationId: string,
+  options: { force?: boolean } = {},
+) => {
+  let draft = await getApplicationDraftForOrganisation(draftId, organisationId);
+  assertDraftCanChange(draft);
+  if (!draft.documents.length) throw new HttpError(400, 'Upload at least one document before analysis.');
+  if (draft.documents.some((document) => document.uploadStatus !== ApplicationDraftDocumentUploadStatus.READY)) {
+    throw new HttpError(409, 'Finish uploading each document before analysis.');
   }
-  const { enqueueDraftProcessing } = await import('./document-processing.service');
-  if (!options.resume) await enqueueDraftProcessing(draftId, organisationId, options);
+  const identity = configuredDocumentAnalysisIdentity();
+  await prisma.applicationDraft.update({
+    where: { id: draft.id },
+    data: {
+      status: ApplicationDraftStatus.ANALYSING,
+      analysisSummary: {
+        phase: 'document-analysis',
+        completed: 0,
+        total: draft.documents.length,
+        message: `Analysing 1 of ${draft.documents.length} documents`,
+      },
+    },
+  });
+
+  const reusable = options.force
+    ? []
+    : draft.documents.filter((document) => currentAnalysisCanBeReused(document, identity));
+  const reusableIds = new Set(reusable.map((document) => document.id));
+  const pending = draft.documents.filter((document) => !reusableIds.has(document.id));
+
+  for (const document of pending) {
+    if (!document.sha256) continue;
+    const cachedDraft = await prisma.applicationDraftDocument.findFirst({
+      where: {
+        id: { not: document.id },
+        cancelledAt: null,
+        sha256: document.sha256,
+        draft: { organisationId },
+        analysisVersion: DOCUMENT_ANALYSIS_VERSION,
+        analysisProvider: identity.provider,
+        analysisModel: identity.model,
+        analysisPromptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
+        analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
+        analysisStatus: {
+          in: [ApplicationDraftDocumentStatus.SUCCESS, ApplicationDraftDocumentStatus.FALLBACK],
+        },
+        analysisResult: { not: Prisma.JsonNull },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (cachedDraft && !options.force) {
+      await copyCachedAnalysis(document, cachedDraft);
+      reusableIds.add(document.id);
+      await refreshAnalysisProgress(draft.id, draft.documents.length);
+      continue;
+    }
+
+    const cachedProject = options.force ? null : await prisma.projectDocument.findFirst({
+      where: {
+        organisationId,
+        fileHash: document.sha256,
+        analysisVersion: DOCUMENT_ANALYSIS_VERSION,
+        analysisProvider: identity.provider,
+        analysisModel: identity.model,
+        analysisPromptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
+        analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
+        analysisStatus: 'SUCCESS',
+        analysisResult: { not: Prisma.JsonNull },
+      },
+      orderBy: { analysedAt: 'desc' },
+    });
+    if (cachedProject) {
+      await copyCachedAnalysis(document, {
+        analysisStatus: ApplicationDraftDocumentStatus.SUCCESS,
+        analysisVersion: cachedProject.analysisVersion,
+        analysisProvider: cachedProject.analysisProvider,
+        analysisModel: cachedProject.analysisModel,
+        analysisPromptVersion: cachedProject.analysisPromptVersion,
+        analysisSchemaVersion: cachedProject.analysisSchemaVersion,
+        analysisResult: cachedProject.analysisResult,
+        analysisError: null,
+        documentType: cachedProject.type,
+        documentStatus: DocumentStatus.IN_REVIEW,
+        revision: cachedProject.revision,
+        drawingNumber: cachedProject.drawingNumber,
+        drawingTitle: cachedProject.drawingTitle,
+        classificationSource: cachedProject.sortSource,
+        confidence: cachedProject.sortConfidence,
+        classificationReason: cachedProject.sortReason,
+      });
+      reusableIds.add(document.id);
+      await refreshAnalysisProgress(draft.id, draft.documents.length);
+    }
+  }
+
+  draft = await getApplicationDraftForOrganisation(draftId, organisationId);
+  const toAnalyse = draft.documents.filter((document) => !reusableIds.has(document.id));
+  if (toAnalyse.length) {
+    await prisma.applicationDraftDocument.updateMany({
+      where: { id: { in: toAnalyse.map((document) => document.id) }, draftId: draft.id },
+      data: { analysisStatus: ApplicationDraftDocumentStatus.ANALYSING, analysisError: null },
+    });
+    const readableInputs = await Promise.all(toAnalyse.map(async (document) => {
+      try {
+        const bytes = await readStoredDocumentBytes(document.storageKey);
+        if (document.mimeType === 'application/pdf' && !bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+          await prisma.applicationDraftDocument.update({
+            where: { id: document.id },
+            data: {
+              uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED,
+              analysisStatus: ApplicationDraftDocumentStatus.FAILED,
+              analysisError: 'This document is not a valid PDF. Upload it again.',
+            },
+          });
+          await refreshAnalysisProgress(draft.id, draft.documents.length);
+          return null;
+        }
+        const sha256 = createHash('sha256').update(bytes).digest('hex');
+        if (document.clientSha256 && document.clientSha256.toLowerCase() !== sha256) {
+          await prisma.applicationDraftDocument.update({
+            where: { id: document.id },
+            data: {
+              uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED,
+              analysisStatus: ApplicationDraftDocumentStatus.FAILED,
+              analysisError: 'This document could not be verified. Upload it again.',
+            },
+          });
+          await refreshAnalysisProgress(draft.id, draft.documents.length);
+          return null;
+        }
+        await prisma.applicationDraftDocument.update({
+          where: { id: document.id },
+          data: { sha256 },
+        });
+        return {
+          document: { ...document, sha256 },
+          input: {
+            documentId: document.id,
+            filename: document.originalFilename,
+            mimeType: document.mimeType,
+            bytes,
+          },
+        };
+      } catch {
+        await prisma.applicationDraftDocument.update({
+          where: { id: document.id },
+          data: {
+            analysisStatus: ApplicationDraftDocumentStatus.FAILED,
+            analysisError: 'The document could not be read. Upload it again or classify it manually.',
+            documentStatus: DocumentStatus.IN_REVIEW,
+            classificationReason: 'Document analysis was unavailable.',
+          },
+        });
+        await refreshAnalysisProgress(draft.id, draft.documents.length);
+        return null;
+      }
+    }));
+    const readable = readableInputs.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null,
+    );
+    const inputs = readable.map((entry) => entry.input);
+    const suggestions = await classifyProjectDocumentBatch(
+      inputs,
+      {
+        applicationType:
+          draft.selectedApplicationType && draft.selectedApplicationType !== ApplicationDraftType.AUTO
+            ? draft.selectedApplicationType
+            : undefined,
+        projectNotes: draft.notes ?? undefined,
+      },
+      undefined,
+      async (suggestion, index) => {
+        await persistSuggestion(readable[index].document, suggestion, identity);
+        await refreshAnalysisProgress(draft.id, draft.documents.length);
+      },
+    );
+    for (const [index, suggestion] of suggestions.entries()) {
+      await persistSuggestion(readable[index].document, suggestion, identity);
+    }
+  }
+
+  return prepareApplicationDraft(draft.id, organisationId);
 };
+
 export const saveApplicationDraftReview = async (
   draftId: string,
   organisationId: string,

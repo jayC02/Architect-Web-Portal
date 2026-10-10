@@ -10,7 +10,7 @@ if (!database) throw new Error('Database configuration is required.');
 const urlFor = value => { const url = new URL(value); url.searchParams.set('schema', schema); return url.toString(); };
 const env = { ...process.env, DATABASE_URL: urlFor(process.env.DATABASE_URL || database), DIRECT_URL: urlFor(database),
   DEBUG_PERF: '',
-  DOCUMENT_PROCESSING_ENABLED: process.env.WORKFLOW_BACKGROUND_PROCESSING ?? 'true', DOCUMENT_AI_PROVIDER: process.env.WORKFLOW_LIVE_AI === 'true' ? process.env.DOCUMENT_AI_PROVIDER ?? '' : '', UPLOAD_STORAGE_PROVIDER: 'local',
+  DOCUMENT_PROCESSING_ENABLED: process.env.WORKFLOW_BACKGROUND_PROCESSING ?? 'false', DOCUMENT_AI_PROVIDER: process.env.WORKFLOW_LIVE_AI === 'true' ? process.env.DOCUMENT_AI_PROVIDER ?? '' : '', UPLOAD_STORAGE_PROVIDER: process.env.WORKFLOW_REAL_STORAGE === 'true' ? process.env.UPLOAD_STORAGE_PROVIDER : 'local',
   PUBLIC_SITE_URL: 'http://127.0.0.1:4330', PUBLIC_ALLOWED_ORIGINS: 'http://127.0.0.1:4330',
 };
 if (process.env.WORKFLOW_MOCK_STORAGE === 'true') Object.assign(env, { UPLOAD_STORAGE_PROVIDER: 'supabase', SUPABASE_URL: 'http://127.0.0.1:4331', SUPABASE_SERVICE_ROLE_KEY: 'loopback-test-key', SUPABASE_STORAGE_BUCKET: 'mock-bucket' });
@@ -21,7 +21,7 @@ if (action === 'init') {
   try { await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS "${schema}"`); } finally { await sql.end(); }
   console.log('Isolated preview schema ready. Existing application schemas are unchanged.');
 }
-const mainApp = path.resolve('output/workflow/main-app');
+const mainApp = path.resolve('output/workflow/baseline-app');
 if (action === 'dev-main') Object.assign(env, { PUBLIC_SITE_URL: 'http://127.0.0.1:4332', PUBLIC_ALLOWED_ORIGINS: 'http://127.0.0.1:4332' });
 const command = action === 'dev' || action === 'dev-main' ? [path.resolve('node_modules/astro/astro.js'), 'dev', '--host', '127.0.0.1', '--port', action === 'dev-main' ? '4332' : '4330']
   : action === 'test' ? ['node_modules/tsx/dist/cli.mjs', ...process.argv.slice(3)]

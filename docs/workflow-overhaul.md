@@ -1,5 +1,7 @@
 # Architect Pro workflow overhaul
 
+**Current PDF workflow:** the redesigned upload/processing mechanism described in the historical results below has been retired. See [PDF workflow restoration](pdf-workflow-restoration.md) for the restored `bd75264` signed-upload and synchronous analysis paths. Phases 4–8 remain in place. Do not provision the document worker or apply the example document cron templates.
+
 ## Baseline — 9 October 2026
 
 Baseline commit: `bd75264`. The checkout was clean. No AGENTS.md files were found in this checkout or its parent directories.
@@ -24,7 +26,7 @@ The recovery path retains successful documents, separates transfer and verificat
 
 ## Release evidence
 
-Implementation, migration, provider and browser results are appended as they are verified. Additive migrations must precede dependent code. Live storage, licensing and minute-level worker scheduling are release prerequisites; no upgrade or production deployment is implied by passing mocked tests.
+Historical implementation, migration, provider and browser results follow. Current PDF acceptance and release limits are recorded in [PDF workflow restoration](pdf-workflow-restoration.md). Document worker scheduling is no longer a release prerequisite. Address-provider licensing and financial rollout requirements remain applicable to their respective features.
 
 ## Implementation — 10 October 2026
 
@@ -96,7 +98,9 @@ The eight pre-existing failures are `agent-enrollment-security`, `application-ti
 
 Screen-reader labels/native dialog semantics and reduced-motion browser settings were checked, but no assistive-technology user session or formal contrast audit was performed. Synthetic minimal PDFs exercised the deterministic fallback classifier; they do not establish live AI extraction quality on customer drawings. Dependency audit still reports existing issues in the broader dependency tree; no unrelated dependency upgrade was undertaken.
 
-## Provider setup and Hobby recovery
+## Historical provider setup and Hobby recovery (superseded)
+
+These steps describe the retired PDF architecture and must not be used for this restoration. Use [the current PDF workflow report](pdf-workflow-restoration.md) for upload, analysis and release requirements. The address and Xero credential requirements below still apply to those separate features.
 
 1. Apply the additive migrations to the intended **isolated hosted preview database** before deploying the final branch. Use the normal `npm run db:deploy` workflow and generate Prisma through the build. Do not point an ordinary preview at production data.
 2. Configure a private Supabase bucket and server-only service-role credentials. Verify signed PUT, hash checking, metadata/read permissions, TUS signed-token behaviour, cancellation and recovery against actual storage. Local mock tokens/endpoints must never become deployment configuration.
@@ -108,7 +112,7 @@ Screen-reader labels/native dialog semantics and reduced-motion browser settings
 8. Confirm the Ideal Postcodes platform sublicensing key, per-organisation licensees and price before setting `IDEAL_POSTCODES_PLATFORM_LICENSED=true`, `IDEAL_POSTCODES_API_KEY` and `IDEAL_POSTCODES_LICENSEES`. Ordinary published pack prices and the licence distinction are recorded in `docs/address-preparation.md`. Manual saving remains available with lookup disabled.
 9. Connect an isolated organisation to Xero Demo Company. Check duplicate-free repeated sync, partial/full payments, full/partial mixed-tax credits and stale/disconnected views. Separately authorise the existing optional invoice-write scope and verify only a DRAFT is created, with matching agreement VAT/account tax settings. No approval or send action is added.
 
-## Monitoring and rollback
+## Historical monitoring and rollback (PDF steps superseded)
 
 `docs/rollout/workflow-monitor.sql` supplies identifier/count-only queries for backlog age, retry states, expired leases, unfinished uploads and Xero freshness. Configure the deployment log/metrics view for upload-intent and finalisation HTTP status/latency, repeated verification requests for the same stable document, address resolve failure rates and Xero sync failures. Transfer-stage recovery itself must also be checked in the storage/TUS metrics; repeated finalisation is a proxy, not a complete automatic-recovery metric. No dashboard or alert service has been provisioned.
 
@@ -144,7 +148,9 @@ The branch is `codex/workflow-overhaul`. The baseline and shared-experience comm
 The final authenticated browser run passed in 2.9 minutes with the additional cancellation, late transfer, document removal and reselection checks. Earlier development-only runs hit Vite's stale dependency cache (504 Outdated Optimize Dep); clearing the cache and waiting for loaded upload handlers resolved that local fixture issue. Production build output uses bundled dependencies and does not use that development cache.
 
 
-## Hobby PDF regression correction - 10 October 2026
+## Historical Hobby PDF regression correction - 10 October 2026 (superseded)
+
+The continuation/queue mechanism below has now been retired in favour of the original synchronous PDF implementation. Use [PDF workflow restoration](pdf-workflow-restoration.md) for current behaviour and verification.
 
 The original queue-only route rejected normal analysis with the default disabled-worker flag. This was a regression. The corrected route awaits analysis and preparation when that flag is false; scheduling remains an optional mode. No production environment, database migration, deployment or merge was performed for this correction.
 

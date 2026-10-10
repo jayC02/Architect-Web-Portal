@@ -52,13 +52,12 @@ assert.equal(isRetryableUploadError(new TypeError('Failed to fetch')), true, 'ne
 
 const uploadPage = fs.readFileSync('src/pages/applications/new.astro', 'utf8');
 const reviewComponent = fs.readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
-const uploadController = fs.readFileSync('src/lib/document-upload-controller.ts', 'utf8');
 
-assert.match(uploadPage, /progress\.state === 'Retry scheduled'/);
+assert.match(uploadPage, /Retrying upload\.\.\./);
 assert.match(uploadPage, /uploadsInFlight\.has\(key\)/, 'the same file cannot start concurrent retry cycles');
-assert.match(uploadPage, /await uploadDocument\(/, 'new packages share the staged recovery controller');
+assert.match(uploadPage, /await retryTransientUpload\(/, 'new packages use the original signed PUT upload retries');
 assert.match(uploadPage, /Unable to upload document:/, 'exhausted attempts retain the manual error state');
-assert.match(uploadController, /status === 409/, 'an existing storage object proceeds to server verification');
+assert.match(uploadPage, /status === 409/, 'an existing storage object proceeds to server verification');
 
 assert.match(reviewComponent, /const \[editingDocumentId, setEditingDocumentId\]/);
 assert.match(reviewComponent, /aria-label={`Change category for \$\{source\?\.originalFilename/);

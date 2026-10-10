@@ -6,15 +6,13 @@ import { assertAuthenticatedUploadLimit } from '@/server/services/upload-limits.
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { finaliseProjectUpload } from '@/server/services/project-upload.service';
+import { analyseStoredProjectDocument } from '@/server/services/project-document-analysis.service';
 export const POST: APIRoute = context => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);
   const { user, organisation } = await requireOrganisation(context);
   await assertAuthenticatedUploadLimit(context, organisation.id, user.id);
   if (!context.params.id || !context.params.intentId) throw new HttpError(400, 'Project and upload ids are required.');
   const document = await finaliseProjectUpload(organisation.id, context.params.id, context.params.intentId);
-  const { enqueueProjectDocumentProcessing } = await import('@/server/services/document-processing.service');
-  await enqueueProjectDocumentProcessing(document.id, organisation.id);
-  const { startDocumentWorker } = await import('@/server/services/document-worker-start.service');
-  startDocumentWorker(organisation.id);
-  return jsonResponse(200, { document });
+  const analysed = document.analysisStatus === 'SUCCESS' ? document : await analyseStoredProjectDocument(document.id, organisation.id);
+  return jsonResponse(200, { document: analysed });
 }, context);
