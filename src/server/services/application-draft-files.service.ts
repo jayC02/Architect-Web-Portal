@@ -193,7 +193,7 @@ export const addApplicationDraftDocuments = async (
 export const createApplicationDraftUploadIntent = async (
   draftId: string,
   organisationId: string,
-  input: { filename: string; mimeType: string; size: number; clientSha256?: string | null },
+  input: { filename: string; mimeType: string; size: number; clientSha256?: string | null; clientUploadId?: string },
 ) => {
   const originalFilename = normaliseFilename(input.filename);
   const mimeType = input.mimeType.trim().toLowerCase();
@@ -206,7 +206,8 @@ export const createApplicationDraftUploadIntent = async (
   if (!mutableStatuses.has(draft.status) || draft.expiresAt <= new Date()) {
     throw new HttpError(409, 'Documents cannot be changed for this application draft.');
   }
-  const uploadIntentKey = intentKeyFor(originalFilename, input.size, input.clientSha256);
+  const contentKey = intentKeyFor(originalFilename, input.size, input.clientSha256);
+  const uploadIntentKey = input.clientUploadId ? createHash('sha256').update(`${contentKey}\0${input.clientUploadId}`).digest('hex') : contentKey;
   const document = await retryDatabaseTransaction(() => prisma.$transaction(async (tx) => {
     // Serialise organisation capacity, including reservations in other packages.
     await tx.$queryRaw`SELECT id FROM ${databaseTable('Organisation')} WHERE id = ${organisationId} FOR UPDATE`;
@@ -218,8 +219,10 @@ export const createApplicationDraftUploadIntent = async (
       throw new HttpError(409, 'Documents cannot be changed for this application draft.');
     }
     const existing = current.documents.find((candidate) => candidate.uploadIntentKey === uploadIntentKey);
-    if (existing?.cancelledAt) throw new HttpError(409, 'This upload was cancelled. Choose the file again to start a new package.');
+    if (existing?.cancelledAt) throw new HttpError(409, 'This upload attempt was cancelled. Select the file again to start a new attempt.');
     if (existing) return existing;
+    const matching = input.clientSha256 ? current.documents.find(candidate => !candidate.cancelledAt && candidate.originalFilename === originalFilename && candidate.mimeType === mimeType && candidate.sizeBytes === input.size && candidate.clientSha256 === input.clientSha256) : undefined;
+    if (matching) return matching;
     const activeDocuments = current.documents.filter(candidate => !candidate.cancelledAt);
     if (activeDocuments.length >= APPLICATION_UPLOAD_LIMITS.maxFiles) {
       throw new HttpError(400, 'This application package is limited to 20 files.');
@@ -266,8 +269,8 @@ export const createApplicationDraftUploadIntent = async (
         unresolvedQuestions: Prisma.JsonNull,
         analysisSummary: {
           phase: 'upload',
-          completed: current.documents.filter((candidate) => candidate.uploadStatus === ApplicationDraftDocumentUploadStatus.READY).length,
-          total: current.documents.length + 1,
+          completed: activeDocuments.filter((candidate) => candidate.uploadStatus === ApplicationDraftDocumentUploadStatus.READY).length,
+          total: activeDocuments.length + 1,
           message: 'Uploading project documents',
         },
       },

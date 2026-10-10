@@ -90,6 +90,7 @@ const formatDate = (date: Date) =>
           <span class="mt-3 text-xs text-stone-400">PDF files only - 20 files - 25 MB per file - 75 MB per package</span>
           <input
             data-file-input
+            disabled
             class="sr-only"
             type="file"
             name="files"
@@ -98,6 +99,7 @@ const formatDate = (date: Date) =>
           />
           <input
             data-folder-input
+            disabled
             class="sr-only"
             type="file"
             name="folderFiles"
@@ -105,7 +107,7 @@ const formatDate = (date: Date) =>
             accept=".pdf,application/pdf"
           />
         </label>
-        <button type="button" data-folder-button class="mt-3 text-sm font-semibold text-stone-600 hover:text-ink">
+        <button type="button" data-folder-button disabled class="mt-3 text-sm font-semibold text-stone-600 hover:text-ink">
           Choose a folder of PDFs
         </button>
 
@@ -154,7 +156,7 @@ const formatDate = (date: Date) =>
         <p data-upload-error class="mt-4 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>
 
         <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button data-submit type="submit" class="btn btn-primary gap-2 sm:min-w-64">
+          <button data-submit type="submit" disabled class="btn btn-primary gap-2 sm:min-w-64">
             <Sparkles size={17} />
             Analyse and prepare application
           </button>
@@ -509,4 +511,9 @@ const formatDate = (date: Date) =>
     }
     if (submitButton) submitButton.disabled = false;
   });
+  // File selection and native form submission wait until their handlers exist.
+  if (input) input.disabled = false;
+  if (folderInput) folderInput.disabled = false;
+  if (folderButton) folderButton.disabled = false;
+  if (submitButton) submitButton.disabled = false;
 </script>

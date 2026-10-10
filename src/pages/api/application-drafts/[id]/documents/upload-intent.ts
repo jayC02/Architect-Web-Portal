@@ -15,6 +15,7 @@ const inputSchema = z.object({
   mimeType: z.string().min(1).max(160),
   size: z.number().int().positive(),
   clientSha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
+  clientUploadId: z.string().uuid().optional(),
 }).strict();
 export const GET: APIRoute = context => withErrorHandling(async () => {
   const { organisation } = await requireOrganisation(context);

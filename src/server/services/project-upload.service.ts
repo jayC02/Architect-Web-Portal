@@ -11,18 +11,21 @@ import { retryDatabaseTransaction } from './transaction-retry';
 
 const accepted = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain']);
 export async function reserveProjectUpload(organisationId: string, userId: string, projectId: string, input: {
-  filename: string; mimeType: string; size: number; clientSha256: string; metadata?: unknown;
+  filename: string; mimeType: string; size: number; clientSha256: string; clientUploadId?: string; metadata?: unknown;
 }) {
   await requireProjectAccess(organisationId, projectId);
   if (!accepted.has(input.mimeType) || input.size > 25 * 1024 * 1024) throw new HttpError(400, 'Choose a supported document of at most 25 MB.');
   if (!input.filename.trim() || /[\\/\u0000-\u001f]/.test(input.filename)) throw new HttpError(400, 'Filename is invalid.');
   const metadata = documentMetadataSchema.parse(input.metadata ?? { status: 'IN_REVIEW' });
-  const identity = createHash('sha256').update(`${input.filename}\0${input.size}\0${input.clientSha256}`).digest('hex');
+  const contentIdentity = `${input.filename}\0${input.size}\0${input.clientSha256}`;
+  const identity = createHash('sha256').update(contentIdentity + (input.clientUploadId ? `\0${input.clientUploadId}` : '')).digest('hex');
   const intent = await retryDatabaseTransaction(() => prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM ${databaseTable('Organisation')} WHERE id = ${organisationId} FOR UPDATE`;
     const existing = await tx.projectUploadIntent.findUnique({ where: { projectId_identity: { projectId, identity } } });
     if (existing?.cancelledAt) throw new HttpError(409, 'This upload was cancelled.');
     if (existing) return existing;
+    const matching = await tx.projectUploadIntent.findFirst({ where: { projectId, organisationId, originalFilename: input.filename, mimeType: input.mimeType, sizeBytes: input.size, clientSha256: input.clientSha256, cancelledAt: null }, orderBy: { createdAt: 'desc' } });
+    if (matching) return matching;
     const [committed, drafts, reservations] = await Promise.all([
       tx.projectDocument.aggregate({ where: { organisationId }, _sum: { sizeBytes: true } }),
       tx.applicationDraftDocument.aggregate({ where: { draft: { organisationId }, committedDocumentId: null, cancelledAt: null }, _sum: { sizeBytes: true } }),

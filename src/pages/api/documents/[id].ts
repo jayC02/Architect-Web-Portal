@@ -57,8 +57,12 @@ export const DELETE: APIRoute = (context) =>
     const { organisation } = await requireOrganisation(context);
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Document id is required.');
-    const result = await prisma.projectDocument.deleteMany({
-      where: { id, organisationId: organisation.id },
+    const result = await prisma.$transaction(async tx => {
+      // Keep stable old identities fenced after removal, while allowing a new
+      // file selection. Fence a leased worker before deleting its target.
+      await tx.projectUploadIntent.updateMany({ where: { projectDocumentId: id, organisationId: organisation.id }, data: { cancelledAt: new Date(), status: 'CANCELLED' } });
+      await tx.documentProcessingJob.updateMany({ where: { projectDocumentId: id, organisationId: organisation.id, state: { in: ['WAITING', 'RUNNING', 'RETRYING'] } }, data: { state: 'CANCELLED', leaseOwner: null, leaseExpiresAt: null } });
+      return tx.projectDocument.deleteMany({ where: { id, organisationId: organisation.id } });
     });
     if (!result.count) throw new HttpError(404, 'Document not found.');
     return jsonResponse(200, { ok: true });

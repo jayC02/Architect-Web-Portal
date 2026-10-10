@@ -7,7 +7,7 @@ export type UploadIntent = {
   document: { id: string; uploadStatus: string };
   upload: { url: string; token: string; method?: 'put' | 'tus'; endpoint?: string; bucket?: string; objectName?: string } | null;
 };
-type Session = { hash: string; intent?: UploadIntent; transferred: boolean };
+type Session = { hash: string; clientUploadId: string; intent?: UploadIntent; transferred: boolean };
 const sessions = new WeakMap<File, Session>();
 const retryAfter = (value: string | null) => value ? Math.max(0, /^\d+(\.\d+)?$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now()) : undefined;
 
@@ -88,11 +88,11 @@ export async function uploadDocument(file: File, baseUrl: string, options: {
       const buffer = await file.arrayBuffer();
       signal.throwIfAborted();
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))).map(byte => byte.toString(16).padStart(2, '0')).join('');
-      session = { hash, transferred: false };
+      session = { hash, clientUploadId: crypto.randomUUID(), transferred: false };
       sessions.set(file, session);
     }
     const reserve = () => uploadJson<UploadIntent>(`${baseUrl}/upload-intent`, {
-      filename: file.name, mimeType: file.type || 'application/pdf', size: file.size, clientSha256: session!.hash, ...options.metadata,
+      filename: file.name, mimeType: file.type || 'application/pdf', size: file.size, clientSha256: session!.hash, clientUploadId: session!.clientUploadId, ...options.metadata,
     }, signal);
     session.intent ??= await stage(reserve);
     report(signal.aborted ? 'Cancelled' : 'Waiting');

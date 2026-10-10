@@ -8,7 +8,7 @@ import { assertAuthenticatedUploadLimit } from '@/server/services/upload-limits.
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { reserveProjectUpload } from '@/server/services/project-upload.service';
-const schema = z.object({ filename: z.string().min(1).max(180), mimeType: z.string().min(1).max(160), size: z.number().int().positive(), clientSha256: z.string().regex(/^[a-f0-9]{64}$/), metadata: z.record(z.unknown()).optional() }).strict();
+const schema = z.object({ filename: z.string().min(1).max(180), mimeType: z.string().min(1).max(160), size: z.number().int().positive(), clientSha256: z.string().regex(/^[a-f0-9]{64}$/), clientUploadId: z.string().uuid().optional(), metadata: z.record(z.unknown()).optional() }).strict();
 export const GET: APIRoute = context => withErrorHandling(async () => {
   const { organisation } = await requireOrganisation(context);
   if (!context.params.id) throw new HttpError(400, 'Project id is required.');
