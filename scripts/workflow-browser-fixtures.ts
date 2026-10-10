@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../src/lib/db/prisma';
+import { applicationDraftReviewSchema } from '../src/lib/validation/application-draft';
+assert.equal(new URL(process.env.DATABASE_URL!).searchParams.get('schema'), 'workflow_overhaul_preview_20261009');
+const fixture = JSON.parse(await fs.readFile('output/workflow/browser-fixture.json', 'utf8'));
+const source = await prisma.applicationDraft.findUniqueOrThrow({ where: { id: fixture.draftId }, include: { documents: true } });
+const review = applicationDraftReviewSchema.parse(source.confirmedData);
+const prepared: any = JSON.parse(JSON.stringify(source.preparedData));
+async function copyDraft(conflict: boolean) {
+  const id = randomUUID();
+  const documentIds = [randomUUID(), randomUUID()];
+  const nextReview: any = JSON.parse(JSON.stringify(review));
+  nextReview.project.name = conflict ? 'Conflicting drawing addresses' : 'Baseline prepared review';
+  nextReview.documents = documentIds.map((documentId, index) => ({ ...review.documents[0], id: documentId, documentType: index ? 'EXISTING_DRAWING' : 'LOCATION_PLAN' }));
+  if (conflict) nextReview.site.buildingNumber = '105';
+  else nextReview.site = Object.fromEntries(Object.entries(nextReview.site).filter(([key]) => ['buildingNumber','addressLine1','addressLine2','townCity','postcode','country','localAuthority'].includes(key)));
+  const nextPrepared = JSON.parse(JSON.stringify(prepared));
+  if (conflict) nextPrepared.site.buildingNumber = { value: '105', currentValue: '147', status: 'conflict', certainty: 'high', sources: documentIds.map((documentId,index) => ({ documentId, filename: index ? '147 High Street drawing.pdf' : '105 High Street drawing.pdf', page: 1, evidence: index ? 'Site address: 147 High Street' : 'Site address: 105 High Street' })) };
+  const original = source.documents[0];
+  await prisma.applicationDraft.create({ data: { id, organisationId: source.organisationId, createdById: source.createdById, status: 'NEEDS_REVIEW', selectedApplicationType: 'HOUSEHOLDER_PLANNING', preparedData: nextPrepared, confirmedData: nextReview, expiresAt: new Date(Date.now()+7*86_400_000), documentSetRevision: 2, documents: { create: documentIds.map((documentId,index) => ({ id: documentId, originalFilename: index ? '147 High Street drawing.pdf' : '105 High Street drawing.pdf', fileName: `${documentId}.pdf`, storageKey: original.storageKey, mimeType: 'application/pdf', sizeBytes: original.sizeBytes, sha256: original.sha256, clientSha256: original.clientSha256, uploadIntentKey: documentId, uploadStatus: 'READY', finalisedAt: new Date(), analysisStatus: 'SUCCESS', documentType: index ? 'EXISTING_DRAWING' : 'LOCATION_PLAN', documentStatus: 'APPROVED', classificationSource: 'MANUAL' })) } } });
+  return id;
+}
+const baselineDraftId = await copyDraft(false), conflictDraftId = await copyDraft(true);
+const historical = await prisma.project.create({ data: { organisationId: source.organisationId, name: 'Historical project with partial payment' } });
+const empty = await prisma.project.create({ data: { organisationId: source.organisationId, name: 'Empty project fixture' } });
+const plan = await prisma.projectFeePlan.create({ data: { organisationId: source.organisationId, projectId: historical.id, createdByUserId: source.createdById, name: 'Historical milestone plan', currency: 'GBP', milestones: { create: { organisationId: source.organisationId, milestoneKey: 'historic-stage', label: 'Historic stage', amount: '100.00', currency: 'GBP', invoiceDescription: 'Historical services' } } }, include: { milestones: true } });
+const connection = await prisma.xeroConnection.upsert({ where: { organisationId: source.organisationId }, update: {}, create: { organisationId: source.organisationId, xeroConnectionId: randomUUID(), xeroTenantId: randomUUID(), xeroTenantName: 'Synthetic Demo Company — local snapshots only', accessTokenEncrypted: 'unusable-fixture', refreshTokenEncrypted: 'unusable-fixture', accessTokenExpiresAt: new Date(0), grantedScopes: 'accounting.invoices.read', status: 'CONNECTED', baseCurrency: 'GBP', lastSyncedAt: new Date() } });
+const invoiceId = randomUUID();
+await prisma.xeroInvoiceSnapshot.create({ data: { organisationId: source.organisationId, connectionId: connection.id, xeroInvoiceId: invoiceId, xeroContactId: randomUUID(), invoiceNumber: 'FIXTURE-PART-PAID', status: 'AUTHORISED', invoiceType: 'ACCREC', currency: 'GBP', subtotal: '100', totalTax: '20', total: '120', amountPaid: '30', amountDue: '90', amountCredited: '0', netCredited: '0', dueDate: new Date(Date.now()-86_400_000), projectLinks: { create: { organisationId: source.organisationId, projectId: historical.id, linkedByUserId: source.createdById } } } });
+await fs.writeFile('output/workflow/extended-fixtures.json', JSON.stringify({ ...fixture, baselineDraftId, conflictDraftId, historicalProjectId: historical.id, emptyProjectId: empty.id, historicalMilestoneId: plan.milestones[0].id }, null, 2));
+await prisma.$disconnect();
+console.log('Synthetic baseline, conflicting-address, empty-project and historical partial-payment fixtures ready in the isolated schema.');
