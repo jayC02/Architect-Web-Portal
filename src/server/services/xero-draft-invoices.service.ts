@@ -1,3 +1,4 @@
+import { databaseTable } from '@/lib/db/table';
 import crypto from 'node:crypto';
 import {
   ActionItemKind,
@@ -16,6 +17,7 @@ import { hasXeroDraftInvoiceScope } from '@/lib/xero/config';
 import { xeroGet, xeroPost } from '@/lib/xero/client';
 import type { XeroInvoice } from '@/lib/xero/types';
 import { HttpError } from '@/lib/utils/http';
+import { scheduleReconciles, agreementTaxMatches } from '@/lib/fees/agreement';
 
 const milestoneActionKey = (id: string) => `xero:milestone:${id}:draft`;
 const referenceFor = (id: string) => `AP:${id}`;
@@ -89,7 +91,7 @@ const loadMilestone = (database: PrismaClient, organisationId: string, milestone
     where: { id: milestoneId, organisationId },
     include: {
       projectFeePlan: {
-        include: { project: { include: { client: { include: { xeroLink: true } } } } },
+        include: { milestones: true, project: { include: { client: { include: { xeroLink: true } } } } },
       },
       writeAttempt: true,
     },
@@ -191,7 +193,7 @@ const findExistingByReference = async (connection: Parameters<typeof xeroGet>[0]
 export const createXeroDraftForMilestone = async (
   organisationId: string,
   milestoneId: string,
-  options: { database?: PrismaClient; post?: typeof xeroPost; lookup?: typeof findExistingByReference } = {},
+  options: { database?: PrismaClient; post?: typeof xeroPost; get?: typeof xeroGet; lookup?: typeof findExistingByReference } = {},
 ) => {
   const database = options.database ?? prisma;
   const milestone = await loadMilestone(database, organisationId, milestoneId);
@@ -224,6 +226,13 @@ export const createXeroDraftForMilestone = async (
     await ensureDraftAction(database, milestone, 'Choose a Xero sales account code before continuing.', ActionItemPriority.HIGH);
     throw new HttpError(409, 'A Xero sales account code is required.');
   }
+  if (!milestone.taxType && !settings?.defaultTaxType) throw new HttpError(409, 'Confirm the Xero tax type before creating an invoice draft.');
+  if (milestone.projectFeePlan.agreedAmount) {
+    const rates = await (options.get ?? xeroGet)<{ TaxRates?: Array<{ TaxType?: string; Status?: string; CanApplyToRevenue?: boolean; EffectiveRate?: number }> }>(connection, '/TaxRates');
+    const selected = rates.TaxRates?.find(rate => rate.TaxType === (milestone.taxType || settings?.defaultTaxType) && rate.Status === 'ACTIVE' && rate.CanApplyToRevenue !== false);
+    if (!selected || !agreementTaxMatches(milestone.projectFeePlan.vatTreatment, milestone.projectFeePlan.vatRate?.toString() ?? null, selected.EffectiveRate)) throw new HttpError(409, 'The Xero tax type does not match the agreed VAT treatment. Confirm the agreement and finance tax setting before creating a draft.');
+  }
+  if (milestone.projectFeePlan.agreedAmount && !scheduleReconciles(milestone.projectFeePlan.agreedAmount.toFixed(2), milestone.projectFeePlan.milestones)) throw new HttpError(409, 'Reconcile the billing schedule to the agreed net fee before creating a draft.');
   const request = buildDraftInvoiceRequest({
     milestoneId: milestone.id,
     xeroContactId: clientLink.xeroContactId,
@@ -248,8 +257,11 @@ export const createXeroDraftForMilestone = async (
     }
   }
   const claimed = await database.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM ${databaseTable('Project')} WHERE id = ${milestone.projectFeePlan.projectId} AND "organisationId" = ${organisationId} FOR UPDATE`;
+    const plan = await tx.projectFeePlan.findFirst({ where: { id: milestone.projectFeePlanId, organisationId } });
+    if (!plan || plan.revision !== milestone.projectFeePlan.revision) throw new HttpError(409, 'The fee agreement changed. Review it before creating a draft.');
     const current = await tx.projectFeeMilestone.updateMany({
-      where: { id: milestone.id, organisationId, state: { in: [ProjectFeeMilestoneState.ELIGIBLE, ProjectFeeMilestoneState.FAILED] } },
+      where: { id: milestone.id, organisationId, updatedAt: milestone.updatedAt, state: { in: [ProjectFeeMilestoneState.ELIGIBLE, ProjectFeeMilestoneState.FAILED] } },
       data: { state: ProjectFeeMilestoneState.DRAFT_CREATING, lastError: null },
     });
     if (current.count !== 1) return false;

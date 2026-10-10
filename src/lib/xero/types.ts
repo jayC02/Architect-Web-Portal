@@ -46,6 +46,7 @@ export type XeroInvoice = {
   Total?: number | string;
   AmountPaid?: number | string;
   AmountDue?: number | string;
+  AmountCredited?: number | string;
   UpdatedDateUTC?: string;
   Contact?: { ContactID?: string; Name?: string };
 };

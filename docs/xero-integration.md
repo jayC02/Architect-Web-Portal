@@ -1,6 +1,6 @@
 # Xero integration setup
 
-Architect Pro uses Xero's standard OAuth 2.0 authorisation-code flow to import accounting data. The integration is read-only: it does not create, edit, send, approve, void or delete accounting records in Xero.
+Architect Pro uses Xero's standard OAuth 2.0 authorisation-code flow to import accounting data. Connections start with read scopes. OWNER/ADMIN users can separately authorise `accounting.invoices` and create eligible milestone invoices as DRAFTs. Existing organisation settings can opt into automatic draft creation. Architect Pro never approves or sends invoices.
 
 ## Xero developer app
 
@@ -19,7 +19,7 @@ If `PUBLIC_SITE_URL` points at another production hostname, register the corresp
 
 ## Required scopes
 
-Architect Pro requests only these scopes:
+The default connection requests these read scopes:
 
 ```text
 offline_access
@@ -31,7 +31,9 @@ accounting.reports.aged.read
 accounting.settings.read
 ```
 
-`accounting.settings.read` is required to read the Xero organisation's base currency and ShortCode for currency-safe display and supported Xero deep links. The deprecated `accounting.transactions.read` and `accounting.reports.read` scopes are not used.
+`accounting.settings.read` is required to read the Xero organisation's base currency, ShortCode and active tax rates for currency-safe display and supported Xero deep links. The deprecated `accounting.transactions.read` and `accounting.reports.read` scopes are not used.
+
+Optional draft creation adds `accounting.invoices` through an explicit authorisation flow. It requires an exact client-contact link, sales account code, explicit tax type, a reconciled billing schedule and matching agreement VAT rate. Stable milestone identifiers, write-attempt records, request hashes and the provider Idempotency-Key protect retries. A failed or uncertain operation is reconciled with the existing invoice reference before retrying.
 
 Current provider references:
 
@@ -88,7 +90,7 @@ Unit and integration-source tests do not require real Xero credentials; the prov
 - All snapshots and links carry an Architect Pro organisation ID and a connection ID. Every route re-checks ownership server-side.
 - Finance pages and mutation routes are limited to OWNER and ADMIN roles for v1.
 - Sync reads Xero and writes only local snapshot tables. Page rendering uses those local snapshots rather than live provider calls.
-- Disconnect calls Xero's connection DELETE endpoint, then removes the local Xero connection. Cascades remove cached Xero snapshots and local Xero links; Architect Pro Clients and Projects remain untouched.
+- Disconnect calls Xero's connection DELETE endpoint, then removes the local Xero connection. Cascades remove cached Xero snapshots and local Xero links; Architect Pro Clients, Projects, fee agreements, milestone history and fee revisions remain untouched.
 - Webhooks are intentionally deferred. Data freshness is manual/initial sync plus a visible last-successful-sync timestamp.
 
 ## Connection test checklist
@@ -106,4 +108,10 @@ Unit and integration-source tests do not require real Xero credentials; the prov
 
 ## Deliberately deferred
 
-Invoice creation/editing/sending, payment write-back, bank data, bills/accounts payable, expenses, payroll, Xero Files, automatic contact or invoice creation, webhooks, payment chasing, time/cost tracking and project profitability are not part of this read-only version.
+Approving/sending invoices, editing existing provider invoices, payment write-back, bank data, bills/accounts payable, expenses, payroll, Xero Files, automatic contact creation, webhooks, payment chasing, time/cost tracking and project profitability remain deferred. Eligible milestone DRAFT creation is supported with explicit write authorisation.
+
+## Credits and project totals
+
+Invoice snapshots retain AmountCredited separately from AmountPaid. Credit-note snapshots retain allocations and tax totals. Fully allocated credit notes provide an attributable net credit; partial allocations on taxable or mixed-tax notes leave net credit unknown. Invoice payment totals are counted once; payment snapshots are not added again. Draft and voided invoices are excluded, currencies stay separate, and overdue dates use Europe/London. Stale, failed or disconnected snapshots show unknown totals. Remaining-to-invoice uses the explicit net agreement and attributable net invoices after credits, and stays unknown for insufficient legacy VAT/credit data.
+
+Live Xero Demo Company checks (including repeated sync and mixed-tax credits) are deployment prerequisites; the workflow tests use mocked provider data. API references: [Invoices](https://developer.xero.com/documentation/api/accounting/invoices), [Credit Notes](https://developer.xero.com/documentation/api/accounting/creditnotes), [Tax Rates](https://developer.xero.com/documentation/api/accounting/taxrates).

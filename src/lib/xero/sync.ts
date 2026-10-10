@@ -11,6 +11,8 @@ import {
 } from '@/lib/xero/mapping';
 import type { XeroContact, XeroInvoice, XeroPayment, XeroReport } from '@/lib/xero/types';
 import { reconcileXeroFinanceAttention } from '@/server/services/xero-finance-attention.service';
+import { Prisma } from '@prisma/client';
+import { reconcileInvoiceCredits, type CreditNote } from './credits';
 
 const pageSize = 100;
 const syncStaleBefore = () => new Date(Date.now() - 30 * 60 * 1000);
@@ -103,7 +105,7 @@ const syncInvoices = async (connection: XeroConnection) => {
   const syncedAt = new Date();
   const invoices = await pagedXeroGet<XeroInvoice>(
     connection,
-    (page) => `/Invoices?page=${page}&summaryOnly=true&where=${encodeURIComponent('Type=="ACCREC"')}`,
+    (page) => `/Invoices?page=${page}&where=${encodeURIComponent('Type=="ACCREC"')}`,
     'Invoices',
     connection.invoicesLastSyncedAt,
   );
@@ -128,6 +130,8 @@ const syncInvoices = async (connection: XeroConnection) => {
         total: decimalString(invoice.Total),
         amountPaid: decimalString(invoice.AmountPaid),
         amountDue: decimalString(invoice.AmountDue),
+        amountCredited: invoice.AmountCredited == null ? null : decimalString(invoice.AmountCredited),
+        netCredited: invoice.AmountCredited === 0 || invoice.AmountCredited === '0.00' ? '0.00' : null,
         xeroUpdatedAt: parseXeroDate(invoice.UpdatedDateUTC),
         syncedAt,
       },
@@ -144,6 +148,8 @@ const syncInvoices = async (connection: XeroConnection) => {
         total: decimalString(invoice.Total),
         amountPaid: decimalString(invoice.AmountPaid),
         amountDue: decimalString(invoice.AmountDue),
+        amountCredited: invoice.AmountCredited == null ? null : decimalString(invoice.AmountCredited),
+        netCredited: invoice.AmountCredited === 0 || invoice.AmountCredited === '0.00' ? '0.00' : null,
         xeroUpdatedAt: parseXeroDate(invoice.UpdatedDateUTC),
         syncedAt,
       },
@@ -153,6 +159,17 @@ const syncInvoices = async (connection: XeroConnection) => {
       data: { isCustomer: true },
     });
   });
+  // Read the complete allocation set so removed allocations do not survive an
+  // incremental sync. Snapshot identity remains stable on repeated syncs.
+  const credits = await pagedXeroGet<CreditNote>(connection, page => `/CreditNotes?page=${page}`, 'CreditNotes', null);
+  await inChunks(credits.filter(note => note.CreditNoteID && note.Type === 'ACCRECCREDIT'), async note => {
+    const values = { status: note.Status ?? 'UNKNOWN', currency: note.CurrencyCode ?? connection.baseCurrency ?? 'GBP', subtotal: decimalString(note.SubTotal), totalTax: decimalString(note.TotalTax), total: decimalString(note.Total),
+      allocations: (note.Allocations ?? []).map(allocation => ({ id: allocation.AllocationID ?? null, invoiceId: allocation.Invoice?.InvoiceID ?? null, amount: decimalString(allocation.Amount) })) as Prisma.InputJsonValue, syncedAt };
+    await prisma.xeroCreditNoteSnapshot.upsert({ where: { connectionId_xeroCreditNoteId: { connectionId: connection.id, xeroCreditNoteId: note.CreditNoteID! } }, create: { organisationId: connection.organisationId, connectionId: connection.id, xeroCreditNoteId: note.CreditNoteID!, ...values }, update: values });
+  });
+  const creditSnapshots = await prisma.xeroCreditNoteSnapshot.findMany({ where: { organisationId: connection.organisationId, connectionId: connection.id, xeroCreditNoteId: { in: credits.filter(note => note.Type === 'ACCRECCREDIT' && note.CreditNoteID).map(note => note.CreditNoteID!) } } });
+  const cachedInvoices = await prisma.xeroInvoiceSnapshot.findMany({ where: { organisationId: connection.organisationId, connectionId: connection.id } });
+  await inChunks(cachedInvoices, invoice => prisma.xeroInvoiceSnapshot.update({ where: { id: invoice.id }, data: { netCredited: reconcileInvoiceCredits(invoice.xeroInvoiceId, invoice.currency, invoice.amountCredited, creditSnapshots) } }));
   await prisma.xeroConnection.update({ where: { id: connection.id }, data: { invoicesLastSyncedAt: syncedAt } });
   return valid.length;
 };
