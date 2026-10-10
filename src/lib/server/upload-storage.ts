@@ -36,6 +36,10 @@ type SavedDocument = {
 export type SignedDirectUpload = {
   uploadUrl: string;
   token: string;
+  method: 'put' | 'tus';
+  endpoint: string;
+  bucket: string;
+  objectName: string;
 };
 
 export type StoredDocumentMetadata = {
@@ -179,7 +183,7 @@ export async function saveUploadedDocument(file: File, options: SaveUploadedDocu
   };
 }
 
-export async function createSignedDirectUpload(storageKey: string): Promise<SignedDirectUpload> {
+export async function createSignedDirectUpload(storageKey: string, sizeBytes = 0): Promise<SignedDirectUpload> {
   if (getStorageProvider() !== 'supabase') {
     throw new HttpError(503, 'Direct document uploads are not configured.');
   }
@@ -195,6 +199,7 @@ export async function createSignedDirectUpload(storageKey: string): Promise<Sign
         'content-type': 'application/json',
       },
       body: JSON.stringify({}),
+      signal: AbortSignal.timeout(15_000),
     },
   );
   if (!response.ok) throw new HttpError(500, 'A secure upload could not be started.');
@@ -203,6 +208,10 @@ export async function createSignedDirectUpload(storageKey: string): Promise<Sign
   return {
     uploadUrl: payload.url.startsWith('http') ? payload.url : `${supabaseUrl}/storage/v1${payload.url}`,
     token: payload.token,
+    method: sizeBytes > 6 * 1024 * 1024 ? 'tus' : 'put',
+    endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+    bucket: supabaseBucket,
+    objectName: storageKey,
   };
 }
 
@@ -218,6 +227,7 @@ export async function getStoredDocumentMetadata(storageKey: string): Promise<Sto
           authorization: `Bearer ${supabaseServiceRoleKey}`,
           apikey: supabaseServiceRoleKey,
         },
+        signal: AbortSignal.timeout(15_000),
       },
     );
     if (response.status === 404) return null;
@@ -251,8 +261,9 @@ export async function readStoredDocumentBytes(storageKey?: string | null, legacy
         authorization: `Bearer ${supabaseServiceRoleKey}`,
         apikey: supabaseServiceRoleKey,
       },
+      signal: AbortSignal.timeout(30_000),
     });
-    if (!response.ok) throw new HttpError(404, 'Document file could not be opened.');
+    if (!response.ok) throw new HttpError(response.status === 404 ? 404 : 503, 'Document file could not be opened.');
     return Buffer.from(await response.arrayBuffer());
   }
 
@@ -285,6 +296,7 @@ export async function deleteStoredDocument(storageKey: string): Promise<void> {
     const { supabaseUrl, supabaseServiceRoleKey, supabaseBucket } = getRequiredSupabaseConfig();
     const response = await fetch(`${supabaseUrl}/storage/v1/object/${supabaseBucket}/${safeKey}`, {
       method: 'DELETE',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         authorization: `Bearer ${supabaseServiceRoleKey}`,
         apikey: supabaseServiceRoleKey,

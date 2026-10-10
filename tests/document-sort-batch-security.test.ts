@@ -29,15 +29,15 @@ assert.match(documentsList, /requireOrganisation\(context\)/, 'documents list en
 assert.match(documentsList, /organisationId:\s*organisation\.id/s, 'documents list endpoint is organisation scoped');
 assert.match(documentsList, /documentsListQuerySchema\.parse/, 'documents list endpoint validates filters');
 assert.match(documentsUpload, /where:\s*\{\s*organisationId:\s*auth\.organisation\.id\s*\}/s, 'documents upload project dropdown is organisation scoped');
-assert.match(documentsUpload, /\/api\/projects\/\$\{projectSelect\.value\}\/document-sort-batches/, 'documents upload reuses the secured project batch upload API');
+assert.match(documentsUpload, /UploadQueue client:load baseUrl=\{`\/api\/projects\//, 'documents upload uses the secured direct upload controller');
 assert.match(documentsPage, /Astro\.redirect\('\/projects'\)/, 'global Documents page redirects to projects while documents live inside project records');
-assert.match(documentsUpload, /This upload is locked to the current project/, 'project-scoped uploads do not ask the user to choose the same project again');
+assert.match(documentsUpload, /!isProjectScoped && <form/, 'project-scoped uploads do not ask the user to choose the same project again');
 assert.match(createRoute, /submittedReturnTo === 'document-folder' \|\| submittedReturnTo === 'project-detail'/, 'batch upload preserves project-detail return routing');
 assert.match(acceptRoute, /body\.returnTo === 'project-detail'/, 'accept route recognises project-detail return routing');
 assert.match(acceptRoute, /#documents/, 'saving a project-scoped review returns to the project documents section');
 assert.match(documentFolder, /where:\s*\{\s*id:\s*projectId,\s*organisationId:\s*auth\.organisation\.id\s*\}/s, 'project document folder access is organisation scoped');
 assert.match(documentFolderApi, /requireProjectAccess\(organisation\.id,\s*projectId\)/, 'lazy project document folder endpoint checks project ownership');
-assert.match(documentFolder, /data-action=\{`\/api\/projects\/\$\{project\.id\}\/document-sort-batches`\}/, 'project document folder reuses the secured project batch upload API');
+assert.match(documentFolder, /UploadQueue client:load baseUrl=\{`\/api\/projects\/\$\{project\.id\}\/documents`\}/, 'project document folder uses secured direct transfers');
 assert.match(createRoute, /await requireProjectAccess\(organisation\.id,\s*projectId\)/, 'uploading from documents requires valid project membership through project access');
 assert.match(acceptRoute, /submittedIds\.size !== batch\.items\.length/, 'saving requires the complete reviewed document list');
 assert.match(acceptRoute, /data:\s*\{\s*status:\s*DocumentSortBatchStatus\.ACCEPTED\s*\}/s, 'a complete review is accepted atomically');

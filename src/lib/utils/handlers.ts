@@ -19,7 +19,10 @@ export const withErrorHandling = async (fn: () => Promise<Response>, context?: A
       return await fn();
     } catch (error) {
       if (error instanceof HttpError) {
-        return jsonResponse(error.status, { error: error.message, details: error.details ?? null });
+        const response = jsonResponse(error.status, { error: error.message, details: error.details ?? null });
+        const seconds = (error.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds;
+        if (seconds) response.headers.set('Retry-After', String(Math.ceil(seconds)));
+        return response;
       }
 
       if (error instanceof ZodError) {
