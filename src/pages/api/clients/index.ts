@@ -13,9 +13,10 @@ import { requireOrganisation } from '@/server/permissions/authz';
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
     const { organisation, membership } = await requireOrganisation(context);
+    const search = context.url.searchParams.get('q')?.trim().slice(0, 120);
     const clients = await withPerf('api.clients.list', () =>
       prisma.client.findMany({
-        where: { organisationId: organisation.id },
+        where: { organisationId: organisation.id, ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' as const } }, { email: { contains: search, mode: 'insensitive' as const } }] } : {}) },
         select: {
           id: true,
           name: true,

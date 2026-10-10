@@ -1,9 +1,15 @@
-import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import AddressSearchForm from '@/components/addresses/AddressSearchForm';
+import SiteAuthorities from '@/components/addresses/SiteAuthorities';
 import EditDrawer from '@/components/ui/EditDrawer';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
 export type DirectoryRecord = Record<string, any>;
+const closeForm = (event: React.MouseEvent<HTMLButtonElement>, onClose: () => void) => {
+  const drawer = event.currentTarget.closest('dialog.edit-drawer');
+  if (drawer) drawer.dispatchEvent(new Event('portal:drawer-close', { bubbles: true }));
+  else onClose();
+};
 
 export function DirectoryDrawer({
   title,
@@ -52,7 +58,7 @@ export function ClientForm({
       <details className="rounded-md border border-stone-200 p-3"><summary className="cursor-pointer text-sm font-semibold">Legacy address</summary><textarea name="address" rows={3} defaultValue={client?.address ?? ''} className="field mt-3" placeholder="Used only by older project records" /></details>
       <label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={client?.notes ?? ''} className="field" placeholder="Add any notes about this client" /></label></>}
       <button className="btn btn-primary w-full">{submitLabel}</button>
-      <button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button>
+      <button type="button" className="btn btn-secondary w-full" onClick={event => closeForm(event, onClose)}>Cancel</button>
       <p data-form-status className="text-sm text-stone-500" />
     </form>
   );
@@ -60,7 +66,7 @@ export function ClientForm({
 
 export function SiteForm({ site, onClose, compact = false, submitLabel = 'Save site' }: { site?: DirectoryRecord; onClose: () => void; compact?: boolean; submitLabel?: string }) {
   const editing = Boolean(site?.id);
-  return <form data-api-form data-field-errors data-action={editing ? `/api/sites/${site?.id}` : '/api/sites'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><label className="block"><span className="label">Building number</span><input required name="buildingNumber" maxLength={40} defaultValue={site?.buildingNumber ?? ''} className="field" placeholder="Enter building number" /></label><label className="block"><span className="label">Address line 1</span><input required name="addressLine1" defaultValue={site?.addressLine1 ?? ''} className="field" placeholder="Enter street or address line 1" /></label>{!compact && <label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={site?.addressLine2 ?? ''} className="field" placeholder="Enter address line 2" /></label>}<div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Town/city</span><input required name="townCity" defaultValue={site?.townCity ?? ''} className="field" placeholder="Town or city" /></label><label className="block"><span className="label">Postcode</span><input required name="postcode" defaultValue={site?.postcode ?? ''} className="field" placeholder="Postcode" /></label></div>{!compact && <><label className="block"><span className="label">Local authority</span><input name="localAuthority" defaultValue={site?.localAuthority ?? ''} className="field" placeholder="Local authority" /></label><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={site?.notes ?? ''} className="field" placeholder="Add any notes about this site" /></label></>}<button className="btn btn-primary w-full">{submitLabel}</button><button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
+  return <form data-api-form data-field-errors data-action={editing ? `/api/sites/${site?.id}` : '/api/sites'} data-method={editing ? 'PATCH' : 'POST'} className="grid gap-4"><AddressSearchForm /><label className="block"><span className="label">Building number / flat</span><input name="buildingNumber" maxLength={40} defaultValue={site?.buildingNumber ?? ''} className="field" placeholder="Enter building number" /></label><label className="block"><span className="label">Address line 1</span><input required name="addressLine1" defaultValue={site?.addressLine1 ?? ''} className="field" placeholder="Enter street or address line 1" /></label>{!compact && <label className="block"><span className="label">Address line 2</span><input name="addressLine2" defaultValue={site?.addressLine2 ?? ''} className="field" placeholder="Enter address line 2" /></label>}<div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="label">Town/city</span><input required name="townCity" defaultValue={site?.townCity ?? ''} className="field" placeholder="Town or city" /></label><label className="block"><span className="label">Postcode</span><input required name="postcode" defaultValue={site?.postcode ?? ''} className="field" placeholder="Postcode" /></label></div>{!compact && <><label className="block"><span className="label">Local authority</span><input name="localAuthority" defaultValue={site?.localAuthority ?? ''} className="field" placeholder="Local authority" /></label><SiteAuthorities site={site} /><label className="block"><span className="label">Notes</span><textarea name="notes" rows={4} defaultValue={site?.notes ?? ''} className="field" placeholder="Add any notes about this site" /></label></>}<button className="btn btn-primary w-full">{submitLabel}</button><button type="button" className="btn btn-secondary w-full" onClick={event => closeForm(event, onClose)}>Cancel</button><p data-form-status className="text-sm text-stone-500" /></form>;
 }
 
 export function AgentDefaultsForm({
@@ -92,7 +98,7 @@ export function AgentDefaultsForm({
     </section>
     {canManage && <button className={`btn btn-primary ${compact ? 'w-full' : 'justify-self-start'}`}>{submitLabel}</button>}
     {!canManage && <p className="text-sm text-stone-500">An organisation owner or admin can update these details.</p>}
-    {onClose && <button type="button" className="btn btn-secondary w-full" onClick={onClose}>Cancel</button>}
+    {onClose && <button type="button" className="btn btn-secondary w-full" onClick={event => closeForm(event, onClose)}>Cancel</button>}
     <p data-form-status className="text-sm text-stone-500" />
   </form>;
 }

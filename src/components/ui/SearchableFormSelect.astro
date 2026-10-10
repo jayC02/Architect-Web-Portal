@@ -1,0 +1,47 @@
+---
+interface Props { label: string; name: string; options: Array<{ value: string; label: string; projectName?: string }>; value?: string | null; clients?: boolean; addRecord?: string }
+const { label, name, options, value = '', clients = false, addRecord } = Astro.props;
+---
+<div data-searchable-select data-clients={clients ? 'true' : undefined} class="space-y-2 min-w-0">
+  <label class="block"><span class="label">Search {label.toLowerCase()}</span><input type="search" class="field" data-record-search placeholder="Search by name or address" /></label>
+  <label class="block"><span class="label">{label}</span><select name={name} class="field" data-client-select={clients || undefined} data-site-select={!clients || undefined}>
+    <option value="">Not linked</option>
+    {options.map(option => <option value={option.value} selected={option.value === value} data-project-name={option.projectName}>{option.label}</option>)}
+    {addRecord && <option value={`__add_${addRecord}__`}>+ Add a new {addRecord}</option>}
+  </select></label>
+  <p data-search-status role="status" class="text-xs text-stone-600"></p>
+</div>
+<script>
+  document.querySelectorAll<HTMLElement>('[data-searchable-select]').forEach(wrapper => {
+    const search = wrapper.querySelector<HTMLInputElement>('[data-record-search]')!;
+    const select = wrapper.querySelector('select')!;
+    const status = wrapper.querySelector<HTMLElement>('[data-search-status]')!;
+    let timer: ReturnType<typeof setTimeout>;
+    let request: AbortController | undefined;
+    search.addEventListener('input', () => {
+      clearTimeout(timer); request?.abort();
+      const query = search.value.trim().toLowerCase();
+      for (const option of select.options) option.hidden = Boolean(option.value && option.value !== select.value && !option.value.startsWith('__add_') && !option.text.toLowerCase().includes(query));
+      if (wrapper.dataset.clients !== 'true') return;
+      timer = setTimeout(async () => {
+        const controller = new AbortController(); request = controller;
+        try {
+          const response = await fetch(`/api/clients?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+          if (!response.ok) throw new Error();
+          const data = await response.json();
+          if (controller.signal.aborted || query !== search.value.trim().toLowerCase()) return;
+          const selected = select.selectedOptions[0]?.cloneNode(true) as HTMLOptionElement | undefined;
+          const selectedValue = select.value;
+          const add = Array.from(select.options).find(option => option.value.startsWith('__add_'));
+          const records = data.clients.map((client: { id: string; name: string; email?: string }) => new Option([client.name, client.email].filter(Boolean).join(' · '), client.id));
+          select.replaceChildren(new Option('Not linked', ''), ...records);
+          if (selectedValue && selected && !records.some((option: HTMLOptionElement) => option.value === selectedValue)) select.append(selected);
+          if (add && !Array.from(select.options).some(option => option.value === add.value)) select.append(add);
+          select.value = selectedValue;
+          status.textContent = records.length ? '' : 'No matching clients. The current selection is kept.';
+        } catch { if (!controller.signal.aborted) status.textContent = 'Search unavailable. Current records are still available.'; }
+      }, 300);
+    });
+    window.addEventListener('pagehide', () => { clearTimeout(timer); request?.abort(); }, { once: true });
+  });
+</script>

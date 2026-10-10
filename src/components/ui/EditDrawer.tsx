@@ -25,13 +25,17 @@ export default function EditDrawer({ title, description, children, onClose }: {
     };
     const saved = (event: Event) => {
       const action = (event as CustomEvent).detail?.action;
+      if (typeof action !== 'string') return;
       if (Array.from(dialog.current?.querySelectorAll('form') ?? []).some(form => form.dataset.action === action)) dirty.current = false;
     };
+    const requestedClose = (event: Event) => { event.stopPropagation(); close(); };
+    dialog.current?.addEventListener('portal:drawer-close', requestedClose);
     window.addEventListener('beforeunload', beforeUnload);
     window.addEventListener('portal:mutation-success', saved);
     return () => {
       window.removeEventListener('beforeunload', beforeUnload);
       window.removeEventListener('portal:mutation-success', saved);
+      dialog.current?.removeEventListener('portal:drawer-close', requestedClose);
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
