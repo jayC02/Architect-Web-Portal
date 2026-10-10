@@ -556,6 +556,7 @@ model Organisation {
   xeroContacts          XeroContactSnapshot[]
   xeroClientLinks       XeroClientLink[]
   xeroInvoices          XeroInvoiceSnapshot[]
+  xeroCreditNotes       XeroCreditNoteSnapshot[]
   xeroPayments          XeroPaymentSnapshot[]
   xeroProjectLinks      XeroProjectInvoiceLink[]
   xeroReports           XeroReportSnapshot[]
@@ -680,6 +681,15 @@ model Site {
   townCity       String
   postcode       String
   localAuthority String?
+  uprn                       String?
+  addressProvider            String?
+  addressVerifiedAt          DateTime?
+  addressProvenance          Json?
+  administrativeAuthority   String?
+  planningAuthority         String?
+  buildingStandardsAuthority String?
+  authorityVerification     String @default("legacy-unverified")
+  nationalPark              String?
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -965,6 +975,8 @@ model ApplicationDraft {
   confirmedData            Json?
   unresolvedQuestions      Json?
   analysisSummary          Json?
+  documentSetRevision      Int                    @default(0)
+  reviewRevision           Int                    @default(0)
   expiresAt                DateTime
   committedAt              DateTime?
   resultingProjectId       String?
@@ -984,6 +996,62 @@ model ApplicationDraft {
   @@index([resultingProjectId])
 }
 
+model UploadRateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}
+
+model DocumentProcessingJob {
+  id                  String   @id @default(cuid())
+  organisationId      String
+  draftId             String?
+  draftDocumentId     String?
+  projectDocumentId   String?
+  kind                String   @default("DOCUMENT")
+  idempotencyKey      String   @unique
+  processingVersion   String
+  documentSetRevision Int?
+  reviewRevision      Int?
+  state               String   @default("WAITING")
+  attempts            Int      @default(0)
+  nextAttemptAt       DateTime @default(now())
+  leaseOwner          String?
+  leaseGeneration     Int      @default(0)
+  leaseExpiresAt      DateTime?
+  failureCode         String?
+  failureMessage      String?
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([state, nextAttemptAt, leaseExpiresAt])
+  @@index([organisationId, state, leaseExpiresAt])
+  @@index([draftId, documentSetRevision])
+}
+
+model ProjectUploadIntent {
+  id                 String   @id @default(cuid())
+  organisationId     String
+  projectId          String
+  userId             String
+  identity           String
+  originalFilename   String
+  mimeType           String
+  sizeBytes          Int
+  clientSha256       String
+  storageKey         String
+  metadata           Json?
+  status             String   @default("UPLOADING")
+  projectDocumentId  String?
+  cancelledAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([projectId, identity])
+  @@index([organisationId, status])
+}
+
 model ApplicationDraftDocument {
   id                    String                               @id @default(cuid())
   draftId               String
@@ -997,6 +1065,7 @@ model ApplicationDraftDocument {
   uploadIntentKey       String
   uploadStatus          ApplicationDraftDocumentUploadStatus @default(UPLOADING)
   finalisedAt           DateTime?
+  cancelledAt           DateTime?
   analysisStatus        ApplicationDraftDocumentStatus       @default(PENDING)
   analysisVersion       String?
   analysisProvider      String?
@@ -1357,6 +1426,7 @@ model XeroConnection {
   contacts            XeroContactSnapshot[]
   clientLinks         XeroClientLink[]
   invoices            XeroInvoiceSnapshot[]
+  creditNotes         XeroCreditNoteSnapshot[]
   payments            XeroPaymentSnapshot[]
   projectInvoiceLinks XeroProjectInvoiceLink[]
   reports             XeroReportSnapshot[]
@@ -1436,6 +1506,11 @@ model ProjectFeePlan {
   name            String
   currency        String
   active          Boolean  @default(true)
+  agreedAmount    Decimal? @db.Decimal(18, 2)
+  vatTreatment    String   @default("LEGACY_UNKNOWN")
+  vatRate         Decimal? @db.Decimal(5, 2)
+  revision        Int      @default(0)
+  notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1444,10 +1519,24 @@ model ProjectFeePlan {
   template     FeePlanTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
   createdBy    User                  @relation("ProjectFeePlanCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   milestones   ProjectFeeMilestone[]
+  revisions    ProjectFeeRevision[]
 
   @@index([organisationId, active])
   @@index([templateId])
   @@index([createdByUserId])
+}
+
+model ProjectFeeRevision {
+  id                String   @id @default(cuid())
+  projectFeePlanId  String
+  revision          Int
+  changedByUserId   String
+  before            Json?
+  after             Json
+  createdAt         DateTime @default(now())
+
+  projectFeePlan ProjectFeePlan @relation(fields: [projectFeePlanId], references: [id], onDelete: Restrict)
+  @@unique([projectFeePlanId, revision])
 }
 
 model ProjectFeeMilestone {
@@ -1458,6 +1547,8 @@ model ProjectFeeMilestone {
   label                  String
   triggerEventType       LifecycleEventType?
   amount                 Decimal                  @db.Decimal(18, 2)
+  scheduleBasis          String                   @default("FIXED")
+  percentage             Decimal?                 @db.Decimal(7, 4)
   currency               String
   invoiceDescription     String
   enabled                Boolean                  @default(true)
@@ -1596,6 +1687,8 @@ model XeroInvoiceSnapshot {
   total          Decimal   @db.Decimal(18, 2)
   amountPaid     Decimal   @db.Decimal(18, 2)
   amountDue      Decimal   @db.Decimal(18, 2)
+  amountCredited Decimal?  @db.Decimal(18, 2)
+  netCredited    Decimal?  @db.Decimal(18, 2)
   xeroUpdatedAt  DateTime?
   syncedAt       DateTime  @default(now())
   createdAt      DateTime  @default(now())
@@ -1610,6 +1703,24 @@ model XeroInvoiceSnapshot {
   @@index([organisationId, status, dueDate])
   @@index([organisationId, xeroContactId])
   @@index([organisationId, invoiceDate])
+}
+
+model XeroCreditNoteSnapshot {
+  id             String   @id @default(cuid())
+  organisationId String
+  connectionId   String
+  xeroCreditNoteId String
+  status         String
+  currency       String
+  subtotal       Decimal  @db.Decimal(18, 2)
+  totalTax       Decimal  @db.Decimal(18, 2)
+  total          Decimal  @db.Decimal(18, 2)
+  allocations    Json
+  syncedAt       DateTime @default(now())
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  connection XeroConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@unique([connectionId, xeroCreditNoteId])
+  @@index([organisationId, connectionId])
 }
 
 model XeroPaymentSnapshot {
