@@ -1,4 +1,4 @@
-﻿---
+---
 import {
   ActionItemStatus,
   ActionItemKind,
@@ -8,13 +8,16 @@ import {
   DocumentType,
   ProjectStage,
   ProjectStatus,
-  Prisma,
+
 } from '@prisma/client';
 import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, FileText, Inbox, Pencil, Upload, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
 import ProjectFees from '@/components/projects/ProjectFees.astro';
+import { loadProjectFinance } from '@/server/services/project-finance.service';
+import { loadProjectReadiness } from '@/server/services/project-readiness.service';
 import ProjectLinkedRecordEditor from '@/components/projects/ProjectLinkedRecordEditor';
+import SearchableFormSelect from '@/components/ui/SearchableFormSelect.astro';
 import { prisma } from '@/lib/db/prisma';
 import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
@@ -69,7 +72,7 @@ const [
   prisma.projectDocument.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, originalName: true, type: true, status: true, revision: true, notes: true, sizeBytes: true, createdAt: true },
+    select: { id: true, originalName: true, type: true, status: true, revision: true, notes: true, sizeBytes: true, createdAt: true, analysisStatus: true },
   }),
   prisma.planningApplication.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
@@ -148,44 +151,8 @@ const [projectFeePlan, feePlanTemplates] = canViewFinance ? await Promise.all([
 const organisationDefaults = await prisma.organisationDefaults.findUnique({
   where: { organisationId: auth.organisation.id },
 });
-const agreedFeeTotal = projectFeePlan?.milestones
-  .filter((milestone) => milestone.enabled && milestone.state !== 'WAIVED')
-  .reduce((total, milestone) => total.plus(milestone.amount), new Prisma.Decimal(0)) ?? null;
-const projectFinance = canViewFinance ? await (async () => {
-  const connection = await prisma.xeroConnection.findUnique({ where: { organisationId: auth.organisation.id } });
-  if (!connection) return null;
-  const clientLink = project.clientId ? await prisma.xeroClientLink.findUnique({ where: { clientId: project.clientId } }) : null;
-  const [links, candidates] = await Promise.all([
-    prisma.xeroProjectInvoiceLink.findMany({
-      where: { organisationId: auth.organisation.id, projectId: project.id },
-      include: { invoice: true },
-      orderBy: { linkedAt: 'desc' },
-    }),
-    prisma.xeroInvoiceSnapshot.findMany({
-      where: {
-        organisationId: auth.organisation.id,
-        invoiceType: 'ACCREC',
-        ...(clientLink ? { xeroContactId: clientLink.xeroContactId } : {}),
-        projectLinks: { none: {} },
-      },
-      orderBy: { invoiceDate: 'desc' },
-      take: 100,
-    }),
-  ]);
-  const totals = links.reduce((result, link) => {
-    const currency = link.invoice.currency;
-    const current = result.get(currency) ?? { invoiced: new Prisma.Decimal(0), paid: new Prisma.Decimal(0), outstanding: new Prisma.Decimal(0), overdue: new Prisma.Decimal(0) };
-    if (['AUTHORISED', 'PAID'].includes(link.invoice.status)) {
-      current.invoiced = current.invoiced.plus(link.invoice.total);
-      current.paid = current.paid.plus(link.invoice.amountPaid);
-      current.outstanding = current.outstanding.plus(link.invoice.amountDue);
-      if (link.invoice.dueDate && link.invoice.dueDate < new Date() && link.invoice.amountDue.greaterThan(0)) current.overdue = current.overdue.plus(link.invoice.amountDue);
-    }
-    result.set(currency, current);
-    return result;
-  }, new Map<string, { invoiced: Prisma.Decimal; paid: Prisma.Decimal; outstanding: Prisma.Decimal; overdue: Prisma.Decimal }>());
-  return { connection, links, candidates, clientLink, totals };
-})() : null;
+const agreedFeeTotal = projectFeePlan?.agreedAmount ?? null;
+const projectFinance = canViewFinance ? await loadProjectFinance(auth.organisation.id, project, projectFeePlan) : null;
 
 
 const documentCount = documentStats.reduce((total, group) => total + group._count._all, 0);
@@ -224,6 +191,8 @@ const warrantDocumentCount = documentStats
   .reduce((total, group) => total + group._count._all, 0);
 const latestPlanning = planningApplications[0] ?? null;
 const latestWarrant = warrantApplications[0] ?? null;
+const processingJobs = await prisma.documentProcessingJob.findMany({ where: { organisationId: auth.organisation.id, projectDocumentId: { in: projectDocuments.map(document => document.id) }, state: { in: ['WAITING', 'RUNNING', 'RETRYING', 'FAILED'] } }, select: { state: true } });
+const readiness = await loadProjectReadiness({ organisationId: auth.organisation.id, organisationName: auth.organisation.name, projectId: project.id, clientLinked: Boolean(project.clientId), siteLinked: Boolean(project.siteId), createdBy: { id: auth.user.id, name: auth.user.name, email: auth.user.email }, ...(latestPlanning ? { planningApplicationId: latestPlanning.id } : {}), ...(latestWarrant ? { buildingWarrantApplicationId: latestWarrant.id } : {}), processing: processingJobs });
 const nextDeadline = deadlines.find((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED) ?? null;
 const desktopContextBase = {
   organisationId: auth.organisation.id,
@@ -297,6 +266,10 @@ const clientEditorRecord = project.client ? {
   notes: project.client.notes,
 } : null;
 const siteEditorRecord = project.site ? {
+  planningAuthority: project.site.planningAuthority,
+  buildingStandardsAuthority: project.site.buildingStandardsAuthority,
+  administrativeAuthority: project.site.administrativeAuthority,
+  authorityVerification: project.site.authorityVerification,
   id: project.site.id,
   buildingNumber: project.site.buildingNumber,
   addressLine1: project.site.addressLine1,
@@ -352,13 +325,14 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
 <AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <header class="mb-6">
     <a href="/projects" class="inline-flex items-center gap-1.5 text-sm font-semibold text-moss hover:text-ink"><ArrowLeft size={15} aria-hidden="true" />Back to projects</a>
-    <div class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div class="min-w-0">
-        <h1 class="break-words text-3xl font-semibold leading-tight text-ink sm:text-4xl">{project.name}</h1>
+        <h1 class="break-words text-2xl font-semibold leading-tight text-ink sm:text-3xl">{project.name}</h1>
+        <p class="mt-1 text-xs font-semibold text-moss">{humanizeEnum(project.status)} · {humanizeEnum(project.stage)}</p>
         <p data-project-site-summary data-project-site-id={project.siteId ?? ''} class="mt-2 text-base leading-6 text-stone-500">{siteSummary}</p>
         {project.internalReference && <p class="mt-1 text-xs font-semibold text-stone-400">Reference {project.internalReference}</p>}
       </div>
-      <button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button>
+      <div class="flex flex-wrap gap-2"><a href={nextAction.href} class="btn btn-primary">{nextAction.label}</a><button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button></div>
     </div>
   </header>
 
@@ -397,6 +371,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
     </div>
   </section>
 
+
+  <section aria-label="Project readiness" class="panel mt-5 rounded-lg p-4"><h2 class="font-semibold">Preparation readiness</h2><ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{readiness.filter(item => canViewFinance || item.label !== 'Project finances').map(item => <li><a class="block rounded-md border border-stone-200 p-3 hover:border-moss focus-visible:ring-2 focus-visible:ring-moss" href={item.href}><span class="flex flex-wrap justify-between gap-2 text-sm font-semibold"><span>{item.label}</span><span class={item.state === 'Blocked' ? 'text-red-800' : 'text-moss'}>{item.state}</span></span><span class="mt-1 block text-xs leading-5 text-stone-600">{item.detail}</span></a></li>)}</ul></section>
 
   <section id="applications" aria-labelledby="applications-heading" class="mt-8">
     <div class="mb-4">
@@ -495,9 +471,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
     </section>
   </div>
 
-  <div id="project-details" data-project-edit-panel hidden class="fixed inset-0 z-50">
-    <button type="button" data-project-edit-close aria-label="Close project details" class="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]"></button>
-    <aside role="dialog" aria-modal="true" aria-labelledby="project-edit-title" class="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col border-l border-stone-200 bg-white shadow-2xl">
+  <dialog id="project-details" data-project-edit-panel aria-labelledby="project-edit-title" class="edit-drawer">
+    <div class="flex min-h-0 flex-col">
       <div class="flex items-start justify-between gap-4 border-b border-stone-100 p-5 sm:p-6">
         <div>
           <h2 id="project-edit-title" class="text-xl font-semibold text-ink">Edit project details</h2>
@@ -514,8 +489,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
             <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
             <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>
           </div>
-          <label class="block"><span class="label">Client</span><select name="clientId" class="field"><option value="">Not linked</option>{clients.map((client) => <option value={client.id} selected={client.id === project.clientId}>{client.name}</option>)}</select></label>
-          <label class="block"><span class="label">Linked site</span><select name="siteId" class="field"><option value="">Not linked</option>{sites.map((site) => <option value={site.id} selected={site.id === project.siteId}>{site.addressLine1}, {site.postcode}</option>)}</select></label>
+          <SearchableFormSelect label="Client" name="clientId" clients value={project.clientId} options={clients.map(client => ({ value: client.id, label: client.name }))} />
+          <SearchableFormSelect label="Linked site" name="siteId" value={project.siteId} options={sites.map(site => ({ value: site.id, label: [site.addressLine1, site.postcode].filter(Boolean).join(', ') }))} />
           <label class="block"><span class="label">Local authority</span><input name="localAuthority" value={project.localAuthority ?? ''} class="field" /></label>
           <label class="block"><span class="label">Manual site address</span><input name="siteAddress" value={project.siteAddress ?? ''} class="field" /></label>
           <div class="mt-2 grid gap-2">
@@ -525,8 +500,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
           </div>
         </form>
       </div>
-    </aside>
-  </div>
+    </div>
+  </dialog>
 
   <section id="documents" class="panel mt-8 scroll-mt-24 rounded-lg p-4 sm:p-5">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -555,7 +530,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
               </div>
               <p class="hidden truncate text-sm text-stone-600 md:block">{documentTypeLabel(document.type)} &middot; {document.revision ? `Rev ${document.revision}` : 'No version'}</p>
               <p class="hidden text-sm text-stone-600 md:block">{formatBytes(document.sizeBytes)}</p>
-              <span class:list={['justify-self-end rounded px-2 py-1 text-xs font-semibold md:justify-self-start', document.status === DocumentStatus.APPROVED ? 'bg-moss/10 text-moss' : 'bg-stone-100 text-stone-700']}>{humanizeEnum(document.status)}</span>
+              <div class="justify-self-end md:justify-self-start"><span class:list={['rounded px-2 py-1 text-xs font-semibold', document.status === DocumentStatus.APPROVED ? 'bg-moss/10 text-moss' : 'bg-stone-100 text-stone-700']}>{humanizeEnum(document.status)}</span>{document.analysisStatus === 'FAILED' && <form class="mt-2" data-api-form data-action={`/api/documents/${document.id}/analysis`} data-method="POST" data-redirect="reload"><button class="text-xs font-semibold text-moss underline" aria-label={`Retry analysis of ${document.originalName}`}>Retry analysis</button><span data-form-status class="block text-xs text-stone-500" aria-live="polite"></span></form>}</div>
               <form class="col-start-2 justify-self-end md:col-auto md:justify-self-auto" data-api-form data-action={`/api/documents/${document.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Remove ${document.originalName} from this project?`}>
                 <button type="submit" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-stone-400 opacity-100 transition hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 md:opacity-0 md:group-hover:opacity-100" aria-label={`Remove ${document.originalName}`}><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
               </form>
@@ -632,19 +607,26 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
 
     const editToggle = document.querySelector('[data-project-edit-toggle]');
     const editPanel = document.querySelector('[data-project-edit-panel]');
+    let projectEditInitial = '';
+    const editForm = editPanel?.querySelector('form');
+    const formValue = () => editForm ? JSON.stringify([...new FormData(editForm).entries()]) : '';
+    const projectDirty = () => editPanel instanceof HTMLDialogElement && editPanel.open && formValue() !== projectEditInitial;
     const setProjectEditOpen = (open: boolean) => {
-      if (!(editPanel instanceof HTMLElement)) return;
-      editPanel.hidden = !open;
+      if (!(editPanel instanceof HTMLDialogElement)) return;
+      if (!open && projectDirty() && !window.confirm('Discard your unsaved changes?')) return;
       editToggle?.setAttribute('aria-expanded', String(open));
       document.documentElement.classList.toggle('overflow-hidden', open);
-      if (open) window.setTimeout(() => editPanel.querySelector('input')?.focus(), 100);
-      else if (editToggle instanceof HTMLElement) editToggle.focus();
+      if (open) { projectEditInitial = formValue(); editPanel.showModal(); }
+      else { editForm?.reset(); editPanel.close(); if (editToggle instanceof HTMLElement) editToggle.focus(); }
     };
+    const openProjectAnchor = () => { if (window.location.hash === '#project-details') setProjectEditOpen(true); };
+    openProjectAnchor(); window.addEventListener('hashchange', openProjectAnchor);
     editToggle?.addEventListener('click', () => setProjectEditOpen(true));
-    editPanel?.querySelectorAll('[data-project-edit-close]').forEach((button) => button.addEventListener('click', () => setProjectEditOpen(false)));
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && editPanel instanceof HTMLElement && !editPanel.hidden) setProjectEditOpen(false);
-    });
+    editPanel?.querySelectorAll('[data-project-edit-close]').forEach(button => button.addEventListener('click', () => setProjectEditOpen(false)));
+    editPanel?.addEventListener('cancel', event => { event.preventDefault(); setProjectEditOpen(false); });
+    editPanel?.addEventListener('click', event => { if (event.target === editPanel) setProjectEditOpen(false); });
+    window.addEventListener('beforeunload', event => { if (projectDirty()) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('portal:mutation-success', event => { if ((event as CustomEvent).detail?.action === editForm?.dataset.action) projectEditInitial = formValue(); });
 
     const documentsExpand = document.querySelector('[data-documents-expand]');
     const extraDocuments = [...document.querySelectorAll('[data-document-extra]')];

@@ -35,7 +35,7 @@ export default function AutomationLaunchButton({ projectId, type, planningApplic
 
   return (
     <div className={className}>
-      <button type="button" className="btn btn-primary gap-2" disabled={working} onClick={() => void open()}>
+      <button type="button" className="btn btn-primary max-w-full whitespace-normal gap-2" disabled={working} onClick={() => void open()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
         {working ? 'Preparing application...' : label}
       </button>
@@ -63,7 +63,7 @@ export function ExistingAutomationJobButton({ jobId, label = 'Open in desktop ap
 
   return (
     <div>
-      <button type="button" className="btn btn-primary gap-2" disabled={working} onClick={() => void open()}>
+      <button type="button" className="btn btn-primary max-w-full whitespace-normal gap-2" disabled={working} onClick={() => void open()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
         {working ? 'Opening...' : label}
       </button>
@@ -109,7 +109,7 @@ export function RunAutomationJobButton({ jobId }: { jobId: string }) {
 
   return (
     <div>
-      <button type="button" className="btn btn-primary gap-2" disabled={working || queued} onClick={() => void run()}>
+      <button type="button" className="btn btn-primary max-w-full whitespace-normal gap-2" disabled={working || queued} onClick={() => void run()}>
         {working ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
         {working ? 'Authorising...' : queued ? 'Application queued' : 'Run application'}
       </button>

@@ -135,7 +135,7 @@ const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-m
   </div>
 
   <form method="GET" class="panel mb-5 rounded-lg p-4">
-    <div class="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_180px_180px_170px_auto] lg:items-end">
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] sm:items-end">
       <label class="block">
         <span class="label">Search</span>
         <input name="q" value={query} class="field h-11" placeholder="Project, reference, client or address" />
@@ -173,76 +173,35 @@ const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-m
 
   {projectRows.length ? (
     <section class="panel overflow-hidden rounded-lg">
-      <div class="hidden border-b border-stone-200 bg-stone-50/70 px-4 py-3 text-xs font-semibold uppercase text-stone-500 lg:grid lg:grid-cols-[minmax(260px,1.35fr)_minmax(150px,0.75fr)_130px_minmax(190px,1fr)_145px_150px_125px_90px] lg:items-center lg:gap-4">
-        <span>Project</span>
-        <span>Client</span>
-        <span>Stage</span>
-        <span>Next action</span>
-        <span>Deadline</span>
-        <span>Documents</span>
-        <span>Automation</span>
-        <span class="text-right">Action</span>
+      <div class="hidden border-b border-stone-200 bg-stone-50/70 px-4 py-3 text-xs font-semibold uppercase text-stone-500 xl:grid xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_70px] xl:gap-4">
+        <span>Project / client</span><span>Status / deadline</span><span>Next action</span><span class="text-right">Open</span>
       </div>
-
       <div class="divide-y divide-stone-100">
         {projectRows.map((project) => {
           const deadlineIsOverdue = project.nextDeadline ? isProjectDateOverdue(project.nextDeadline.dueDate) : false;
           return (
-            <article class="grid gap-4 px-4 py-4 transition hover:bg-stone-50/70 lg:grid-cols-[minmax(260px,1.35fr)_minmax(150px,0.75fr)_130px_minmax(190px,1fr)_145px_150px_125px_90px] lg:items-center lg:gap-4">
+            <article class="grid min-w-0 gap-4 px-4 py-4 transition hover:bg-stone-50/70 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_70px] xl:items-center">
               <div class="min-w-0">
-                <a href={`/projects/${project.id}`} class="block truncate text-base font-semibold text-ink hover:underline">{project.name}</a>
-                <p class="mt-1 truncate text-sm text-stone-500">{project.siteSummary}{project.internalReference ? <span> &middot; Ref {project.internalReference}</span> : null}</p>
+                <a href={`/projects/${project.id}`} class="block break-words text-base font-semibold text-ink hover:underline">{project.name}</a>
+                <p class="mt-1 break-words text-sm text-stone-600">{project.client?.name ?? 'Client not linked'}</p>
+                <p class="mt-1 break-words text-xs text-stone-500">{project.siteSummary}{project.internalReference ? <span> &middot; Ref {project.internalReference}</span> : null}</p>
               </div>
-
               <div class="min-w-0">
-                <p class="label lg:hidden">Client</p>
-                <p class="truncate text-sm text-stone-700">{project.client?.name ?? 'Not linked'}</p>
-              </div>
-
-              <div>
-                <p class="label lg:hidden">Status / stage</p>
                 <div class="flex items-center gap-2 text-sm text-stone-700">
                   <span class={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(project.status)}`}></span>
                   <span>{humanizeEnum(project.status)}</span>
                 </div>
                 <p class="mt-1 text-xs text-stone-500">{humanizeEnum(project.stage)}</p>
+                {project.nextDeadline ? <p class={`mt-2 break-words text-xs ${deadlineIsOverdue ? 'text-red-800' : 'text-stone-500'}`}>{formatDate(project.nextDeadline.dueDate)} &middot; {project.nextDeadline.title}</p> : <p class="mt-2 text-xs text-stone-500">No upcoming deadline</p>}
               </div>
-
               <div class="min-w-0">
-                <p class="label lg:hidden">Next action</p>
-                <a href={project.nextAction.href} class={`block truncate text-sm font-semibold hover:underline ${actionTextClass(project.nextAction.tone)}`}>{project.nextAction.label}</a>
-                <p class="mt-1 text-xs text-stone-500">Based on current records</p>
+                <a href={project.nextAction.href} class={`block break-words text-sm font-semibold hover:underline ${actionTextClass(project.nextAction.tone)}`}>{project.nextAction.label}</a>
+                <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <a href={`/projects/${project.id}/files`} class={`hover:underline ${attentionTextClass(project.documentReviewCount)}`}>{project.documentReviewCount > 0 ? `${project.documentReviewCount} documents need review` : 'Documents reviewed'}</a>
+                  <a href={`/automation-jobs?projectId=${project.id}`} class={`hover:underline ${automationTextClass(project.readyAutomationJobCount)}`}>{project.readyAutomationJobCount > 0 ? `${project.readyAutomationJobCount} automation jobs ready` : 'None ready'}</a>
+                </div>
               </div>
-
-              <div>
-                <p class="label lg:hidden">Deadline</p>
-                {project.nextDeadline ? (
-                  <>
-                    <p class={`truncate text-sm font-medium ${deadlineIsOverdue ? 'text-red-800' : 'text-stone-700'}`}>{formatDate(project.nextDeadline.dueDate)}</p>
-                    <p class="mt-1 truncate text-xs text-stone-500">{project.nextDeadline.title}</p>
-                  </>
-                ) : (
-                  <p class="text-sm text-stone-500">No upcoming deadline</p>
-                )}
-              </div>
-
-              <div>
-                <p class="label lg:hidden">Documents</p>
-                <a href={`/projects/${project.id}/files`} class={`text-sm hover:underline ${attentionTextClass(project.documentReviewCount)}`}>
-                  {project.documentReviewCount > 0 ? `${project.documentReviewCount} need review` : 'All reviewed'}
-                </a>
-              </div>
-
-              <div>
-                <p class="label lg:hidden">Automation</p>
-                <a href={`/automation-jobs?projectId=${project.id}`} class={`text-sm hover:underline ${automationTextClass(project.readyAutomationJobCount)}`}>
-                  {project.readyAutomationJobCount > 0 ? `${project.readyAutomationJobCount} ready` : 'None ready'}
-                </a>
-              </div>
-
-              <div class="lg:text-right">
-                <a href={`/projects/${project.id}`} class="btn btn-secondary h-9 px-3">Open</a>
-              </div>
+              <div class="sm:self-end xl:text-right"><a href={`/projects/${project.id}`} class="btn btn-secondary h-9 px-3">Open</a></div>
             </article>
           );
         })}
