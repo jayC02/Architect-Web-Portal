@@ -353,7 +353,7 @@ const parseStructuredResult = (text: string) => {
 
 const timeoutSignal = () => {
   const configured = Number(process.env.DOCUMENT_AI_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
-  const timeout = Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), 90_000) : DEFAULT_TIMEOUT_MS;
+  const timeout = Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), 60_000) : DEFAULT_TIMEOUT_MS;
   return AbortSignal.timeout(timeout);
 };
 

@@ -45,7 +45,7 @@ export const PATCH: APIRoute = (context) =>
     const body = await parseBody(context.request, documentMetadataSchema);
     const result = await prisma.projectDocument.updateMany({
       where: { id, organisationId: organisation.id },
-      data: body,
+      data: { ...body, sortSource: 'MANUAL' },
     });
     if (!result.count) throw new HttpError(404, 'Document not found.');
     return jsonResponse(200, { ok: true });

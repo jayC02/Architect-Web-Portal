@@ -34,7 +34,7 @@ export const PATCH: APIRoute = (context) =>
     const { organisation } = await requireOrganisation(context);
     const id = draftIdFrom(context);
     const input = await parseBody(context.request, applicationDraftUpdateSchema);
-    const result = await saveApplicationDraftReview(id, organisation.id, input.review);
+    const result = await saveApplicationDraftReview(id, organisation.id, input.review, input.revision);
     const draft = await getApplicationDraftForOrganisation(id, organisation.id);
     return jsonResponse(200, {
       draft: applicationDraftResponse(draft),

@@ -35,6 +35,8 @@ export const applicationDraftResponse = (draft: DraftWithDocuments) => ({
   id: draft.id,
   status: draft.status,
   notes: draft.notes,
+  reviewRevision: draft.reviewRevision,
+  documentSetRevision: draft.documentSetRevision,
   suggestedApplicationType: draft.suggestedApplicationType,
   selectedApplicationType: draft.selectedApplicationType,
   prepared: parsedPreparedApplicationDraft(draft.preparedData),
@@ -51,7 +53,7 @@ export const applicationDraftResponse = (draft: DraftWithDocuments) => ({
     warrantId: draft.resultingWarrantId,
     automationJobId: draft.resultingAutomationJobId,
   } : null,
-  documents: draft.documents.map((document) => ({
+  documents: draft.documents.filter(document => !document.cancelledAt).map((document) => ({
     id: document.id,
     originalFilename: document.originalFilename,
     mimeType: document.mimeType,

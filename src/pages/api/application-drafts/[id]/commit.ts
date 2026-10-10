@@ -22,6 +22,7 @@ export const POST: APIRoute = (context) =>
       { id: organisation.id, name: organisation.name },
       { id: user.id, name: user.name, email: user.email },
       input.review,
+      input.revision,
     );
     const projectUrl = `/projects/${encodeURIComponent(result.projectId)}`;
     const applicationSection = result.warrantId

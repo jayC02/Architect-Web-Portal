@@ -1,3 +1,4 @@
+import { databaseTable } from '@/lib/db/table';
 import { randomUUID } from 'node:crypto';
 import {
   ApplicationDraftStatus,
@@ -231,6 +232,15 @@ const resolvePermanentRecords = async (
           townCity: review.site.townCity!,
           postcode: review.site.postcode!,
           localAuthority: review.site.localAuthority,
+          uprn: review.site.uprn,
+          addressProvider: review.site.addressProvider,
+          addressVerifiedAt: review.site.addressVerifiedAt ? new Date(review.site.addressVerifiedAt) : undefined,
+          addressProvenance: review.site.addressProvenance as Prisma.InputJsonValue | undefined,
+          administrativeAuthority: review.site.administrativeAuthority,
+          planningAuthority: review.site.planningAuthority,
+          buildingStandardsAuthority: review.site.buildingStandardsAuthority,
+          authorityVerification: review.site.authorityVerification,
+          nationalPark: review.site.nationalPark,
         },
         select: { id: true },
       })).id;
@@ -285,6 +295,7 @@ export const commitApplicationDraft = async (
   organisation: CommitOrganisation,
   user: CommitUser,
   submittedReview: unknown,
+  expectedRevision?: number,
 ) => {
   const review = applicationDraftReviewSchema.parse(submittedReview);
   const issues = evaluateApplicationDraftReadiness(review);
@@ -315,11 +326,14 @@ export const commitApplicationDraft = async (
   const jobId = jobType ? existingJobId ?? randomUUID() : null;
 
   const committedRecords = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM ${databaseTable('ApplicationDraft')} WHERE id = ${draftId} AND "organisationId" = ${organisation.id} FOR UPDATE`;
     const current = await tx.applicationDraft.findFirst({
       where: { id: draftId, organisationId: organisation.id },
-      include: { documents: true },
+      include: { documents: { where: { cancelledAt: null } } },
     });
     if (!current) throw new HttpError(404, 'Application draft not found.');
+    if (current.status !== 'COMMITTED' && expectedRevision !== undefined && current.reviewRevision !== expectedRevision) throw new HttpError(409, 'The review changed in another session. Reload before creating the project.');
+    ensureReviewedDocumentsMatch(current.documents.map(document => document.id), review);
     if (current.status === ApplicationDraftStatus.COMMITTED) {
       return {
         projectId: current.resultingProjectId!,
