@@ -44,6 +44,7 @@ export const rateLimitPolicies = {
   passwordReset: { name: 'password-reset', windowMs: 15 * 60 * 1000, max: 8 },
   mutation: { name: 'mutation', windowMs: 10 * 60 * 1000, max: 80 },
   upload: { name: 'upload', windowMs: 15 * 60 * 1000, max: 20 },
+  documentAnalysis: { name: 'document-analysis', windowMs: 15 * 60 * 1000, max: 300 },
   desktop: { name: 'desktop', windowMs: 15 * 60 * 1000, max: 300 },
 } satisfies Record<string, RateLimitPolicy>;
 

@@ -500,29 +500,42 @@ function AnalysisState({
   const total = Math.max(draft.analysis.total, draft.documents.length, 1);
   const percentage = Math.min(100, Math.round((draft.analysis.completed / total) * 100));
 
-  const analyse = async (force: boolean) => {
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const analyse = async (force: boolean, resume = false) => {
+    started.current = true;
     setWorking(true);
     setError('');
     try {
-      const payload = await apiJson<{ draft: ApplicationDraftResponse }>(
-        `/api/application-drafts/${draft.id}/analyse`,
-        { method: 'POST', body: JSON.stringify({ force }) },
-      );
-      onDraft(payload.draft);
+      while (alive.current) {
+        const payload = await apiJson<{ draft: ApplicationDraftResponse; processing: { mode: string; continueAfterMs: number | null } }>(
+          `/api/application-drafts/${draft.id}/analyse`,
+          { method: 'POST', body: JSON.stringify({ force, resume }) },
+        );
+        if (!alive.current) return;
+        onDraft(payload.draft);
+        if (payload.draft.status !== 'ANALYSING') { setWorking(false); return; }
+        if (payload.processing.mode !== 'inline') return;
+        if (payload.processing.continueAfterMs === null) { setWorking(false); return; }
+        await new Promise(resolve => window.setTimeout(resolve, payload.processing.continueAfterMs!));
+        force = false;
+        resume = true;
+      }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'The application could not be prepared.');
+      if (!alive.current) return;
+      setError(`${requestError instanceof Error ? requestError.message : 'The request was interrupted.'} Uploaded documents and completed results are saved. Retry preparation to continue without uploading again.`);
       setWorking(false);
     }
   };
 
   useEffect(() => {
-    if (draft.status !== 'UPLOADING' || started.current) return;
+    if (started.current || (draft.status !== 'UPLOADING' && !(draft.status === 'ANALYSING' && draft.processingMode === 'inline'))) return;
     started.current = true;
-    void analyse(false);
+    void analyse(false, draft.status === 'ANALYSING');
   }, [draft.status]);
 
   useEffect(() => {
-    if (draft.status !== 'ANALYSING' && !working) return;
+    if (!working) return;
     const timer = window.setInterval(() => {
       void apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`)
         .then((payload) => {
@@ -994,17 +1007,8 @@ export default function ApplicationDraftReview({
     setWorking('analyse');
     setError('');
     try {
-      setDraft((current) => ({
-        ...current,
-        status: 'ANALYSING',
-        analysis: {
-          ...current.analysis,
-          phase: 'document-analysis',
-          completed: 0,
-          total: current.documents.length,
-          message: 'Preparing document analysis',
-        },
-      }));
+      if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+      if (!await persistCurrentReview()) return;
       const payload = await apiJson<{ draft: ApplicationDraftResponse }>(
         `/api/application-drafts/${draft.id}/analyse`,
         { method: 'POST', body: JSON.stringify({ force: true }) },

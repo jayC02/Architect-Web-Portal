@@ -2,17 +2,31 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { extractedFixture } from './workflow-ai-fixtures.mjs';
 // Loopback-only provider stand-in used by isolated browser verification.
 const root = path.resolve('output/workflow/mock-storage');
 const files = new Map();
 const resumable = new Map();
+const aiCalls = [];
+let aiFailures = {};
 const server = http.createServer(async (request, response) => {
-  response.setHeader('access-control-allow-origin', 'http://127.0.0.1:4330');
+  response.setHeader('access-control-allow-origin', request.headers.origin === 'http://127.0.0.1:4332' ? request.headers.origin : 'http://127.0.0.1:4330');
   response.setHeader('access-control-allow-methods', 'GET,PUT,POST,DELETE,OPTIONS,HEAD,PATCH');
   response.setHeader('access-control-allow-headers', 'content-type,x-upsert,authorization,apikey,x-signature,tus-resumable,upload-length,upload-offset,upload-metadata');
   response.setHeader('access-control-expose-headers', 'Location,Upload-Offset,Upload-Length,Tus-Resumable');
   if (request.method === 'OPTIONS') { response.writeHead(204).end(); return; }
   const url = new URL(request.url, 'http://127.0.0.1:4331');
+  if (url.pathname.startsWith('/__ai')) {
+    const json = (status, data) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(data)); };
+    if (request.method === 'GET') { json(200, { calls: aiCalls }); return; }
+    const chunks = []; for await (const chunk of request) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+    if (url.pathname === '/__ai/control') { aiFailures = body.failures ?? {}; json(200, { ok: true }); return; }
+    const filename = body.input[0].content[0].filename;
+    aiCalls.push({ filename, prompt: body.input[0].content[1].text });
+    if (aiFailures[filename] > 0) { aiFailures[filename]--; json(503, { error: 'Injected temporary AI outage' }); return; }
+    json(200, { output_text: JSON.stringify(extractedFixture(filename)) }); return;
+  }
   if (url.pathname.startsWith('/storage/v1/upload/resumable')) {
     response.setHeader('Tus-Resumable', '1.0.0');
     if (!request.headers['x-signature']) { response.writeHead(403).end(); return; }

@@ -505,7 +505,7 @@ const formatDate = (date: Date) =>
     if (completed && draftId) {
       if (progressMessage) progressMessage.textContent = 'Documents finalised. Preparing analysis...';
       try { await api(`/api/application-drafts/${draftId}/analyse`, { force: false }); }
-      catch (error) { showError(error instanceof Error ? error.message : 'Processing could not start. Open the draft to retry.'); if (submitButton) submitButton.disabled = false; return; }
+      catch (error) { showError(`${error instanceof Error ? error.message : 'The analysis request was interrupted.'} Your uploaded files and completed analysis are saved. Click Analyse and prepare application again to continue without re-uploading.`); if (submitButton) submitButton.disabled = false; return; }
       window.location.assign(`/applications/${draftId}`);
       return;
     }

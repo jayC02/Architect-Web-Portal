@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { processingEnabled } from '@/lib/document-processing';
 import {
   applicationDraftAnalysisSummary,
   parsedApplicationDraftReview,
@@ -34,6 +35,7 @@ const readinessIssues = (value: unknown): DraftReadinessIssue[] => {
 export const applicationDraftResponse = (draft: DraftWithDocuments) => ({
   id: draft.id,
   status: draft.status,
+  processingMode: processingEnabled() ? 'background' as const : 'inline' as const,
   notes: draft.notes,
   reviewRevision: draft.reviewRevision,
   documentSetRevision: draft.documentSetRevision,

@@ -611,13 +611,21 @@ const buildInitialReview = (
   } : client;
   const typeOfWork = explicitTypeOfWork(suggestionString(prepared.project, 'typeOfWorkKey'));
   const existingReview = applicationDraftReviewSchema.safeParse(draft.confirmedData);
+  const previousPrepared = preparedApplicationDraftSchema.safeParse(draft.preparedData);
+  // A failed initial preparation is not an architect-confirmed blank review.
+  // Rebuild it from recovered evidence; saved reviews keep their explicit values.
+  const recoveredInitialReview = draft.reviewRevision === 0 && previousPrepared.success
+    && (previousPrepared.data.summary.failedCount > prepared.summary.failedCount
+      || previousPrepared.data.summary.fallbackCount > prepared.summary.fallbackCount);
+
   const currentDocuments = draft.documents.map((document) => {
     const details = classificationDetailsFromAudit(document.analysisResult);
     const acceptedByDefault =
       document.analysisStatus === ApplicationDraftDocumentStatus.SUCCESS
       && !details?.manualReviewRequired
+      && !(document.documentType === DocumentType.LOCATION_PLAN && draft.documents.filter(item => item.documentType === DocumentType.LOCATION_PLAN).length > 1)
       && (document.confidence ?? 0) >= 0.55;
-    const previous = existingReview.success
+    const previous = existingReview.success && !recoveredInitialReview
       ? existingReview.data.documents.find((item) => item.id === document.id)
       : undefined;
     return previous ?? {
@@ -630,7 +638,7 @@ const buildInitialReview = (
     };
   });
 
-  if (existingReview.success) {
+  if (existingReview.success && !recoveredInitialReview) {
     const selectedApplicationType =
       existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
         ? suggestedApplicationType
@@ -965,9 +973,14 @@ export const prepareApplicationDraft = async (draftId: string, organisationId: s
   return { prepared: result.prepared, review, issues };
 };
 
-export const analyseApplicationDraft = async (draftId: string, organisationId: string, options: { force?: boolean } = {}) => {
+export const analyseApplicationDraft = async (draftId: string, organisationId: string, options: { force?: boolean; resume?: boolean } = {}) => {
+  if (options.resume) {
+    const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
+    assertDraftCanChange(draft);
+    if (draft.status !== 'ANALYSING') return;
+  }
   const { enqueueDraftProcessing } = await import('./document-processing.service');
-  await enqueueDraftProcessing(draftId, organisationId, options);
+  if (!options.resume) await enqueueDraftProcessing(draftId, organisationId, options);
 };
 export const saveApplicationDraftReview = async (
   draftId: string,

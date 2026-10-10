@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const files = process.argv.includes('--all')
-  ? fs.readdirSync('tests').filter(name => name.endsWith('.test.ts') && name !== 'workflow-database.test.ts').map(name => `tests/${name}`)
+  ? fs.readdirSync('tests').filter(name => name.endsWith('.test.ts') && !['workflow-database.test.ts', 'workflow-inline-batch.test.ts'].includes(name)).map(name => `tests/${name}`)
   : [...new Set(['test:security','test:addresses','test:fees','test:state-model','test:orchestration'].flatMap(key => packageJson.scripts[key].split(' && ').map(command => command.replace(/^tsx /, ''))))];
 const results = [];
 fs.mkdirSync('output/workflow/regression', { recursive: true });

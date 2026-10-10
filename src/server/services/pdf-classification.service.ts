@@ -39,6 +39,7 @@ export type PdfClassificationInput = {
   mimeType: string;
   bytes: Buffer;
   extractedText?: string;
+  signal?: AbortSignal;
   projectContext?: {
     projectName?: string;
     typeOfWork?: string;
@@ -351,10 +352,10 @@ const parseStructuredResult = (text: string) => {
   });
 };
 
-const timeoutSignal = () => {
+const timeoutSignal = (signal?: AbortSignal) => {
   const configured = Number(process.env.DOCUMENT_AI_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
   const timeout = Number.isFinite(configured) ? Math.min(Math.max(configured, 5_000), 60_000) : DEFAULT_TIMEOUT_MS;
-  return AbortSignal.timeout(timeout);
+  return signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
 };
 
 const retryAfterMs = (response: Response) => {
@@ -463,7 +464,7 @@ export class GeminiPdfClassificationProvider implements PdfClassificationProvide
             'content-type': 'application/json',
             'x-goog-api-key': this.apiKey,
           },
-          signal: timeoutSignal(),
+          signal: timeoutSignal(input.signal),
           body: JSON.stringify(request.body),
         });
 
@@ -535,7 +536,7 @@ class OpenAiPdfClassificationProvider implements PdfClassificationProvider {
         authorization: `Bearer ${this.apiKey}`,
         'content-type': 'application/json',
       },
-      signal: timeoutSignal(),
+      signal: timeoutSignal(input.signal),
       body: JSON.stringify({
         model: this.model,
         input: [{
@@ -560,7 +561,7 @@ class OpenAiPdfClassificationProvider implements PdfClassificationProvider {
       }),
     });
 
-    if (!response.ok) throw new Error(`OpenAI classification failed with status ${response.status}.`);
+    if (!response.ok) throw new PdfAiProcessingError(response.status === 400 ? 'invalid_request' : 'provider_unavailable', `OpenAI classification failed with status ${response.status}.`, response.status);
     return parseStructuredResult(responseTextFromOpenAi(await response.json()));
   }
 }
@@ -631,6 +632,7 @@ const classifyOne = async (
   fallback: DocumentSortSuggestion,
   provider: PdfClassificationProvider | null,
   projectContext: ProjectClassificationContext,
+  signal?: AbortSignal,
 ): Promise<DocumentSortSuggestion> => {
   if (!provider) return withFallbackDetails(fallback, 'No AI document provider is configured.');
   if (input.mimeType !== 'application/pdf' || !input.bytes) {
@@ -664,6 +666,7 @@ const classifyOne = async (
       bytes,
       extractedText: input.pdfText,
       projectContext,
+      signal,
     }));
     const documentType = CATEGORY_TO_DOCUMENT_TYPE[result.categoryKey];
     const warnings = [...result.warnings];
@@ -758,11 +761,12 @@ export const classifyProjectDocumentBatch = async (
   projectContext: ProjectClassificationContext = {},
   provider: PdfClassificationProvider | null = createConfiguredPdfClassificationProvider(),
   onProgress?: (result: DocumentSortSuggestion, index: number, completed: number, total: number) => void | Promise<void>,
+  signal?: AbortSignal,
 ) => {
   const fallbacks = await classifyDocumentBatch(inputs);
   let completed = 0;
   const suggestions = await mapWithConcurrency(inputs, APPLICATION_UPLOAD_LIMITS.analysisConcurrency, async (input, index) => {
-    const result = await classifyOne(input, fallbacks[index], provider, projectContext);
+    const result = await classifyOne(input, fallbacks[index], provider, projectContext, signal);
     completed += 1;
     await onProgress?.(result, index, completed, inputs.length);
     return result;
