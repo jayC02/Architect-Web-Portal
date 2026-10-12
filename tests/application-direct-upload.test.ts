@@ -49,10 +49,10 @@ assert.match(storage, /createSignedDirectUpload/, 'the server creates signed dir
 assert.match(storage, /SUPABASE_SERVICE_ROLE_KEY/, 'the signing credential remains server-side');
 assert.doesNotMatch(intentRoute, /SUPABASE_SERVICE_ROLE_KEY|serviceRole/i, 'the browser contract cannot receive a service role credential');
 assert.match(finaliseRoute, /finaliseApplicationDraftDocument/, 'finalisation is a separate lightweight request');
-assert.match(analysis, /createHash\('sha256'\)/, 'synchronous analysis calculates an authoritative hash');
-assert.match(analysis, /subarray\(0, 5\).*%PDF-/, 'the original analysis request verifies PDF magic bytes');
+assert.match(analysis, /createHash\('sha256'\)/, 'the first analysis read calculates an authoritative hash');
+assert.match(analysis, /subarray\(0, 5\).*%PDF-/, 'PDF magic bytes are verified during analysis');
 assert.match(analysis, /clientSha256.*sha256/, 'a supplied browser hash is compared authoritatively');
-assert.match(uploadService, /cancelledAt/, 'invalid or cancelled uploads cannot bypass the tombstone');
+assert.match(analysis, /deleteStoredDocument/, 'spoofed PDFs are removed safely');
 assert.match(commit, /storageKey: document\.storageKey/, 'commit attaches the existing physical object to ProjectDocument');
 assert.doesNotMatch(commit, /saveUploadedDocument|readStoredDocumentBytes/, 'commit does not copy or re-upload a draft object');
 
@@ -118,8 +118,8 @@ assert.equal(uploadPackageProgress(files, (file) => partialStates.get(file.id)).
 const withoutFailed = files.filter((file) => file.id !== files[7].id);
 assert.equal(uploadPackageProgress(withoutFailed, (file) => partialStates.get(file.id)).ready, true, 'removing a failed file recalculates readiness');
 
-assert.match(analysis, /include: \{ documents: \{ where: \{ cancelledAt: null \}, orderBy:/, 'analysis loads the active authoritative draft document set from the database');
+assert.match(analysis, /include: \{ documents: \{ orderBy:/, 'analysis loads the authoritative draft document set from the database');
 assert.match(analysis, /total: draft\.documents\.length/, 'analysis progress uses the authoritative document total');
-assert.match(analysis, /uploadStatus !== ApplicationDraftDocumentUploadStatus.READY/, 'analysis rejects unresolved uploads');
+assert.match(analysis, /uploadStatus !== ApplicationDraftDocumentUploadStatus\.READY/, 'analysis rejects unresolved uploads');
 
 console.log('application direct upload tests passed');

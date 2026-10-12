@@ -1,4 +1,3 @@
-import { applicationAuthority } from '@/lib/addresses/authority-routing';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   AutomationJobSourceType,
@@ -349,7 +348,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
           postcode: project.site.postcode,
           country: 'United Kingdom',
         },
-        localAuthority: applicationAuthority(project.site, input.type) ?? null,
+        localAuthority: project.site.localAuthority,
         source: 'SITE' as const,
         updatedAt: project.site.updatedAt.toISOString(),
       }

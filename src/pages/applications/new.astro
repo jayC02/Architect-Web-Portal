@@ -252,10 +252,6 @@ const formatDate = (date: Date) =>
   let selectedFiles: File[] = [];
   let draftId: string | null = null;
   let uploading = false;
-  window.addEventListener('beforeunload', event => {
-    if (!uploading) return;
-    event.preventDefault(); event.returnValue = '';
-  });
   const fileStates = new Map<string, { state: ApplicationUploadState; documentId?: string; error?: string }>();
   const uploadsInFlight = new Set<string>();
 

@@ -1,8 +1,3 @@
-import SearchableSelector from '@/components/ui/SearchableSelector';
-import AddressSearch from '@/components/addresses/AddressSearch';
-
-
-
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -12,7 +7,6 @@ import {
   CheckCircle2,
   ChevronRight,
   ExternalLink,
-
   FilePlus2,
   FileText,
   LoaderCircle,
@@ -496,7 +490,7 @@ function AnalysisState({
   onDraft: (draft: ApplicationDraftResponse) => void;
 }) {
   const [error, setError] = useState('');
-  const [working, setWorking] = useState(draft.status === 'UPLOADING');
+  const [working, setWorking] = useState(draft.status === 'ANALYSING' || draft.status === 'UPLOADING');
   const started = useRef(false);
   const total = Math.max(draft.analysis.total, draft.documents.length, 1);
   const percentage = Math.min(100, Math.round((draft.analysis.completed / total) * 100));
@@ -523,7 +517,7 @@ function AnalysisState({
   }, [draft.status]);
 
   useEffect(() => {
-    if (!working) return;
+    if (draft.status !== 'ANALYSING' && !working) return;
     const timer = window.setInterval(() => {
       void apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`)
         .then((payload) => {
@@ -543,10 +537,10 @@ function AnalysisState({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
-            {working ? 'Preparing application' : 'Analysis did not finish'}
+            {working ? 'Preparing application' : 'Preparation paused'}
           </p>
           <h2 className="mt-1 text-2xl font-semibold text-ink">
-            {working ? draft.analysis.message : 'Retry using the uploaded PDFs'}
+            {working ? draft.analysis.message : 'Your documents are safe'}
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-500">
             {working
@@ -567,7 +561,7 @@ function AnalysisState({
           {error ? <p className="mt-4 text-sm font-semibold text-red-700" role="alert">{error}</p> : null}
           {!working ? (
             <div className="mt-5 flex flex-wrap gap-3">
-              <button type="button" className="btn btn-primary gap-2" onClick={() => void analyse(false)}>
+              <button type="button" className="btn btn-primary gap-2" onClick={() => void analyse(true)}>
                 <RefreshCw size={16} />
                 Retry preparation
               </button>
@@ -588,9 +582,6 @@ export default function ApplicationDraftReview({
 }: Props) {
   const resolvedInitialReview = reviewWithResolvedRoute(initialDraft);
   const [draft, setDraft] = useState(initialDraft);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-  const serverReviewRevision = useRef(initialDraft.reviewRevision);
   const [review, setReview] = useState<Review | null>(resolvedInitialReview);
   const [issues, setIssues] = useState(
     resolvedInitialReview && resolvedInitialReview !== initialDraft.review
@@ -633,8 +624,7 @@ export default function ApplicationDraftReview({
   }, [issues]);
 
   useEffect(() => {
-    serverReviewRevision.current = Math.max(serverReviewRevision.current, draft.reviewRevision);
-    if (draft.review && JSON.stringify(reviewRef.current) === lastSavedReview.current) {
+    if (draft.review) {
       const resolved = reviewWithResolvedRoute(draft);
       reviewRef.current = resolved;
       setReview(resolved);
@@ -649,14 +639,6 @@ export default function ApplicationDraftReview({
 
   useEffect(() => () => {
     if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
-  }, []);
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (JSON.stringify(reviewRef.current) === lastSavedReview.current) return;
-      event.preventDefault(); event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    return () => window.removeEventListener('beforeunload', beforeUnload);
   }, []);
 
   const persistCurrentReview = async (): Promise<boolean> => {
@@ -679,13 +661,10 @@ export default function ApplicationDraftReview({
           issues: ApplicationDraftResponse['issues'];
         }>(`/api/application-drafts/${draft.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ review: current, revision: serverReviewRevision.current }),
+          body: JSON.stringify({ review: current }),
         });
-        serverReviewRevision.current = payload.draft.reviewRevision;
-        // The server accepted this snapshot even when a newer local edit exists.
-        // A change back to an earlier value must still be sent after this save.
-        lastSavedReview.current = snapshot;
         if (JSON.stringify(reviewRef.current) === snapshot) {
+          lastSavedReview.current = snapshot;
           setDraft(payload.draft);
           setIssues(payload.issues);
           setSaveState('saved');
@@ -746,14 +725,14 @@ export default function ApplicationDraftReview({
         if (Object.keys(fields).length) {
           applyReview(value => {
             const updatedSite = { ...value.site };
-            for (const key of ['postcode'] as const) {
+            for (const key of ['postcode', 'localAuthority'] as const) {
               if (!updatedSite[key]?.trim() && fields[key]) {
                 updatedSite[key] = fields[key]!;
                 automaticAddressFields.current[key] = fields[key]!;
               }
             }
             const client = value.clientAddressSameAsSite ? withSiteAddress(value.client, updatedSite) : value.client;
-            return { ...value, site: updatedSite, client, applicant: value.applicant };
+            return { ...value, site: updatedSite, client, applicant: value.applicantDifferentFromClient ? value.applicant : client };
           });
         }
         const copy: Record<SiteLookupResult['status'], string> = {
@@ -840,8 +819,6 @@ export default function ApplicationDraftReview({
         delete automatic.localAuthority;
       } else if (key === 'localAuthority') {
         delete automatic.localAuthority;
-        if (current.selectedApplicationType === 'BUILDING_WARRANT') site.buildingStandardsAuthority = value || null;
-        else site.planningAuthority = value || null;
       }
       const client = current.clientAddressSameAsSite
         ? withSiteAddress(current.client, site)
@@ -850,7 +827,9 @@ export default function ApplicationDraftReview({
         ...current,
         site,
         client,
-        applicant: current.applicant,
+        applicant: current.applicantDifferentFromClient
+          ? current.applicant
+          : client,
       };
     });
   };
@@ -981,7 +960,7 @@ export default function ApplicationDraftReview({
 
       const result = await apiJson<{ redirectTo: string }>(`/api/application-drafts/${draft.id}/commit`, {
         method: 'POST',
-        body: JSON.stringify({ review: currentReview, revision: serverReviewRevision.current }),
+        body: JSON.stringify({ review: currentReview }),
       });
       window.location.assign(result.redirectTo);
     } catch (requestError) {
@@ -995,8 +974,17 @@ export default function ApplicationDraftReview({
     setWorking('analyse');
     setError('');
     try {
-      if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
-      if (!await persistCurrentReview()) return;
+      setDraft((current) => ({
+        ...current,
+        status: 'ANALYSING',
+        analysis: {
+          ...current.analysis,
+          phase: 'document-analysis',
+          completed: 0,
+          total: current.documents.length,
+          message: 'Preparing document analysis',
+        },
+      }));
       const payload = await apiJson<{ draft: ApplicationDraftResponse }>(
         `/api/application-drafts/${draft.id}/analyse`,
         { method: 'POST', body: JSON.stringify({ force: true }) },
@@ -1027,8 +1015,6 @@ export default function ApplicationDraftReview({
 
   const addDocuments = async (files: FileList | null) => {
     if (!files?.length) return;
-    if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
-    if (!await persistCurrentReview()) return;
     setWorking('files');
     setError('');
     try {
@@ -1107,7 +1093,7 @@ export default function ApplicationDraftReview({
   const analysedCount = draft.prepared?.summary.analysedCount ?? draft.documents.length;
 
   return (
-    <fieldset disabled={!hydrated} aria-busy={!hydrated} className="min-w-0 border-0 p-0">
+    <div>
       <header className="mb-6">
         <a href="/applications/new" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink">
           <ArrowLeft size={15} />
@@ -1344,8 +1330,6 @@ export default function ApplicationDraftReview({
                   ))}
                 </select>
               </label>
-              {review.siteMode === 'create' && <div className="col-span-full"><AddressSearch editKey={JSON.stringify(review.site)} onSelect={address => applyReview(current => ({ ...current, site: { ...current.site, ...address } }), true)} /></div>}
-              {review.siteMode === 'create' && draft.prepared && <div className="col-span-full space-y-3">{Object.entries(draft.prepared.site).filter(([, suggestion]) => suggestion.status === 'conflict').map(([key, suggestion]) => <div key={key} className="rounded-md border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-semibold">Conflicting {evidenceLabels[key] ?? key}</p><p className="mt-1 text-xs">Choose the supported value or enter another address below. Source evidence stays attached to this draft.</p><div className="mt-2 flex flex-wrap gap-2">{[suggestion.value, suggestion.currentValue].filter((value, index, all) => value != null && all.indexOf(value) === index).map(value => <button type="button" key={String(value)} className="btn btn-secondary" onClick={() => updateSite(key as keyof Review['site'], String(value))}>{String(value)}</button>)}</div><Evidence draftId={draft.id} prepared={draft.prepared} section="site" field={key} /></div>)}</div>}
               <Field label="Building number" value={review.site.buildingNumber} onChange={(value) => updateSite('buildingNumber', value)} issue={issueFor('site.buildingNumber')} required />
               {review.siteMode === 'create' ? (
                 <>
@@ -1355,9 +1339,6 @@ export default function ApplicationDraftReview({
                   <Field label="Postcode" value={review.site.postcode} onChange={(value) => updateSite('postcode', value)} issue={issueFor('site.postcode')} required />
                   <Field label="Country" value={review.site.country} onChange={(value) => updateSite('country', value)} />
                   <Field label="Local authority" value={review.site.localAuthority} onChange={(value) => updateSite('localAuthority', value)} issue={issueFor('site.localAuthority')} required />
-                  <Field label="Planning authority" value={review.site.planningAuthority} onChange={value => updateSite('planningAuthority', value)} />
-                  <Field label="Building standards authority" value={review.site.buildingStandardsAuthority} onChange={value => updateSite('buildingStandardsAuthority', value)} />
-                  {review.site.authorityVerification === 'suggested' && <div className="col-span-full text-sm text-stone-700"><p>Administrative area: {review.site.administrativeAuthority ?? 'Unknown'}. {review.site.nationalPark ? `National park: ${review.site.nationalPark}. Confirm the planning authority for this site.` : 'Confirm the authority for this application.'}</p><button type="button" className="btn btn-secondary mt-2" onClick={() => applyReview(current => ({ ...current, site: { ...current.site, localAuthority: current.selectedApplicationType === 'BUILDING_WARRANT' ? current.site.buildingStandardsAuthority ?? current.site.localAuthority : current.site.planningAuthority ?? current.site.localAuthority, authorityVerification: 'confirmed' } }), true)}>Confirm application authority</button></div>}
                 </>
               ) : null}
             </div>
@@ -1373,7 +1354,7 @@ export default function ApplicationDraftReview({
             title="Client and applicant"
             summary={review.clientMode === 'existing'
               ? draft.prepared?.matches.clients.find((match) => match.id === review.existingClientId)?.label ?? 'Existing client'
-              : [personSummary(review.client), review.client.email || review.client.phone, review.applicantDifferentFromClient ? `Separate applicant: ${personSummary(review.applicant ?? emptyPerson())}` : 'Client is the applicant'].filter(Boolean).join(' · ')}
+              : personSummary(review.client)}
             issueCount={issuesBySection.get('client') ?? 0}
           >
             <div className="space-y-6">
@@ -1422,12 +1403,30 @@ export default function ApplicationDraftReview({
               </section>
 
               <div className="rounded-md border border-stone-200 bg-stone-50 p-4">
-                <SearchableSelector clientSearch label="Prepared client or existing client"
-                  emptyLabel="Use the prepared client details"
-                  value={review.clientMode === 'existing' ? review.existingClientId ?? '' : ''}
-                  options={(draft.prepared?.matches.clients ?? []).map(match => ({ value: match.id, label: `${match.label} (${match.strength} match)`, reason: match.reasons.join('; ') }))}
-                  onChange={value => applyReview(current => ({ ...current, clientMode: value ? 'existing' : 'create', existingClientId: value || null, clientAddressSameAsSite: value ? false : current.clientAddressSameAsSite }), true)} />
-                <p className="mt-2 text-xs text-stone-600">Choosing an existing client requires your confirmation. Application-specific edits do not update the client directory.</p>
+                <label className="block">
+                  <span className="label">Prepared client or existing client</span>
+                  <select
+                    value={review.clientMode === 'existing' ? review.existingClientId ?? '' : 'create'}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      applyReview((current) => ({
+                        ...current,
+                        clientMode: value === 'create' ? 'create' : 'existing',
+                        existingClientId: value === 'create' ? null : value,
+                        clientAddressSameAsSite: value === 'create' ? current.clientAddressSameAsSite : false,
+                      }), true);
+                    }}
+                    className="field bg-white"
+                  >
+                    <option value="create">Use the prepared client details</option>
+                    {draft.prepared?.matches.clients.map((match) => (
+                      <option key={match.id} value={match.id}>{match.label} ({match.strength} match)</option>
+                    ))}
+                  </select>
+                  {draft.prepared?.matches.clients.some((match) => match.strength === 'possible') ? (
+                    <p className="mt-2 text-xs text-stone-500">Possible matches require your choice. Architect Pro never matches on surname alone.</p>
+                  ) : null}
+                </label>
               </div>
 
               {review.clientMode === 'create' ? (
@@ -1734,6 +1733,6 @@ export default function ApplicationDraftReview({
           </div>
         </div>
       </section>
-    </fieldset>
+    </div>
   );
 }

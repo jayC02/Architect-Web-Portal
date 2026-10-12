@@ -6,11 +6,11 @@ export const normaliseDraftAddresses = (review: ApplicationDraftReview): Applica
   const site = review.siteMode === 'create' ? normaliseUkAddress(review.site) : review.site;
   let client = normaliseUkAddress(review.client);
   if (review.clientAddressSameAsSite) {
-    const { buildingNumber, addressLine1, addressLine2, townCity, postcode, country } = site;
-    const address = { buildingNumber, addressLine1, addressLine2, townCity, postcode, country };
+    const { localAuthority: _authority, ...address } = site;
     client = { ...client, ...address };
   }
-  const applicant = review.applicant ? normaliseUkAddress(review.applicant) : client;
+  const applicant = review.applicantDifferentFromClient && review.applicant
+    ? normaliseUkAddress(review.applicant) : client;
   const next = { ...review, site, client, applicant };
   return JSON.stringify(next) === JSON.stringify(review) ? review : next;
 };

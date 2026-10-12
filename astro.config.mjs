@@ -8,13 +8,12 @@ const site = (process.env.PUBLIC_SITE_URL || 'http://localhost:4321').replace(/\
 export default defineConfig({
   site,
   output: 'server',
-  adapter: vercel({ maxDuration: 240 }),
+  adapter: vercel(),
   integrations: [react(), tailwind({ applyBaseStyles: false })],
   security: {
     checkOrigin: false,
   },
   vite: {
-    server: { watch: { ignored: ['**/output/**'] } },
     build: {
       target: 'esnext',
     },

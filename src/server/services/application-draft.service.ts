@@ -1,13 +1,10 @@
 import { normaliseUkAddress } from '@/lib/addresses/uk-address';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import { lookupSiteAddress } from '@/server/services/site-address-lookup.service';
-
 import { createHash } from 'node:crypto';
-import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import {
   ApplicationDraftDocumentStatus,
   ApplicationDraftDocumentUploadStatus,
-
   ApplicationDraftStatus,
   ApplicationDraftType,
   DocumentSortSource,
@@ -21,7 +18,7 @@ import {
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { prisma } from '@/lib/db/prisma';
 import type { TypeOfWorkKey } from '@/lib/projects/type-of-work';
-
+import { deleteStoredDocument, readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import {
   applicationDraftReviewSchema,
   preparedApplicationDraftSchema,
@@ -36,7 +33,6 @@ import {
   classificationAuditForSuggestion,
   classificationDetailsFromAudit,
   classifyProjectDocumentBatch,
-
   configuredDocumentAnalysisIdentity,
   DOCUMENT_ANALYSIS_PROMPT_VERSION,
   DOCUMENT_ANALYSIS_SCHEMA_VERSION,
@@ -285,11 +281,6 @@ const withDefaultIndividualTitle = (
     ? { ...person, title: 'Other' }
     : person;
 
-const preparedProvenance = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'string') return null;
-  try { return jsonObject(JSON.parse(value)); } catch { return null; }
-};
-
 const siteFromPrepared = (prepared: PreparedApplicationDraft) => ({
   buildingNumber: suggestionString(prepared.site, 'buildingNumber'),
   addressLine1: suggestionString(prepared.site, 'addressLine1'),
@@ -298,15 +289,6 @@ const siteFromPrepared = (prepared: PreparedApplicationDraft) => ({
   postcode: suggestionString(prepared.site, 'postcode'),
   country: suggestionString(prepared.site, 'country') ?? 'United Kingdom',
   localAuthority: suggestionString(prepared.site, 'localAuthority'),
-  administrativeAuthority: suggestionString(prepared.site, 'administrativeAuthority'),
-  planningAuthority: suggestionString(prepared.site, 'planningAuthority'),
-  buildingStandardsAuthority: suggestionString(prepared.site, 'buildingStandardsAuthority'),
-  uprn: suggestionString(prepared.site, 'uprn'),
-  addressProvider: suggestionString(prepared.site, 'addressProvider'),
-  addressVerifiedAt: suggestionString(prepared.site, 'addressVerifiedAt'),
-  addressProvenance: preparedProvenance(prepared.site.addressProvenance?.value),
-  nationalPark: suggestionString(prepared.site, 'nationalPark'),
-  authorityVerification: prepared.site.administrativeAuthority?.value ? 'suggested' as const : 'legacy-unverified' as const,
 });
 
 const siteFromRecord = (site: Site) => ({
@@ -317,15 +299,6 @@ const siteFromRecord = (site: Site) => ({
   postcode: site.postcode,
   country: 'United Kingdom',
   localAuthority: site.localAuthority,
-  uprn: site.uprn,
-  addressProvider: site.addressProvider,
-  addressVerifiedAt: site.addressVerifiedAt?.toISOString() ?? null,
-  addressProvenance: jsonObject(site.addressProvenance),
-  administrativeAuthority: site.administrativeAuthority,
-  planningAuthority: site.planningAuthority,
-  buildingStandardsAuthority: site.buildingStandardsAuthority,
-  authorityVerification: site.authorityVerification as 'legacy-unverified' | 'suggested' | 'confirmed',
-  nationalPark: site.nationalPark,
 });
 
 const agentFromDefaults = (defaults: OrganisationDefaults | null) => ({
@@ -411,17 +384,8 @@ export const synthesisePreparedApplicationDraft = async (
       townCity: suggestionString(siteFields, 'townCity'),
       postcode: suggestionString(siteFields, 'postcode'),
       localAuthority: suggestionString(siteFields, 'localAuthority'),
-    }, { organisationId });
-    if (lookup.verification) {
-      const verified = lookup.verification;
-      const evidence = [{ documentId: 'site-address-lookup', filename: 'Verified address lookup', evidence: 'Unique exact address match; authority routing remains subject to architect confirmation.' }];
-      for (const key of ['uprn', 'planningAuthority', 'buildingStandardsAuthority', 'administrativeAuthority', 'nationalPark'] as const) siteFields[key] = customSuggestion(verified[key], evidence, 'high');
-      siteFields.addressProvider = customSuggestion(verified.provider, evidence, 'high');
-      siteFields.addressVerifiedAt = customSuggestion(verified.verifiedAt, evidence, 'high');
-      siteFields.addressProvenance = customSuggestion(JSON.stringify(verified.provenance), evidence, 'high');
-    }
-    if (lookup.fields.localAuthority) siteFields.administrativeAuthority = customSuggestion(lookup.fields.localAuthority, [{ documentId: 'site-address-lookup', filename: 'Postcode geography', evidence: lookup.sources.localAuthority! }], 'medium');
-    for (const key of ['postcode'] as const) {
+    });
+    for (const key of ['postcode', 'localAuthority'] as const) {
       if (siteFields[key].value !== null || !lookup.fields[key]) continue;
       siteFields[key] = customSuggestion(lookup.fields[key]!, [{
         documentId: 'site-address-lookup', filename: 'Verified address lookup',
@@ -614,21 +578,13 @@ const buildInitialReview = (
   } : client;
   const typeOfWork = explicitTypeOfWork(suggestionString(prepared.project, 'typeOfWorkKey'));
   const existingReview = applicationDraftReviewSchema.safeParse(draft.confirmedData);
-  const previousPrepared = preparedApplicationDraftSchema.safeParse(draft.preparedData);
-  // A failed initial preparation is not an architect-confirmed blank review.
-  // Rebuild it from recovered evidence; saved reviews keep their explicit values.
-  const recoveredInitialReview = draft.reviewRevision === 0 && previousPrepared.success
-    && (previousPrepared.data.summary.failedCount > prepared.summary.failedCount
-      || previousPrepared.data.summary.fallbackCount > prepared.summary.fallbackCount);
-
   const currentDocuments = draft.documents.map((document) => {
     const details = classificationDetailsFromAudit(document.analysisResult);
     const acceptedByDefault =
       document.analysisStatus === ApplicationDraftDocumentStatus.SUCCESS
       && !details?.manualReviewRequired
-      && !(document.documentType === DocumentType.LOCATION_PLAN && draft.documents.filter(item => item.documentType === DocumentType.LOCATION_PLAN).length > 1)
       && (document.confidence ?? 0) >= 0.55;
-    const previous = existingReview.success && !recoveredInitialReview
+    const previous = existingReview.success
       ? existingReview.data.documents.find((item) => item.id === document.id)
       : undefined;
     return previous ?? {
@@ -641,7 +597,7 @@ const buildInitialReview = (
     };
   });
 
-  if (existingReview.success && !recoveredInitialReview) {
+  if (existingReview.success) {
     const selectedApplicationType =
       existingReview.data.selectedApplicationType === ApplicationDraftType.AUTO && suggestedApplicationType
         ? suggestedApplicationType
@@ -659,14 +615,16 @@ const buildInitialReview = (
       ...existingReview.data,
       client: withDefaultIndividualTitle(confirmedClient),
       applicant: withDefaultIndividualTitle(
-        existingReview.data.applicant ?? confirmedClient,
+        existingReview.data.applicantDifferentFromClient
+          ? existingReview.data.applicant ?? confirmedClient
+          : confirmedClient,
       ),
       selectedApplicationType,
       confirmations: mergeApplicationDraftConfirmationDefaults(
         selectedApplicationType,
         existingReview.data.confirmations,
       ),
-      documents: currentDocuments.map(document => existingReview.data.documents.find(previous => previous.id === document.id) ?? document),
+      documents: currentDocuments,
     };
   }
 
@@ -881,18 +839,17 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
   return issues;
 };
 
-export const persistSuggestion = async (
+const persistSuggestion = async (
   document: SynthesisDocument,
   suggestion: DocumentSortSuggestion,
   identity: ReturnType<typeof configuredDocumentAnalysisIdentity>,
-  database: Prisma.TransactionClient = prisma,
 ) => {
   const audit = classificationAuditForSuggestion(suggestion);
   const aiStatus = analysisStatusForSuggestion(suggestion);
   const status = aiStatus === 'SUCCESS'
     ? ApplicationDraftDocumentStatus.SUCCESS
     : ApplicationDraftDocumentStatus.FALLBACK;
-  await database.applicationDraftDocument.update({
+  await prisma.applicationDraftDocument.update({
     where: { id: document.id },
     data: {
       analysisStatus: status,
@@ -903,15 +860,13 @@ export const persistSuggestion = async (
       analysisSchemaVersion: DOCUMENT_ANALYSIS_SCHEMA_VERSION,
       analysisResult: audit as Prisma.InputJsonValue,
       analysisError: suggestion.classificationDetails?.fallbackReason ?? null,
-      ...(document.classificationSource === 'MANUAL' ? {} : {
-        documentType: suggestion.suggestedDocumentType,
-        revision: suggestion.revision,
-        drawingNumber: suggestion.drawingNumber,
-        drawingTitle: suggestion.drawingTitle,
-        classificationSource: suggestion.source,
-        confidence: suggestion.confidence,
-        classificationReason: suggestion.reason,
-      }),
+      documentType: suggestion.suggestedDocumentType,
+      revision: suggestion.revision,
+      drawingNumber: suggestion.drawingNumber,
+      drawingTitle: suggestion.drawingTitle,
+      classificationSource: suggestion.source,
+      confidence: suggestion.confidence,
+      classificationReason: suggestion.reason,
     },
   });
 };
@@ -947,7 +902,6 @@ const copyCachedAnalysis = async (
     analysisSchemaVersion: cached.analysisSchemaVersion,
     analysisResult: cached.analysisResult === null ? Prisma.JsonNull : cached.analysisResult,
     analysisError: cached.analysisError,
-    ...(target.classificationSource === DocumentSortSource.MANUAL ? {} : {
     documentType: cached.documentType,
     documentStatus: cached.documentStatus,
     revision: cached.revision,
@@ -956,14 +910,13 @@ const copyCachedAnalysis = async (
     classificationSource: cached.classificationSource,
     confidence: cached.confidence,
     classificationReason: cached.classificationReason,
-    }),
   },
 });
 
 const refreshAnalysisProgress = async (draftId: string, total: number) => {
   const grouped = await prisma.applicationDraftDocument.groupBy({
     by: ['analysisStatus'],
-    where: { draftId, cancelledAt: null },
+    where: { draftId },
     _count: { _all: true },
   });
   const completed = grouped
@@ -993,7 +946,7 @@ export const getApplicationDraftForOrganisation = async (
 ) => {
   const draft = await prisma.applicationDraft.findFirst({
     where: { id: draftId, organisationId },
-    include: { documents: { where: { cancelledAt: null }, orderBy: { createdAt: 'asc' } } },
+    include: { documents: { orderBy: { createdAt: 'asc' } } },
   });
   if (!draft) throw new HttpError(404, 'Application draft not found.');
   return draft;
@@ -1011,7 +964,6 @@ const assertDraftCanChange = (draft: DraftWithDocuments) => {
 export const prepareApplicationDraft = async (draftId: string, organisationId: string) => {
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
-  if (draft.documents.some(document => document.uploadStatus !== 'READY')) throw new HttpError(503, 'Wait for the current document transfers to finish.');
   const result = await synthesisePreparedApplicationDraft(organisationId, draft);
   const review = buildInitialReview(
     draft,
@@ -1021,8 +973,8 @@ export const prepareApplicationDraft = async (draftId: string, organisationId: s
     result.suggestedApplicationType,
   );
   const issues = evaluateApplicationDraftReadiness(review);
-  const write = async (tx: Prisma.TransactionClient) => tx.applicationDraft.updateMany({
-    where: { id: draft.id, organisationId, documentSetRevision: draft.documentSetRevision, reviewRevision: draft.reviewRevision, status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING, ApplicationDraftStatus.CANCELLED, ApplicationDraftStatus.EXPIRED] } },
+  await prisma.applicationDraft.update({
+    where: { id: draft.id },
     data: {
       suggestedApplicationType: result.suggestedApplicationType,
       preparedData: result.prepared as Prisma.InputJsonValue,
@@ -1040,8 +992,6 @@ export const prepareApplicationDraft = async (draftId: string, organisationId: s
       },
     },
   });
-  const changed = await prisma.$transaction(async tx => write(tx));
-  if (!changed.count) throw new HttpError(409, "The review or documents changed during analysis. Saved corrections are kept; retry using the uploaded PDFs.");
   return { prepared: result.prepared, review, issues };
 };
 
@@ -1096,7 +1046,6 @@ export const analyseApplicationDraft = async (
     const cachedDraft = await prisma.applicationDraftDocument.findFirst({
       where: {
         id: { not: document.id },
-        cancelledAt: null,
         sha256: document.sha256,
         draft: { organisationId },
         analysisVersion: DOCUMENT_ANALYSIS_VERSION,
@@ -1167,6 +1116,7 @@ export const analyseApplicationDraft = async (
       try {
         const bytes = await readStoredDocumentBytes(document.storageKey);
         if (document.mimeType === 'application/pdf' && !bytes.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
+          await deleteStoredDocument(document.storageKey).catch(() => undefined);
           await prisma.applicationDraftDocument.update({
             where: { id: document.id },
             data: {
@@ -1180,6 +1130,7 @@ export const analyseApplicationDraft = async (
         }
         const sha256 = createHash('sha256').update(bytes).digest('hex');
         if (document.clientSha256 && document.clientSha256.toLowerCase() !== sha256) {
+          await deleteStoredDocument(document.storageKey).catch(() => undefined);
           await prisma.applicationDraftDocument.update({
             where: { id: document.id },
             data: {
@@ -1249,7 +1200,6 @@ export const saveApplicationDraftReview = async (
   draftId: string,
   organisationId: string,
   review: ApplicationDraftReview,
-  expectedRevision?: number,
 ) => {
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
@@ -1262,14 +1212,8 @@ export const saveApplicationDraftReview = async (
     throw new HttpError(400, 'Review every document in this application draft.');
   }
   const issues = evaluateApplicationDraftReadiness(review);
-  await prisma.$transaction(async tx => {
-    const changed = await tx.applicationDraft.updateMany({
-      where: { id: draft.id, organisationId, reviewRevision: expectedRevision ?? draft.reviewRevision, documentSetRevision: draft.documentSetRevision,
-        status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING, ApplicationDraftStatus.CANCELLED, ApplicationDraftStatus.EXPIRED] } },
-      data: { reviewRevision: { increment: 1 } },
-    });
-    if (!changed.count) throw new HttpError(409, 'This review changed in another session. Your entered values are kept; reload the latest review before saving again.');
-    await Promise.all(review.documents.map((document) => tx.applicationDraftDocument.updateMany({
+  await prisma.$transaction([
+    ...review.documents.map((document) => prisma.applicationDraftDocument.updateMany({
       where: { id: document.id, draftId: draft.id },
       data: {
         documentType: document.documentType,
@@ -1281,8 +1225,8 @@ export const saveApplicationDraftReview = async (
           ? undefined
           : DocumentSortSource.MANUAL,
       },
-    })));
-    await tx.applicationDraft.update({
+    })),
+    prisma.applicationDraft.update({
       where: { id: draft.id },
       data: {
         selectedApplicationType: review.selectedApplicationType,
@@ -1299,8 +1243,8 @@ export const saveApplicationDraftReview = async (
             : 'Ready to create',
         },
       },
-    });
-  });
+    }),
+  ]);
   return { review, issues };
 };
 
