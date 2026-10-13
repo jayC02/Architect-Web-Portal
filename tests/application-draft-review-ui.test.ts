@@ -6,6 +6,7 @@ import { applicationDraftReviewSchema } from '../src/lib/validation/application-
 
 const read = (file: string) => fs.readFileSync(file, 'utf8');
 const reviewUi = read('src/components/applications/ApplicationDraftReview.tsx');
+const clientUi = read('src/components/applications/ClientApplicantReview.tsx');
 const draftService = read('src/server/services/application-draft.service.ts');
 const draftValidation = read('src/lib/validation/application-draft.ts');
 const commitRoute = read('src/pages/api/application-drafts/[id]/commit.ts');
@@ -70,9 +71,9 @@ assert.match(reviewUi, />\s*Cancel\s*</, 'category changes can be cancelled');
 assert.match(reviewUi, /More than one document is marked as a Location Plan/, 'Location Plan conflicts explain the required manual choice');
 assert.match(reviewUi, /clientAddressSameAsSite/, 'same-as-site address flow is visible');
 assert.match(reviewUi, /withSiteAddress[\s\S]*buildingNumber: site\.buildingNumber/, 'same-as-site copies the structured Site building number');
-assert.match(reviewUi, /showAddress \? <section[\s\S]*Address details/, 'same-as-site hides the duplicate Client address section');
+assert.match(clientUi, /group === 'address' && sameAsSite/, 'same-as-site hides the duplicate Client address fields');
 assert.match(reviewUi, /label="Building number"[\s\S]*review\.site\.buildingNumber/, 'Site asks for the building number once');
-assert.match(reviewUi, /Use a different applicant/, 'different applicant remains a secondary action');
+assert.match(clientUi, /Client is also the applicant/, 'one clear relationship control reveals a separate applicant');
 assert.match(reviewUi, /persistCurrentReview/, 'draft updates are autosaved');
 assert.match(reviewUi, /window\.setTimeout\(\(\) => void persistCurrentReview\(\), 600\)/, 'text updates are debounced');
 assert.match(reviewUi, /saveImmediately\.current/, 'discrete changes save immediately');

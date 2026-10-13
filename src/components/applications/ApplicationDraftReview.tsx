@@ -1,3 +1,5 @@
+import ClientApplicantReview from './ClientApplicantReview';
+import { hasDifferentAddress, preparedPerson, siteAddressReady } from './client-review';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -128,13 +130,6 @@ const reviewWithResolvedRoute = (draft: ApplicationDraftResponse): Review | null
     ? draft.suggestedApplicationType
     : review.application.typeOfWorkKeys.length || review.project.typeOfWorkKey ? 'BUILDING_WARRANT' : null;
   return suggested ? { ...review, selectedApplicationType: suggested } : review;
-};
-
-const personSummary = (person: Person) => {
-  const name = person.displayName
-    || [person.title, person.firstName, person.lastName].filter(Boolean).join(' ')
-    || person.companyName;
-  return [name, person.email, person.phone].filter(Boolean).join(' | ') || 'Details need attention';
 };
 
 const siteSummary = (site: Review['site']) =>
@@ -272,88 +267,6 @@ function BooleanQuestion({
       </select>
       {issue ? <span className="mt-1 block text-xs text-red-700">{issue}</span> : null}
     </label>
-  );
-}
-
-function PersonFields({
-  person,
-  onChange,
-  issueFor,
-  prefix,
-  showAddress = true,
-}: {
-  person: Person;
-  onChange: (key: keyof Person, value: string) => void;
-  issueFor: (key: string) => string | undefined;
-  prefix: 'client' | 'applicant';
-  showAddress?: boolean;
-}) {
-  return (
-    <div className="space-y-5">
-      <section aria-labelledby={`${prefix}-identity-heading`}>
-        <h4 id={`${prefix}-identity-heading`} className="mb-3 text-sm font-semibold text-ink">Identity and contact</h4>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="block">
-            <span className="label">{prefix === 'client' ? 'Client' : 'Applicant'} type</span>
-            <select
-              value={person.clientType}
-              onChange={(event) => onChange('clientType', event.target.value)}
-              className="field"
-            >
-              <option value="INDIVIDUAL">Individual</option>
-              <option value="ORGANISATION">Organisation</option>
-            </select>
-          </label>
-          <Field
-            label="Display name"
-            value={person.displayName}
-            onChange={(value) => onChange('displayName', value)}
-            issue={issueFor(`${prefix}.displayName`)}
-            required
-          />
-          {person.clientType === 'INDIVIDUAL' ? (
-            <>
-              <label className="block">
-                <span className="label">Title <span aria-hidden="true">*</span></span>
-                <select
-                  value={person.title ?? ''}
-                  onChange={(event) => onChange('title', event.target.value)}
-                  className={`field ${issueFor(`${prefix}.title`) ? 'border-red-300 ring-2 ring-red-100' : ''}`}
-                  required
-                  aria-invalid={Boolean(issueFor(`${prefix}.title`))}
-                  aria-describedby={issueFor(`${prefix}.title`) ? `${prefix}-title-error` : undefined}
-                >
-                  <option value="">Choose title</option>
-                  <option value="Mr">Mr</option>
-                  <option value="Mrs">Mrs</option>
-                  <option value="Miss">Miss</option>
-                  <option value="Ms">Ms</option>
-                  <option value="Other">Other</option>
-                </select>
-                {issueFor(`${prefix}.title`) ? <p id={`${prefix}-title-error`} className="mt-1 text-xs text-red-700">{issueFor(`${prefix}.title`)}</p> : null}
-              </label>
-              <Field label="First name" value={person.firstName} onChange={(value) => onChange('firstName', value)} issue={issueFor(`${prefix}.firstName`)} required />
-              <Field label="Last name" value={person.lastName} onChange={(value) => onChange('lastName', value)} issue={issueFor(`${prefix}.lastName`)} required />
-            </>
-          ) : (
-            <Field label="Company name" value={person.companyName} onChange={(value) => onChange('companyName', value)} issue={issueFor(`${prefix}.companyName`)} required />
-          )}
-          <Field label="Email" type="email" value={person.email} onChange={(value) => onChange('email', value)} issue={issueFor(`${prefix}.email`)} required />
-          <Field label="Phone" type="tel" value={person.phone} onChange={(value) => onChange('phone', value)} />
-        </div>
-      </section>
-      {showAddress ? <section aria-labelledby={`${prefix}-address-heading`}>
-        <h4 id={`${prefix}-address-heading`} className="mb-3 text-sm font-semibold text-ink">Address details</h4>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Building number" value={person.buildingNumber} onChange={(value) => onChange('buildingNumber', value)} issue={issueFor(`${prefix}.buildingNumber`)} required />
-          <Field label="Address line 1" value={person.addressLine1} onChange={(value) => onChange('addressLine1', value)} issue={issueFor(`${prefix}.addressLine1`)} required />
-          <Field label="Address line 2" value={person.addressLine2} onChange={(value) => onChange('addressLine2', value)} />
-          <Field label="Town or city" value={person.townCity} onChange={(value) => onChange('townCity', value)} issue={issueFor(`${prefix}.townCity`)} required />
-          <Field label="Postcode" value={person.postcode} onChange={(value) => onChange('postcode', value)} issue={issueFor(`${prefix}.postcode`)} required />
-          <Field label="Country" value={person.country} onChange={(value) => onChange('country', value)} />
-        </div>
-      </section> : null}
-    </div>
   );
 }
 
@@ -612,6 +525,26 @@ export default function ApplicationDraftReview({
   const firstReviewRender = useRef(true);
   const saveImmediately = useRef(false);
   const categorySaveInFlight = useRef<string | null>(null);
+  const preparedClient = useRef<Person>(resolvedInitialReview?.clientMode === 'create' ? { ...resolvedInitialReview.client } : preparedPerson(initialDraft.prepared));
+  const separateApplicant = useRef<Person | null>(resolvedInitialReview?.applicantDifferentFromClient && resolvedInitialReview.applicant ? { ...resolvedInitialReview.applicant } : null);
+  const clientAddressBeforeSite = useRef<Person | null>(null);
+  const [confirmedClientId, setConfirmedClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (separateApplicant.current) return;
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(`applicant-review:${draft.id}`) ?? 'null');
+      if (saved && ['INDIVIDUAL', 'ORGANISATION'].includes(saved.clientType)
+        && Object.keys(emptyPerson()).every(key => saved[key] === null || typeof saved[key] === 'string')) {
+        separateApplicant.current = saved;
+      }
+    } catch { /* Keep the in-memory applicant if browser storage is unavailable. */ }
+  }, [draft.id]);
+
+  const rememberApplicant = (person: Person) => {
+    separateApplicant.current = { ...person };
+    try { window.sessionStorage.setItem(`applicant-review:${draft.id}`, JSON.stringify(person)); } catch { /* In-memory recovery still works. */ }
+  };
 
   const issueMap = useMemo(
     () => new Map(issues.map((issue) => [issue.key, issue.message])),
@@ -697,6 +630,24 @@ export default function ApplicationDraftReview({
     }
     autosaveTimer.current = window.setTimeout(() => void persistCurrentReview(), 600);
   }, [review]);
+
+  useEffect(() => {
+    const isDirty = () => Boolean(reviewRef.current && JSON.stringify(reviewRef.current) !== lastSavedReview.current);
+    const protectUnload = (event: BeforeUnloadEvent) => {
+      if (isDirty()) { event.preventDefault(); event.returnValue = ''; }
+    };
+    const protectNavigation = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !isDirty()) return;
+      const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const next = new URL(anchor.href, window.location.href);
+      if (next.pathname === window.location.pathname && next.search === window.location.search) return;
+      if (!window.confirm('Your latest changes have not been saved. Leave without saving them?')) { event.preventDefault(); event.stopPropagation(); }
+    };
+    window.addEventListener('beforeunload', protectUnload);
+    document.addEventListener('click', protectNavigation, true);
+    return () => { window.removeEventListener('beforeunload', protectUnload); document.removeEventListener('click', protectNavigation, true); };
+  }, []);
 
   const siteLookupKey = JSON.stringify([review?.projectMode, review?.siteMode, review?.site]);
   useEffect(() => {
@@ -836,11 +787,37 @@ export default function ApplicationDraftReview({
   const updatePerson = (target: 'client' | 'applicant', key: keyof Person, value: string) => {
     applyReview((current) => {
       const person = target === 'client' ? current.client : current.applicant ?? emptyPerson();
+      if (target === 'applicant') rememberApplicant({ ...person, [key]: value || null });
       return {
         ...current,
         [target]: { ...person, [key]: value || null },
       };
     });
+  };
+  const selectClient = (person: Person | null, id: string | null) => {
+    setConfirmedClientId(id);
+    applyReview(current => {
+      if (current.clientMode === 'create') preparedClient.current = { ...current.client };
+      const client = person ?? { ...preparedClient.current };
+      return { ...current, client, clientMode: id ? 'existing' : 'create', existingClientId: id, clientAddressSameAsSite: false };
+    }, true);
+  };
+  const setApplicantDifferent = (different: boolean) => applyReview(current => {
+    if (current.applicantDifferentFromClient && current.applicant) rememberApplicant(current.applicant);
+    return { ...current, applicantDifferentFromClient: different,
+      applicant: different ? { ...(separateApplicant.current ?? current.client) } : current.applicant };
+  }, true);
+  const setClientSiteAddress = (same: boolean) => {
+    const current = reviewRef.current;
+    if (!current || current.clientMode !== 'create' || (same && !siteAddressReady(current.site))) return;
+    if (same && hasDifferentAddress(current.client, current.site)
+      && !window.confirm("Replace this draft's client address with the site address? Saved client-directory records are not changed.")) return;
+    if (same) clientAddressBeforeSite.current = { ...current.client };
+    applyReview(value => ({ ...value, clientAddressSameAsSite: same,
+      client: same ? withSiteAddress(value.client, value.site) : clientAddressBeforeSite.current
+        ? { ...value.client, ...Object.fromEntries((['buildingNumber', 'addressLine1', 'addressLine2', 'townCity', 'postcode', 'country'] as const).map(key => [key, clientAddressBeforeSite.current![key]])) }
+        : value.client,
+    }), true);
   };
   const updateAgent = (key: keyof Agent, value: string | boolean) => {
     applyReview((current) => ({
@@ -939,10 +916,13 @@ export default function ApplicationDraftReview({
   const visibleDocuments = showAllDocuments || attentionDocumentIds.size === 0
     ? review.documents
     : review.documents.filter((document) => attentionDocumentIds.has(document.id));
-  const siteAddressComplete = Boolean(review.site.buildingNumber && review.site.addressLine1 && review.site.townCity && review.site.postcode);
+  const selectionNeedsConfirmation = review.clientMode === 'existing'
+    && (draft.prepared?.matches.clients.filter(match => match.strength === 'strong').length ?? 0) > 1
+    && confirmedClientId !== review.existingClientId;
   const locationPlanConflict = locationPlanCount > 1;
 
   const commit = async () => {
+    if (selectionNeedsConfirmation) { setError('Confirm the matching client before creating the project.'); return; }
     setWorking('commit');
     setError('');
     setNotice('');
@@ -962,6 +942,7 @@ export default function ApplicationDraftReview({
         method: 'POST',
         body: JSON.stringify({ review: currentReview }),
       });
+      try { window.sessionStorage.removeItem(`applicant-review:${draft.id}`); } catch { /* Browser storage is optional. */ }
       window.location.assign(result.redirectTo);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The application could not be created.');
@@ -1152,14 +1133,15 @@ export default function ApplicationDraftReview({
               <h2 className="font-semibold text-ink">Details requiring attention</h2>
               <p className="mt-1 text-sm text-stone-600">Open the highlighted sections below. Legal confirmations must be answered by you.</p>
               <ul className="mt-3 grid gap-x-6 gap-y-1 text-sm text-stone-700 sm:grid-cols-2">
-                {issues.slice(0, 8).map((issue) => (
+                {issues.filter(issue => issue.section !== 'client').slice(0, 8).map((issue) => (
                   <li key={issue.key} className="flex gap-2">
                     <span aria-hidden="true">-</span>
                     <span><strong>{issue.label}:</strong> {issue.message}</span>
                   </li>
                 ))}
+                {issues.some(issue => issue.section === 'client') ? <li><a href="#client-applicant-review" className="font-semibold underline underline-offset-4">Client &amp; Applicant: complete the highlighted details</a></li> : null}
               </ul>
-              {issues.length > 8 ? <p className="mt-2 text-xs text-stone-500">And {issues.length - 8} more in the sections below.</p> : null}
+              {issues.filter(issue => issue.section !== 'client').length > 8 ? <p className="mt-2 text-xs text-stone-500">And {issues.length - 8} more in the sections below.</p> : null}
             </div>
           </div>
         </section>
@@ -1350,108 +1332,12 @@ export default function ApplicationDraftReview({
         ) : null}
 
         {review.projectMode === 'create' ? (
-          <Section
-            title="Client and applicant"
-            summary={review.clientMode === 'existing'
-              ? draft.prepared?.matches.clients.find((match) => match.id === review.existingClientId)?.label ?? 'Existing client'
-              : personSummary(review.client)}
-            issueCount={issuesBySection.get('client') ?? 0}
-          >
-            <div className="space-y-6">
-              <section aria-labelledby="client-relationship-heading">
-                <h3 id="client-relationship-heading" className="text-sm font-semibold text-ink">Client and applicant relationship</h3>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-ink">
-                    <input
-                      type="checkbox"
-                      checked={!review.applicantDifferentFromClient}
-                      aria-label={review.applicantDifferentFromClient ? 'Use client as applicant' : 'Use a different applicant'}
-                      onChange={(event) => applyReview((current) => ({
-                        ...current,
-                        applicantDifferentFromClient: !event.target.checked,
-                        applicant: event.target.checked ? current.applicant : current.applicant ?? { ...current.client },
-                      }), true)}
-                      className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
-                    />
-                    Client is also the applicant
-                  </label>
-                {review.clientMode === 'create' ? (
-                  <label className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-semibold text-ink">
-                    <input
-                      type="checkbox"
-                      checked={review.clientAddressSameAsSite}
-                      disabled={!siteAddressComplete}
-                      onChange={(event) => applyReview((current) => ({
-                        ...current,
-                        clientAddressSameAsSite: event.target.checked,
-                        client: event.target.checked
-                          ? withSiteAddress(current.client, current.site)
-                          : current.client,
-                        applicant: event.target.checked && !current.applicantDifferentFromClient
-                          ? withSiteAddress(current.applicant ?? current.client, current.site)
-                          : current.applicant,
-                      }), true)}
-                      className="h-4 w-4 rounded border-stone-300 text-ink focus:ring-moss"
-                    />
-                    Client address is the same as the site address
-                  </label>
-                ) : (
-                  <p className="flex min-h-11 items-center rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-500">The selected client keeps their saved address.</p>
-                )}
-                </div>
-                {!siteAddressComplete && review.clientMode === 'create' ? <p className="mt-2 text-xs text-stone-500">Complete the site address before using it for the client.</p> : null}
-              </section>
-
-              <div className="rounded-md border border-stone-200 bg-stone-50 p-4">
-                <label className="block">
-                  <span className="label">Prepared client or existing client</span>
-                  <select
-                    value={review.clientMode === 'existing' ? review.existingClientId ?? '' : 'create'}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      applyReview((current) => ({
-                        ...current,
-                        clientMode: value === 'create' ? 'create' : 'existing',
-                        existingClientId: value === 'create' ? null : value,
-                        clientAddressSameAsSite: value === 'create' ? current.clientAddressSameAsSite : false,
-                      }), true);
-                    }}
-                    className="field bg-white"
-                  >
-                    <option value="create">Use the prepared client details</option>
-                    {draft.prepared?.matches.clients.map((match) => (
-                      <option key={match.id} value={match.id}>{match.label} ({match.strength} match)</option>
-                    ))}
-                  </select>
-                  {draft.prepared?.matches.clients.some((match) => match.strength === 'possible') ? (
-                    <p className="mt-2 text-xs text-stone-500">Possible matches require your choice. Architect Pro never matches on surname alone.</p>
-                  ) : null}
-                </label>
-              </div>
-
-              {review.clientMode === 'create' ? (
-                <PersonFields
-                  person={review.client}
-                  onChange={(key, value) => updatePerson('client', key, value)}
-                  issueFor={issueFor}
-                  prefix="client"
-                  showAddress={!review.clientAddressSameAsSite}
-                />
-              ) : null}
-
-              {review.applicantDifferentFromClient ? (
-                <section aria-labelledby="separate-applicant-heading">
-                  <h3 id="separate-applicant-heading" className="mb-3 text-sm font-semibold text-ink">Separate applicant details</h3>
-                  <PersonFields
-                    person={review.applicant ?? emptyPerson()}
-                    onChange={(key, value) => updatePerson('applicant', key, value)}
-                    issueFor={issueFor}
-                    prefix="applicant"
-                  />
-                </section>
-              ) : null}
-            </div>
-          </Section>
+          <ClientApplicantReview
+            key={draft.id} review={review} prepared={draft.prepared} issues={issues} draftId={draft.id}
+            saveState={saveState} selectionNeedsConfirmation={selectionNeedsConfirmation} disabled={Boolean(working)}
+            onChange={updatePerson} onSelect={selectClient} onRelationship={setApplicantDifferent}
+            onSiteAddress={setClientSiteAddress} onRetrySave={persistCurrentReview}
+          />
         ) : null}
 
         <Section
@@ -1726,7 +1612,7 @@ export default function ApplicationDraftReview({
             <p className={`self-center text-sm ${saveState === 'failed' ? 'text-red-700' : 'text-stone-500'}`} role="status" aria-live="polite">
               {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'failed' ? 'Could not save changes' : ''}
             </p>
-            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working)}>
+            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || selectionNeedsConfirmation}>
               {working === 'commit' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
               {working === 'commit' ? 'Creating project...' : 'Create Project'}
             </button>
