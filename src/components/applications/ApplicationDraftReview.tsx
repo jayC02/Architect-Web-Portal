@@ -1,5 +1,5 @@
 import ClientApplicantReview from './ClientApplicantReview';
-import { hasDifferentAddress, preparedPerson, siteAddressReady } from './client-review';
+import { clientSection, type ClientSection } from './client-review';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -102,23 +102,6 @@ const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
   if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
   return payload;
 };
-
-const emptyPerson = (): Person => ({
-  clientType: 'INDIVIDUAL',
-  displayName: null,
-  title: null,
-  firstName: null,
-  lastName: null,
-  companyName: null,
-  email: null,
-  phone: null,
-  buildingNumber: null,
-  addressLine1: null,
-  addressLine2: null,
-  townCity: null,
-  postcode: null,
-  country: 'United Kingdom',
-});
 
 const text = (value: string | number | null | undefined) =>
   value === null || value === undefined || String(value).trim() === '' ? 'Not found' : String(value);
@@ -525,26 +508,12 @@ export default function ApplicationDraftReview({
   const firstReviewRender = useRef(true);
   const saveImmediately = useRef(false);
   const categorySaveInFlight = useRef<string | null>(null);
-  const preparedClient = useRef<Person>(resolvedInitialReview?.clientMode === 'create' ? { ...resolvedInitialReview.client } : preparedPerson(initialDraft.prepared));
-  const separateApplicant = useRef<Person | null>(resolvedInitialReview?.applicantDifferentFromClient && resolvedInitialReview.applicant ? { ...resolvedInitialReview.applicant } : null);
-  const clientAddressBeforeSite = useRef<Person | null>(null);
-  const [confirmedClientId, setConfirmedClientId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (separateApplicant.current) return;
-    try {
-      const saved = JSON.parse(window.sessionStorage.getItem(`applicant-review:${draft.id}`) ?? 'null');
-      if (saved && ['INDIVIDUAL', 'ORGANISATION'].includes(saved.clientType)
-        && Object.keys(emptyPerson()).every(key => saved[key] === null || typeof saved[key] === 'string')) {
-        separateApplicant.current = saved;
-      }
-    } catch { /* Keep the in-memory applicant if browser storage is unavailable. */ }
-  }, [draft.id]);
-
-  const rememberApplicant = (person: Person) => {
-    separateApplicant.current = { ...person };
-    try { window.sessionStorage.setItem(`applicant-review:${draft.id}`, JSON.stringify(person)); } catch { /* In-memory recovery still works. */ }
-  };
+  const clientChangesPending = useRef(false);
+  const explicitClientSave = useRef(false);
+  const [clientNeedsSaving, setClientNeedsSaving] = useState(false);
+  const [clientMatchNeedsConfirmation, setClientMatchNeedsConfirmation] = useState(
+    resolvedInitialReview?.clientMode === 'existing' && (initialDraft.prepared?.matches.clients.filter(match => match.strength === 'strong').length ?? 0) > 1,
+  );
 
   const issueMap = useMemo(
     () => new Map(issues.map((issue) => [issue.key, issue.message])),
@@ -623,6 +592,7 @@ export default function ApplicationDraftReview({
       return;
     }
     if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+    if (explicitClientSave.current) { explicitClientSave.current = false; return; }
     if (saveImmediately.current) {
       saveImmediately.current = false;
       void persistCurrentReview();
@@ -632,10 +602,8 @@ export default function ApplicationDraftReview({
   }, [review]);
 
   useEffect(() => {
-    const isDirty = () => Boolean(reviewRef.current && JSON.stringify(reviewRef.current) !== lastSavedReview.current);
-    const protectUnload = (event: BeforeUnloadEvent) => {
-      if (isDirty()) { event.preventDefault(); event.returnValue = ''; }
-    };
+    const isDirty = () => clientChangesPending.current || Boolean(reviewRef.current && JSON.stringify(reviewRef.current) !== lastSavedReview.current);
+    const protectUnload = (event: BeforeUnloadEvent) => { if (isDirty()) { event.preventDefault(); event.returnValue = ''; } };
     const protectNavigation = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || !isDirty()) return;
       const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[href]') : null;
@@ -784,40 +752,22 @@ export default function ApplicationDraftReview({
       };
     });
   };
-  const updatePerson = (target: 'client' | 'applicant', key: keyof Person, value: string) => {
-    applyReview((current) => {
-      const person = target === 'client' ? current.client : current.applicant ?? emptyPerson();
-      if (target === 'applicant') rememberApplicant({ ...person, [key]: value || null });
-      return {
-        ...current,
-        [target]: { ...person, [key]: value || null },
-      };
-    });
-  };
-  const selectClient = (person: Person | null, id: string | null) => {
-    setConfirmedClientId(id);
-    applyReview(current => {
-      if (current.clientMode === 'create') preparedClient.current = { ...current.client };
-      const client = person ?? { ...preparedClient.current };
-      return { ...current, client, clientMode: id ? 'existing' : 'create', existingClientId: id, clientAddressSameAsSite: false };
-    }, true);
-  };
-  const setApplicantDifferent = (different: boolean) => applyReview(current => {
-    if (current.applicantDifferentFromClient && current.applicant) rememberApplicant(current.applicant);
-    return { ...current, applicantDifferentFromClient: different,
-      applicant: different ? { ...(separateApplicant.current ?? current.client) } : current.applicant };
-  }, true);
-  const setClientSiteAddress = (same: boolean) => {
-    const current = reviewRef.current;
-    if (!current || current.clientMode !== 'create' || (same && !siteAddressReady(current.site))) return;
-    if (same && hasDifferentAddress(current.client, current.site)
-      && !window.confirm("Replace this draft's client address with the site address? Saved client-directory records are not changed.")) return;
-    if (same) clientAddressBeforeSite.current = { ...current.client };
-    applyReview(value => ({ ...value, clientAddressSameAsSite: same,
-      client: same ? withSiteAddress(value.client, value.site) : clientAddressBeforeSite.current
-        ? { ...value.client, ...Object.fromEntries((['buildingNumber', 'addressLine1', 'addressLine2', 'townCity', 'postcode', 'country'] as const).map(key => [key, clientAddressBeforeSite.current![key]])) }
-        : value.client,
-    }), true);
+  const saveClientSection = async (section: ClientSection) => {
+    if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
+    const previous = reviewRef.current;
+    explicitClientSave.current = true;
+    applyReview(current => ({ ...current, ...section }));
+    const saved = await persistCurrentReview();
+    if (!saved && previous) {
+      explicitClientSave.current = true;
+      const reverted = { ...(reviewRef.current ?? previous), ...clientSection(previous) };
+      reviewRef.current = reverted;
+      setReview(reverted);
+      setIssues(evaluateClientApplicationDraftReadiness(reverted));
+      setSaveState('idle');
+    }
+    setError(''); // The client section reports its own save result in place.
+    return saved;
   };
   const updateAgent = (key: keyof Agent, value: string | boolean) => {
     applyReview((current) => ({
@@ -916,13 +866,11 @@ export default function ApplicationDraftReview({
   const visibleDocuments = showAllDocuments || attentionDocumentIds.size === 0
     ? review.documents
     : review.documents.filter((document) => attentionDocumentIds.has(document.id));
-  const selectionNeedsConfirmation = review.clientMode === 'existing'
-    && (draft.prepared?.matches.clients.filter(match => match.strength === 'strong').length ?? 0) > 1
-    && confirmedClientId !== review.existingClientId;
+  const clientReviewPending = review.projectMode === 'create' && (clientNeedsSaving || clientMatchNeedsConfirmation);
   const locationPlanConflict = locationPlanCount > 1;
 
   const commit = async () => {
-    if (selectionNeedsConfirmation) { setError('Confirm the matching client before creating the project.'); return; }
+    if (clientReviewPending) { setError('Save the client and applicant details before creating the project.'); return; }
     setWorking('commit');
     setError('');
     setNotice('');
@@ -942,7 +890,7 @@ export default function ApplicationDraftReview({
         method: 'POST',
         body: JSON.stringify({ review: currentReview }),
       });
-      try { window.sessionStorage.removeItem(`applicant-review:${draft.id}`); } catch { /* Browser storage is optional. */ }
+      try { window.sessionStorage.removeItem(`applicant-review:${draft.id}`); } catch { /* Browser recovery storage is optional. */ }
       window.location.assign(result.redirectTo);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The application could not be created.');
@@ -1092,7 +1040,7 @@ export default function ApplicationDraftReview({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-secondary gap-2" onClick={() => void analyseAgain()} disabled={Boolean(working)}>
+            <button type="button" className="btn btn-secondary gap-2" onClick={() => void analyseAgain()} disabled={Boolean(working) || clientNeedsSaving} title={clientNeedsSaving ? 'Save client and applicant details first.' : undefined}>
               <RefreshCw size={15} />
               Analyse again
             </button>
@@ -1125,7 +1073,7 @@ export default function ApplicationDraftReview({
         </div>
       </section>
 
-      {attentionCount > 0 ? (
+      {issues.some(issue => issue.section !== 'client') ? (
         <section data-attention-summary className="mb-5 rounded-lg border border-amber-200 bg-[#fffbef] p-5">
           <div className="flex items-start gap-3">
             <AlertCircle size={19} className="mt-0.5 shrink-0 text-amber-700" />
@@ -1139,9 +1087,8 @@ export default function ApplicationDraftReview({
                     <span><strong>{issue.label}:</strong> {issue.message}</span>
                   </li>
                 ))}
-                {issues.some(issue => issue.section === 'client') ? <li><a href="#client-applicant-review" className="font-semibold underline underline-offset-4">Client &amp; Applicant: complete the highlighted details</a></li> : null}
               </ul>
-              {issues.filter(issue => issue.section !== 'client').length > 8 ? <p className="mt-2 text-xs text-stone-500">And {issues.length - 8} more in the sections below.</p> : null}
+              {issues.filter(issue => issue.section !== 'client').length > 8 ? <p className="mt-2 text-xs text-stone-500">And {issues.filter(issue => issue.section !== 'client').length - 8} more in the sections below.</p> : null}
             </div>
           </div>
         </section>
@@ -1162,6 +1109,8 @@ export default function ApplicationDraftReview({
               <span className="label">Use an existing project or create a new one</span>
               <select
                 value={review.projectMode === 'existing' ? review.existingProjectId ?? '' : 'create'}
+                disabled={clientNeedsSaving}
+                title={clientNeedsSaving ? 'Save client and applicant details first.' : undefined}
                 onChange={(event) => {
                   const value = event.target.value;
                   applyReview((current) => ({
@@ -1332,12 +1281,10 @@ export default function ApplicationDraftReview({
         ) : null}
 
         {review.projectMode === 'create' ? (
-          <ClientApplicantReview
-            key={draft.id} review={review} prepared={draft.prepared} issues={issues} draftId={draft.id}
-            saveState={saveState} selectionNeedsConfirmation={selectionNeedsConfirmation} disabled={Boolean(working)}
-            onChange={updatePerson} onSelect={selectClient} onRelationship={setApplicantDifferent}
-            onSiteAddress={setClientSiteAddress} onRetrySave={persistCurrentReview}
-          />
+          <ClientApplicantReview key={draft.id} review={review} prepared={draft.prepared} draftId={draft.id}
+            disabled={Boolean(working)} onSave={saveClientSection}
+            onDirtyChange={dirty => { clientChangesPending.current = dirty; setClientNeedsSaving(dirty); }}
+            onConfirmationChange={setClientMatchNeedsConfirmation} />
         ) : null}
 
         <Section
@@ -1605,14 +1552,16 @@ export default function ApplicationDraftReview({
                 : 'Ready to create project'}
             </p>
             <p className="mt-1 text-xs text-stone-500">
-              Changes are saved automatically. Permanent records are created only after you approve this review.
+              {review.projectMode === 'create'
+                ? 'Save client and applicant details above. Other review changes save automatically.'
+                : 'Changes are saved automatically. Permanent records are created only after you approve this review.'}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <p className={`self-center text-sm ${saveState === 'failed' ? 'text-red-700' : 'text-stone-500'}`} role="status" aria-live="polite">
               {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'failed' ? 'Could not save changes' : ''}
             </p>
-            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || selectionNeedsConfirmation}>
+            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || clientReviewPending}>
               {working === 'commit' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
               {working === 'commit' ? 'Creating project...' : 'Create Project'}
             </button>

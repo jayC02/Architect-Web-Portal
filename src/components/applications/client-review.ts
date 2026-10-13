@@ -4,6 +4,16 @@ export type ClientReview = NonNullable<ApplicationDraftResponse['review']>;
 export type ClientPerson = ClientReview['client'];
 export type PersonGroup = 'identity' | 'contact' | 'address';
 export type DirectoryClient = Omit<ClientPerson, 'clientType' | 'displayName'> & { id: string; name: string; address?: string | null };
+export type ClientSection = Pick<ClientReview, 'clientMode' | 'existingClientId' | 'client' | 'clientAddressSameAsSite' | 'applicantDifferentFromClient' | 'applicant'>;
+export const clientSection = (review: ClientReview): ClientSection => ({
+  clientMode: review.clientMode, existingClientId: review.existingClientId, client: { ...review.client },
+  clientAddressSameAsSite: review.clientAddressSameAsSite, applicantDifferentFromClient: review.applicantDifferentFromClient,
+  applicant: review.applicant ? { ...review.applicant } : undefined,
+});
+export const blankApplicant = (): ClientPerson => ({
+  clientType: 'INDIVIDUAL', displayName: null, title: null, firstName: null, lastName: null, companyName: null,
+  email: null, phone: null, buildingNumber: null, addressLine1: null, addressLine2: null, townCity: null, postcode: null, country: null,
+});
 
 export const personName = (person: ClientPerson) => person.displayName?.trim()
   || (person.clientType === 'ORGANISATION' ? person.companyName?.trim() : [person.firstName, person.lastName].filter(Boolean).join(' '))

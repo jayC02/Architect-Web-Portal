@@ -29,11 +29,21 @@ assert.equal(preparedPerson(partial).country, null, 'UI mapping does not assume 
 assert.equal(scoreClientMatch({ ...record, firstName: 'Alex', name: 'Alex Campbell', postcode: null, address: null, addressLine1: null, phone: null } as Parameters<typeof scoreClientMatch>[0], { lastName: 'Campbell' }), null, 'surname alone never selects a client');
 
 const review = applicationDraftReviewSchema.parse({ selectedApplicationType: 'HOUSEHOLDER_PLANNING', projectMode:'create',existingProjectId:null,project:{name:'Extension',internalReference:null,typeOfWorkKey:null,summary:null},siteMode:'create',existingSiteId:null,site,clientMode:'create',existingClientId:null,client:person,clientAddressSameAsSite:false,applicantDifferentFromClient:false,applicant:person,agent:{practiceName:null,firstName:null,lastName:null,email:null,phone:null,buildingNumber:null,addressLine1:null,addressLine2:null,townCity:null,postcode:null,country:null},application:{description:null,currentUse:null,proposedUse:null,estimatedValue:null,presetKey:null,selectedCertifierPresetId:null},confirmations:{},documents:[] });
-const props = {review,prepared:null,issues:[],draftId:'fixture',saveState:'saved' as const,selectionNeedsConfirmation:false,disabled:false,onChange:()=>{},onSelect:()=>{},onRelationship:()=>{},onSiteAddress:()=>{},onRetrySave:async()=>true};
+const props = {review,prepared:null,draftId:'fixture',disabled:false,onSave:async()=>true,onDirtyChange:()=>{},onConfirmationChange:()=>{}};
 const complete = renderToStaticMarkup(React.createElement(ClientApplicantReview,props));
-assert.ok(complete.includes('Anna Campbell') && complete.includes('Same as client'));
-assert.ok(!complete.includes('type="email"'), 'complete client starts with a summary, not a full form');
-const missing = renderToStaticMarkup(React.createElement(ClientApplicantReview,{...props,review:{...review,client:{...person,email:null,addressLine1:null}},issues:[{key:'client.email',section:'client',label:'Email',message:'Confirm the email.'},{key:'client.addressLine1',section:'client',label:'Address',message:'Confirm the address.'}]}));
-assert.ok(missing.includes('type="email"'), 'missing contact opens just the contact editor');
-assert.ok(!missing.includes('>Address line 1<'), 'unrelated address fields remain collapsed with a targeted action');
+assert.ok(complete.includes('Anna Campbell') && complete.includes('Applicant details will be the same as the client.'));
+assert.ok(complete.includes('readOnly=""'), 'known values appear as a quiet summary and become editable on focus');
+assert.ok(!complete.includes('class="field'), 'complete client has no outlined input form');
+assert.equal((complete.match(/type="submit"/g) ?? []).length,1,'one action saves the section');
+assert.ok(!complete.includes('Done editing') && !complete.includes('Identity needs review'),'no extra editing or review actions');
+const missing = renderToStaticMarkup(React.createElement(ClientApplicantReview,{...props,review:{...review,client:{...person,email:null,addressLine1:null}}}));
+assert.ok(missing.includes('placeholder="Enter email"'), 'missing email can be completed immediately');
+assert.ok(missing.includes('placeholder="Enter address line 1"'), 'missing address is inline without another editor');
+assert.ok(!missing.includes('Enter phone'),'optional absent phone is not presented as required');
+const emptyIdentity = renderToStaticMarkup(React.createElement(ClientApplicantReview,{...props,review:{...review,client:{...person,displayName:null,firstName:null,lastName:null}}}));
+assert.ok(emptyIdentity.includes('Enter first name') && emptyIdentity.includes('Enter last name'));
+assert.ok(!emptyIdentity.includes('placeholder="Enter name"'),'missing individual identity is entered once and its display name is derived');
+const uncertainPrepared = {client:{email:{value:person.email,status:'suggested',certainty:'low',sources:[]}},matches:{clients:[]}} as unknown as PreparedApplicationDraft;
+const uncertain = renderToStaticMarkup(React.createElement(ClientApplicantReview,{...props,prepared:uncertainPrepared}));
+assert.ok(uncertain.includes('Check the email suggested by the documents.'),'uncertain values need visible inline confirmation');
 console.log('Client/applicant summary, source mapping, address safeguards and original match behavior passed.');

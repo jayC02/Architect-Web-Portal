@@ -1,2 +1,0 @@
-[    4025ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4330/@vite/client:1695
-[    4026ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:4330/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:4330/@vite/client:1766
