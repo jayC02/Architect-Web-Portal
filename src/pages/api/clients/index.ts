@@ -15,6 +15,8 @@ export const GET: APIRoute = (context) =>
     const { organisation, membership } = await requireOrganisation(context);
     const query = context.url.searchParams.get('q')?.trim().slice(0, 160);
     const clientId = context.url.searchParams.get('clientId')?.trim().slice(0, 120);
+    const picker = context.url.searchParams.get('picker') === 'true' && !clientId;
+    const after = picker ? context.url.searchParams.get('after')?.trim().slice(0, 120) : undefined;
     const clients = await withPerf('api.clients.list', () =>
       prisma.client.findMany({
         where: {
@@ -51,11 +53,16 @@ export const GET: APIRoute = (context) =>
           country: true,
           _count: { select: { projects: true } },
         },
-        orderBy: { updatedAt: 'desc' },
-        take: 100,
+        orderBy: picker ? [{ name: 'asc' }, { id: 'asc' }] : { updatedAt: 'desc' },
+        ...(after ? { cursor: { id: after }, skip: 1 } : {}),
+        take: picker ? 101 : 100,
       }),
     );
-    return jsonResponse(200, { clients, canViewFinance: ['OWNER', 'ADMIN'].includes(membership.role) });
+    return jsonResponse(200, {
+      clients: picker ? clients.slice(0, 100) : clients,
+      ...(picker ? { nextCursor: clients.length > 100 ? clients[99].id : null } : {}),
+      canViewFinance: ['OWNER', 'ADMIN'].includes(membership.role),
+    });
   }, context);
 
 export const POST: APIRoute = (context) =>

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, Check, LoaderCircle } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import type { ApplicationDraftResponse } from '@/server/services/application-draft-view.service';
 import {
@@ -34,11 +34,6 @@ const preparedPerson = (draft: ApplicationDraftResponse): ReviewPerson => {
   person.clientType = person.companyName ? 'ORGANISATION' : 'INDIVIDUAL';
   person.displayName ||= person.companyName || [person.firstName, person.lastName].filter(Boolean).join(' ') || null;
   return person;
-};
-const labels: Partial<Record<keyof ReviewPerson, string>> = {
-  displayName: 'Name', title: 'Title', firstName: 'First name', lastName: 'Last name', companyName: 'Company name',
-  email: 'Email', phone: 'Phone', buildingNumber: 'Building number', addressLine1: 'Street', addressLine2: 'Address line 2',
-  townCity: 'Town or city', postcode: 'Postcode', country: 'Country',
 };
 const ignoredDefaults = (review: Review, draft: ApplicationDraftResponse): (keyof ReviewPerson)[] => [
   ...(review.clientAddressSameAsSite ? addressKeys : []),
@@ -92,7 +87,7 @@ function PersonDetails({ person, prefix, onChange, issueFor, readOnly, site, use
       {field('email', 'Email', true)}{field('phone', 'Phone · optional')}
     </div></div>
     <div className="cr-row"><h4>Address</h4><div>
-      <div className="cr-address-tools"><p>{sameAsSite ? 'Using the site address. Changes to the site stay in sync.' : 'Correspondence address'}</p>
+      <div className="cr-address-tools"><p>{sameAsSite ? 'Site address' : 'Correspondence address'}</p>
         {!readOnly ? <button className="btn btn-secondary" type="button" disabled={!siteComplete} onClick={useSite}
           title={siteComplete ? [site.buildingNumber, site.addressLine1, site.townCity, site.postcode].filter(Boolean).join(', ') : 'Complete the site address first'}>Use site address</button> : null}
       </div>
@@ -105,13 +100,12 @@ function PersonDetails({ person, prefix, onChange, issueFor, readOnly, site, use
 }
 
 export default function ClientApplicantReview({ draft, review, onChange, issueFor, onContinue, busy, saveState, onLookupPending, onVisibilityChange }: Props) {
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ReviewClient[]>([]);
+  const [clients, setClients] = useState<ReviewClient[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(true);
+  const [pickerError, setPickerError] = useState('');
   const [lookupError, setLookupError] = useState('');
   const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [candidate, setCandidate] = useState<ReviewClient | null>(null);
   const [matchNotice, setMatchNotice] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [continuing, setContinuing] = useState(false);
@@ -126,8 +120,34 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
   const selected = review.clientMode === 'existing';
   const lookupName = review.client.displayName?.trim() ?? '';
   const selectedId = selected ? review.existingClientId : null;
-  const lookup = searchOpen ? `q=${encodeURIComponent(query)}` : selectedId ? `clientId=${encodeURIComponent(selectedId)}`
+  const lookup = selectedId ? `clientId=${encodeURIComponent(selectedId)}`
     : lookupName ? `q=${encodeURIComponent(lookupName)}` : '';
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setPickerLoading(true); setPickerError('');
+    void (async () => {
+      try {
+        const all: ReviewClient[] = [];
+        let cursor: string | null = null;
+        const seen = new Set<string>();
+        do {
+          const payload: { clients: ReviewClient[]; nextCursor: string | null } = await apiRequest(
+            `/api/clients?picker=true${cursor ? `&after=${encodeURIComponent(cursor)}` : ''}`, { signal: controller.signal },
+          );
+          if (controller.signal.aborted) return;
+          all.push(...payload.clients);
+          cursor = payload.nextCursor;
+          if (cursor && seen.has(cursor)) throw new Error('Could not load clients. Please try again.');
+          if (cursor) seen.add(cursor);
+        } while (cursor);
+        setClients(all);
+      } catch (error) {
+        if (!controller.signal.aborted) setPickerError(error instanceof Error ? error.message : 'Could not load clients.');
+      } finally { if (!controller.signal.aborted) setPickerLoading(false); }
+    })();
+    return () => controller.abort();
+  }, [retry]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => onVisibilityChange(entry.isIntersecting));
@@ -137,7 +157,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
 
   // Read the organisation-scoped directory. Stale responses never replace edits or a newer choice.
   useEffect(() => {
-    if (!lookup) { setResults([]); setMatchNotice(''); setLoading(false); onLookupPending(false); return; }
+    if (!lookup) { setMatchNotice(''); setLoading(false); onLookupPending(false); return; }
     const controller = new AbortController();
     const snapshot = reviewPersonKey(current.current.review.client);
     setLoading(true); onLookupPending(true); setLookupError(''); setMatchNotice('');
@@ -145,9 +165,8 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
       try {
         const payload = await apiRequest<{ clients: ReviewClient[] }>(`/api/clients?${lookup}`, { signal: controller.signal });
         if (controller.signal.aborted) return;
-        setResults(payload.clients);
         const latest = current.current;
-        if (searchOpen || reviewPersonKey(latest.review.client) !== snapshot) return;
+        if (reviewPersonKey(latest.review.client) !== snapshot) return;
         if (selectedId) {
           const record = payload.clients.find(client => client.id === selectedId);
           if (!record) { setLookupError('This saved client is no longer available. Choose another client.'); return; }
@@ -163,19 +182,19 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
           const record = matches[0];
           const conflicts = clientDifferences(latest.review.client, personFromDirectory(record), ignoredDefaults(latest.review, latest.draft));
           if (conflicts.length || Object.values(latest.draft.prepared?.client ?? {}).some(field => field.status === 'conflict')) {
-            setMatchNotice('A saved client has this name. Review the differing details before choosing.');
+            setMatchNotice('Choose the correct client from the list above.');
           } else {
             previousPrepared.current = latest.review.client;
             latest.onChange(value => value.clientMode === 'create' && reviewPersonKey(value.client) === snapshot
               ? selectDirectoryClient(value, record) : value, true);
           }
-        } else if (matches.length > 1) setMatchNotice('More than one saved client has this name. Choose the correct client.');
+        } else if (matches.length > 1) setMatchNotice('Choose the correct client from the list above.');
       } catch (error) {
         if (!controller.signal.aborted) setLookupError(error instanceof Error ? error.message : 'Could not load saved clients.');
       } finally { if (!controller.signal.aborted) { setLoading(false); onLookupPending(false); } }
-    }, searchOpen || !selectedId ? 300 : 0);
+    }, !selectedId ? 300 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [lookup, selectedId, searchOpen, retry, onLookupPending]);
+  }, [lookup, selectedId, retry, onLookupPending]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -189,7 +208,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     if (review.clientMode === 'create') previousPrepared.current = review.client;
     manualChoice.current = true;
     onChange(value => selectDirectoryClient(value, record), true);
-    setSearchOpen(false); setCandidate(null); setContinueError('');
+    setContinueError('');
   };
   const updatePerson = (prefix: 'client' | 'applicant', key: keyof ReviewPerson, value: string) => {
     setContinueError('');
@@ -222,9 +241,6 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
   const clientHasIssues = Object.keys(review.client).some(key => issueFor(`client.${key}`));
   const clientReady = !clientHasIssues && !issueFor('existingClientId');
   const applicantReady = !review.applicantDifferentFromClient || !Object.keys(review.applicant ?? emptyPerson()).some(key => issueFor(`applicant.${key}`));
-  const source = Object.values(draft.prepared?.client ?? {}).flatMap(value => value.sources).find(source =>
-    draft.documents.some(document => document.id === source.documentId));
-  const savedLabel = draft.prepared?.matches.clients.find(match => match.id === selectedId)?.label;
   const titleId = useId();
   const relationshipId = useId();
 
@@ -233,47 +249,43 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     <div className="cr-person-name">
       <PersonField person={person} name="displayName" label={prefix === 'client' ? 'Client name' : 'Applicant name'} prefix={prefix}
         required onChange={(key, value) => updatePerson(prefix, key, value)} issue={errors(`${prefix}.displayName`)} />
-      {prefix === 'client' ? <p className="cr-source">{selected ? 'Using saved client details' : source ? <>
-        From <a href={`/api/application-drafts/${draft.id}/documents/${source.documentId}`} target="_blank" rel="noreferrer">{source.filename}</a>{source.page ? ` · page ${source.page}` : ''}
-      </> : 'Prepared client details — correct or complete below'}</p> : null}
     </div>
-    {prefix === 'client' ? <span className={`cr-status ${clientReady ? 'cr-good' : ''}`}>{clientReady ? <><Check size={12} /> {selected ? 'Saved client' : 'Details complete'}</> : 'Details to complete'}</span> : null}
+    {prefix === 'client' ? <span className={`cr-status ${selected || clientReady ? 'cr-good' : ''}`}>
+      {selected || clientReady ? <span className="cr-status-icon"><Check size={16} strokeWidth={2.5} /></span> : null}
+      {selected ? 'Saved client' : clientReady ? 'Details complete' : 'Details to complete'}
+    </span> : null}
   </div>;
 
   return <section className="client-review" ref={root} aria-labelledby={titleId}>
     <header className="cr-heading"><h2 id={titleId}>Client & Applicant</h2><p>Review the details. Fill the gaps. Confirm who’s applying.</p></header>
     <div className="cr-paper">
-      <div className="cr-paper-top"><h3>Client details</h3><button type="button" className="btn btn-secondary" aria-expanded={searchOpen}
-        onClick={() => { setSearchOpen(!searchOpen); setQuery(lookupName); setCandidate(null); }}>Search existing clients</button></div>
-      {searchOpen ? <div className="cr-search">
-        <label>Find an existing client<input className="field" autoFocus type="search" value={query} onChange={event => { setQuery(event.target.value); setCandidate(null); }} placeholder="Search name or email" /></label>
-        <label>Existing client<select className="field" disabled={loading} value={candidate?.id ?? ''} onChange={event => {
-          const record = results.find(client => client.id === event.target.value);
-          if (record) clientDifferences(review.client, personFromDirectory(record), ignoredDefaults(review, draft)).length ? setCandidate(record) : choose(record);
-        }}>
-          <option value="">{loading ? 'Searching saved clients…' : 'Choose a saved client'}</option>
-          {results.map(record => <option value={record.id} key={record.id}>{[record.name, record.email, record.postcode].filter(Boolean).join(' · ')}</option>)}
-        </select></label>
-        {!loading && !lookupError && results.length === 0 ? <p className="cr-helper">No matching clients. Try another name or keep the prepared details.</p> : null}
-        {results.length === 100 ? <p className="cr-helper">Showing 100 clients. Refine your search to find the right person.</p> : null}
-        {candidate ? <div className="cr-conflict" role="region" aria-label="Saved client differences"><strong>These details differ</strong>
-          {clientDifferences(review.client, personFromDirectory(candidate), ignoredDefaults(review, draft)).map(key => <p key={key}>{labels[key]}: <span>{review.client[key] || 'Not provided'}</span> → <strong>{personFromDirectory(candidate)[key] || 'Not saved'}</strong></p>)}
-          <button type="button" className="btn btn-secondary" onClick={() => choose(candidate)}>Use this saved client</button>
-          <button type="button" className="btn btn-secondary" onClick={() => setCandidate(null)}>Keep current details</button>
-        </div> : null}
-        <button type="button" className="btn btn-secondary" onClick={() => { setSearchOpen(false); setCandidate(null); }}>Close search</button>
-      </div> : null}
+      <div className="cr-paper-top"><h3>Client details</h3>
+        <div className="cr-client-picker">
+          <select className="btn btn-secondary" aria-label="Search existing clients" disabled={pickerLoading || Boolean(pickerError)} value=""
+            onChange={event => {
+              if (event.target.value === '__new__') {
+                manualChoice.current = true;
+                onChange(value => ({ ...value, clientMode: 'create', existingClientId: null, clientDetailsEdited: false,
+                  client: previousPrepared.current, clientAddressSameAsSite: false,
+                  applicant: value.applicantDifferentFromClient ? value.applicant : previousPrepared.current }), true);
+              } else {
+                const record = clients.find(client => client.id === event.target.value);
+                if (record) choose(record);
+              }
+            }}>
+            <option value="" disabled>{pickerLoading ? 'Loading clients...' : 'Search existing clients'}</option>
+            {selected ? <option value="__new__">Enter a new client</option> : null}
+            {clients.length ? <optgroup label="Saved clients">{clients.map(record =>
+              <option key={record.id} value={record.id}>{[record.name, record.email, record.postcode].filter(Boolean).join(' \u00b7 ')}</option>
+            )}</optgroup> : <option disabled>No saved clients</option>}
+          </select>
+          <ChevronDown size={16} aria-hidden="true" />
+        </div>
+      </div>
       <div className="cr-body">
-        {lookupError ? <p className="cr-error" role="alert">{lookupError} <button type="button" className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
-        {matchNotice && !searchOpen ? <p className="cr-helper" role="status">{matchNotice} <button type="button" className="btn btn-secondary" onClick={() => { setQuery(lookupName); setSearchOpen(true); }}>Review matches</button></p> : null}
+        {lookupError || pickerError ? <p className="cr-error" role="alert">{lookupError || pickerError} <button type="button" className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
+        {matchNotice ? <p className="cr-helper" role="status">{matchNotice}</p> : null}
         {personHeading(review.client, 'client')}
-        {selected ? <div className="cr-saved-note"><p>Linked to {savedLabel || review.client.displayName || 'your saved client'}. Edit any detail below. Corrections are saved with this draft and update the saved client when you create the project.</p>
-          <button type="button" className="btn btn-secondary" onClick={() => {
-            manualChoice.current = true;
-            onChange(value => ({ ...value, clientMode: 'create', existingClientId: null, clientDetailsEdited: false, client: previousPrepared.current, clientAddressSameAsSite: false,
-              applicant: value.applicantDifferentFromClient ? value.applicant : previousPrepared.current }), true);
-          }}>{previousPrepared.current.displayName ? 'Use prepared details instead' : 'Enter a new client'}</button>
-        </div> : null}
         <PersonDetails person={review.client} prefix="client" onChange={(key, value) => updatePerson('client', key, value)} issueFor={errors}
           readOnly={false} site={review.site} useSite={() => useSite('client')} sameAsSite={review.clientAddressSameAsSite} />
         {addressTarget ? <div className="cr-conflict" role="region" aria-label="Replace correspondence address"><p>Replace the {addressTarget}’s correspondence address with {[review.site.buildingNumber, review.site.addressLine1, review.site.townCity, review.site.postcode].filter(Boolean).join(', ')}?</p>
@@ -293,7 +305,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         </section> : null}
       </div>
       <footer className="cr-foot"><div role="status"><strong>{clientReady && applicantReady ? 'Ready to continue' : 'Complete the remaining details'}</strong>
-        <p>{saveState === 'saving' ? 'Saving changes…' : saveState === 'failed' ? 'Could not save. Your entries are still here.' : 'Your prepared details are already filled in.'}</p></div>
+        <p>{saveState === 'saving' ? 'Saving changes…' : saveState === 'failed' ? 'Could not save. Your entries are still here.' : saveState === 'saved' ? 'Changes saved.' : ''}</p></div>
         <button type="button" className="btn btn-primary gap-3" disabled={busy || continuing || loading} onClick={async () => {
           setAttempted(true); setContinueError('');
           const invalid = Array.from(root.current?.querySelectorAll<HTMLInputElement>('input:not([readonly])') ?? []).find(input => !input.checkValidity());

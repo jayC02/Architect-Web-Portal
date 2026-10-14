@@ -10,10 +10,8 @@
 .client-review .cr-person-head{padding:18px 0 14px;display:flex;gap:18px;align-items:center}
 .client-review .cr-avatar{background:#edf0e8;color:#526346;width:45px;height:45px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;flex-shrink:0}
 .client-review .cr-person-name{flex:1;min-width:0}
-.client-review .cr-source{font-size:11px;color:var(--cr-muted);margin:6px 0 0;overflow-wrap:anywhere;line-height:1.5}
-.client-review .cr-source a{font-weight:500;color:#505a46;text-decoration:underline;text-underline-offset:2px}
-.client-review .cr-status{display:inline-flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;padding:5px 8px;border-radius:4px;background:#f5f0e6;color:#886126}
-.client-review .cr-good{background:#eef3ea;color:#45603c}
+.client-review .cr-status{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-weight:600;white-space:nowrap;min-height:40px;padding:7px 12px;border:1px solid #ded6c5;border-radius:6px;background:#faf7ef;color:#765825;align-self:flex-end}
+.client-review .cr-good{background:#f2f6ee;border-color:#c6d2bd;color:#344a2a}
 .client-review .cr-row{display:grid;grid-template-columns:112px minmax(0,1fr);gap:22px;padding:14px 0;border-top:1px solid var(--cr-line)}
 .client-review .cr-row h4{font-size:13px;font-weight:550;padding-top:23px;margin:0}
 .client-review .cr-fields{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
@@ -41,12 +39,9 @@
 .client-review .cr-applicant{border-top:1px solid var(--cr-line);padding:18px 0 15px}
 .client-review .cr-error{display:block;font-size:12px;color:#a33e2b;margin-top:5px;line-height:1.5}
 .client-review .cr-save-error{padding:14px 28px}
-.client-review .cr-search{background:#f8faf5;padding:18px 28px;border-bottom:1px solid var(--cr-line)}
-.client-review .cr-search>label{font-size:12px;display:block;color:var(--cr-muted)}
 .client-review .cr-conflict{padding:14px;background:#fff9ec;border:1px solid #dccca9;border-radius:5px;margin:12px 0;font-size:13px;overflow-wrap:anywhere}
 .client-review .cr-conflict p{margin:7px 0}
 .client-review .cr-conflict button{margin:7px 14px 0 0}
-.client-review .cr-saved-note{font-size:12px;color:var(--cr-muted);margin-bottom:14px;line-height:1.5}
 @media(max-width:760px){
   .client-review .cr-heading h2{font-size:28px}
   .client-review .cr-heading p{font-size:13px}
@@ -70,20 +65,21 @@
   .client-review .cr-choices label{min-height:47px}
   .client-review .cr-foot{padding:18px;flex-direction:column;align-items:stretch;gap:15px}
   .client-review .cr-address-tools{align-items:flex-start;flex-direction:column;gap:8px}
-  .client-review .cr-source{line-height:1.6}
-  .client-review .cr-search{padding:17px 18px}
 }
 
 .client-review .cr-field .field{min-width:0}
-.client-review .cr-search{display:grid;gap:12px}
-.client-review .cr-search .field{margin-top:6px}
-.client-review .cr-search>.btn{justify-self:start}
-.client-review .cr-saved-note{display:flex;align-items:center;justify-content:space-between;gap:16px}
-.client-review .cr-saved-note .btn{flex-shrink:0}
-.client-review .cr-choices input:focus-visible,.client-review .cr-source a:focus-visible{outline:2px solid #68765c;outline-offset:3px}
+.client-review .cr-choices input:focus-visible{outline:2px solid #68765c;outline-offset:3px}
 @media(max-width:760px){
   .client-review .cr-paper-top{flex-wrap:wrap}
-  .client-review .cr-field .field,.client-review .cr-search .field{font-size:16px}
-  .client-review .cr-saved-note{align-items:flex-start;flex-direction:column;gap:10px}
+  .client-review .cr-field .field{font-size:16px}
   .client-review .cr-foot>.btn{width:100%}
+}
+
+.client-review .cr-status-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#e0e9d8;color:#3e5832}
+.client-review .cr-client-picker{position:relative;max-width:100%;flex-shrink:0}
+.client-review .cr-client-picker select{appearance:none;padding-right:38px;cursor:pointer;width:220px;max-width:100%}
+.client-review .cr-client-picker>svg{position:absolute;right:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:#575d51}
+@media(max-width:760px){
+  .client-review .cr-status{min-height:38px}
+  .client-review .cr-client-picker select{width:210px}
 }

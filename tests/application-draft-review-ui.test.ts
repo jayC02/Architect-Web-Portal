@@ -71,7 +71,7 @@ assert.match(reviewUi, />\s*Cancel\s*</, 'category changes can be cancelled');
 assert.match(reviewUi, /More than one document is marked as a Location Plan/, 'Location Plan conflicts explain the required manual choice');
 assert.match(reviewUi, /clientAddressSameAsSite/, 'same-as-site address flow is visible');
 assert.match(reviewUi, /withSiteAddress[\s\S]*buildingNumber: site\.buildingNumber/, 'same-as-site copies the structured Site building number');
-assert.match(clientReviewUi, /Using the site address\. Changes to the site stay in sync\./, 'the linked address stays visible for review');
+assert.match(clientReviewUi, /sameAsSite \? 'Site address' : 'Correspondence address'/, 'the address relationship has a concise label');
 assert.match(reviewUi, /label="Building number"[\s\S]*review\.site\.buildingNumber/, 'Site asks for the building number once');
 assert.match(clientReviewUi, /No, a different applicant/, 'separate applicant remains accessible');
 assert.match(reviewUi, /persistCurrentReview/, 'draft updates are autosaved');
