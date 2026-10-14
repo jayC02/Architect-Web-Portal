@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ChevronDown, ListOrdered, X, LoaderCircle } from 'lucide-react';
+import { ChevronDown, ListOrdered, LoaderCircle } from 'lucide-react';
 
 type Job = {
   id: string; title: string; type: string; status: string;
@@ -8,7 +8,7 @@ type Job = {
 };
 type Queue = { active: Job[] };
 const progressClassName = 'h-2 w-full appearance-none overflow-hidden rounded-full bg-stone-200 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-stone-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-moss [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-moss';
-const labels: Record<string, string> = { READY: 'Queued', CLAIMED: 'Starting', IN_PROGRESS: 'In progress' };
+const labels: Record<string, string> = { READY: 'Queued', CLAIMED: 'Starting', IN_PROGRESS: 'In progress', NEEDS_REVIEW: 'Needs attention', CANCELLED: 'Stopping' };
 
 export default function AgentQueueDropdown() {
   const [queue, setQueue] = useState<Queue | null>(null);
@@ -21,11 +21,16 @@ export default function AgentQueueDropdown() {
   const preview = useRef<HTMLDivElement>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removalError, setRemovalError] = useState('');
+  const [cancelPrompt, setCancelPrompt] = useState<Job | null>(null);
+  const [notice, setNotice] = useState('');
   const removalInFlight = useRef(false);
   const removedIds = useRef(new Map<string, number>());
+  const pendingCancellations = useRef(new Map<string, { job: Job; generation: number }>());
   const queueMutationGeneration = useRef(0);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const keepJob = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (cancelPrompt) keepJob.current?.focus(); }, [cancelPrompt]);
   useEffect(() => {
     const originalPosition = anchor.current;
     if (!originalPosition) return;
@@ -74,7 +79,20 @@ export default function AgentQueueDropdown() {
         const response = await fetch('/api/automation-jobs/queue', { signal: controller.signal, cache: 'no-store' });
         if (!response.ok) throw new Error('Queue unavailable');
         const next = await response.json();
-        if (!controller.signal.aborted) { setQueue({ active: next.active.filter((job: Job) => (removedIds.current.get(job.id) ?? 0) <= requestGeneration) }); setError(false);
+        if (!controller.signal.aborted) {
+          let active: Job[] = next.active.filter((job: Job) => (removedIds.current.get(job.id) ?? 0) <= requestGeneration);
+          for (const [id, pending] of pendingCancellations.current) {
+            if (!active.some(job => job.id === id)) {
+              if (pending.generation > requestGeneration) active.unshift(pending.job);
+              else {
+                pendingCancellations.current.delete(id);
+                setNotice('Job cancelled. Your prepared application has been kept.');
+              }
+            }
+          }
+          active = active.map(job => pendingCancellations.current.has(job.id)
+            ? { ...job, status: 'CANCELLED', progressMessage: 'Stopping safely…' } : job);
+          setQueue({ active }); setError(false);
           for (const [id, generation] of removedIds.current) if (generation <= requestGeneration) removedIds.current.delete(id);
         }
       } catch {
@@ -99,24 +117,34 @@ export default function AgentQueueDropdown() {
       if (!container.current?.contains(event.target as Node)) setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); }
+      if (event.key === 'Escape') { setCancelPrompt(null); setOpen(false); trigger.current?.focus(); }
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [open]);
-  const removeJob = async (job: Job) => {
+  const removeJob = async (job: Job, cancel = false) => {
     if (removalInFlight.current) return;
     removalInFlight.current = true;
     setRemoving(job.id);
     setRemovalError('');
+    setNotice('');
     try {
-      const response = await fetch(`/api/automation-jobs/${job.id}/queue`, { method: 'DELETE', credentials: 'same-origin' });
+      const response = await fetch(`/api/automation-jobs/${job.id}/${cancel ? 'cancel' : 'queue'}`, { method: cancel ? 'POST' : 'DELETE', credentials: 'same-origin' });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Could not remove this job.');
-      // Exclude it from a polling response that started before withdrawal completed.
-      removedIds.current.set(job.id, ++queueMutationGeneration.current);
-      setQueue(current => current ? { active: current.active.filter(item => item.id !== job.id) } : current);
+      if (payload.pending) {
+        pendingCancellations.current.set(job.id, { job, generation: ++queueMutationGeneration.current });
+        setQueue(current => current ? { active: current.active.map(item => item.id === job.id
+          ? { ...item, status: 'CANCELLED', progressMessage: 'Stopping safely…' } : item) } : current);
+        setNotice('Cancellation requested. The next job can start once the Agent stops this run. If the Agent is offline, reopen it to finish cancelling.');
+      } else {
+        // Exclude it from a polling response that started before withdrawal completed.
+        removedIds.current.set(job.id, ++queueMutationGeneration.current);
+        setQueue(current => current ? { active: current.active.filter(item => item.id !== job.id) } : current);
+        setNotice(cancel ? 'Job cancelled. Your prepared application has been kept.' : 'Removed from queue. Your prepared application has been kept.');
+      }
+      setCancelPrompt(null);
       window.dispatchEvent(new CustomEvent('portal:mutation-success'));
       trigger.current?.focus();
     } catch (requestError) {
@@ -143,14 +171,14 @@ export default function AgentQueueDropdown() {
           </div>
         </>}
       </a>
-      {job.status === 'READY' && <button type="button"
-        aria-label={`Remove ${job.project.name} ${job.title} from queue`}
-        title="Remove from queue; keep the prepared application"
-        disabled={removing !== null}
-        onClick={() => void removeJob(job)}
-        className="mt-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-moss">
-        {removing === job.id ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <X size={15} aria-hidden="true" />}
-      </button>}
+      <button type="button"
+        aria-label={job.status === 'READY' ? `Remove ${job.project.name} ${job.title} from queue` : `Cancel ${job.project.name} ${job.title} job`}
+        disabled={removing !== null || job.status === 'CANCELLED'}
+        onClick={() => job.status === 'READY' ? void removeJob(job) : setCancelPrompt(job)}
+        className="btn btn-secondary mt-2 min-h-11 shrink-0 gap-2 px-3 text-xs disabled:opacity-50">
+        {(removing === job.id || job.status === 'CANCELLED') && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
+        {job.status === 'READY' ? 'Remove' : job.status === 'CANCELLED' ? 'Cancelling…' : 'Cancel job'}
+      </button>
     </li>
   );
   let position = 0;
@@ -183,6 +211,17 @@ export default function AgentQueueDropdown() {
       <div className="max-h-[min(60vh,calc(100dvh-var(--queue-top)-10rem))] overflow-y-auto p-2">
         {error && <p role="status" className="p-3 text-sm text-amber-800">Cannot refresh the queue. {queue ? 'Showing the last update. ' : ''}Retrying automatically.</p>}
         {removalError && <p role="alert" className="p-3 text-sm text-red-700">{removalError}</p>}
+        {notice && <p role="status" className="p-3 text-sm text-stone-700">{notice}</p>}
+        {cancelPrompt && <div className="m-2 rounded-lg border border-stone-200 p-3" role="group" aria-label="Confirm job cancellation">
+          <p className="text-sm font-semibold">Cancel {cancelPrompt.project.name}?</p>
+          <p className="mt-1 text-sm text-stone-600">The Agent will stop this run. Your prepared application will be kept.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button ref={keepJob} type="button" className="btn btn-secondary" disabled={removing !== null} onClick={() => { setCancelPrompt(null); trigger.current?.focus(); }}>Keep job</button>
+            <button type="button" className="btn btn-primary gap-2" disabled={removing !== null} onClick={() => void removeJob(cancelPrompt, true)}>
+              {removing === cancelPrompt.id && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}Cancel job
+            </button>
+          </div>
+        </div>}
         {!queue && !error && <p role="status" className="p-3 text-sm text-stone-600">Loading jobs...</p>}
         {queue && <>
           {!queue.active.length && <p className="p-3 text-sm text-stone-600">No jobs queued. Queue a prepared application to add it here.</p>}

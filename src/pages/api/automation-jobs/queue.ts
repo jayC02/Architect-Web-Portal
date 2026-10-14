@@ -19,6 +19,8 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       OR: [
         { status: 'READY', executionAuthorisedAt: { not: null } },
         { status: { in: ['CLAIMED', 'IN_PROGRESS'] } },
+        { status: 'NEEDS_REVIEW', claimedByAgentId: { not: null } },
+        { status: 'CANCELLED', claimedByAgentId: { not: null }, events: { none: { eventType: 'execution_released' } } },
       ],
     },
     select,

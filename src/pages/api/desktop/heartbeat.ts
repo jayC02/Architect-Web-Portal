@@ -32,6 +32,12 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (body.state !== 'READY' && body.currentJobId && body.agentRunId) {
+      const cancelled = await tx.automationJob.findFirst({
+        where: { id: body.currentJobId, organisationId: agent.organisationId,
+          claimedByAgentId: agent.id, agentRunId: body.agentRunId, status: AutomationJobStatus.CANCELLED },
+        select: { id: true, agentRunId: true },
+      });
+      if (cancelled) return [{ type: 'CANCEL_JOB', jobId: cancelled.id, agentRunId: cancelled.agentRunId }];
       await tx.automationJob.updateMany({
         where: {
           id: body.currentJobId,
@@ -62,6 +68,15 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
           requestedAt: current.browserRevealRequestedAt.toISOString(),
         }];
       }
+    }
+    if (body.state === 'READY' && !body.currentJobId) {
+      const cancelled = await tx.automationJob.findFirst({
+        where: { organisationId: agent.organisationId, claimedByAgentId: agent.id,
+          agentRunId: { not: null }, status: AutomationJobStatus.CANCELLED,
+          events: { none: { eventType: 'execution_released' } } },
+        orderBy: { updatedAt: 'asc' }, select: { id: true, agentRunId: true },
+      });
+      if (cancelled) return [{ type: 'CANCEL_JOB', jobId: cancelled.id, agentRunId: cancelled.agentRunId }];
     }
     const completed = await tx.automationJob.findFirst({
       where: {

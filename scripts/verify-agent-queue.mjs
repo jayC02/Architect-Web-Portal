@@ -14,6 +14,8 @@ createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname==='/fixture/progress'){jobs[0].progressPercent=56;res.end('ok');return;}
  if(url.pathname==='/fixture/reenqueue'){jobs=structuredClone(initialJobs);res.end('ok');return;}
+ if(url.pathname==='/fixture/claimed'){jobs=structuredClone(initialJobs);jobs[0].status='CLAIMED';res.end('ok');return;}
+ if(url.pathname==='/fixture/release'){jobs=jobs.filter(job=>job.status!=='CANCELLED');res.end('ok');return;}
  if(url.pathname==='/fixture/inspection'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobs,deleting,setups,downloads}));return;}
  if(url.pathname==='/'){latestVersion=url.searchParams.get('latest')||'4.2.1';}
  if(url.pathname.startsWith('/downloads/ArchitectProAgentSetup-')){downloads++;res.setHeader('Content-Type','application/octet-stream');res.setHeader('Content-Disposition','attachment; filename="fixture-only.txt"');res.end('Test fixture only');return;}
@@ -21,6 +23,8 @@ createServer((req,res)=>{
  if(url.pathname==='/api/settings/desktop-agents'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({agents:[{id:'test-agent',machineName:'Test PC',agentVersion:latestVersion,connected:true,usable:true,revokedAt:null,lastSeenAt:new Date().toISOString(),operatingState:'READY'}]}));return;}
  if(url.pathname==='/api/desktop/releases/latest'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({version:latestVersion,status:'AVAILABLE',downloadUrl:'/downloads/ArchitectProAgentSetup-'+latestVersion+'.exe'}));return;}
  const match=url.pathname.match(/^\/api\/automation-jobs\/([^/]+)\/queue$/);
+ const cancel=url.pathname.match(/^\/api\/automation-jobs\/([^/]+)\/cancel$/);
+ if(cancel&&req.method==='POST'){const job=jobs.find(job=>job.id===cancel[1]);res.setHeader('Content-Type','application/json');if(!job){res.statusCode=404;res.end(JSON.stringify({error:'Job not found'}));return;}const pending=job.status==='IN_PROGRESS';if(pending){job.status='CANCELLED';job.progressMessage='Stopping safely…';}else{jobs=jobs.filter(item=>item.id!==job.id);}res.end(JSON.stringify({ok:true,pending}));return;}
  if(match&&req.method==='DELETE'){deleting.push(match[1]);res.setHeader('Content-Type','application/json');if(match[1]==='planning-b'){res.statusCode=409;res.end(JSON.stringify({error:'This job has already started. Refresh the queue.'}));return;}jobs=jobs.filter(job=>job.id!==match[1]);res.end(JSON.stringify({ok:true}));return;}
  if(req.url==='/app.js'){res.setHeader('Content-Type','text/javascript');res.end(js.outputFiles[0].text);return;}
  if(req.url==='/style.css'){res.setHeader('Content-Type','text/css');res.end(css.css);return;}

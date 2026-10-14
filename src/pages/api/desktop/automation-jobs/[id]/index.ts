@@ -115,6 +115,10 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     }
     if (duplicate.length) return { duplicate: true, status: job.status };
 
+    // Cancellation won the same execution lock. Drain late results without
+    // reviving this attempt; a started callback above must still be refused.
+    if (job.status === AutomationJobStatus.CANCELLED) return { duplicate: true, status: job.status };
+
     assertAutomationJobTransition(job.status, body.status);
     const eventPayload = JSON.stringify({
       status: body.status,

@@ -15,6 +15,8 @@ export const assertExecutionAvailable = async (
       ...(ownJobId ? { id: { not: ownJobId } } : {}),
       OR: [
         { status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS, AutomationJobStatus.NEEDS_REVIEW] } },
+        { status: AutomationJobStatus.CANCELLED, claimedByAgentId: { not: null },
+          events: { none: { eventType: 'execution_released' } } },
         {
           status: AutomationJobStatus.AWAITING_PORTAL_REVIEW,
           claimedByAgentId: { not: null },

@@ -18,6 +18,7 @@ let lastWhere: any;
 const database: any = {
   agentRegistration: { updateMany: async () => ({ count: 1 }) },
   automationJob: { findFirst: async ({ where }: any) => {
+    if (where.status === 'CANCELLED') return null;
     lastWhere = where;
     assert.equal(where.organisationId, 'org');
     assert.equal(where.claimedByAgentId, actor);
