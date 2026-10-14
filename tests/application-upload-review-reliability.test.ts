@@ -32,7 +32,7 @@ await assert.rejects(
   }, { delayMs: 0 }),
   /Storage remains unavailable/,
 );
-assert.equal(failedCycleRequests, 2, 'a failed cycle stops after the automatic retry');
+assert.equal(failedCycleRequests, 5, 'persistent transient failures stop after five attempts');
 
 for (const status of [400, 401, 403, 404, 507]) {
   let requests = 0;
@@ -56,7 +56,7 @@ const reviewComponent = fs.readFileSync('src/components/applications/Application
 assert.match(uploadPage, /state: 'Retrying upload\.\.\.'/);
 assert.match(uploadPage, /uploadsInFlight\.has\(key\)/, 'the same file cannot start concurrent retry cycles');
 assert.match(uploadPage, /retryTransientUpload\(async \(\) =>/);
-assert.match(uploadPage, /Unable to upload document:/, 'two failed attempts retain the manual error state');
+assert.match(uploadPage, /Unable to upload document:/, 'exhausted attempts retain the manual error state');
 assert.match(uploadPage, /response\.status === 409[\s\S]*already exists/i, 'a lost success response reuses the existing storage object');
 
 assert.match(reviewComponent, /const \[editingDocumentId, setEditingDocumentId\]/);
@@ -76,3 +76,16 @@ assert.equal(
 assert.match(reviewComponent, /editingDocumentId === document\.id/, 'only the selected document row opens');
 
 console.log('application upload retry and category edit regression tests passed');
+
+let recoveredAttempts = 0;
+assert.equal(await retryTransientUpload(async () => {
+  if (++recoveredAttempts < 5) throw new TypeError('Failed to fetch');
+  return 'recovered';
+}, { delayMs: 0 }), 'recovered');
+assert.equal(recoveredAttempts, 5, 'the last automatic retry can recover without a manual click');
+let abortedAttempts = 0;
+await assert.rejects(retryTransientUpload(async () => {
+  abortedAttempts++;
+  throw new DOMException('Cancelled', 'AbortError');
+}, {delayMs: 0}));
+assert.equal(abortedAttempts, 1, 'cancellations are not retried');

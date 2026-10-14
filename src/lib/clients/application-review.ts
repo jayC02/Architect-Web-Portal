@@ -54,5 +54,6 @@ export const clientDifferences = (prepared: ReviewPerson, saved: ReviewPerson, i
 export const selectDirectoryClient = (review: ApplicationDraftReview, client: ReviewClient): ApplicationDraftReview => {
   const person = personFromDirectory(client);
   return { ...review, clientMode: 'existing', existingClientId: client.id, client: person,
+    clientDetailsEdited: false,
     clientAddressSameAsSite: false, applicant: review.applicantDifferentFromClient ? review.applicant : person };
 };

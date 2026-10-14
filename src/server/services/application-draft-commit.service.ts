@@ -33,6 +33,7 @@ import {
   emitProjectCreatedLifecycleEvent,
 } from '@/server/services/lifecycle-events.service';
 import { drainWorkflowEffectsBestEffort } from '@/server/services/workflow-effects.service';
+import { saveDraftClientCorrections } from '@/server/services/application-draft-client.service';
 
 type CommitUser = {
   id: string;
@@ -196,6 +197,7 @@ const resolvePermanentRecords = async (
     };
   }
 
+  await saveDraftClientCorrections(tx, organisationId, review);
   const clientId = selected.client?.id ?? (await tx.client.create({
     data: {
       organisationId,

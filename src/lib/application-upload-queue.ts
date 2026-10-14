@@ -16,6 +16,7 @@ export class UploadRequestError extends Error {
 }
 
 export const isRetryableUploadError = (error: unknown) => {
+  if (error instanceof Error && error.name === 'AbortError') return false;
   if (error instanceof TypeError) return true;
   const status = error instanceof UploadRequestError ? error.status : undefined;
   if (status === undefined) return true;
@@ -26,16 +27,21 @@ export const retryTransientUpload = async <T>(
   attempt: () => Promise<T>,
   options: {
     delayMs?: number;
+    maxAttempts?: number;
     onRetry?: () => void;
   } = {},
 ) => {
-  try {
-    return await attempt();
-  } catch (error) {
-    if (!isRetryableUploadError(error)) throw error;
-    options.onRetry?.();
-    await new Promise((resolve) => setTimeout(resolve, options.delayMs ?? 750));
-    return attempt();
+  const maxAttempts = options.maxAttempts ?? 5;
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error('Upload attempts must be at least one.');
+  for (let index = 0; ; index += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (index + 1 >= maxAttempts || !isRetryableUploadError(error)) throw error;
+      options.onRetry?.();
+      const delay = Math.min((options.delayMs ?? 750) * 2 ** index, 6000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
 };
 

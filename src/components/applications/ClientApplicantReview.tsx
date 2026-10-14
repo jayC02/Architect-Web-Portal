@@ -59,10 +59,10 @@ function PersonField({ person, name, label, prefix, onChange, issue, required = 
     : ['firstName', 'lastName', 'townCity', 'country'].includes(name) ? 100 : 160;
   return <label className={`cr-field ${value ? 'cr-filled' : required && !readOnly ? 'cr-missing' : ''}`} htmlFor={id}>
     <span>{label}{!value && required && !readOnly ? <em>Required</em> : null}</span>
-    {options ? <select id={id} value={value} onChange={event => onChange(name, event.target.value)} disabled={readOnly}
+    {options ? <select className="field" id={id} value={value} onChange={event => onChange(name, event.target.value)} disabled={readOnly}
       aria-label={`${prefix} ${label}`} aria-required={required} aria-invalid={Boolean(visibleIssue)} aria-describedby={visibleIssue ? `${id}-error` : undefined}>
       {options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
-    </select> : <input id={id} value={value} onChange={event => { setFormatError(''); onChange(name, event.target.value); }} readOnly={readOnly}
+    </select> : <input className="field" id={id} value={value} onChange={event => { setFormatError(''); onChange(name, event.target.value); }} readOnly={readOnly}
       onBlur={event => setFormatError(event.currentTarget.validity.typeMismatch ? 'Enter a valid email address.' : '')}
       onInvalid={event => { event.preventDefault(); setFormatError('Enter a valid email address.'); }}
       aria-label={`${prefix} ${label}`} aria-required={required} aria-invalid={Boolean(visibleIssue)} aria-describedby={visibleIssue ? `${id}-error` : undefined}
@@ -93,8 +93,8 @@ function PersonDetails({ person, prefix, onChange, issueFor, readOnly, site, use
     </div></div>
     <div className="cr-row"><h4>Address</h4><div>
       <div className="cr-address-tools"><p>{sameAsSite ? 'Using the site address. Changes to the site stay in sync.' : 'Correspondence address'}</p>
-        {!readOnly ? <button className="cr-reuse" type="button" disabled={!siteComplete} onClick={useSite}
-          title={siteComplete ? [site.buildingNumber, site.addressLine1, site.townCity, site.postcode].filter(Boolean).join(', ') : 'Complete the site address first'}>Use site address ↗</button> : null}
+        {!readOnly ? <button className="btn btn-secondary" type="button" disabled={!siteComplete} onClick={useSite}
+          title={siteComplete ? [site.buildingNumber, site.addressLine1, site.townCity, site.postcode].filter(Boolean).join(', ') : 'Complete the site address first'}>Use site address</button> : null}
       </div>
       <div className="cr-fields cr-address">
         {field('buildingNumber', 'Building number', true)}{field('addressLine1', 'Street', true)}{field('addressLine2', 'Address line 2 · optional')}
@@ -151,8 +151,8 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         if (selectedId) {
           const record = payload.clients.find(client => client.id === selectedId);
           if (!record) { setLookupError('This saved client is no longer available. Choose another client.'); return; }
-          if (latest.review.existingClientId === selectedId && reviewPersonKey(personFromDirectory(record)) !== snapshot) {
-            latest.onChange(value => value.clientMode === 'existing' && value.existingClientId === selectedId
+          if (!latest.review.clientDetailsEdited && latest.review.existingClientId === selectedId && reviewPersonKey(personFromDirectory(record)) !== snapshot) {
+            latest.onChange(value => !value.clientDetailsEdited && value.clientMode === 'existing' && value.existingClientId === selectedId
               ? selectDirectoryClient(value, record) : value, true);
           }
           return;
@@ -197,7 +197,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     onChange(current => {
       const person = { ...(prefix === 'client' ? current.client : current.applicant ?? emptyPerson()), [key]: value || null } as ReviewPerson;
       if (prefix === 'applicant') separateApplicant.current = person;
-      return prefix === 'client' ? { ...current, client: person,
+      return prefix === 'client' ? { ...current, client: person, clientDetailsEdited: current.clientMode === 'existing',
         clientAddressSameAsSite: addressKeys.includes(key as typeof addressKeys[number]) ? false : current.clientAddressSameAsSite,
         applicant: current.applicantDifferentFromClient ? current.applicant : person }
         : { ...current, applicant: person };
@@ -208,7 +208,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
       const person = { ...(prefix === 'client' ? value.client : value.applicant ?? emptyPerson()),
         ...Object.fromEntries(addressKeys.map(key => [key, value.site[key]])) } as ReviewPerson;
       if (prefix === 'applicant') separateApplicant.current = person;
-      return prefix === 'client' ? { ...value, client: person, clientAddressSameAsSite: true,
+      return prefix === 'client' ? { ...value, client: person, clientDetailsEdited: value.clientMode === 'existing', clientAddressSameAsSite: true,
         applicant: value.applicantDifferentFromClient ? value.applicant : person } : { ...value, applicant: person };
     }, true);
     setAddressTarget(null);
@@ -232,7 +232,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     {prefix === 'client' ? <div className="cr-avatar" aria-hidden="true">{(person.displayName ?? '').trim().split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('') || '—'}</div> : null}
     <div className="cr-person-name">
       <PersonField person={person} name="displayName" label={prefix === 'client' ? 'Client name' : 'Applicant name'} prefix={prefix}
-        required readOnly={selected && prefix === 'client'} onChange={(key, value) => updatePerson(prefix, key, value)} issue={errors(`${prefix}.displayName`)} />
+        required onChange={(key, value) => updatePerson(prefix, key, value)} issue={errors(`${prefix}.displayName`)} />
       {prefix === 'client' ? <p className="cr-source">{selected ? 'Using saved client details' : source ? <>
         From <a href={`/api/application-drafts/${draft.id}/documents/${source.documentId}`} target="_blank" rel="noreferrer">{source.filename}</a>{source.page ? ` · page ${source.page}` : ''}
       </> : 'Prepared client details — correct or complete below'}</p> : null}
@@ -243,39 +243,41 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
   return <section className="client-review" ref={root} aria-labelledby={titleId}>
     <header className="cr-heading"><h2 id={titleId}>Client & Applicant</h2><p>Review the details. Fill the gaps. Confirm who’s applying.</p></header>
     <div className="cr-paper">
-      <div className="cr-paper-top"><h3>Client details</h3><button type="button" className="cr-text-action" aria-expanded={searchOpen}
+      <div className="cr-paper-top"><h3>Client details</h3><button type="button" className="btn btn-secondary" aria-expanded={searchOpen}
         onClick={() => { setSearchOpen(!searchOpen); setQuery(lookupName); setCandidate(null); }}>Search existing clients</button></div>
       {searchOpen ? <div className="cr-search">
-        <label>Find an existing client<input autoFocus type="search" value={query} onChange={event => { setQuery(event.target.value); setCandidate(null); }} placeholder="Search name or email" /></label>
-        {loading ? <p className="cr-helper" role="status">Searching saved clients…</p> : results.map(record => <button className="cr-result" type="button" key={record.id}
-          onClick={() => clientDifferences(review.client, personFromDirectory(record), ignoredDefaults(review, draft)).length ? setCandidate(record) : choose(record)}>
-          <span><strong>{record.name}</strong><small>{record.email || 'No saved email'}<br />{[record.buildingNumber, record.addressLine1, record.townCity, record.postcode].filter(Boolean).join(', ') || 'No saved address'}</small></span><span>Use client ↗</span>
-        </button>)}
+        <label>Find an existing client<input className="field" autoFocus type="search" value={query} onChange={event => { setQuery(event.target.value); setCandidate(null); }} placeholder="Search name or email" /></label>
+        <label>Existing client<select className="field" disabled={loading} value={candidate?.id ?? ''} onChange={event => {
+          const record = results.find(client => client.id === event.target.value);
+          if (record) clientDifferences(review.client, personFromDirectory(record), ignoredDefaults(review, draft)).length ? setCandidate(record) : choose(record);
+        }}>
+          <option value="">{loading ? 'Searching saved clients…' : 'Choose a saved client'}</option>
+          {results.map(record => <option value={record.id} key={record.id}>{[record.name, record.email, record.postcode].filter(Boolean).join(' · ')}</option>)}
+        </select></label>
         {!loading && !lookupError && results.length === 0 ? <p className="cr-helper">No matching clients. Try another name or keep the prepared details.</p> : null}
         {results.length === 100 ? <p className="cr-helper">Showing 100 clients. Refine your search to find the right person.</p> : null}
         {candidate ? <div className="cr-conflict" role="region" aria-label="Saved client differences"><strong>These details differ</strong>
           {clientDifferences(review.client, personFromDirectory(candidate), ignoredDefaults(review, draft)).map(key => <p key={key}>{labels[key]}: <span>{review.client[key] || 'Not provided'}</span> → <strong>{personFromDirectory(candidate)[key] || 'Not saved'}</strong></p>)}
-          <button type="button" className="cr-reuse" onClick={() => choose(candidate)}>Use this saved client</button>
-          <button type="button" className="cr-text-action" onClick={() => setCandidate(null)}>Keep current details</button>
+          <button type="button" className="btn btn-secondary" onClick={() => choose(candidate)}>Use this saved client</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setCandidate(null)}>Keep current details</button>
         </div> : null}
-        <button type="button" className="cr-text-action" onClick={() => { setSearchOpen(false); setCandidate(null); }}>Close search</button>
+        <button type="button" className="btn btn-secondary" onClick={() => { setSearchOpen(false); setCandidate(null); }}>Close search</button>
       </div> : null}
       <div className="cr-body">
-        {lookupError ? <p className="cr-error" role="alert">{lookupError} <button type="button" className="cr-text-action" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
-        {matchNotice && !searchOpen ? <p className="cr-helper" role="status">{matchNotice} <button type="button" className="cr-text-action" onClick={() => { setQuery(lookupName); setSearchOpen(true); }}>Review matches</button></p> : null}
+        {lookupError ? <p className="cr-error" role="alert">{lookupError} <button type="button" className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
+        {matchNotice && !searchOpen ? <p className="cr-helper" role="status">{matchNotice} <button type="button" className="btn btn-secondary" onClick={() => { setQuery(lookupName); setSearchOpen(true); }}>Review matches</button></p> : null}
         {personHeading(review.client, 'client')}
-        {selected ? <p className="cr-saved-note">Linked to {savedLabel || review.client.displayName || 'your saved client'}.
-          {' '}<a href="/clients" target="_blank" rel="noreferrer">Edit saved client ↗</a>
-          <button type="button" className="cr-text-action" onClick={() => {
+        {selected ? <div className="cr-saved-note"><p>Linked to {savedLabel || review.client.displayName || 'your saved client'}. Edit any detail below. Corrections are saved with this draft and update the saved client when you create the project.</p>
+          <button type="button" className="btn btn-secondary" onClick={() => {
             manualChoice.current = true;
-            onChange(value => ({ ...value, clientMode: 'create', existingClientId: null, client: previousPrepared.current, clientAddressSameAsSite: false,
+            onChange(value => ({ ...value, clientMode: 'create', existingClientId: null, clientDetailsEdited: false, client: previousPrepared.current, clientAddressSameAsSite: false,
               applicant: value.applicantDifferentFromClient ? value.applicant : previousPrepared.current }), true);
           }}>{previousPrepared.current.displayName ? 'Use prepared details instead' : 'Enter a new client'}</button>
-        </p> : null}
+        </div> : null}
         <PersonDetails person={review.client} prefix="client" onChange={(key, value) => updatePerson('client', key, value)} issueFor={errors}
-          readOnly={selected} site={review.site} useSite={() => useSite('client')} sameAsSite={review.clientAddressSameAsSite} />
+          readOnly={false} site={review.site} useSite={() => useSite('client')} sameAsSite={review.clientAddressSameAsSite} />
         {addressTarget ? <div className="cr-conflict" role="region" aria-label="Replace correspondence address"><p>Replace the {addressTarget}’s correspondence address with {[review.site.buildingNumber, review.site.addressLine1, review.site.townCity, review.site.postcode].filter(Boolean).join(', ')}?</p>
-          <button type="button" className="cr-reuse" onClick={() => copySite(addressTarget)}>Use this address</button><button type="button" className="cr-text-action" onClick={() => setAddressTarget(null)}>Keep current address</button></div> : null}
+          <button type="button" className="btn btn-secondary" onClick={() => copySite(addressTarget)}>Use this address</button><button type="button" className="btn btn-secondary" onClick={() => setAddressTarget(null)}>Keep current address</button></div> : null}
         <fieldset className="cr-relationship"><legend>Is the client also the applicant?</legend><div className="cr-choices">
           <label><input type="radio" name={relationshipId} checked={!review.applicantDifferentFromClient} onChange={() => {
             separateApplicant.current = review.applicant ?? null;
@@ -292,7 +294,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
       </div>
       <footer className="cr-foot"><div role="status"><strong>{clientReady && applicantReady ? 'Ready to continue' : 'Complete the remaining details'}</strong>
         <p>{saveState === 'saving' ? 'Saving changes…' : saveState === 'failed' ? 'Could not save. Your entries are still here.' : 'Your prepared details are already filled in.'}</p></div>
-        <button type="button" className="cr-primary" disabled={busy || continuing || loading} onClick={async () => {
+        <button type="button" className="btn btn-primary gap-3" disabled={busy || continuing || loading} onClick={async () => {
           setAttempted(true); setContinueError('');
           const invalid = Array.from(root.current?.querySelectorAll<HTMLInputElement>('input:not([readonly])') ?? []).find(input => !input.checkValidity());
           if (invalid) { invalid.focus(); return; }

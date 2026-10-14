@@ -6,6 +6,7 @@ import '../../src/styles/global.css';
 
 const scenario = new URLSearchParams(location.search).get('state');
 const draft = clientReviewFixture();
+if (scenario === 'restored') draft.review = JSON.parse(sessionStorage.getItem('saved-review')!);
 if (scenario === 'missing' || scenario === 'auto' || scenario === 'delayed') {
   draft.review!.client.email = null;
   for (const key of ['buildingNumber', 'addressLine1', 'townCity', 'postcode'] as const) draft.review!.client[key] = null;

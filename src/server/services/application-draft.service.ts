@@ -708,7 +708,8 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     }
     if (review.clientMode === 'existing') {
       addMissing(issues, 'client', 'existingClientId', 'Existing client', review.existingClientId, 'Choose the matching client.');
-    } else {
+    }
+    if (review.clientMode === 'create' || review.clientDetailsEdited) {
       addMissing(issues, 'client', 'client.displayName', 'Client name', review.client.displayName, 'Confirm the client or company name.');
       if (review.client.clientType === 'INDIVIDUAL') {
         addMissing(issues, 'client', 'client.title', 'Applicant title', review.client.title, 'Confirm the applicant title.');

@@ -146,6 +146,8 @@ export const applicationDraftReviewSchema = z.object({
   clientMode: z.enum(['create', 'existing']).default('create'),
   existingClientId: nullableText(120),
   client: draftPersonSchema,
+  // Corrections stay with the draft until project creation updates the linked client.
+  clientDetailsEdited: z.boolean().optional(),
   clientAddressSameAsSite: z.boolean().default(false),
   applicantDifferentFromClient: z.boolean().default(false),
   applicant: draftPersonSchema.optional(),
