@@ -18,7 +18,10 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       id,
       organisationId: agent.organisationId,
       claimedByAgentId: agent.id,
-      status: AutomationJobStatus.COMPLETED,
+      OR: [
+        { status: AutomationJobStatus.COMPLETED },
+        { status: AutomationJobStatus.AWAITING_PORTAL_REVIEW, events: { some: { eventType: 'execution_released' } } },
+      ],
     },
     select: {
       id: true,

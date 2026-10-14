@@ -1,6 +1,8 @@
 ---
 import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
+import { editablePreparationStatuses } from '@/lib/automation/preparation-editability';
+import { resolveApplicationDescription } from '@/server/services/application-description.service';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 import { prisma } from '@/lib/db/prisma';
 import {
@@ -26,6 +28,7 @@ const application = await prisma.buildingWarrantApplication.findFirst({
   },
 });
 if (!application) return Astro.redirect('/projects');
+const description = await resolveApplicationDescription(auth.organisation.id, application.projectId, application.description);
 
 const suppliedJobId = Astro.url.searchParams.get('job');
 const suppliedJob = suppliedJobId ? await prisma.automationJob.findFirst({
@@ -35,7 +38,7 @@ const suppliedJob = suppliedJobId ? await prisma.automationJob.findFirst({
     projectId: application.projectId,
     type: AutomationJobType.BUILDING_WARRANT,
   },
-  select: { id: true, projectId: true, type: true, dataSnapshot: true },
+  select: { id: true, projectId: true, type: true, status: true, dataSnapshot: true },
 }) : null;
 const reusableJob = suppliedJob ?? await findReusableAutomationJob({
   organisationId: auth.organisation.id,
@@ -43,7 +46,8 @@ const reusableJob = suppliedJob ?? await findReusableAutomationJob({
   type: AutomationJobType.BUILDING_WARRANT,
   applicationId: application.id,
 });
-const job = reusableJob && automationJobApplicationId(reusableJob) === application.id ? reusableJob : null;
+const job = reusableJob && editablePreparationStatuses.has(reusableJob.status)
+  && automationJobApplicationId(reusableJob) === application.id ? reusableJob : null;
 
 const defaults = await prisma.organisationDefaults.findUnique({
   where: { organisationId: auth.organisation.id },
@@ -152,7 +156,7 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
             ))}
           </div>
         </fieldset>
-        <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required maxlength="2000" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+        <label class="mt-5 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
         <div class="mt-4 grid gap-4 sm:grid-cols-3">
           <label class="block"><span class="label">Estimated value of work</span><input required type="number" min="0.01" step="0.01" name="estimatedValue" value={application.estimatedValue ? String(application.estimatedValue) : ''} class="field" /></label>
           <label class="block"><span class="label">Current use</span><input required maxlength="160" name="currentUse" value={application.currentUse ?? ''} class="field" /></label>

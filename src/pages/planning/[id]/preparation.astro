@@ -1,6 +1,7 @@
 ---
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
+import { resolveApplicationDescription } from '@/server/services/application-description.service';
 import { prisma } from '@/lib/db/prisma';
 import { resolveSoleOwner } from '@/lib/planning-preparation-defaults';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -16,6 +17,7 @@ const application = await prisma.planningApplication.findFirst({
   include: { project: { include: { client: true, site: true } } },
 });
 if (!application) return Astro.redirect('/projects');
+const description = await resolveApplicationDescription(auth.organisation.id, application.projectId, application.description);
 
 const suppliedJobId = Astro.url.searchParams.get('job');
 const candidates = await prisma.automationJob.findMany({
@@ -66,7 +68,7 @@ const documentCount = await prisma.projectDocument.count({
       {job && <input type="hidden" name="jobId" value={job.id} />}
       <section aria-labelledby="planning-questions-heading">
       <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
-      <label class="mt-5 block"><span class="label">Description of proposed work</span><textarea required maxlength="500" name="description" rows="4" class="field">{application.description ?? ''}</textarea></label>
+      <label class="mt-5 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
       <label class="mt-4 block"><span class="label">Planning application fee (£)</span><input required type="number" min="0" max="9999999.99" step="0.01" name="applicationFee" value={numberValue('applicationFee')} class="field" /><span class="mt-1 block text-xs text-stone-500">Enter the fee to leave ready in the government portal. Enter 0 only when no fee is payable.</span></label>
       <div class="mt-4 grid gap-4 sm:grid-cols-2">
         <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>

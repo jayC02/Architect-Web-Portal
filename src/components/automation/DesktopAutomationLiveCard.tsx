@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, LoaderCircle, Play, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, FilePenLine, LoaderCircle, Play, X } from 'lucide-react';
 import AutomationFailureRecovery, { type FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { apiRequest } from '@/lib/api/http';
@@ -273,7 +273,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           ? 'Architect Pro has recorded the manual portal submission. No prepared-review action remains.'
           : 'This application has progressed beyond portal preparation. Its canonical application status now takes priority.'}
       </p>
-      <div className="mt-4"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
+      <div className="mt-4 flex flex-wrap items-center gap-3"><a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
     </section>
   );
 
@@ -295,6 +295,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           {working === 'reveal' ? 'Opening…' : `Review in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
         <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
+        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
@@ -307,13 +308,14 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     <section className="border-l-4 border-l-amber-500 bg-amber-50/70 p-4 sm:px-5" aria-live="polite">
       <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Prepared application</p>
       <h3 className="mt-1 text-lg font-semibold text-ink">Prepared — needs your review</h3>
-      <p className="mt-1 max-w-2xl text-sm leading-5 text-stone-600">Architect Pro prepared the portal draft and calculated the fee. Complete payment, review and submit it yourself in eBuilding Standards.</p>
+      <p className="mt-1 max-w-2xl text-sm leading-5 text-stone-600">Architect Pro prepared the portal draft and calculated the fee. Complete payment, review and submit it yourself in {isWarrant ? 'eBuilding Standards' : 'ePlanning'}.</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-          {working === 'reveal' ? 'Opening browser…' : 'Continue in eBuilding Standards'}
+          {working === 'reveal' ? 'Opening browser…' : `Continue in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
         <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
+        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-amber-900">{notice}</p>}
@@ -331,6 +333,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {failure.stageDescription || stageLabel(failure.stage)}</p>
       {failure.explanation && <p className="mt-2 text-sm font-medium text-stone-700">{failure.explanation}</p>}
       <AutomationFailureRecovery metadata={failure} context={recoveryContext} applicationType={applicationType} retrying={working === 'retry'} onRetry={retry} detailsHref={currentDetailsHref} />
+      <a className="btn btn-secondary mt-3 gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {failure.category ?? 'AUTOMATION_FAILED'} · {failure.stage ?? 'stage not reported'}</p></details>
@@ -344,7 +347,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       <p className="mt-1 text-sm text-stone-600">{agentOnline === null ? 'Connection status is temporarily unavailable. Your application remains queued.' : agentOnline ? 'Your Agent is connected and should start this application shortly.' : 'Reconnect Architect Pro Agent to continue this application.'}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {agentOnline === false && <a className="btn btn-primary" href="/settings/integrations#desktop-agent">Reconnect Agent</a>}
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a>
+        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
       </div>
     </section>
   );
@@ -355,7 +358,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full rounded-full bg-moss transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
       {visualEta && <p className="mt-2 text-xs text-stone-500" aria-live="off">{visualEta}</p>}
       {addressAction && <p className="mt-3 text-sm font-medium text-amber-800">Choose the correct address in the Agent. The browser remains paused safely.</p>}
-      <div className="mt-3"><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a></div>
+      <div className="mt-3 flex flex-wrap items-center gap-3"><a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a></div>
     </section>
   );
 
@@ -366,7 +369,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       <p className="mt-1 text-sm text-stone-600">{connectedAgent ? 'Your connected Agent can prepare this application in the background.' : 'Run the application, then open or connect the Desktop Agent.'}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'run'} onClick={() => void run()}>{working === 'run' ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{working === 'run' ? 'Queuing…' : 'Run application'}</button>
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a>
+        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
       </div>
       {!connectedAgent && <details className="mt-3 text-sm text-stone-600"><summary className="cursor-pointer font-semibold">Desktop fallback</summary><p className="mt-2">Open the Agent manually if it is installed but not currently connected.</p></details>}
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
@@ -376,5 +379,5 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
 
   const finalTitle = job.status === 'CANCELLED' ? 'Automation cancelled' : 'Needs your attention';
   const finalMessage = job.status === 'CANCELLED' ? 'The previous run stopped safely. Review the application before starting again.' : job.resultSummary || 'Review the application before continuing.';
-  return <section className="p-4 sm:px-5"><p className="font-semibold text-ink">{finalTitle}</p><p className="mt-1 text-sm text-stone-600">{finalMessage}</p><a className="mt-3 inline-flex text-sm font-semibold text-moss hover:text-ink" href={manageHref}>View application</a></section>;
+  return <section className="p-4 sm:px-5"><p className="font-semibold text-ink">{finalTitle}</p><p className="mt-1 text-sm text-stone-600">{finalMessage}</p><a className="btn btn-primary mt-4 gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a></section>;
 }

@@ -24,6 +24,7 @@ const refreshableStatuses = [
   AutomationJobStatus.DRAFT,
   AutomationJobStatus.PREFLIGHT_REQUIRED,
   AutomationJobStatus.NEEDS_INPUT,
+  AutomationJobStatus.READY,
   AutomationJobStatus.STALE,
 ];
 
@@ -162,8 +163,22 @@ export const POST: APIRoute = (context) =>
       ? AutomationJobStatus.READY
       : AutomationJobStatus.NEEDS_INPUT;
     const readinessLifecycleEvent = await prisma.$transaction(async (tx) => {
-      await tx.automationJob.update({
-        where: { id: job.id },
+      const refreshed = await tx.automationJob.updateMany({
+        where: {
+          id: job.id,
+          organisationId: organisation.id,
+          projectId: application.projectId,
+          type: job.type,
+          status: job.status,
+          updatedAt: job.updatedAt,
+          snapshotHash: job.snapshotHash,
+          claimedAt: null,
+          claimedDeviceId: null,
+          claimedByUserId: null,
+          claimedByAgentId: null,
+          agentRunId: null,
+          completedAt: null,
+        },
         data: {
           status,
           payloadVersion: 2,
@@ -176,6 +191,12 @@ export const POST: APIRoute = (context) =>
           error: null,
         },
       });
+      if (refreshed.count !== 1) {
+        throw new HttpError(409, 'Application details were saved, but the automation attempt changed before its snapshot could be refreshed. Return to the project to review it.', {
+          applicationDetailsSaved: true,
+          automationSnapshotUpdated: false,
+        });
+      }
       return recordAutomationReadinessTransition(tx, {
         organisationId: organisation.id,
         projectId: application.projectId,

@@ -73,7 +73,7 @@ export const preparationFormSchema = (jobType: AutomationJobType) => z.object({
   agentTownCity: optionalText(100),
   agentPostcode: optionalText(20),
   agentCountry: optionalText(100),
-  description: z.string().trim().min(1).max(2000),
+  description: z.string().trim().min(1).max(4000),
   typeOfWorkKeys: jobType === AutomationJobType.BUILDING_WARRANT
     ? z.array(z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]], { errorMap: () => ({ message: 'Choose a valid Building Warrant Type of Work.' }) }))
       .min(1, 'Choose at least one Type of Work for this Building Warrant.').max(TYPE_OF_WORK_KEYS.length)

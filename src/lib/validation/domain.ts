@@ -177,7 +177,7 @@ export const householderPreparationSchema = z.object({
 });
 
 export const householderPreparationUpdateSchema = z.object({
-  description: optionalText(500),
+  description: optionalText(4000),
   discussedWithPlanningAuthority: formBoolean,
   treesOnOrAdjacentToSite: formBoolean,
   newOrAlteredVehicleAccess: formBoolean,
@@ -209,7 +209,7 @@ export const planningPreparationDetailsSchema = z.object({
 }).and(householderPreparationUpdateSchema);
 
 export const buildingWarrantPreparationUpdateSchema = z.object({
-  description: optionalText(2000),
+  description: optionalText(4000),
   estimatedValue: optionalNonNegativeMoney,
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
@@ -245,7 +245,7 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   portalUrl: safeUrl,
   notes: optionalText(3000),
   typeOfWorkKeys: typeOfWorkKeysSchema,
-  description: z.string().trim().min(1, 'Enter a description of the Building Warrant work.').max(2000),
+  description: z.string().trim().min(1, 'Enter a description of the Building Warrant work.').max(4000),
   estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),
   currentUse: z.string().trim().min(1, 'Enter the current use of the building.').max(160),
   proposedUse: z.string().trim().min(1, 'Enter the proposed use of the building.').max(160),

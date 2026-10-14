@@ -29,6 +29,7 @@ import {
 } from '@/lib/validation/domain';
 import { HttpError } from '@/lib/utils/http';
 import { evaluateAutomationPreflight } from '@/server/services/automation-preflight.service';
+import { resolveApplicationDescription } from '@/server/services/application-description.service';
 
 type BuildAutomationJobSnapshotInput = {
   jobId?: string;
@@ -596,6 +597,7 @@ export const ensureAutomationApplicationRecord = async (
         organisationId,
         projectId,
         presetKey: typeOfWorkKey(project.projectType),
+        description: await resolveApplicationDescription(organisationId, projectId),
         preparationData: {
           typeOfWorkKeys: [typeOfWorkKey(project.projectType)],
         },
@@ -623,6 +625,7 @@ export const ensureAutomationApplicationRecord = async (
     data: {
       organisationId,
       projectId,
+      description: await resolveApplicationDescription(organisationId, projectId),
       status: PlanningStatus.DRAFTING,
       preparedAt: new Date(),
     },

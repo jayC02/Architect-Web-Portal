@@ -9,6 +9,7 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
 import { requireOrganisation, requireProjectAccess } from '@/server/permissions/authz';
+import { resolveApplicationDescription } from '@/server/services/application-description.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -35,7 +36,7 @@ export const POST: APIRoute = (context) =>
     await requireProjectAccess(organisation.id, projectId);
     const body = await parseBody(context.request, buildingWarrantCreateSchema);
     const application = await prisma.buildingWarrantApplication.create({
-      data: { ...body, organisationId: organisation.id, projectId },
+      data: { ...body, description: await resolveApplicationDescription(organisation.id, projectId), organisationId: organisation.id, projectId },
     });
     return jsonResponse(201, { application });
   }, context);

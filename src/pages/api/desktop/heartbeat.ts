@@ -67,7 +67,10 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       where: {
         organisationId: agent.organisationId,
         claimedByAgentId: agent.id,
-        status: AutomationJobStatus.COMPLETED,
+        OR: [
+          { status: AutomationJobStatus.COMPLETED },
+          { status: AutomationJobStatus.AWAITING_PORTAL_REVIEW, events: { some: { eventType: 'execution_released' } } },
+        ],
         browserRevealRequestedAt: { not: null },
       },
       orderBy: { browserRevealRequestedAt: 'desc' },
