@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import type { ApplicationDraftResponse } from '@/server/services/application-draft-view.service';
 import {
@@ -14,9 +14,6 @@ type Props = {
   review: Review;
   onChange: (change: (current: Review) => Review, immediate?: boolean) => void;
   issueFor: (key: string) => string | undefined;
-  onContinue: () => Promise<boolean>;
-  busy: boolean;
-  saveState: 'idle' | 'saving' | 'saved' | 'failed';
   onLookupPending: (pending: boolean) => void;
   onVisibilityChange: (visible: boolean) => void;
 };
@@ -48,17 +45,19 @@ function PersonField({ person, name, label, prefix, onChange, issue, required = 
 }) {
   const id = useId();
   const [formatError, setFormatError] = useState('');
-  const visibleIssue = issue || formatError;
+  const [touched, setTouched] = useState(false);
+  const visibleIssue = formatError || (touched ? issue : undefined);
   const value = person[name] ?? '';
   const maxLength = ['title', 'phone', 'buildingNumber'].includes(name) ? 40 : name === 'postcode' ? 20
     : ['firstName', 'lastName', 'townCity', 'country'].includes(name) ? 100 : 160;
   return <label className={`cr-field ${value ? 'cr-filled' : required && !readOnly ? 'cr-missing' : ''}`} htmlFor={id}>
     <span>{label}{!value && required && !readOnly ? <em>Required</em> : null}</span>
     {options ? <select className="field" id={id} value={value} onChange={event => onChange(name, event.target.value)} disabled={readOnly}
+      onBlur={() => setTouched(true)}
       aria-label={`${prefix} ${label}`} aria-required={required} aria-invalid={Boolean(visibleIssue)} aria-describedby={visibleIssue ? `${id}-error` : undefined}>
       {options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
     </select> : <input className="field" id={id} value={value} onChange={event => { setFormatError(''); onChange(name, event.target.value); }} readOnly={readOnly}
-      onBlur={event => setFormatError(event.currentTarget.validity.typeMismatch ? 'Enter a valid email address.' : '')}
+      onBlur={event => { setTouched(true); setFormatError(event.currentTarget.validity.typeMismatch ? 'Enter a valid email address.' : ''); }}
       onInvalid={event => { event.preventDefault(); setFormatError('Enter a valid email address.'); }}
       aria-label={`${prefix} ${label}`} aria-required={required} aria-invalid={Boolean(visibleIssue)} aria-describedby={visibleIssue ? `${id}-error` : undefined}
       maxLength={maxLength} type={name === 'email' ? 'email' : name === 'phone' ? 'tel' : 'text'}
@@ -99,17 +98,13 @@ function PersonDetails({ person, prefix, onChange, issueFor, readOnly, site, use
   </>;
 }
 
-export default function ClientApplicantReview({ draft, review, onChange, issueFor, onContinue, busy, saveState, onLookupPending, onVisibilityChange }: Props) {
+export default function ClientApplicantReview({ draft, review, onChange, issueFor, onLookupPending, onVisibilityChange }: Props) {
   const [clients, setClients] = useState<ReviewClient[]>([]);
   const [pickerLoading, setPickerLoading] = useState(true);
   const [pickerError, setPickerError] = useState('');
   const [lookupError, setLookupError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [retry, setRetry] = useState(0);
   const [matchNotice, setMatchNotice] = useState('');
-  const [attempted, setAttempted] = useState(false);
-  const [continuing, setContinuing] = useState(false);
-  const [continueError, setContinueError] = useState('');
   const [addressTarget, setAddressTarget] = useState<'client' | 'applicant' | null>(null);
   const previousPrepared = useRef<ReviewPerson>(review.clientMode === 'create' ? review.client : preparedPerson(draft));
   const separateApplicant = useRef<ReviewPerson | null>(review.applicantDifferentFromClient ? review.applicant ?? null : null);
@@ -157,10 +152,10 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
 
   // Read the organisation-scoped directory. Stale responses never replace edits or a newer choice.
   useEffect(() => {
-    if (!lookup) { setMatchNotice(''); setLoading(false); onLookupPending(false); return; }
+    if (!lookup) { setMatchNotice(''); onLookupPending(false); return; }
     const controller = new AbortController();
     const snapshot = reviewPersonKey(current.current.review.client);
-    setLoading(true); onLookupPending(true); setLookupError(''); setMatchNotice('');
+    onLookupPending(true); setLookupError(''); setMatchNotice('');
     const timer = window.setTimeout(async () => {
       try {
         const payload = await apiRequest<{ clients: ReviewClient[] }>(`/api/clients?${lookup}`, { signal: controller.signal });
@@ -191,7 +186,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         } else if (matches.length > 1) setMatchNotice('Choose the correct client from the list above.');
       } catch (error) {
         if (!controller.signal.aborted) setLookupError(error instanceof Error ? error.message : 'Could not load saved clients.');
-      } finally { if (!controller.signal.aborted) { setLoading(false); onLookupPending(false); } }
+      } finally { if (!controller.signal.aborted) onLookupPending(false); }
     }, !selectedId ? 300 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [lookup, selectedId, retry, onLookupPending]);
@@ -208,10 +203,8 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     if (review.clientMode === 'create') previousPrepared.current = review.client;
     manualChoice.current = true;
     onChange(value => selectDirectoryClient(value, record), true);
-    setContinueError('');
   };
   const updatePerson = (prefix: 'client' | 'applicant', key: keyof ReviewPerson, value: string) => {
-    setContinueError('');
     if (prefix === 'client' && key === 'displayName') manualChoice.current = false;
     onChange(current => {
       const person = { ...(prefix === 'client' ? current.client : current.applicant ?? emptyPerson()), [key]: value || null } as ReviewPerson;
@@ -237,10 +230,8 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     if (addressKeys.some(key => person?.[key]?.trim() && person[key] !== review.site[key])) setAddressTarget(prefix);
     else copySite(prefix);
   };
-  const errors = (key: string) => attempted ? issueFor(key) : undefined;
   const clientHasIssues = Object.keys(review.client).some(key => issueFor(`client.${key}`));
   const clientReady = !clientHasIssues && !issueFor('existingClientId');
-  const applicantReady = !review.applicantDifferentFromClient || !Object.keys(review.applicant ?? emptyPerson()).some(key => issueFor(`applicant.${key}`));
   const titleId = useId();
   const relationshipId = useId();
 
@@ -248,7 +239,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
     {prefix === 'client' ? <div className="cr-avatar" aria-hidden="true">{(person.displayName ?? '').trim().split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('') || '—'}</div> : null}
     <div className="cr-person-name">
       <PersonField person={person} name="displayName" label={prefix === 'client' ? 'Client name' : 'Applicant name'} prefix={prefix}
-        required onChange={(key, value) => updatePerson(prefix, key, value)} issue={errors(`${prefix}.displayName`)} />
+        required onChange={(key, value) => updatePerson(prefix, key, value)} issue={issueFor(`${prefix}.displayName`)} />
     </div>
     {prefix === 'client' ? <span className={`cr-status ${selected || clientReady ? 'cr-good' : ''}`}>
       {selected || clientReady ? <span className="cr-status-icon"><Check size={16} strokeWidth={2.5} /></span> : null}
@@ -286,7 +277,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         {lookupError || pickerError ? <p className="cr-error" role="alert">{lookupError || pickerError} <button type="button" className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
         {matchNotice ? <p className="cr-helper" role="status">{matchNotice}</p> : null}
         {personHeading(review.client, 'client')}
-        <PersonDetails person={review.client} prefix="client" onChange={(key, value) => updatePerson('client', key, value)} issueFor={errors}
+        <PersonDetails person={review.client} prefix="client" onChange={(key, value) => updatePerson('client', key, value)} issueFor={issueFor}
           readOnly={false} site={review.site} useSite={() => useSite('client')} sameAsSite={review.clientAddressSameAsSite} />
         {addressTarget ? <div className="cr-conflict" role="region" aria-label="Replace correspondence address"><p>Replace the {addressTarget}’s correspondence address with {[review.site.buildingNumber, review.site.addressLine1, review.site.townCity, review.site.postcode].filter(Boolean).join(', ')}?</p>
           <button type="button" className="btn btn-secondary" onClick={() => copySite(addressTarget)}>Use this address</button><button type="button" className="btn btn-secondary" onClick={() => setAddressTarget(null)}>Keep current address</button></div> : null}
@@ -301,24 +292,10 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         {review.applicantDifferentFromClient ? <section className="cr-applicant"><h3>Applicant</h3><p className="cr-helper">These details apply to this application.</p>
           {personHeading(review.applicant ?? emptyPerson(), 'applicant')}
           <PersonDetails person={review.applicant ?? emptyPerson()} prefix="applicant" onChange={(key, value) => updatePerson('applicant', key, value)}
-            issueFor={errors} readOnly={false} site={review.site} useSite={() => useSite('applicant')} />
+            issueFor={issueFor} readOnly={false} site={review.site} useSite={() => useSite('applicant')} />
         </section> : null}
       </div>
-      <footer className="cr-foot"><div role="status"><strong>{clientReady && applicantReady ? 'Ready to continue' : 'Complete the remaining details'}</strong>
-        <p>{saveState === 'saving' ? 'Saving changes…' : saveState === 'failed' ? 'Could not save. Your entries are still here.' : saveState === 'saved' ? 'Changes saved.' : ''}</p></div>
-        <button type="button" className="btn btn-primary gap-3" disabled={busy || continuing || loading} onClick={async () => {
-          setAttempted(true); setContinueError('');
-          const invalid = Array.from(root.current?.querySelectorAll<HTMLInputElement>('input:not([readonly])') ?? []).find(input => !input.checkValidity());
-          if (invalid) { invalid.focus(); return; }
-          if (!clientReady || !applicantReady) { requestAnimationFrame(() => root.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return; }
-          if (selected && lookupError) { setContinueError('Choose an available saved client before continuing.'); return; }
-          setContinuing(true);
-          try { if (!await onContinue()) setContinueError('Could not save these details. Your entries are still here; please retry.'); }
-          catch { setContinueError('Could not save these details. Your entries are still here; please retry.'); }
-          finally { setContinuing(false); }
-        }}>{continuing ? <LoaderCircle size={16} className="animate-spin" /> : null}Save and continue <ArrowRight size={16} /></button>
-      </footer>
-      {continueError ? <p className="cr-save-error cr-error" role="alert">{continueError}</p> : null}
+
     </div>
   </section>;
 }

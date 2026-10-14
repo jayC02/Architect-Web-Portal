@@ -1245,20 +1245,9 @@ export default function ApplicationDraftReview({
             review={review}
             onChange={applyReview}
             issueFor={issueFor}
-            busy={Boolean(working)}
-            saveState={saveState}
             onLookupPending={setClientLookupPending}
             onVisibilityChange={setClientReviewVisible}
-            onContinue={async () => {
-              if (!await persistCurrentReview()) return false;
-              const section = document.querySelector('.client-review')?.nextElementSibling;
-              if (section instanceof HTMLDetailsElement) {
-                section.open = true;
-                section.querySelector('summary')?.focus();
-                section.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-              }
-              return true;
-            }}
+
           />
         ) : null}
         <Section
