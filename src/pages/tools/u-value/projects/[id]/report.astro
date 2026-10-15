@@ -1,0 +1,32 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import UValueReport, { type ReportContext } from '@/components/tools/UValueReport';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { latestCalculations } from '@/lib/u-value/revisions';
+import type { UValueInput, UValueResult } from '@/lib/u-value/calculator';
+import '@/styles/u-value-report.css';
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const project = await prisma.project.findFirst({ where: { id: Astro.params.id, organisationId: auth.organisation.id }, select: { id: true, name: true, siteAddress: true, internalReference: true } });
+if (!project) return new Response('Project not found.', { status: 404 });
+// One repeatable-read snapshot prevents mixing pre/post withdrawal or revision states.
+const snapshot = await prisma.$transaction(async tx => {
+  const metadata = await tx.uValueCalculation.findMany({ where: { projectId: project.id, organisationId: auth.organisation.id }, orderBy: { createdAt: 'desc' }, take: 1001, select: { id: true, seriesId: true, revision: true, status: true } });
+  const latest = latestCalculations(metadata);
+  const ids = latest.filter(row => row.status === 'ISSUED').map(row => row.id);
+  // Load complete inputs only for reports that will appear in the pack.
+  const issued = metadata.length > 1000 || !ids.length ? [] : await tx.uValueCalculation.findMany({ where: { id: { in: ids }, organisationId: auth.organisation.id, projectId: project.id }, orderBy: { title: 'asc' }, include: { reviewEvents: { where: { organisationId: auth.organisation.id }, orderBy: { createdAt: 'asc' } } } });
+  return { tooMany: metadata.length > 1000, currentCount: latest.length, issued };
+}, { isolationLevel: 'RepeatableRead', timeout: 15000 });
+if (snapshot.tooMany) return new Response('Project exceeds the report pack limit.', { status: 422 });
+const issued = snapshot.issued;
+if (!issued.length) return new Response('No current issued reports. Review and issue the latest calculation revisions first.', { status: 422 });
+const generated = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' });
+---
+<BaseLayout title={`${project.name} — U-value report pack`} noindex={true}>
+  <div class="report-controls mx-auto flex max-w-5xl flex-wrap justify-between gap-3 p-6"><a class="btn btn-secondary" href={`/tools/u-value/projects/${project.id}`}>Back to schedule</a><button id="print-pack" class="btn btn-primary">Print / save PDF</button></div>
+  <article class="u-value-report report-pack-cover"><p class="report-kicker">{auth.organisation.name}</p><h1 class="mt-4 text-3xl font-semibold">U-value calculation schedule</h1><p class="report-title">{project.name}</p><p class="report-small">{project.siteAddress} · {project.internalReference}</p><p class="report-small">Pack assembled {generated}. Contains {issued.length} current issued reports. {snapshot.currentCount - issued.length} current calculations are not issued and are excluded.</p><div class="report-table-wrap"><table><thead><tr><th>Calculation</th><th>Revision</th><th>U (W/m²K)</th><th>Report reference</th></tr></thead><tbody>{issued.map(row => <tr><td>{row.title}</td><td>{row.revision}</td><td>{(row.resultSnapshot as UValueResult).displayUValue}</td><td>AP-UV-{row.id.slice(-10).toUpperCase()}</td></tr>)}</tbody></table></div><p class="report-small">An element schedule, not a whole-building heat-loss or regulatory compliance assessment. Each report states its own method, reference area and scope. Check the portal for subsequent revisions or withdrawals.</p></article>
+  {issued.map(row => <UValueReport id={row.id} title={row.title} createdAt={row.createdAt.toISOString()} inputHash={row.inputHash} input={row.inputSnapshot as UValueInput} result={row.resultSnapshot as UValueResult} context={row.contextSnapshot as ReportContext} revision={row.revision} status={row.status} events={row.reviewEvents.map(event => ({ ...event, createdAt: event.createdAt.toISOString() }))} />)}
+</BaseLayout>
+<script>document.getElementById('print-pack')?.addEventListener('click', () => window.print());</script>

@@ -16,7 +16,7 @@ mkdirSync('output/u-value', { recursive: true });
 const js = await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Calculator from './src/components/tools/UValueCalculator';(async()=>{const props=await(await fetch('/fixture/initial')).json();createRoot(document.getElementById('root')).render(<Calculator {...props}/>);})();`,
   resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, write: false, format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"test"' } });
 const css = await postcss([tailwindcss(config)]).process(readFileSync('src/styles/global.css', 'utf8'), { from: 'src/styles/global.css' });
-const reportCss = readFileSync('src/pages/tools/u-value/reports/[id].astro', 'utf8').split('<style is:global>')[1].split('</style>')[0];
+const reportCss = readFileSync('src/styles/u-value-report.css', 'utf8');
 const seedInput = uValueInputSchema.parse({ element: 'wall', correctionsAssessed: true, layers: [
   { id: 'lining', kind: 'solid', name: 'Gyproc WallBoard 12.5 mm', thicknessMm: 12.5, lambda: 0.19, source: 'British Gypsum product data sheet, 17 October 2025; λ 0.19 W/mK. https://www.british-gypsum.com/download-documents/product-data-sheet-pds/british-gypsum-pds-gyproc-wallboard-12-5mm.pdf' },
   { id: 'insulation', kind: 'solid', name: '100 mm insulation between timber studs', thicknessMm: 100, lambda: 0.038, source: 'Referenced insulation declaration.', bridge: { name: 'Timber studs', lambda: 0.13, fraction: 0.15, group: 'studs', source: 'Timber design value and framing area from drawing W01.' } },

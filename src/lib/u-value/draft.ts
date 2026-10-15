@@ -1,5 +1,17 @@
 import { uValueInputSchema, type UValueInput } from './calculator';
 import { z } from 'zod';
+import { additionalMethods, isAdditionalMethod, methodKeys, methodFields, type AdditionalMethod, type MethodField } from './methods';
+
+export type MethodDraft = {
+  values: Record<string, string>; source: string; applicabilityConfirmed: boolean;
+  components: { name: string; kind: 'frame' | 'glazing' | 'panel'; area: string; u: string; source: string }[];
+  edges: { name: string; length: string; psi: string; source: string }[];
+  regions: { name: string; shape: 'rectangle' | 'triangle'; area: string; thickness1: string; thickness2: string; thickness3: string }[];
+};
+export const emptyMethodDraft = (method?: AdditionalMethod): MethodDraft => ({
+  values: Object.fromEntries(method ? additionalMethods[method].fields.map((field: MethodField) => [field.key, field.initial || '']) : []),
+  source: '', applicabilityConfirmed: false, components: [], edges: [], regions: [],
+});
 
 export type LayerDraft = {
   id: string; kind: 'solid' | 'resistance' | 'air'; name: string; productId: string;
@@ -11,6 +23,7 @@ export type LayerDraft = {
 };
 export type CalculationDraft = {
   title: string; projectId: string; reference: string; location: string;
+  basedOnId: string | null;
   element: UValueInput['element']; construction: UValueInput['construction'];
   heatFlow: UValueInput['heatFlow']; correctionsAssessed: boolean;
   layers: LayerDraft[]; target: string; targetReference: string;
@@ -18,6 +31,7 @@ export type CalculationDraft = {
   groundConfiguration: NonNullable<UValueInput['ground']>['configuration'];
   corrections: { id: string; name: string; value: string; source: string }[];
   automaticCorrections: AutomaticCorrectionDraft[];
+  methodData: MethodDraft;
 };
 export type AutomaticCorrectionDraft = {
   id: string; kind: 'airgap' | 'fastener'; layerId: string; level: '0' | '1' | '2'; source: string;
@@ -33,11 +47,11 @@ export const newLayer = (id: string, kind: LayerDraft['kind'] = 'solid'): LayerD
   bridgeLambda: '0.13', bridgeFraction: '15', bridgeGroup: 'frame-1', bridgeSource: '',
 });
 export const emptyCalculation = (): CalculationDraft => ({
-  title: '', projectId: '', reference: '', location: '', element: 'wall', construction: 'standard', layers: [],
+  title: '', projectId: '', reference: '', location: '', basedOnId: null, element: 'wall', construction: 'standard', layers: [],
   heatFlow: 'automatic', correctionsAssessed: false,
   target: '', targetReference: '', area: '', perimeter: '', wallThickness: '300', soilLambda: '2',
   groundSource: '',
-  groundConfiguration: 'uniform-slab', corrections: [], automaticCorrections: [],
+  groundConfiguration: 'uniform-slab', corrections: [], automaticCorrections: [], methodData: emptyMethodDraft(),
 });
 const numeric = (value: string) => value.trim() ? Number(value) : NaN;
 const draftText = z.string().max(2000);
@@ -51,7 +65,13 @@ const layerDraftSchema = z.object({
 });
 const draftSchema = z.object({
   title: draftText, projectId: draftText, reference: draftText, location: draftText,
-  element: z.enum(['wall', 'roof', 'exposed-floor', 'ground-slab']), construction: z.enum(['standard', 'steel-frame', 'inverted-roof', 'specialist']),
+  basedOnId: z.string().min(1).max(120).nullable().default(null),
+  element: z.enum(['wall', 'roof', 'exposed-floor', 'ground-slab', ...methodKeys]), construction: z.enum(['standard', 'steel-frame', 'inverted-roof', 'specialist']),
+  methodData: z.object({ values: z.record(draftText), source: draftText, applicabilityConfirmed: z.boolean(),
+    components: z.array(z.object({ name: draftText, kind: z.enum(['frame', 'glazing', 'panel']), area: draftText, u: draftText, source: draftText })).max(32),
+    edges: z.array(z.object({ name: draftText, length: draftText, psi: draftText, source: draftText })).max(32),
+    regions: z.array(z.object({ name: draftText, shape: z.enum(['rectangle', 'triangle']), area: draftText, thickness1: draftText, thickness2: draftText, thickness3: draftText })).max(32),
+  }).default(emptyMethodDraft),
   heatFlow: z.enum(['automatic', 'upwards', 'horizontal', 'downwards']).default('automatic'), correctionsAssessed: z.boolean().default(false),
   layers: z.array(layerDraftSchema).max(32), target: draftText, targetReference: draftText,
   area: draftText, perimeter: draftText, wallThickness: draftText, soilLambda: draftText, groundSource: draftText,
@@ -68,6 +88,20 @@ export function parseStoredDraft(raw: unknown): CalculationDraft | null {
   return parsed.data;
 }
 export function draftInputs(draft: CalculationDraft): unknown {
+  if (isAdditionalMethod(draft.element)) {
+    const data = draft.methodData;
+    const fields = methodFields(draft.element, data.values);
+    return { element: draft.element, construction: 'standard', heatFlow: 'automatic', correctionsAssessed: draft.correctionsAssessed,
+      layers: [], corrections: [], automaticCorrections: [], ground: null,
+      target: draft.target.trim() ? numeric(draft.target) : null, targetReference: draft.targetReference,
+      methodData: { values: Object.fromEntries(fields.map(field => [field.key, field.options || field.text ? data.values[field.key] : numeric(data.values[field.key] || '')])),
+        source: data.source, applicabilityConfirmed: data.applicabilityConfirmed,
+        components: data.components.map(c => ({ name: c.name, kind: c.kind, area_m2: numeric(c.area), u_value_w_m2k: numeric(c.u), evidence: c.source })),
+        edges: data.edges.map(e => ({ name: e.name, length_m: numeric(e.length), psi_w_mk: numeric(e.psi), evidence: e.source })),
+        regions: data.regions.map(r => ({ name: r.name, shape: r.shape, area_m2: numeric(r.area), thicknesses_mm: [r.thickness1, r.thickness2, ...(r.shape === 'triangle' ? [r.thickness3] : [])].map(numeric) })),
+      },
+    };
+  }
   return {
     element: draft.element, construction: draft.construction,
     heatFlow: draft.heatFlow, correctionsAssessed: draft.correctionsAssessed,
@@ -97,6 +131,12 @@ export function draftInputs(draft: CalculationDraft): unknown {
 export function restoredDraft(rawInput: UValueInput, metadata: Partial<CalculationDraft> = {}): CalculationDraft {
   const input = uValueInputSchema.parse(rawInput);
   return { ...emptyCalculation(), ...metadata, element: input.element, construction: input.construction,
+    methodData: input.methodData ? {
+      values: Object.fromEntries(Object.entries(input.methodData.values).map(([key, value]) => [key, String(value)])), source: input.methodData.source, applicabilityConfirmed: input.methodData.applicabilityConfirmed,
+      components: input.methodData.components.map(c => ({ name: c.name, kind: c.kind, area: String(c.area_m2), u: String(c.u_value_w_m2k), source: c.evidence })),
+      edges: input.methodData.edges.map(e => ({ name: e.name, length: String(e.length_m), psi: String(e.psi_w_mk), source: e.evidence })),
+      regions: input.methodData.regions.map(r => ({ name: r.name, shape: r.shape, area: String(r.area_m2), thickness1: String(r.thicknesses_mm[0]), thickness2: String(r.thicknesses_mm[1]), thickness3: r.thicknesses_mm[2] == null ? '' : String(r.thicknesses_mm[2]) })),
+    } : emptyMethodDraft(),
     heatFlow: input.heatFlow, correctionsAssessed: input.correctionsAssessed,
     target: input.target == null ? '' : String(input.target), targetReference: input.targetReference,
     layers: input.layers.map(layer => ({ ...newLayer(layer.id, layer.kind), name: layer.name,

@@ -10,6 +10,7 @@ Integration changes:
 - Removed only the standalone CLI block at the end of `uvalue_engine.mjs`, avoiding Node-only dynamic imports and top-level await in the portal's browser bundle. Exported calculation code is unchanged. The original file remains in the supplied ZIP; its original checksum is retained in SHA256SUMS.txt.
 - Exported the existing `calculatePlaneLayers` function directly so the browser build can omit unused specialist dispatch and numerical-solver code. Its mathematical implementation is unchanged.
 - Added `uvalue_engine.d.mts` for the restricted functions consumed by the portal.
+- Added `backend/calculations.d.mts` for the strict adapter used by the additional portal method forms. The adapter's original JavaScript and mathematics are unchanged.
 
 The portal imports the mathematical functions directly. It uses its existing authenticated APIs, organisation ownership and saved reports, rather than starting this package's standalone HTTP service. Its input adapter retains inside-to-outside layer entry and reverses it for the engine. Zero-resistance membranes are retained in report inputs and omitted only from resistance arithmetic. The portal always includes assessed corrections, even when their sum is below 3%.
 

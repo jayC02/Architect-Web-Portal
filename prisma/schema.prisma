@@ -575,6 +575,7 @@ model Organisation {
   projectFeeMilestones  ProjectFeeMilestone[]
   xeroWriteAttempts     XeroWriteAttempt[]
   uValueCalculations    UValueCalculation[]
+  uValueTemplates       UValueTemplate[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -748,6 +749,11 @@ model UValueCalculation {
   resultSnapshot   Json
   contextSnapshot  Json
   createdAt        DateTime @default(now())
+  seriesId         String?
+  revision         Int      @default(1)
+  previousId       String?
+  status           String   @default("DRAFT")
+  reviewEvents     UValueReviewEvent[]
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -755,6 +761,36 @@ model UValueCalculation {
 
   @@index([organisationId, createdAt])
   @@index([organisationId, projectId, createdAt])
+  @@unique([organisationId, seriesId, revision])
+}
+
+model UValueReviewEvent {
+  id              String   @id @default(cuid())
+  calculationId   String
+  organisationId  String
+  action          String
+  actorId         String
+  actorName       String
+  statement       String
+  inputHash       String
+  requestKey      String   @unique
+  requestHash     String
+  createdAt       DateTime @default(now())
+  calculation UValueCalculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  @@index([organisationId, calculationId, createdAt])
+}
+
+model UValueTemplate {
+  id                    String   @id @default(cuid())
+  organisationId        String
+  sourceCalculationId   String
+  name                  String
+  createdByName         String
+  createdAt             DateTime @default(now())
+  inputSnapshot         Json
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  @@unique([organisationId, sourceCalculationId, name])
+  @@index([organisationId, createdAt])
 }
 
 model LifecycleEvent {

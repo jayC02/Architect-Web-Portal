@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState, type InputHTMLAttributes } from '
 import { ArrowDown, ArrowUp, FileText, LoaderCircle, Plus, Layers3, RotateCcw } from 'lucide-react';
 import { calculateUValue, elementLabels, heatFlowLabels, ThermalCalculationError, uValueInputSchema, type UValueInput } from '@/lib/u-value/calculator';
 import { thermalMaterials, materialLambda } from '@/lib/u-value/materials';
-import { draftInputs, emptyCalculation, newLayer, parseStoredDraft, restoredDraft, type CalculationDraft, type LayerDraft } from '@/lib/u-value/draft';
+import { draftInputs, emptyCalculation, emptyMethodDraft, newLayer, parseStoredDraft, restoredDraft, type CalculationDraft, type LayerDraft } from '@/lib/u-value/draft';
 import UValueCorrections from './UValueCorrections';
+import UValueMethodInputs from './UValueMethodInputs';
+import { isAdditionalMethod } from '@/lib/u-value/methods';
 
 type Project = { id: string; name: string; internalReference: string | null; siteAddress: string | null };
 type Saved = { id: string; title: string; createdAt: string; projectId: string | null };
-type Props = { projects: Project[]; storageKey: string; initial?: CalculationDraft; initialSaved?: Saved[] };
+type Props = { projects: Project[]; storageKey: string; initial?: CalculationDraft; initialSaved?: Saved[]; templates?: { id: string; name: string }[] };
 const n = (value: number, digits = 3) => value.toFixed(digits);
 const Field = ({ label, id, ...props }: { label: string; id: string } & InputHTMLAttributes<HTMLInputElement>) =>
   <label className="block min-w-0" htmlFor={id}><span className="label">{label}</span><input id={id} className="field min-h-11" {...props} /></label>;
@@ -39,10 +41,11 @@ async function calculationRequest(url: string, options: RequestInit = {}) {
   } finally { clearTimeout(timer); }
 }
 
-export default function UValueCalculator({ projects, storageKey, initial, initialSaved = [] }: Props) {
+export default function UValueCalculator({ projects, storageKey, initial, initialSaved = [], templates = [] }: Props) {
   const [draft, setDraft] = useState<CalculationDraft>(initial || emptyCalculation);
   const [saved, setSaved] = useState(initialSaved);
   const [selectedSaved, setSelectedSaved] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
   const [busy, setBusy] = useState<'save' | 'load' | ''>('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -89,7 +92,7 @@ export default function UValueCalculator({ projects, storageKey, initial, initia
   };
   const loadSaved = async () => {
     if (!selectedSaved || busy) return;
-    if (draft.layers.length && !window.confirm('Replace the current working calculation with a copy of the saved calculation?')) return;
+    if ((draft.layers.length || draft.methodData.source) && !window.confirm('Replace the current working calculation with a copy of the saved calculation?')) return;
     setBusy('load'); setError(''); const loadGeneration = generation.current;
     try {
       const data = await calculationRequest(`/api/u-value/${encodeURIComponent(selectedSaved)}`);
@@ -100,6 +103,18 @@ export default function UValueCalculator({ projects, storageKey, initial, initia
         reference: item.contextSnapshot.reference || '', location: item.contextSnapshot.location || '' }));
       setNotice('Loaded a working copy. The saved report stays unchanged.');
     } catch (problem) { setError(problem instanceof Error ? problem.message : 'Could not load this calculation.'); }
+    finally { setBusy(''); }
+  };
+  const loadTemplate = async () => {
+    if (!selectedTemplate || busy) return;
+    if ((draft.layers.length || draft.methodData.source) && !window.confirm('Replace the current working inputs with this construction template?')) return;
+    const version = generation.current; setBusy('load'); setError('');
+    try {
+      const { template } = await calculationRequest(`/api/u-value/templates/${encodeURIComponent(selectedTemplate)}`);
+      if (generation.current !== version) { setNotice('Your newer edits have been kept. Load the template again when ready.'); return; }
+      change(() => restoredDraft(template.inputSnapshot, { title: template.name }));
+      setNotice('Construction template loaded. Select the project and check its applicability before saving.');
+    } catch (problem) { setError(problem instanceof Error ? problem.message : 'Could not load this construction template.'); }
     finally { setBusy(''); }
   };
   const save = async () => {
@@ -113,7 +128,7 @@ export default function UValueCalculator({ projects, storageKey, initial, initia
     try {
       const data = await calculationRequest('/api/u-value', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId: requestId.current, title: draft.title, projectId: draft.projectId || null,
-          reference: draft.reference, location: draft.location, inputs: draftInputs(draft) }),
+          reference: draft.reference, location: draft.location, basedOnId: draft.basedOnId, inputs: draftInputs(draft) }),
       });
       setSaved(previous => [data.calculation, ...previous.filter(item => item.id !== data.calculation.id)].slice(0, 100));
       if (generation.current !== saveGeneration) {
@@ -125,45 +140,51 @@ export default function UValueCalculator({ projects, storageKey, initial, initia
     finally { setBusy(''); }
   };
   const reset = () => {
-    if (draft.layers.length && !window.confirm('Start a new calculation? Saved reports will be kept.')) return;
-    change(() => emptyCalculation()); setSelectedSaved('');
+    if ((draft.layers.length || draft.methodData.source) && !window.confirm('Start a new calculation? Saved reports will be kept.')) return;
+    change(() => emptyCalculation()); setSelectedSaved(''); setSelectedTemplate('');
   };
   const totalThickness = draft.layers.reduce((sum, layer) => sum + (Number(layer.thickness) || 0), 0);
   const calc = result.value;
+  const additional = isAdditionalMethod(draft.element);
   if (!hydrated) return <div className="flex items-center gap-3 py-10 text-sm text-stone-600" role="status"><LoaderCircle size={18} className="animate-spin" />Loading calculation…</div>;
   return <div className="space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><p className="text-xs font-semibold uppercase tracking-wider text-moss">Design tools</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">U-value calculator</h1><p className="mt-2 text-sm text-stone-600">Build a construction, check its thermal performance and create a calculation report.</p></div>
       <button type="button" className="btn btn-secondary gap-2" onClick={reset} disabled={Boolean(busy)}><RotateCcw size={16} />New calculation</button>
     </header>
+    {draft.basedOnId && <div className="rounded-lg border border-moss/30 bg-moss/5 p-4 text-sm">Creating a revision of a saved report. <a className="font-semibold underline" href={`/tools/u-value/reports/${draft.basedOnId}`}>View previous report</a>. Earlier inputs and review records will be retained.</div>}
     {saved.length > 0 && <section className="panel rounded-xl p-4" aria-label="Saved calculations">
       <div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1"><span className="label">Saved calculations</span><select className="field min-h-11" value={selectedSaved} onChange={event => setSelectedSaved(event.target.value)}><option value="">Select a saved calculation</option>{saved.map(item => <option key={item.id} value={item.id}>{item.title} · {new Date(item.createdAt).toLocaleDateString('en-GB')}</option>)}</select></label>
         <button className="btn btn-secondary min-h-11 gap-2" type="button" disabled={!selectedSaved || Boolean(busy)} onClick={() => void loadSaved()}>{busy === 'load' && <LoaderCircle size={16} className="animate-spin" />}Load copy</button>
         {selectedSaved && <a className="btn btn-secondary min-h-11" href={`/tools/u-value/reports/${selectedSaved}`}>View saved report</a>}
       </div>
     </section>}
+    {templates.length > 0 && <section className="panel rounded-xl p-4" aria-label="Construction templates"><div className="flex flex-wrap items-end gap-3"><label className="min-w-0 flex-1"><span className="label">Construction templates</span><select className="field min-h-11" value={selectedTemplate} onChange={event => setSelectedTemplate(event.target.value)}><option value="">Select a practice construction</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><button type="button" className="btn btn-secondary min-h-11" disabled={!selectedTemplate || Boolean(busy)} onClick={() => void loadTemplate()}>Use construction template</button></div></section>}
+    {draft.projectId && <a className="btn btn-secondary" href={`/tools/u-value/projects/${encodeURIComponent(draft.projectId)}`}>Open project U-value schedule</a>}
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-w-0 space-y-5">
         <section className="panel rounded-xl p-5 sm:p-6" aria-labelledby="details-heading">
           <h2 id="details-heading" className="text-base font-semibold">Calculation details</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Calculation name" id="calculation-title" value={draft.title} placeholder="External wall · W01" onChange={event => patch('title', event.target.value)} maxLength={160} />
-            <label><span className="label">Project · optional</span><select className="field min-h-11" value={draft.projectId} onChange={event => {
+            <label><span className="label">Project · optional</span><select className="field min-h-11" disabled={Boolean(draft.basedOnId)} value={draft.projectId} onChange={event => {
               const project = projects.find(item => item.id === event.target.value);
               change(previous => ({ ...previous, projectId: event.target.value, reference: project?.internalReference || previous.reference, location: project?.siteAddress || previous.location }));
             }}><option value="">Standalone calculation</option>{projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
             <Field label="Drawing / element reference" id="element-reference" value={draft.reference} onChange={event => patch('reference', event.target.value)} maxLength={120} />
             <Field label="Site address / location" id="calculation-location" value={draft.location} onChange={event => patch('location', event.target.value)} maxLength={400} />
-            <label><span className="label">Building element</span><select className="field min-h-11" value={draft.element} onChange={event => patch('element', event.target.value as UValueInput['element'])}>{Object.entries(elementLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label><span className="label">Building element</span><select className="field min-h-11" value={draft.element} onChange={event => { const element = event.target.value as UValueInput['element']; change(previous => ({ ...previous, element, correctionsAssessed: false, methodData: emptyMethodDraft(isAdditionalMethod(element) ? element : undefined) })); }}>{Object.entries(elementLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            {!additional && <>
             <label><span className="label">Construction system</span><select className="field min-h-11" value={draft.construction} onChange={event => patch('construction', event.target.value as UValueInput['construction'])}><option value="standard">Solid, masonry or timber construction</option><option value="steel-frame">Steel framing</option><option value="inverted-roof">Inverted roof</option><option value="specialist">Other specialist system</option></select></label>
             {draft.element !== 'ground-slab' && <label><span className="label">Heat-flow direction</span><select className="field min-h-11" value={draft.heatFlow} onChange={event => patch('heatFlow', event.target.value as UValueInput['heatFlow'])}>{Object.entries(heatFlowLabels).map(([key, label]) => <option key={key} value={key}>{key === 'automatic' ? `${draft.element === 'wall' ? 'Horizontal' : draft.element === 'roof' ? 'Upwards' : 'Downwards'} · element default` : label}</option>)}</select><span className="mt-1 block text-xs text-stone-500">Select the direction appropriate to the element’s inclination.</span></label>}
+            </>}
           </div>
         </section>
         {draft.element === 'ground-slab' && <section className="panel rounded-xl p-5 sm:p-6" aria-labelledby="ground-heading"><h2 id="ground-heading" className="text-base font-semibold">Ground-floor geometry</h2><p className="mt-1 text-sm text-stone-600">Use the relevant floor footprint. Exposed perimeter excludes walls adjoining spaces heated to a similar temperature.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Floor area A (m²)" id="floor-area" type="number" step="any" min="0" value={draft.area} onChange={event => patch('area', event.target.value)} /><Field label="Exposed perimeter P (m)" id="floor-perimeter" type="number" step="any" min="0" value={draft.perimeter} onChange={event => patch('perimeter', event.target.value)} /><Field label="External wall thickness (mm)" id="floor-wall-thickness" type="number" step="any" min="0" value={draft.wallThickness} onChange={event => patch('wallThickness', event.target.value)} /><Field label="Design soil conductivity (W/mK)" id="soil-lambda" type="number" step="any" min="0" value={draft.soilLambda} onChange={event => patch('soilLambda', event.target.value)} />
           <label className="sm:col-span-2"><span className="label">Floor configuration</span><select className="field min-h-11" value={draft.groundConfiguration} onChange={event => patch('groundConfiguration', event.target.value as CalculationDraft['groundConfiguration'])}><option value="uniform-slab">Ground-level slab · uniform all-over layers · no separate edge insulation</option><option value="edge-insulated">Slab with separate edge insulation</option><option value="suspended">Suspended floor over a subfloor void</option><option value="basement">Basement floor</option><option value="flowing-groundwater">Floor affected by shallow flowing groundwater</option></select></label><Field label="Soil design-value reference" id="soil-reference" value={draft.groundSource} onChange={event => patch('groundSource', event.target.value)} /></div>
         </section>}
-        <section className="panel overflow-hidden rounded-xl" aria-labelledby="layers-heading">
+        {isAdditionalMethod(draft.element) ? <UValueMethodInputs key={draft.element} method={draft.element} draft={draft.methodData} onChange={value => patch('methodData', value)} /> : <section className="panel overflow-hidden rounded-xl" aria-labelledby="layers-heading">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-4 sm:px-6"><div><h2 id="layers-heading" className="text-base font-semibold">Construction layers</h2><p className="mt-1 text-sm text-stone-500">Inside → {draft.element === 'ground-slab' ? 'ground' : 'outside'}</p></div><span className="text-sm text-stone-600">{totalThickness > 0 ? `${n(totalThickness, 1)} mm overall` : 'No layers yet'}</span></div>
           <div className="divide-y divide-stone-200">
           {!draft.layers.length && <div className="px-6 py-10 text-center"><Layers3 className="mx-auto text-moss" size={28} /><p className="mt-3 font-semibold">Start with the innermost layer</p><p className="mt-2 text-sm text-stone-600">Choose a referenced product or enter the material’s design conductivity.</p><button type="button" className="btn btn-primary mt-5 gap-2" onClick={() => addLayer()}><Plus size={16} />Add first layer</button></div>}
@@ -194,21 +215,21 @@ export default function UValueCalculator({ projects, storageKey, initial, initia
           </div>)}
           </div>
           {draft.layers.length > 0 && <div className="flex flex-wrap gap-3 border-t border-stone-200 p-5 sm:px-6"><button type="button" className="btn btn-secondary gap-2" disabled={draft.layers.length >= 32} onClick={() => addLayer()}><Plus size={16} />Add layer</button><button type="button" className="btn btn-secondary" disabled={draft.layers.length >= 32} onClick={() => addLayer('air')}>Add air cavity</button></div>}
-        </section>
+        </section>}
         <section className="panel rounded-xl p-5 sm:p-6"><h2 className="text-base font-semibold">Project target · optional</h2><p className="mt-1 text-sm text-stone-600">Enter the target applicable to this element and project. A target comparison is not a whole-building compliance assessment.</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Maximum U-value (W/m²K)" id="target-u-value" type="number" step="any" min="0" value={draft.target} onChange={event => patch('target', event.target.value)} /><Field label="Target reference / handbook clause" id="target-reference" value={draft.targetReference} onChange={event => patch('targetReference', event.target.value)} /></div></section>
-        {draft.element !== 'ground-slab' && <UValueCorrections draft={draft} onCalculatedChange={items => patch('automaticCorrections', items)} onAssessedChange={items => patch('corrections', items)} />}
+        {!additional && draft.element !== 'ground-slab' && <UValueCorrections draft={draft} onCalculatedChange={items => patch('automaticCorrections', items)} onAssessedChange={items => patch('corrections', items)} />}
       </div>
       <aside className="space-y-4 xl:sticky xl:top-6" aria-label="Calculation result">
-        <section className="panel rounded-xl p-6"><p className="text-xs font-semibold uppercase tracking-wider text-moss">Calculated U-value</p><div className="mt-3 flex items-baseline gap-2"><output className="text-5xl font-semibold tracking-tight" aria-label="U-value">{calc?.displayUValue || '—'}</output><span className="text-sm text-stone-600">W/m²K</span></div><p className="mt-2 text-sm text-stone-600">{elementLabels[draft.element]}</p>
-          {calc ? <><p className="mt-5 border-t border-stone-200 pt-4 text-sm font-medium">{calc.method}</p><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-4"><dt className="text-stone-600">{calc.ground ? 'Effective resistance' : 'Total resistance'}</dt><dd>{n(calc.totalResistance)} m²K/W</dd></div><div className="flex justify-between gap-4"><dt className="text-stone-600">Base U-value</dt><dd>{n(calc.baseUValue, 4)}</dd></div><div className="flex justify-between gap-4"><dt className="text-stone-600">Corrections ΔU</dt><dd>{n(calc.correction, 4)}</dd></div>{!calc.ground && <div className="flex justify-between gap-4"><dt className="text-stone-600">Rsi / Rse</dt><dd>{n(calc.rsi, 2)} / {n(calc.rse, 2)}</dd></div>}</dl>{calc.targetMet !== null && <p className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${calc.targetMet ? 'bg-moss/10 text-moss' : 'bg-amber-50 text-amber-900'}`}>{calc.targetMet ? 'Meets selected target' : 'Above selected target'} · {draft.target} W/m²K</p>}
-          <details className="mt-4 text-sm"><summary className="cursor-pointer text-stone-600">Calculation detail</summary><dl className="mt-3 space-y-2 text-xs"><div>Unrounded U: {calc.uValue.toFixed(8)} W/m²K</div>{calc.ground ? <><div>B′: {n(calc.ground.characteristicDimension)} m</div><div>Equivalent thickness dt: {n(calc.ground.equivalentThickness)} m</div><div>{calc.ground.regime}</div></> : <><div>Upper R: {n(calc.upperResistance, 5)}</div><div>Lower R: {n(calc.lowerResistance, 5)}</div><div>Approximation error: {n(calc.approximationErrorPercent, 2)}%</div><div>{calc.ventilation}</div></>}</dl></details></> : <p className="mt-5 text-sm text-stone-600" role="status">{draft.layers.length ? result.message : 'Add construction layers to calculate the result.'}</p>}
+        <section className="panel rounded-xl p-6"><p className="text-xs font-semibold uppercase tracking-wider text-moss">{draft.element === 'supplied_u' ? 'Externally assessed U-value' : 'Calculated U-value'}</p><div className="mt-3 flex items-baseline gap-2"><output className="text-5xl font-semibold tracking-tight" aria-label="U-value">{calc?.displayUValue || '—'}</output><span className="text-sm text-stone-600">W/m²K</span></div><p className="mt-2 text-sm text-stone-600">{elementLabels[draft.element]}</p>
+          {calc ? <><p className="mt-5 border-t border-stone-200 pt-4 text-sm font-medium">{calc.method}</p><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between gap-4"><dt className="text-stone-600">{calc.ground || calc.additional ? 'Effective resistance (1/U)' : 'Total resistance'}</dt><dd>{n(calc.totalResistance)} m²K/W</dd></div><div className="flex justify-between gap-4"><dt className="text-stone-600">Base U-value</dt><dd>{n(calc.baseUValue, 4)}</dd></div><div className="flex justify-between gap-4"><dt className="text-stone-600">{additional ? 'Method adjustment ΔU' : 'Corrections ΔU'}</dt><dd>{n(calc.correction, 4)}</dd></div>{!calc.ground && !calc.additional && <div className="flex justify-between gap-4"><dt className="text-stone-600">Rsi / Rse</dt><dd>{n(calc.rsi, 2)} / {n(calc.rse, 2)}</dd></div>}</dl>{calc.targetMet !== null && <p className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${calc.targetMet ? 'bg-moss/10 text-moss' : 'bg-amber-50 text-amber-900'}`}>{calc.targetMet ? 'Meets selected target' : 'Above selected target'} · {draft.target} W/m²K</p>}
+          <details className="mt-4 text-sm"><summary className="cursor-pointer text-stone-600">Calculation detail</summary><dl className="mt-3 space-y-2 text-xs"><div>Unrounded U: {calc.uValue.toFixed(8)} W/m²K</div>{calc.additional ? calc.additional.working.map(row => <div key={row.label}>{row.label}: {row.value}</div>) : calc.ground ? <><div>B′: {n(calc.ground.characteristicDimension)} m</div><div>Equivalent thickness dt: {n(calc.ground.equivalentThickness)} m</div><div>{calc.ground.regime}</div></> : <><div>Upper R: {n(calc.upperResistance, 5)}</div><div>Lower R: {n(calc.lowerResistance, 5)}</div><div>Approximation error: {n(calc.approximationErrorPercent, 2)}%</div><div>{calc.ventilation}</div></>}</dl></details></> : <p className="mt-5 text-sm text-stone-600" role="status">{additional || draft.layers.length ? result.message : 'Add construction layers to calculate the result.'}</p>}
           {calc && calc.missingSources.length > 0 && <p className="mt-4 text-sm text-amber-900">Add references for {calc.missingSources.join(', ')} before creating the report.</p>}
-          <label className="mt-5 flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={draft.correctionsAssessed} onChange={event => patch('correctionsAssessed', event.target.checked)} /><span>I have assessed applicable corrections{draft.element === 'ground-slab' ? ' and confirmed this floor matches the supported slab configuration.' : ', including air gaps and fixings, and included any required corrections.'}</span></label>
+          <label className="mt-5 flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-moss" checked={draft.correctionsAssessed} onChange={event => patch('correctionsAssessed', event.target.checked)} /><span>I have assessed applicable corrections{additional ? ' and included any required effects in the supplied values.' : draft.element === 'ground-slab' ? ' and confirmed this floor matches the supported slab configuration.' : ', including air gaps and fixings, and included any required corrections.'}</span></label>
           <button type="button" className="btn btn-primary mt-6 w-full gap-2" disabled={!calc || calc.missingSources.length > 0 || !draft.correctionsAssessed || Boolean(busy)} onClick={() => void save()}>{busy === 'save' ? <LoaderCircle size={16} className="animate-spin" /> : <FileText size={16} />}Create calculation report</button>
           <p className="mt-3 text-xs text-stone-500">Saves an immutable calculation and opens a report you can print or save as PDF.</p>
           {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}{notice && <p role="status" className="mt-4 text-sm text-moss">{notice}</p>}
         </section>
-        <div className="rounded-lg border border-stone-200 p-4 text-xs leading-relaxed text-stone-600"><p className="font-semibold text-ink">Calculation basis</p><p className="mt-2">ISO 6946 for supported opaque above-ground elements; ISO 13370 for uniform ground-bearing slabs. Use appropriate design values and assess applicable corrections before issuing a report.</p><p className="mt-2">Windows, metal-framed systems, inverted roofs and other ground-floor configurations require their own specialist method.</p></div>
+        <div className="rounded-lg border border-stone-200 p-4 text-xs leading-relaxed text-stone-600"><p className="font-semibold text-ink">Calculation basis</p><p className="mt-2">ISO 6946 for supported opaque above-ground elements; ISO 13370 for supported ground-transfer methods. Opening calculations use supplied component values. Use appropriate design values and assess applicable corrections before issuing a report.</p><p className="mt-2">Choose the method that matches the construction. Numerical metal-frame analysis, interacting specialist corrections and flowing groundwater remain outside the supported portal methods.</p></div>
       </aside>
     </div>
   </div>;

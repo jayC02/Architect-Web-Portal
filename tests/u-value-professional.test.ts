@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { calculateUValue, uValueInputSchema } from '../src/lib/u-value/calculator';
+import { calculateConstruction } from '../vendor/uvalue-backend/backend/calculations.mjs';
+import { draftInputs, restoredDraft, parseStoredDraft } from '../src/lib/u-value/draft';
+import { type AdditionalMethod } from '../src/lib/u-value/methods';
+
+const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
+import { methodExample, examples } from './fixtures/u-value-methods';
+for (const method of Object.keys(examples) as AdditionalMethod[]) {
+  const draft = methodExample(method);
+  const input = uValueInputSchema.parse(draftInputs(draft));
+  const result = calculateUValue(input);
+  assert.ok(Number.isFinite(result.uValue) && result.uValue > 0);
+  assert.equal(result.missingSources.length, 0);
+  const restored = restoredDraft(input);
+  assert.deepEqual(uValueInputSchema.parse(draftInputs(restored)), input, `${method} draft round-trip`);
+  assert.ok(parseStoredDraft(draft));
+  const unconfirmed = structuredClone(input); unconfirmed.methodData!.applicabilityConfirmed = false;
+  assert.throws(() => calculateUValue(unconfirmed), /Confirm/);
+  assert.throws(() => calculateUValue({ ...input, layers: [{ id: 'extra', kind: 'resistance', name: 'Hidden layer', thicknessMm: 0, resistance: 1 }] }), /only the inputs/);
+  const unexpected = structuredClone(input); unexpected.methodData!.values.typo = 1;
+  assert.throws(() => calculateUValue(unexpected), /Unexpected inputs/);
+}
+close(calculateUValue(draftInputs(methodExample('window'))).uValue, (.3 * 1.5 + 1.7 * 1.1 + 5.4 * .04) / 2);
+close(calculateUValue(draftInputs(methodExample('door'))).uValue, 1.268);
+close(calculateUValue(draftInputs(methodExample('unheated_space'))).uValue, .4 * 3.05 / (8.16 + 3.05));
+const inverted = calculateUValue(draftInputs(methodExample('inverted_roof')));
+close(inverted.uValue, .2 + 3 * .04 * (4 / 5) ** 2); close(inverted.correction, .0768);
+close(calculateUValue(draftInputs(methodExample('edge_insulated_slab'))).uValue, calculateConstruction(JSON.parse(readFileSync('vendor/uvalue-backend/example-edge-insulated-slab.json', 'utf8'))).u_value);
+close(calculateUValue(draftInputs(methodExample('ceiling_insulated_roof'))).uValue, 1 / (.1 + 5 + .2 + .04));
+close(calculateUValue(draftInputs(methodExample('rafter_roof_flat_ceiling'))).uValue, 1 / ((5 + .04) * Math.cos(Math.PI / 6) + .1 + .05 + .16));
+const heated = calculateUValue(draftInputs(methodExample('heated_basement')));
+assert.equal(heated.additional!.engineResult.reference_area_m2, 152);
+const fixture = JSON.parse(readFileSync('vendor/uvalue-backend/example-heated-basement.json', 'utf8'));
+close(heated.uValue, calculateConstruction(fixture).u_value);
+const taper = calculateUValue(draftInputs(methodExample('tapered_roof')));
+close(taper.uValue, calculateConstruction(JSON.parse(readFileSync('vendor/uvalue-backend/example-tapered-roof.json', 'utf8'))).u_value);
+const deep = methodExample('suspended_ground_floor'); Object.assign(deep.methodData.values, { base_depth_m: '1.5', below_ground_wall_resistance_m2k_w: '2', wall_rsi_m2k_w: '.13', wall_rse_m2k_w: '.04' });
+assert.ok(calculateUValue(draftInputs(deep)).uValue > 0);
+const opening = methodExample('window'); opening.methodData.components[0].area = '1';
+assert.throws(() => calculateUValue(draftInputs(opening)), /sum to total/);
+console.log('PASS 14 additional portal methods, shallow/deep suspended floors, assessment gates, hidden-input rejection, draft round trips, window arithmetic, rain/edge/unheated adjustments, roof surface conventions and baseline engine fixtures.');

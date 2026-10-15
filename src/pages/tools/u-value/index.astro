@@ -8,14 +8,16 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
-const [projects, calculations, selected] = await Promise.all([
+const [projects, calculations, selected, templates] = await Promise.all([
   prisma.project.findMany({ where: { organisationId: auth.organisation.id }, select: { id: true, name: true, internalReference: true, siteAddress: true }, orderBy: { updatedAt: 'desc' } }),
   prisma.uValueCalculation.findMany({ where: { organisationId: auth.organisation.id }, select: { id: true, title: true, projectId: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 100 }),
   Astro.url.searchParams.get('calculationId') ? prisma.uValueCalculation.findFirst({ where: { id: Astro.url.searchParams.get('calculationId')!, organisationId: auth.organisation.id } }) : null,
+  prisma.uValueTemplate.findMany({ where: { organisationId: auth.organisation.id }, select: { id: true, name: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
 ]);
+if (Astro.url.searchParams.has('calculationId') && !selected) return new Response('Calculation not found.', { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
 const context = selected?.contextSnapshot as { reference: string; location: string } | null;
-const initial = selected ? restoredDraft(selected.inputSnapshot as UValueInput, { title: selected.title, projectId: selected.projectId || '', reference: context?.reference || '', location: context?.location || '' }) : undefined;
+const initial = selected ? restoredDraft(selected.inputSnapshot as UValueInput, { title: selected.title, projectId: selected.projectId || '', reference: context?.reference || '', location: context?.location || '', basedOnId: Astro.url.searchParams.get('revision') === '1' ? selected.id : null }) : undefined;
 ---
 <AppShell title="U-value calculator" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <UValueCalculator client:load projects={projects} initial={initial} initialSaved={calculations.map(item => ({ ...item, createdAt: item.createdAt.toISOString() }))} storageKey={`ap-u-value:${auth.organisation.id}:${auth.user.id}`} />
+  <UValueCalculator client:load projects={projects} initial={initial} templates={templates} initialSaved={calculations.map(item => ({ ...item, createdAt: item.createdAt.toISOString() }))} storageKey={`ap-u-value:${auth.organisation.id}:${auth.user.id}`} />
 </AppShell>

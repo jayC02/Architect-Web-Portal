@@ -1,13 +1,16 @@
 import { z } from 'zod';
 import { materialLambda, thermalMaterials } from './materials';
+import { additionalMethods, methodKeys, isAdditionalMethod, methodDataSchema, calculateAdditionalMethod } from './methods';
 import { calculatePlaneLayers as calculateEnginePlane, calculateSlabOnGround, unventilatedAirLayerResistance,
   airGapCorrection, discreteFastenerCorrection } from '../../../vendor/uvalue-backend/uvalue_engine.mjs';
 
-export const U_VALUE_METHOD_VERSION = 'AP-THERMAL-2.0.0';
+export const U_VALUE_METHOD_VERSION = 'AP-THERMAL-3.0.0';
 export const U_VALUE_ENGINE_VERSION = '4.0.0';
 export const thermalReferences = [
   { title: 'ISO 6946:2017 — opaque building elements', url: 'https://www.iso.org/standard/65708.html' },
   { title: 'ISO 13370:2017 — heat transfer via the ground', url: 'https://www.iso.org/standard/65716.html' },
+  { title: 'ISO 10077-1:2017 — supplied window and door component values', url: 'https://www.iso.org/standard/67090.html' },
+  { title: 'ISO 13789:2017 — passive unheated-space heat balance', url: 'https://www.iso.org/standard/65713.html' },
   { title: 'BRE BR 443:2019 — UK calculation conventions', url: 'https://www.cibse.org/media/wzrjrf3l/conventions-for-u-value-calculations.pdf' },
   { title: 'Scottish domestic technical handbook — April 2026', url: 'https://www.gov.scot/publications/building-standards-technical-handbook-domestic-april-2026-pdf/' },
 ];
@@ -34,11 +37,12 @@ export const thermalLayerSchema = z.discriminatedUnion('kind', [
     openings: z.number().finite().min(0).max(100000).default(0) }).strict(),
 ]);
 export const uValueInputSchema = z.object({
-  element: z.enum(['wall', 'roof', 'exposed-floor', 'ground-slab']),
+  element: z.enum(['wall', 'roof', 'exposed-floor', 'ground-slab', ...methodKeys]),
+  methodData: methodDataSchema.nullable().default(null),
   construction: z.enum(['standard', 'steel-frame', 'inverted-roof', 'specialist']).default('standard'),
   heatFlow: z.enum(['automatic', 'upwards', 'horizontal', 'downwards']).default('automatic'),
   correctionsAssessed: z.boolean().default(false),
-  layers: z.array(thermalLayerSchema).min(1, 'Add at least one construction layer.').max(32),
+  layers: z.array(thermalLayerSchema).max(32),
   corrections: z.array(z.object({
     name: z.string().trim().min(1).max(120), deltaU: z.number().finite().min(0).max(10),
     source: z.string().trim().min(1, 'Give a calculation or product reference for each correction.').max(600),
@@ -60,10 +64,19 @@ export const uValueInputSchema = z.object({
 }).strict();
 export type ThermalLayer = z.infer<typeof thermalLayerSchema>;
 export type UValueInput = z.infer<typeof uValueInputSchema>;
+export function referencesForInput(input: UValueInput) {
+  const ground = input.element === 'ground-slab' || (isAdditionalMethod(input.element) && ['ground', 'edge'].includes(additionalMethods[input.element].family));
+  const opening = input.element === 'window' || input.element === 'door';
+  return thermalReferences.filter(reference => reference.title.startsWith('BRE') || (input.target != null && reference.title.startsWith('Scottish'))
+    || (ground && reference.title.startsWith('ISO 13370')) || (opening && reference.title.startsWith('ISO 10077'))
+    || (!ground && !opening && input.element !== 'supplied_u' && reference.title.startsWith('ISO 6946'))
+    || (input.element === 'unheated_space' && reference.title.startsWith('ISO 13789')));
+}
 export class ThermalCalculationError extends Error {}
 
 export const elementLabels: Record<UValueInput['element'], string> = {
   wall: 'External wall', roof: 'Roof', 'exposed-floor': 'Floor exposed to outside air', 'ground-slab': 'Ground-bearing slab',
+  ...Object.fromEntries(Object.entries(additionalMethods).map(([key, value]) => [key, value.label])) as Record<keyof typeof additionalMethods, string>,
 };
 export const surfaceResistance = (element: UValueInput['element']) => element === 'wall' ? 0.13 : element === 'roof' ? 0.10 : 0.17;
 export const heatFlowLabels = { automatic: 'Element default', upwards: 'Upwards', horizontal: 'Horizontal', downwards: 'Downwards' };
@@ -127,6 +140,32 @@ function resistanceBounds(layers: ThermalLayer[], rsi: number, rse: number, flow
 
 export function calculateUValue(raw: unknown) {
   const input = uValueInputSchema.parse(raw);
+  if (isAdditionalMethod(input.element)) {
+    if (input.construction !== 'standard' || input.layers.length || input.corrections.length || input.automaticCorrections.length || input.ground || input.heatFlow !== 'automatic') throw new ThermalCalculationError('Use only the inputs belonging to the selected calculation method.');
+    if (!input.methodData) throw new ThermalCalculationError('Enter the method inputs.');
+    let calculation;
+    try { calculation = calculateAdditionalMethod(input.element, input.methodData); }
+    catch (error) { throw new ThermalCalculationError(error instanceof Error ? error.message : 'Check the method inputs.'); }
+    const uValue = calculation.result.u_value;
+    if (!Number.isFinite(uValue) || uValue <= 0) throw new ThermalCalculationError('The calculation must produce a finite positive U-value.');
+    const resistance = 1 / uValue;
+    const baseU = typeof calculation.result.u_uncorrected === 'number' ? calculation.result.u_uncorrected
+      : typeof calculation.result.uncorrected_u_value === 'number' ? calculation.result.uncorrected_u_value : uValue;
+    return {
+      methodVersion: U_VALUE_METHOD_VERSION, engineVersion: U_VALUE_ENGINE_VERSION,
+      method: calculation.label, uValue, displayUValue: formatUValue(uValue), baseUValue: baseU, correction: uValue - baseU,
+      correctionDetails: [], totalResistance: resistance, upperResistance: resistance, lowerResistance: resistance,
+      approximationErrorPercent: 0, rsi: 0, rse: 0, heatFlow: 'upwards' as const,
+      ventilation: 'See method conditions', ventilationDetails: null, ignoredLayerIds: [] as string[], paths: [] as Bounds['paths'], ground: null,
+      layerResults: [] as { id: string; resistance: number; ignored: boolean }[],
+      targetMet: input.target == null ? null : uValue <= input.target,
+      missingSources: input.methodData.source ? [] : ['Construction assessment / design-value reference'],
+      notes: [calculation.scope, ...(calculation.result.warnings || []), 'The calculation does not assess whole-building energy compliance, condensation or fire performance.'],
+      additional: { working: calculation.working, engineResult: calculation.result, source: input.methodData.source },
+    };
+  }
+  if (input.methodData) throw new ThermalCalculationError('Additional method inputs do not belong to this element.');
+  if (!input.layers.length) throw new ThermalCalculationError('Add at least one construction layer.');
   for (const layer of input.layers) if (layer.kind === 'solid' && layer.productId) {
     const product = thermalMaterials.find(item => item.id === layer.productId);
     if (!product) throw new ThermalCalculationError('The selected product is not in the verified material library. Choose Custom material.');
@@ -250,7 +289,7 @@ export function calculateUValue(raw: unknown) {
     : 'No additional correction has been entered. Confirm that installation air gaps, mechanical fixings and other applicable corrections have been assessed.');
   notes.push('The calculation does not assess condensation, junction Ψ-values, whole-building energy performance or fire performance. It is not an independently certified software result.');
   return {
-    methodVersion: U_VALUE_METHOD_VERSION, engineVersion: U_VALUE_ENGINE_VERSION, correctionDetails,
+    methodVersion: U_VALUE_METHOD_VERSION, engineVersion: U_VALUE_ENGINE_VERSION, correctionDetails, additional: null,
     method: input.element === 'ground-slab' ? 'ISO 13370 — uniform slab on ground'
       : used.some(layer => layer.kind === 'solid' && layer.bridge) ? 'ISO 6946 — combined upper/lower method' : 'ISO 6946 — homogeneous layers',
     uValue, displayUValue: formatUValue(uValue), baseUValue: baseU, correction,

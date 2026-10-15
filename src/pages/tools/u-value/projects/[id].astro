@@ -1,0 +1,20 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { latestCalculations } from '@/lib/u-value/revisions';
+import type { UValueResult } from '@/lib/u-value/calculator';
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const project = await prisma.project.findFirst({ where: { id: Astro.params.id, organisationId: auth.organisation.id }, select: { id: true, name: true } });
+if (!project) return new Response('Project not found.', { status: 404 });
+const rows = await prisma.uValueCalculation.findMany({ where: { projectId: project.id, organisationId: auth.organisation.id }, orderBy: { createdAt: 'desc' }, take: 1001 });
+if (rows.length > 1000) return new Response('This project exceeds the report schedule limit. Split the calculation set before creating a report pack.', { status: 422 });
+const calculations = latestCalculations(rows);
+const issued = calculations.filter(row => row.status === 'ISSUED');
+---
+<AppShell title="U-value schedule" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="space-y-6"><header class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-sm text-moss">{project.name}</p><h1 class="mt-2 text-3xl font-semibold">U-value schedule</h1><p class="mt-2 text-sm text-stone-600">Current revision of each calculation. Report packs contain current issued reports.</p></div><div class="flex flex-wrap gap-3"><a class="btn btn-secondary" href="/tools/u-value">Calculator</a>{issued.length > 0 && <a class="btn btn-primary" href={`/tools/u-value/projects/${project.id}/report`}>Open issued report pack</a>}</div></header>
+    {calculations.length ? <section class="panel overflow-x-auto rounded-xl"><table class="w-full text-left text-sm"><thead class="border-b border-stone-200"><tr><th class="p-4">Calculation</th><th class="p-4">Revision</th><th class="p-4">U (W/m²K)</th><th class="p-4">Status</th><th class="p-4">Report</th></tr></thead><tbody>{calculations.map(row => <tr class="border-b border-stone-200"><td class="p-4 font-medium">{row.title}</td><td class="p-4">{row.revision}</td><td class="p-4">{(row.resultSnapshot as UValueResult).displayUValue}</td><td class="p-4">{row.status.toLowerCase()}</td><td class="p-4"><a class="btn btn-secondary" href={`/tools/u-value/reports/${row.id}`}>Open report</a></td></tr>)}</tbody></table></section> : <section class="panel rounded-xl p-6"><h2 class="font-semibold">No calculations yet</h2><p class="mt-2 text-sm text-stone-600">Save a calculation against this project to start its schedule.</p></section>}
+  </div>
+</AppShell>
