@@ -221,7 +221,7 @@ assert.match(liveCard, /active && !awaitingFee && !addressAction/, 'paused-for-a
 assert.match(liveCard, /job\.status === 'READY'[\s\S]*Queued/, 'the live card covers authorised and queued state');
 assert.match(liveCard, /new Set\(\['CLAIMED', 'IN_PROGRESS'\]\)/, 'the live card covers claimed and running states');
 assert.match(liveCard, /AWAITING_PORTAL_REVIEW[\s\S]*calculated the fee[\s\S]*Complete payment, review and submit it yourself/, 'awaiting-fee clearly leaves payment and submission with the architect');
-assert.match(liveCard, /Continue in eBuilding Standards/, 'awaiting-fee exposes the primary browser handoff action');
+assert.match(liveCard, /Continue in \$\{isWarrant \? 'eBuilding Standards' : 'ePlanning'\}/, 'awaiting-fee exposes the workflow-specific primary browser handoff action');
 assert.match(liveCard, /job\.status === 'COMPLETED'[\s\S]*Prepared — needs your review/, 'verified preparation renders as a positive prepared state');
 assert.match(liveCard, /Mark as submitted/, 'prepared applications expose an explicit submission action');
 assert.match(liveCard, /Confirm submission/, 'submission requires explicit confirmation');
@@ -247,7 +247,7 @@ assert.doesNotMatch(viewRoute, /createProposal|createApplication|prisma\.[a-zA-Z
 
 assert.match(enrollmentPanel, /AgentSetupFlow/, 'Agent settings use the shared automatic enrollment flow');
 assert.match(enrollmentFlow, /Download & connect Agent/, 'Agent enrollment offers one clear setup action');
-assert.match(enrollmentFlow, /connect automatically/, 'Agent enrollment explains the automatic browser connection');
+assert.match(enrollmentFlow, /Agent will open automatically when installation finishes/, 'Agent setup explains the automatic launch after installation');
 assert.doesNotMatch(enrollmentFlow, /Paste the code|Copy one-time code/i, 'Agent enrollment never asks users to move a secret manually');
 assert.match(enrollmentPanel, /activeAgent[\s\S]*connectedAgent=\{activeAgent\}/, 'connected or offline Agent state is passed into the shared flow');
 assert.match(projectFees, /Agreed[\s\S]*Invoiced[\s\S]*Paid[\s\S]*Outstanding[\s\S]*Overdue/, 'fees render the compact finance summary');
@@ -271,7 +271,7 @@ assert.match(planningPreparationPage, /automationJobApplicationId\(candidate\) =
 assert.match(planningPreparationPage, /Planning application details/, 'Planning has a distinct preparation page');
 assert.doesNotMatch(planningPreparationPage, /registrationAPart1|registrationBPart1|Certifier details/, 'Planning never renders Building Warrant certifier fields');
 assert.match(planningCompletionRoute, /automationJobApplicationId\(job\) !== application\.id/, 'Planning completion rejects the wrong job and application pairing');
-assert.match(planningCompletionRoute, /where: \{ id: job\.id \}/, 'Planning completion updates the same job');
+assert.match(planningCompletionRoute, /where: \{\s*id: job\.id,\s*organisationId: organisation\.id/, 'Planning completion updates only the same organisation-owned job');
 assert.doesNotMatch(planningCompletionRoute, /automationJob\.create/, 'Planning completion never creates a replacement job');
 assert.match(legacyWarrantRoute, /\/building-warrant\/\$\{application\.id\}\/preparation/, 'legacy tracker links redirect to the focused Building Warrant route');
 assert.match(legacyPlanningRoute, /\/planning\/\$\{application\.id\}\/preparation/, 'legacy Planning route redirects to focused preparation');

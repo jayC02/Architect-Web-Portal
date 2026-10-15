@@ -102,8 +102,8 @@ export default function AutomationFailureRecovery({
         {retrying ? 'Queuing retry…' : 'Retry application'}
       </button>}
       {canOpenEditor && <button type="button" className="btn btn-primary" onClick={openEditor}>{actionLabel(desiredEditor)}</button>}
-      {metadata.recoveryAction === 'update_login' && <a className="btn btn-primary" href="architectpro://settings/login">Update login</a>}
-      {metadata.recoveryAction === 'update_login' && metadata.retrySafe && <button type="button" className="text-sm font-semibold text-stone-700 hover:text-ink" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>{retrying ? 'Queuing retry…' : 'Retry after updating login'}</button>}
+      {metadata.recoveryAction === 'update_login' && <a className="btn btn-secondary" href="architectpro://settings/login">Update Agent login</a>}
+      {metadata.recoveryAction === 'update_login' && metadata.retrySafe && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>{retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{retrying ? 'Queuing restart…' : 'Restart after updating login'}</button>}
       {metadata.recoveryAction === 'review_documents' && <a className="btn btn-primary" href={context.documentsHref}>Review documents</a>}
       {(metadata.recoveryAction === 'review_portal' || metadata.recoveryAction === 'close') && <a className="btn btn-primary gap-2" href={context.portalHref ?? detailsHref} target={context.portalHref ? '_blank' : undefined} rel={context.portalHref ? 'noreferrer' : undefined}>
         {context.portalHref && <ExternalLink size={16} />}
@@ -112,6 +112,7 @@ export default function AutomationFailureRecovery({
       {metadata.retrySafe && !directRetry && !canOpenEditor && metadata.recoveryAction !== 'update_login' && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}><Play size={16} />Retry application</button>}
       <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View run details</a>
     </div>
+    {metadata.recoveryAction === 'update_login' && <p className="mt-3 max-w-2xl text-sm text-stone-600">Change the saved eDevelopment email and password in Architect Pro Agent on the computer that runs this application. Once saved, use Restart after updating login. If you are viewing this page on another device, update the login on the Agent computer first.</p>}
     {desiredEditor === 'agent' && !context.canManageAgentDefaults && <p className="mt-3 text-sm font-medium text-amber-900">An organisation owner or administrator must update the saved Agent details.</p>}
 
     {editor === 'address' && context.site && <DirectoryDrawer title="Property address needs review" description="Check the saved site address returned to the portal." onClose={() => setEditor(null)}>

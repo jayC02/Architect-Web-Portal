@@ -225,7 +225,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     : null;
   const visualEta = visualRemaining === null ? null : visualCountdownLabel(visualRemaining);
   const failure = useMemo(
-    () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint),
+    () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint, job),
     [job.lastCheckpoint, job.progressStage, job.resultData, job.status],
   );
   const applicationHasProgressed = !['NOT_STARTED', 'DRAFTING'].includes(applicationStatus);

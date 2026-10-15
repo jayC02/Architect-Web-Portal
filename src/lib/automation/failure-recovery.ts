@@ -67,24 +67,42 @@ export const readAutomationFailureMetadata = (
   resultData: unknown,
   status: string,
   fallbackStage: string | null,
+  evidence?: { lastCheckpoint?: string | null },
 ): AutomationFailureMetadata => {
   const result = objectValue(resultData);
-  const category = text(result.failureCategory) ?? text(result.errorCode);
+  const reportedCategory = text(result.failureCategory) ?? text(result.errorCode);
+  // Older Agents report an unrecognised Selenium exception as a final generic
+  // failure, even when login never finished. Recover only this exact early-stop
+  // shape; a failure at proposal/documents/fee or with later completed work is
+  // never made restartable by its message mentioning a login or password.
+  const stoppedAtLogin = status === 'FAILED_FINAL'
+    && reportedCategory === 'AUTOMATION_FAILED'
+    && (!result.errorCode || result.errorCode === 'AUTOMATION_FAILED')
+    && result.outcome === 'failed_final'
+    && fallbackStage === 'login'
+    && evidence?.lastCheckpoint === 'login'
+    && result.currentSection === 'login'
+    && (!result.lastCompletedStep || ['validation', 'browser'].includes(String(result.lastCompletedStep)))
+    && (!result.safeRetryPoint || ['validation', 'browser', 'login'].includes(String(result.safeRetryPoint)))
+    && (!result.documentsUploaded)
+    && !result.browserSessionId
+    && (!result.recoveryAction || result.recoveryAction === 'close');
+  const category = stoppedAtLogin ? 'LOGIN_NOT_COMPLETED' : reportedCategory;
   const categoryDefaults = category ? categoryPresentation[category] : undefined;
   const explicitAction = text(result.recoveryAction) as FailureRecoveryAction | null;
-  const recoveryAction = explicitAction && knownActions.has(explicitAction)
+  const recoveryAction = stoppedAtLogin ? 'update_login' : explicitAction && knownActions.has(explicitAction)
     ? explicitAction
     : actionForCategory(category);
   const safeRetryPoint = text(result.safeRetryPoint);
-  const retrySafe = status === 'FAILED_RETRYABLE'
-    && (result.retrySafe === true || (result.outcome === 'failed_retryable' && Boolean(safeRetryPoint)));
+  const retrySafe = stoppedAtLogin || (status === 'FAILED_RETRYABLE'
+    && (result.retrySafe === true || (result.outcome === 'failed_retryable' && Boolean(safeRetryPoint))));
   return {
     category,
-    headline: text(result.errorHeadline) ?? categoryDefaults?.headline ?? null,
+    headline: stoppedAtLogin ? 'Sign-in did not complete' : text(result.errorHeadline) ?? categoryDefaults?.headline ?? null,
     stage: categoryDefaults?.stage ?? text(result.currentSection) ?? fallbackStage,
     stageDescription: text(result.stageDescription),
-    explanation: text(result.progressionMessage) ?? categoryDefaults?.explanation ?? null,
-    nextAction: text(result.nextAction),
+    explanation: stoppedAtLogin ? 'The run stopped at sign-in before opening or changing the application.' : text(result.progressionMessage) ?? categoryDefaults?.explanation ?? null,
+    nextAction: stoppedAtLogin ? 'Update the saved eDevelopment login on the computer running the Agent, then restart the application.' : text(result.nextAction),
     recoveryAction,
     recoveryFields: Array.isArray(result.recoveryFields)
       ? result.recoveryFields.filter((value): value is string => typeof value === 'string')

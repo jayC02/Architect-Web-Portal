@@ -53,6 +53,7 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
       dataSnapshot: true,
       resultData: true,
       progressStage: true,
+      lastCheckpoint: true,
     },
   });
   if (!oldJob) throw new HttpError(404, 'Automation job not found.');
@@ -70,8 +71,8 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     if (!successor) throw new HttpError(409, 'The recorded retry is no longer available. Review the application in Architect Pro.');
     return successor;
   }
-  const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage);
-  if (oldJob.status !== AutomationJobStatus.FAILED_RETRYABLE || !recovery.retrySafe) {
+  const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage, oldJob);
+  if (!recovery.retrySafe) {
     throw new HttpError(409, 'This automation attempt is not confirmed safe to retry. Review the issue before continuing.');
   }
 
@@ -167,7 +168,8 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     await transaction.automationJobEvent.create({ data: {
       organisationId: input.organisation.id, automationJobId: oldJob.id,
       idempotencyKey, eventType: 'fresh_retry_created',
-      payload: { newJobId: created.id, postcode: input.correctedPostcode ?? null },
+      payload: { newJobId: created.id, postcode: input.correctedPostcode ?? null,
+        executionAuthorised: Boolean(authorisedAt), recoveryCategory: recovery.category },
     } });
     return created;
 };
