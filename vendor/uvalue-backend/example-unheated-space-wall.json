@@ -1,0 +1,7 @@
+{
+  "name":"Synthetic wall adjoining an unheated space",
+  "element":"layered_wall","rse":0.13,
+  "layers":[{"name":"Insulation","thickness_mm":100,"conductivity":0.04},{"name":"Plasterboard","thickness_mm":12.5,"conductivity":0.21}],
+  "unheated_space":{"method":"heat_balance","h_inside_to_unheated_w_k":8.16,"h_unheated_to_outside_w_k":3.05,
+    "inside_temperature_c":20,"outside_temperature_c":0}
+}

@@ -1,0 +1,26 @@
+{
+  "name": "Synthetic suspended timber floor — demonstration inputs",
+  "element": "suspended_ground_floor",
+  "fractions": [0.89, 0.11],
+  "layers": [
+    {"name": "Insulation and repeating joists", "thickness_mm": 150, "conductivities": [0.040, 0.13]},
+    {"name": "Timber deck", "thickness_mm": 22, "conductivity": 0.13}
+  ],
+  "ground": {
+    "area_m2": 80,
+    "exposed_perimeter_m": 40,
+    "wall_thickness_m": 0.3,
+    "soil_conductivity_w_mk": 1.5,
+    "rsi_m2k_w": 0.17,
+    "rse_m2k_w": 0.04,
+    "edge_insulation": "none",
+    "floor_height_m": 0.3,
+    "underfloor_wall_u_value_w_m2k": 1.5,
+    "ventilation_opening_area_per_perimeter_m2_m": 0.003,
+    "annual_wind_speed_10m_m_s": 5,
+    "wind_shielding_factor": 0.05,
+    "ventilation": "natural",
+    "base_depth_m": 0,
+    "base_insulation_resistance_m2k_w": 0
+  }
+}

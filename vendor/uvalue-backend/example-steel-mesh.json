@@ -1,0 +1,67 @@
+{
+  "name": "Synthetic steel web and flanges — explicit 2D geometry",
+  "element": "thermal_mesh",
+  "mesh": {
+    "geometry": {
+      "width_mm": 600,
+      "height_mm": 202.5,
+      "base_conductivity_w_mk": 0.04,
+      "max_cell_size_mm": 20,
+      "minimum_cells_per_interval": 2,
+      "regions": [
+        {
+          "name": "Outer steel flange",
+          "x_mm": 275,
+          "y_mm": 50,
+          "width_mm": 50,
+          "height_mm": 1.2,
+          "conductivity_w_mk": 50
+        },
+        {
+          "name": "Steel web",
+          "x_mm": 299.4,
+          "y_mm": 51.2,
+          "width_mm": 1.2,
+          "height_mm": 137.6,
+          "conductivity_w_mk": 50
+        },
+        {
+          "name": "Inner steel flange",
+          "x_mm": 275,
+          "y_mm": 188.8,
+          "width_mm": 50,
+          "height_mm": 1.2,
+          "conductivity_w_mk": 50
+        },
+        {
+          "name": "Plasterboard",
+          "x_mm": 0,
+          "y_mm": 190,
+          "width_mm": 600,
+          "height_mm": 12.5,
+          "conductivity_w_mk": 0.21
+        }
+      ]
+    },
+    "boundaries": {
+      "top": {
+        "kind": "temperature",
+        "temperature_c": 0,
+        "surface_resistance_m2k_w": 0.04
+      },
+      "bottom": {
+        "kind": "temperature",
+        "temperature_c": 20,
+        "surface_resistance_m2k_w": 0.13
+      },
+      "left": {
+        "kind": "adiabatic"
+      },
+      "right": {
+        "kind": "adiabatic"
+      }
+    },
+    "max_refinements": 3,
+    "mesh_convergence_tolerance": 0.005
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "file": "example-timber-wall.json",
+    "label": "Timber wall — published Scottish example"
+  },
+  {
+    "file": "example-slab-on-ground.json",
+    "label": "Slab on ground — published Irish example"
+  },
+  {
+    "file": "example-suspended-ground-floor.json",
+    "label": "Suspended timber floor — demonstration"
+  },
+  {
+    "file": "example-ventilated-wall.json",
+    "label": "Ventilated cavity wall — demonstration"
+  },
+  {
+    "file": "example-inverted-roof.json",
+    "label": "Inverted roof rainfall — demonstration"
+  },
+  {
+    "file": "example-ceiling-roof.json",
+    "label": "Ceiling insulation with loft hatch — demonstration"
+  },
+  {
+    "file": "example-rafter-roof.json",
+    "label": "Rafter roof over flat ceiling — SEAI example"
+  },
+  {
+    "file": "example-tapered-roof.json",
+    "label": "Tapered flat roof — demonstration"
+  },
+  {
+    "file": "example-heated-basement.json",
+    "label": "Heated basement floor and walls — demonstration"
+  },
+  {
+    "file": "example-unheated-basement.json",
+    "label": "Floor over unheated basement — demonstration"
+  },
+  {
+    "file": "example-edge-insulated-slab.json",
+    "label": "Perimeter-insulated slab — demonstration"
+  },
+  {
+    "file": "example-unheated-space-wall.json",
+    "label": "Wall to unheated space — demonstration"
+  },
+  {
+    "file": "example-recessed-fastener.json",
+    "label": "Recessed metal fasteners — demonstration"
+  },
+  {
+    "file": "example-steel-mesh.json",
+    "label": "Steel web and flanges — explicit 2D example"
+  }
+]

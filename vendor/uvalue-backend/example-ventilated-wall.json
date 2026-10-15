@@ -1,0 +1,10 @@
+{
+  "name": "Synthetic slightly ventilated wall — demonstration inputs",
+  "element": "layered_wall",
+  "layers": [
+    {"name": "Outer leaf", "resistance": 0.5},
+    {"name": "Cavity", "kind": "air", "thickness_mm": 50, "width_mm": 3000, "height_mm": 2400,
+      "orientation": "vertical", "opening_area_mm2_per_m": 1000, "openings_allow_through_flow": true},
+    {"name": "Inner construction", "resistance": 2.5}
+  ]
+}

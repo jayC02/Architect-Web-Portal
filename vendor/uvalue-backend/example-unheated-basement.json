@@ -1,0 +1,13 @@
+{
+  "name":"Synthetic unheated basement — separate floor deck",
+  "element":"unheated_basement",
+  "layers":[{"name":"Room-to-basement deck insulation","thickness_mm":100,"conductivity":0.04},{"name":"Timber deck","thickness_mm":22,"conductivity":0.13}],
+  "ground":{
+    "area_m2":80,"exposed_perimeter_m":36,"wall_thickness_m":0.3,
+    "soil_conductivity_w_mk":2,"rsi_m2k_w":0.17,"rse_m2k_w":0.04,
+    "basement_depth_m":1.5,"floor_resistance_m2k_w":0.1,"wall_resistance_m2k_w":0.4,
+    "wall_rsi_m2k_w":0.13,"wall_rse_m2k_w":0.04,"edge_insulation":"none",
+    "above_ground_wall_height_m":0.5,"above_ground_wall_u_value_w_m2k":2,
+    "ventilation":"external_air","air_changes_per_hour":0.5,"basement_air_volume_m3":160
+  }
+}

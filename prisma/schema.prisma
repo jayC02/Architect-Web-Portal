@@ -455,6 +455,7 @@ model User {
   lifecycleEvents          LifecycleEvent[]         @relation("LifecycleEventActor")
   projectActivities        ProjectActivity[]        @relation("ProjectActivityActor")
   deadlineOverrides        Deadline[]               @relation("DeadlineManualOverrideBy")
+  uValueCalculations       UValueCalculation[]
 
   @@index([email])
   @@index([createdAt])
@@ -573,6 +574,7 @@ model Organisation {
   projectFeePlans       ProjectFeePlan[]
   projectFeeMilestones  ProjectFeeMilestone[]
   xeroWriteAttempts     XeroWriteAttempt[]
+  uValueCalculations    UValueCalculation[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -724,12 +726,35 @@ model Project {
   actionItems          ActionItem[]
   activities           ProjectActivity[]
   feePlan              ProjectFeePlan?
+  uValueCalculations   UValueCalculation[]
 
   @@index([organisationId, status, updatedAt])
   @@index([organisationId, updatedAt])
   @@index([organisationId, stage])
   @@index([organisationId, clientId])
   @@index([organisationId, siteId])
+}
+
+model UValueCalculation {
+  id               String   @id @default(cuid())
+  organisationId   String
+  projectId        String?
+  createdById      String?
+  title            String
+  methodVersion    String
+  inputHash        String
+  idempotencyKey   String   @unique
+  inputSnapshot    Json
+  resultSnapshot   Json
+  contextSnapshot  Json
+  createdAt        DateTime @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, createdAt])
+  @@index([organisationId, projectId, createdAt])
 }
 
 model LifecycleEvent {

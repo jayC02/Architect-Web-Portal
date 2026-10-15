@@ -1,0 +1,13 @@
+{
+  "name":"Synthetic tapered flat roof — partitioned design",
+  "element":"tapered_roof",
+  "layers":[{"name":"Deck and finish","resistance":0.2}],
+  "roof":{
+    "conductivity_w_mk":0.025,
+    "regions_partition_roof":true,
+    "regions":[
+      {"name":"Main rectangular fall","shape":"rectangle","area_m2":60,"thicknesses_mm":[80,160]},
+      {"name":"Triangular drainage area","shape":"triangle","area_m2":40,"thicknesses_mm":[80,120,160]}
+    ]
+  }
+}

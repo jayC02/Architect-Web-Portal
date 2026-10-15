@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   CircleDollarSign,
+  Calculator,
 } from 'lucide-react';
 
 interface Props {
@@ -43,6 +44,7 @@ const primaryNav: NavigationItem[] = [
     activePrefixes: ['/projects', '/clients', '/sites', '/planning', '/building-warrant', '/automation-job'],
   },
   { label: 'Calendar', href: '/calendar', icon: CalendarDays, activePrefixes: ['/calendar', '/deadlines'] },
+  { label: 'U-values', href: '/tools/u-value', icon: Calculator, activePrefixes: ['/tools/u-value'] },
   ...(['OWNER', 'ADMIN'].includes(role)
     ? [{ label: 'Finance', href: '/finance', icon: CircleDollarSign, activePrefixes: ['/finance'] }]
     : []),

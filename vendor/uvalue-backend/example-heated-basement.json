@@ -1,0 +1,12 @@
+{
+  "name":"Synthetic heated basement — floor and below-ground walls",
+  "element":"heated_basement",
+  "layers":[{"name":"Slab insulation","thickness_mm":100,"conductivity":0.025}],
+  "wall_layers":[{"name":"Wall insulation","thickness_mm":80,"conductivity":0.03},{"name":"Concrete","thickness_mm":200,"conductivity":2}],
+  "ground":{
+    "area_m2":80,"exposed_perimeter_m":36,"wall_thickness_m":0.3,
+    "soil_conductivity_w_mk":2,"rsi_m2k_w":0.17,"rse_m2k_w":0.04,
+    "basement_depth_m":2,"wall_rsi_m2k_w":0.13,"wall_rse_m2k_w":0.04,
+    "edge_insulation":"none"
+  }
+}

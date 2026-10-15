@@ -1,0 +1,10 @@
+{
+  "json_schema": "AJV strict Draft 2020-12 passed",
+  "validator_differential_cases": 349,
+  "openapi": "Swagger Parser OpenAPI validation passed",
+  "tool_versions": {
+    "ajv": "8.20.0",
+    "swagger_parser": "13.1.0",
+    "typescript": "7.0.2"
+  }
+}

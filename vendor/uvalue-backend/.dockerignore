@@ -1,0 +1,8 @@
+.env
+node_modules
+*.zip
+calculator.html
+calculator-preview.jpg
+app
+work
+**/test_*.mjs

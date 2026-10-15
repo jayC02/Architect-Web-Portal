@@ -1,0 +1,7 @@
+{
+  "name":"Synthetic roof with recessed metal fasteners",
+  "element":"layered_roof","omit_small_corrections":false,
+  "layers":[{"name":"Insulation","thickness_mm":100,"conductivity":0.05},{"name":"Deck and finish","resistance":1.86}],
+  "corrections":[{"kind":"recessed_fastener","layer_index":0,"conductivity":50,"area_mm2":10,
+    "count_per_m2":4,"metal_penetration_mm":50,"both_ends_contact_metal":false}]
+}

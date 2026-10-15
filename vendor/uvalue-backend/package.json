@@ -1,0 +1,19 @@
+{
+  "name": "uvalue-workshop-backend",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent U-value calculation engine and stateless website API",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "start": "node backend/server.mjs",
+    "test": "node backend/run-tests.mjs",
+    "build:contracts": "node backend/generate-contracts.mjs"
+  },
+  "exports": {
+    ".": "./backend/calculations.mjs",
+    "./client": {"types": "./backend/client.d.ts", "import": "./backend/client.mjs"},
+    "./schema": "./backend/schema.mjs",
+    "./server": "./backend/server.mjs"
+  }
+}

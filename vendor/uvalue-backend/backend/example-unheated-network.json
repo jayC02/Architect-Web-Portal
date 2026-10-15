@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    {"id": "garage", "external_heat_loss_coefficient_w_k": 10},
+    {"id": "hall", "external_heat_loss_coefficient_w_k": 20}
+  ],
+  "inside_elements": [{
+    "id": "wall-to-garage", "node_id": "garage", "area_m2": 10,
+    "construction": {"element": "supplied_u", "u_value_w_m2k": 1, "evidence": "Illustrative boundary value"}
+  }],
+  "links": [{"from_node_id": "garage", "to_node_id": "hall", "heat_loss_coefficient_w_k": 5}],
+  "inside_temperature_c": 20,
+  "outside_temperature_c": 0,
+  "all_external_paths_to_same_temperature": true,
+  "no_heat_gains": true,
+  "component_boundaries_consistent": true
+}

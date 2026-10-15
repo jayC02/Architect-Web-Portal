@@ -1,0 +1,21 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import UValueCalculator from '@/components/tools/UValueCalculator';
+import { restoredDraft } from '@/lib/u-value/draft';
+import type { UValueInput } from '@/lib/u-value/calculator';
+import { prisma } from '@/lib/db/prisma';
+import { requirePageAuth } from '@/lib/server/page-auth';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const [projects, calculations, selected] = await Promise.all([
+  prisma.project.findMany({ where: { organisationId: auth.organisation.id }, select: { id: true, name: true, internalReference: true, siteAddress: true }, orderBy: { updatedAt: 'desc' } }),
+  prisma.uValueCalculation.findMany({ where: { organisationId: auth.organisation.id }, select: { id: true, title: true, projectId: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 100 }),
+  Astro.url.searchParams.get('calculationId') ? prisma.uValueCalculation.findFirst({ where: { id: Astro.url.searchParams.get('calculationId')!, organisationId: auth.organisation.id } }) : null,
+]);
+const context = selected?.contextSnapshot as { reference: string; location: string } | null;
+const initial = selected ? restoredDraft(selected.inputSnapshot as UValueInput, { title: selected.title, projectId: selected.projectId || '', reference: context?.reference || '', location: context?.location || '' }) : undefined;
+---
+<AppShell title="U-value calculator" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <UValueCalculator client:load projects={projects} initial={initial} initialSaved={calculations.map(item => ({ ...item, createdAt: item.createdAt.toISOString() }))} storageKey={`ap-u-value:${auth.organisation.id}:${auth.user.id}`} />
+</AppShell>

@@ -1,0 +1,87 @@
+{
+  "path_resistances": [
+    4.111222111222111,
+    1.777888777888778
+  ],
+  "r_upper": 3.434998920480255,
+  "r_lower": 3.3035298035298037,
+  "r_total": 3.3692643620050293,
+  "element": "layered_wall",
+  "heat_flow": "horizontal",
+  "rsi": 0.13,
+  "rse": 0.04,
+  "layers": [
+    {
+      "name": "Brick",
+      "original_index": 0,
+      "resistance_by_section": [
+        0.13246753246753246,
+        0.13246753246753246
+      ],
+      "effective_resistance": 0.13246753246753248,
+      "thickness_mm": 102
+    },
+    {
+      "name": "Unventilated cavity",
+      "original_index": 1,
+      "resistance_by_section": [
+        0.18,
+        0.18
+      ],
+      "effective_resistance": 0.18,
+      "thickness_mm": 50
+    },
+    {
+      "name": "Sheathing",
+      "original_index": 2,
+      "resistance_by_section": [
+        0.06923076923076922,
+        0.06923076923076922
+      ],
+      "effective_resistance": 0.06923076923076922,
+      "thickness_mm": 9
+    },
+    {
+      "name": "Mineral wool / timber",
+      "original_index": 3,
+      "resistance_by_section": [
+        3.5000000000000004,
+        1.1666666666666667
+      ],
+      "effective_resistance": 2.6923076923076925,
+      "thickness_mm": 140
+    },
+    {
+      "name": "Plasterboard",
+      "original_index": 4,
+      "resistance_by_section": [
+        0.05952380952380953,
+        0.05952380952380953
+      ],
+      "effective_resistance": 0.059523809523809534,
+      "thickness_mm": 12.5
+    }
+  ],
+  "fractions": [
+    0.85,
+    0.15
+  ],
+  "cavity_plans": [],
+  "relative_resistance_spread": 0.019510062557426433,
+  "u_uncorrected": 0.2968006937291516,
+  "corrections": [
+    {
+      "kind": "airgap",
+      "layer_index": 3,
+      "delta_u": 0.006385269139211799
+    }
+  ],
+  "delta_u_total": 0.006385269139211799,
+  "delta_u_applied": 0,
+  "corrections_omitted": true,
+  "u_value": 0.2968006937291516,
+  "u_value_5dp": 0.2968,
+  "u_value_2dp": 0.3,
+  "total_thickness_mm": 313.5,
+  "warnings": []
+}

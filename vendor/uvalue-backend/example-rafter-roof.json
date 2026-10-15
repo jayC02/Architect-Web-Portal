@@ -1,0 +1,11 @@
+{
+  "name":"SEAI DEAP June 2025 — rafter insulation over flat ceiling",
+  "element":"rafter_roof_flat_ceiling",
+  "fractions":[0.92,0.08],
+  "layers":[
+    {"name":"Insulation between rafters","thickness_mm":120,"conductivities":[0.025,0.13]},
+    {"name":"Continuous insulation below rafters","thickness_mm":50,"conductivity":0.025}
+  ],
+  "ceiling_layers":[{"name":"Flat ceiling plasterboard","thickness_mm":12.5,"conductivity":0.25}],
+  "roof":{"pitch_degrees":30}
+}

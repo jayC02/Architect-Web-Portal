@@ -1,0 +1,2456 @@
+[
+  {
+    "id": "timber-wall",
+    "label": "Timber wall — published Scottish example",
+    "input": {
+      "element": "layered_wall",
+      "fractions": [
+        0.85,
+        0.15
+      ],
+      "layers": [
+        {
+          "name": "Brick",
+          "thickness_mm": 102,
+          "conductivity": 0.77
+        },
+        {
+          "name": "Unventilated cavity",
+          "thickness_mm": 50,
+          "resistance": 0.18
+        },
+        {
+          "name": "Sheathing",
+          "thickness_mm": 9,
+          "conductivity": 0.13
+        },
+        {
+          "name": "Mineral wool / timber",
+          "thickness_mm": 140,
+          "conductivities": [
+            0.04,
+            0.12
+          ]
+        },
+        {
+          "name": "Plasterboard",
+          "thickness_mm": 12.5,
+          "conductivity": 0.21
+        }
+      ],
+      "corrections": [
+        {
+          "kind": "airgap",
+          "layer_index": 3,
+          "level": 1
+        }
+      ]
+    },
+    "result": {
+      "path_resistances": [
+        4.111222111222111,
+        1.777888777888778
+      ],
+      "r_upper": 3.434998920480255,
+      "r_lower": 3.3035298035298037,
+      "r_total": 3.3692643620050293,
+      "element": "layered_wall",
+      "heat_flow": "horizontal",
+      "rsi": 0.13,
+      "rse": 0.04,
+      "layers": [
+        {
+          "name": "Brick",
+          "original_index": 0,
+          "resistance_by_section": [
+            0.13246753246753246,
+            0.13246753246753246
+          ],
+          "effective_resistance": 0.13246753246753248,
+          "thickness_mm": 102
+        },
+        {
+          "name": "Unventilated cavity",
+          "original_index": 1,
+          "resistance_by_section": [
+            0.18,
+            0.18
+          ],
+          "effective_resistance": 0.18,
+          "thickness_mm": 50
+        },
+        {
+          "name": "Sheathing",
+          "original_index": 2,
+          "resistance_by_section": [
+            0.06923076923076922,
+            0.06923076923076922
+          ],
+          "effective_resistance": 0.06923076923076922,
+          "thickness_mm": 9
+        },
+        {
+          "name": "Mineral wool / timber",
+          "original_index": 3,
+          "resistance_by_section": [
+            3.5000000000000004,
+            1.1666666666666667
+          ],
+          "effective_resistance": 2.6923076923076925,
+          "thickness_mm": 140
+        },
+        {
+          "name": "Plasterboard",
+          "original_index": 4,
+          "resistance_by_section": [
+            0.05952380952380953,
+            0.05952380952380953
+          ],
+          "effective_resistance": 0.059523809523809534,
+          "thickness_mm": 12.5
+        }
+      ],
+      "fractions": [
+        0.85,
+        0.15
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0.019510062557426433,
+      "u_uncorrected": 0.2968006937291516,
+      "corrections": [
+        {
+          "kind": "airgap",
+          "layer_index": 3,
+          "delta_u": 0.006385269139211799
+        }
+      ],
+      "delta_u_total": 0.006385269139211799,
+      "delta_u_applied": 0,
+      "corrections_omitted": true,
+      "u_value": 0.2968006937291516,
+      "u_value_5dp": 0.2968,
+      "u_value_2dp": 0.3,
+      "total_thickness_mm": 313.5,
+      "warnings": []
+    }
+  },
+  {
+    "id": "slab-on-ground",
+    "label": "Slab on ground — published Irish example",
+    "input": {
+      "name": "Irish TGD L 2022 Example A4 — homogeneous slab",
+      "element": "slab_on_ground",
+      "layers": [
+        {
+          "name": "Insulation from published example",
+          "thickness_mm": 100,
+          "conductivity": 0.02
+        }
+      ],
+      "ground": {
+        "area_m2": 63.4375,
+        "exposed_perimeter_m": 23.25,
+        "wall_thickness_m": 0.35,
+        "soil_conductivity_w_mk": 2,
+        "rsi_m2k_w": 0.17,
+        "rse_m2k_w": 0.04,
+        "basement_depth_m": 0,
+        "edge_insulation": "none"
+      }
+    },
+    "result": {
+      "element": "slab_on_ground",
+      "method": "iso_13370_steady_state_slab_subset",
+      "area_m2": 63.4375,
+      "exposed_perimeter_m": 23.25,
+      "characteristic_dimension_m": 5.456989247311828,
+      "perimeter_area_ratio_m_inv": 0.3665024630541872,
+      "wall_thickness_m": 0.35,
+      "soil_conductivity_w_mk": 2,
+      "rsi_m2k_w": 0.17,
+      "rse_m2k_w": 0.04,
+      "floor_resistance_m2k_w": 5,
+      "equivalent_ground_thickness_m": 10.77,
+      "branch": "well_insulated",
+      "warnings": [
+        "Steady-state U only. Edge insulation, basements, flowing groundwater and embedded heating are outside this method. Wall/floor junction heat loss is separate."
+      ],
+      "u_value": 0.15078584963975558,
+      "u_value_5dp": 0.15079,
+      "u_value_2dp": 0.15,
+      "heat_loss_coefficient_w_k": 9.565477336521994,
+      "heat_flow": "down",
+      "floor_construction": {
+        "path_resistances": [
+          5
+        ],
+        "r_upper": 5,
+        "r_lower": 5,
+        "r_total": 5,
+        "element": "exposed_floor",
+        "heat_flow": "down",
+        "rsi": 0,
+        "rse": 0,
+        "layers": [
+          {
+            "name": "Insulation from published example",
+            "original_index": 0,
+            "resistance_by_section": [
+              5
+            ],
+            "effective_resistance": 5,
+            "thickness_mm": 100
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 0.2,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.2,
+        "u_value_5dp": 0.2,
+        "u_value_2dp": 0.2,
+        "total_thickness_mm": 100,
+        "warnings": []
+      },
+      "reference_area_m2": 63.4375
+    }
+  },
+  {
+    "id": "suspended-ground-floor",
+    "label": "Suspended timber floor — demonstration",
+    "input": {
+      "name": "Synthetic suspended timber floor — demonstration inputs",
+      "element": "suspended_ground_floor",
+      "fractions": [
+        0.89,
+        0.11
+      ],
+      "layers": [
+        {
+          "name": "Insulation and repeating joists",
+          "thickness_mm": 150,
+          "conductivities": [
+            0.04,
+            0.13
+          ]
+        },
+        {
+          "name": "Timber deck",
+          "thickness_mm": 22,
+          "conductivity": 0.13
+        }
+      ],
+      "ground": {
+        "area_m2": 80,
+        "exposed_perimeter_m": 40,
+        "wall_thickness_m": 0.3,
+        "soil_conductivity_w_mk": 1.5,
+        "rsi_m2k_w": 0.17,
+        "rse_m2k_w": 0.04,
+        "edge_insulation": "none",
+        "floor_height_m": 0.3,
+        "underfloor_wall_u_value_w_m2k": 1.5,
+        "ventilation_opening_area_per_perimeter_m2_m": 0.003,
+        "annual_wind_speed_10m_m_s": 5,
+        "wind_shielding_factor": 0.05,
+        "ventilation": "natural",
+        "base_depth_m": 0,
+        "base_insulation_resistance_m2k_w": 0
+      }
+    },
+    "result": {
+      "area_m2": 80,
+      "exposed_perimeter_m": 40,
+      "characteristic_dimension_m": 4,
+      "wall_thickness_m": 0.3,
+      "soil_conductivity_w_mk": 1.5,
+      "rsi_m2k_w": 0.17,
+      "rse_m2k_w": 0.04,
+      "element": "suspended_ground_floor",
+      "method": "iso_13370_steady_state_natural_suspended_extended",
+      "deck_u_value_w_m2k": 0.2797093427589154,
+      "deck_surface_resistance_each_m2k_w": 0.17,
+      "base_depth_m": 0,
+      "base_insulation_resistance_m2k_w": 0,
+      "floor_height_m": 0.3,
+      "underfloor_wall_u_value_w_m2k": 1.5,
+      "ventilation_opening_area_per_perimeter_m2_m": 0.003,
+      "annual_wind_speed_10m_m_s": 5,
+      "wind_shielding_factor": 0.05,
+      "equivalent_ground_thickness_m": 0.615,
+      "ground_u_value_w_m2k": 0.6975611906752287,
+      "ground_path_method": "shallow_void_ground_logarithm",
+      "underfloor_wall_path_u_value_w_m2k": 0.22499999999999998,
+      "ventilation_path_u_value_w_m2k": 0.27187500000000003,
+      "underfloor_external_u_value_w_m2k": 0.496875,
+      "total_equivalent_resistance_m2k_w": 4.4123548742601,
+      "warnings": [
+        "Steady-state ground heat transfer only. Seasonal heat flows, embedded heating and flowing groundwater are outside this method.",
+        "Wall/floor junction thermal bridging is separate; current standard and national conventions require review.",
+        "The 0.5 m void-depth boundary selects different analytical ground approximations; values can change across this boundary."
+      ],
+      "u_value": 0.22663634918251857,
+      "u_value_5dp": 0.22664,
+      "u_value_2dp": 0.23,
+      "heat_loss_coefficient_w_k": 18.130907934601485,
+      "heat_flow": "down",
+      "floor_construction": {
+        "path_resistances": [
+          4.259230769230769,
+          1.6630769230769231
+        ],
+        "r_upper": 3.635036780056024,
+        "r_lower": 3.515242793278865,
+        "r_total": 3.5751397866674446,
+        "element": "exposed_floor",
+        "heat_flow": "down",
+        "rsi": 0.17,
+        "rse": 0.17,
+        "layers": [
+          {
+            "name": "Insulation and repeating joists",
+            "original_index": 0,
+            "resistance_by_section": [
+              3.75,
+              1.1538461538461537
+            ],
+            "effective_resistance": 3.006012024048096,
+            "thickness_mm": 150
+          },
+          {
+            "name": "Timber deck",
+            "original_index": 1,
+            "resistance_by_section": [
+              0.1692307692307692,
+              0.1692307692307692
+            ],
+            "effective_resistance": 0.1692307692307692,
+            "thickness_mm": 22
+          }
+        ],
+        "fractions": [
+          0.89,
+          0.11
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0.01675374865395469,
+        "u_uncorrected": 0.2797093427589154,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.2797093427589154,
+        "u_value_5dp": 0.27971,
+        "u_value_2dp": 0.28,
+        "total_thickness_mm": 172,
+        "warnings": []
+      },
+      "reference_area_m2": 80
+    }
+  },
+  {
+    "id": "ventilated-wall",
+    "label": "Ventilated cavity wall — demonstration",
+    "input": {
+      "name": "Synthetic slightly ventilated wall — demonstration inputs",
+      "element": "layered_wall",
+      "layers": [
+        {
+          "name": "Outer leaf",
+          "resistance": 0.5
+        },
+        {
+          "name": "Cavity",
+          "kind": "air",
+          "thickness_mm": 50,
+          "width_mm": 3000,
+          "height_mm": 2400,
+          "orientation": "vertical",
+          "opening_area_mm2_per_m": 1000,
+          "openings_allow_through_flow": true
+        },
+        {
+          "name": "Inner construction",
+          "resistance": 2.5
+        }
+      ]
+    },
+    "result": {
+      "r_upper": 3.0549999999999997,
+      "r_lower": 3.0549999999999997,
+      "r_total": 3.0549999999999997,
+      "path_resistances": null,
+      "element": "layered_wall",
+      "heat_flow": "horizontal",
+      "rsi": 0.13,
+      "rse": 0.04,
+      "layers": [
+        {
+          "name": "Outer leaf",
+          "original_index": 0,
+          "resistance_by_section": [
+            0.5
+          ],
+          "effective_resistance": 0.5,
+          "thickness_mm": 0
+        },
+        {
+          "name": "Cavity",
+          "original_index": 1,
+          "air_calculation": {
+            "resistance": 0.18,
+            "resistance_unit": "m2 K/W",
+            "method": "table",
+            "heat_flow": "horizontal",
+            "thickness_mm": 50,
+            "width_mm": 3000,
+            "height_mm": 2400,
+            "emissivity_1": 0.9,
+            "emissivity_2": 0.9,
+            "mean_temperature_c": 10,
+            "temperature_difference_k": 5,
+            "emissivity_evidence": null,
+            "warnings": [],
+            "references": [
+              "https://cdn.standards.iteh.ai/samples/40968/eef030b005bd4146b90cddaf78c64f06/ISO-6946-2007.pdf"
+            ]
+          },
+          "resistance_by_section": [
+            0.18
+          ],
+          "effective_resistance": 0.18,
+          "thickness_mm": 50
+        },
+        {
+          "name": "Inner construction",
+          "original_index": 2,
+          "resistance_by_section": [
+            2.5
+          ],
+          "effective_resistance": 2.5,
+          "thickness_mm": 0
+        }
+      ],
+      "fractions": [
+        1
+      ],
+      "ventilation": {
+        "ventilation": "slightly_ventilated",
+        "opening_area_value": 1000,
+        "opening_area_unit": "mm2/m horizontal length",
+        "unventilated_weight": 0.5,
+        "well_ventilated_weight": 0.5,
+        "well_ventilated_external_surface_resistance": 0.13,
+        "well_ventilated_first_retained_layer_index": 2,
+        "disregard_layer_indices_for_well_ventilated": [
+          0,
+          1
+        ],
+        "retained_layer_indices_for_well_ventilated": [
+          2
+        ],
+        "instructions": [
+          "Calculate the unventilated endpoint with all layers and normal surface resistances.",
+          "Calculate the well-ventilated endpoint after dropping the cavity and all layers toward outdoors; replace exterior R with the still-air value given here.",
+          "Blend the two total resistances using the supplied weights; take the reciprocal afterward. Do not blend cavity R values or endpoint U values.",
+          "Remap correction layer indices for retained layers; exclude removed-layer corrections. Apply validated U corrections only after obtaining the blended base resistance."
+        ],
+        "references": [
+          "https://cdn.standards.iteh.ai/samples/40968/eef030b005bd4146b90cddaf78c64f06/ISO-6946-2007.pdf",
+          "https://www.cibse.org/media/wzrjrf3l/conventions-for-u-value-calculations.pdf"
+        ],
+        "layer_index": 1,
+        "unventilated_endpoint": {
+          "path_resistances": [
+            3.3499999999999996
+          ],
+          "r_upper": 3.3499999999999996,
+          "r_lower": 3.3499999999999996,
+          "r_total": 3.3499999999999996
+        },
+        "well_ventilated_endpoint": {
+          "path_resistances": [
+            2.76
+          ],
+          "r_upper": 2.76,
+          "r_lower": 2.76,
+          "r_total": 2.76
+        }
+      },
+      "cavity_plans": [
+        {
+          "ventilation": "slightly_ventilated",
+          "opening_area_value": 1000,
+          "opening_area_unit": "mm2/m horizontal length",
+          "unventilated_weight": 0.5,
+          "well_ventilated_weight": 0.5,
+          "well_ventilated_external_surface_resistance": 0.13,
+          "well_ventilated_first_retained_layer_index": 2,
+          "disregard_layer_indices_for_well_ventilated": [
+            0,
+            1
+          ],
+          "retained_layer_indices_for_well_ventilated": [
+            2
+          ],
+          "instructions": [
+            "Calculate the unventilated endpoint with all layers and normal surface resistances.",
+            "Calculate the well-ventilated endpoint after dropping the cavity and all layers toward outdoors; replace exterior R with the still-air value given here.",
+            "Blend the two total resistances using the supplied weights; take the reciprocal afterward. Do not blend cavity R values or endpoint U values.",
+            "Remap correction layer indices for retained layers; exclude removed-layer corrections. Apply validated U corrections only after obtaining the blended base resistance."
+          ],
+          "references": [
+            "https://cdn.standards.iteh.ai/samples/40968/eef030b005bd4146b90cddaf78c64f06/ISO-6946-2007.pdf",
+            "https://www.cibse.org/media/wzrjrf3l/conventions-for-u-value-calculations.pdf"
+          ],
+          "layer_index": 1
+        }
+      ],
+      "relative_resistance_spread": 0,
+      "u_uncorrected": 0.32733224222585927,
+      "corrections": [],
+      "delta_u_total": 0,
+      "delta_u_applied": 0,
+      "corrections_omitted": false,
+      "u_value": 0.32733224222585927,
+      "u_value_5dp": 0.32733,
+      "u_value_2dp": 0.33,
+      "total_thickness_mm": 50,
+      "warnings": []
+    }
+  },
+  {
+    "id": "inverted-roof",
+    "label": "Inverted roof rainfall — demonstration",
+    "input": {
+      "name": "Synthetic inverted roof — demonstrates the rain correction",
+      "element": "layered_roof",
+      "layers": [
+        {
+          "name": "Insulation above waterproof membrane",
+          "thickness_mm": 200,
+          "conductivity": 0.05
+        },
+        {
+          "name": "Deck and finish",
+          "resistance": 0.86
+        }
+      ],
+      "corrections": [
+        {
+          "kind": "inverted_roof_rain",
+          "layer_indices": [
+            0
+          ],
+          "rainfall_mm_per_day": 3,
+          "fx_w_day_m2k_mm": 0.04,
+          "ballast_excluded": true,
+          "rainfall_evidence": "Synthetic demonstration only; replace with site heating-season rainfall",
+          "drainage_evidence": "BBA Information 4 (2020): butt-edged boards/open cover, f=1 and x=0.04",
+          "design_conductivity_evidence": "Synthetic design conductivity for demonstration only; replace with moisture-adjusted product data"
+        }
+      ]
+    },
+    "result": {
+      "path_resistances": [
+        5
+      ],
+      "r_upper": 5,
+      "r_lower": 5,
+      "r_total": 5,
+      "element": "layered_roof",
+      "heat_flow": "up",
+      "rsi": 0.1,
+      "rse": 0.04,
+      "layers": [
+        {
+          "name": "Insulation above waterproof membrane",
+          "original_index": 0,
+          "resistance_by_section": [
+            4
+          ],
+          "effective_resistance": 4,
+          "thickness_mm": 200
+        },
+        {
+          "name": "Deck and finish",
+          "original_index": 1,
+          "resistance_by_section": [
+            0.86
+          ],
+          "effective_resistance": 0.86,
+          "thickness_mm": 0
+        }
+      ],
+      "fractions": [
+        1
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0,
+      "u_uncorrected": 0.2,
+      "corrections": [
+        {
+          "kind": "inverted_roof_rain",
+          "layer_indices": [
+            0
+          ],
+          "delta_u": 0.07680000000000001,
+          "rainfall_mm_per_day": 3,
+          "fx_w_day_m2k_mm": 0.04,
+          "ballast_excluded": true,
+          "rainfall_evidence": "Synthetic demonstration only; replace with site heating-season rainfall",
+          "drainage_evidence": "BBA Information 4 (2020): butt-edged boards/open cover, f=1 and x=0.04",
+          "design_conductivity_evidence": "Synthetic design conductivity for demonstration only; replace with moisture-adjusted product data"
+        }
+      ],
+      "delta_u_total": 0.07680000000000001,
+      "delta_u_applied": 0.07680000000000001,
+      "corrections_omitted": false,
+      "u_value": 0.27680000000000005,
+      "u_value_5dp": 0.2768,
+      "u_value_2dp": 0.28,
+      "total_thickness_mm": 200,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ceiling-roof",
+    "label": "Ceiling insulation with loft hatch — demonstration",
+    "input": {
+      "name": "Synthetic ceiling-insulated pitched roof",
+      "element": "ceiling_insulated_roof",
+      "fractions": [
+        0.87,
+        0.13
+      ],
+      "layers": [
+        {
+          "name": "Continuous insulation over joists",
+          "thickness_mm": 150,
+          "conductivity": 0.04
+        },
+        {
+          "name": "Insulation and joists",
+          "thickness_mm": 100,
+          "conductivities": [
+            0.04,
+            0.13
+          ]
+        },
+        {
+          "name": "Plasterboard",
+          "thickness_mm": 12.5,
+          "conductivity": 0.21
+        }
+      ],
+      "roof_space": {
+        "roof_covering": "sheeted_or_tiles_with_underlay",
+        "ventilation": "natural",
+        "external_envelope_insulated": false
+      },
+      "roof_inclusions": {
+        "total_area_m2": 100,
+        "inclusions": [
+          {
+            "name": "Hatch (illustrative U)",
+            "area_m2": 0.6,
+            "u_value_w_m2k": 1.5
+          }
+        ]
+      }
+    },
+    "result": {
+      "fractions": [
+        0.87,
+        0.13
+      ],
+      "path_resistances": [
+        6.649523809523809,
+        4.918754578754578
+      ],
+      "r_upper": 6.358657899372804,
+      "r_lower": 6.083759786312978,
+      "r_total": 6.221208842842891,
+      "u_uncorrected": 0.16074046463661754,
+      "u_value": 0.16877602184879784,
+      "u_value_5dp": 0.16878,
+      "u_value_2dp": 0.17,
+      "warnings": [],
+      "method": "iso_6946_ceiling_insulated_roof",
+      "area_basis": "flat_ceiling",
+      "heat_flow": "up",
+      "roof_space": {
+        "method": "iso_6946_tabulated_roof_space",
+        "roof_covering": "sheeted_or_tiles_with_underlay",
+        "resistance_m2k_w": 0.2,
+        "includes_roof_covering": true,
+        "includes_external_surface": false
+      },
+      "rse": 0.04,
+      "element": "ceiling_insulated_roof",
+      "rsi": 0.1,
+      "layers": [
+        {
+          "name": "Continuous insulation over joists",
+          "original_index": 0,
+          "resistance_by_section": [
+            3.75,
+            3.75
+          ],
+          "effective_resistance": 3.75,
+          "thickness_mm": 150
+        },
+        {
+          "name": "Insulation and joists",
+          "original_index": 1,
+          "resistance_by_section": [
+            2.5,
+            0.7692307692307693
+          ],
+          "effective_resistance": 1.9342359767891686,
+          "thickness_mm": 100
+        },
+        {
+          "name": "Plasterboard",
+          "original_index": 2,
+          "resistance_by_section": [
+            0.05952380952380953,
+            0.05952380952380953
+          ],
+          "effective_resistance": 0.05952380952380952,
+          "thickness_mm": 12.5
+        }
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0.022093625210482908,
+      "corrections": [],
+      "delta_u_total": 0,
+      "delta_u_applied": 0,
+      "corrections_omitted": false,
+      "total_thickness_mm": 262.5,
+      "u_before_local_areas": 0.16074046463661754,
+      "roof_area_adjustment": {
+        "method": "roof_area_weighting",
+        "total_area_m2": 100,
+        "main_area_m2": 99.4,
+        "main_u_value_w_m2k": 0.16074046463661754,
+        "inclusions": [
+          {
+            "name": "Hatch (illustrative U)",
+            "area_m2": 0.6,
+            "u_value_w_m2k": 1.5,
+            "heat_loss_coefficient_w_k": 0.8999999999999999
+          }
+        ],
+        "heat_loss_coefficient_w_k": 16.877602184879784,
+        "delta_u": 0.0080355572121803,
+        "u_value": 0.16877602184879784,
+        "u_value_5dp": 0.16878,
+        "u_value_2dp": 0.17,
+        "warnings": []
+      },
+      "heat_loss_coefficient_w_k": 16.877602184879784,
+      "reference_area_m2": 100
+    }
+  },
+  {
+    "id": "rafter-roof",
+    "label": "Rafter roof over flat ceiling — SEAI example",
+    "input": {
+      "name": "SEAI DEAP June 2025 — rafter insulation over flat ceiling",
+      "element": "rafter_roof_flat_ceiling",
+      "fractions": [
+        0.92,
+        0.08
+      ],
+      "layers": [
+        {
+          "name": "Insulation between rafters",
+          "thickness_mm": 120,
+          "conductivities": [
+            0.025,
+            0.13
+          ]
+        },
+        {
+          "name": "Continuous insulation below rafters",
+          "thickness_mm": 50,
+          "conductivity": 0.025
+        }
+      ],
+      "ceiling_layers": [
+        {
+          "name": "Flat ceiling plasterboard",
+          "thickness_mm": 12.5,
+          "conductivity": 0.25
+        }
+      ],
+      "roof": {
+        "pitch_degrees": 30
+      }
+    },
+    "result": {
+      "fractions": [
+        0.92,
+        0.08
+      ],
+      "path_resistances": [
+        6.233613761885561,
+        2.8760998887520444
+      ],
+      "r_upper": 5.701176631752393,
+      "r_lower": 5.188160340311054,
+      "r_total": 5.444668486031723,
+      "u_uncorrected": 0.18366591144447017,
+      "u_value": 0.18366591144447017,
+      "u_value_5dp": 0.18367,
+      "u_value_2dp": 0.18,
+      "warnings": [],
+      "method": "br443_rafter_roof_over_flat_ceiling",
+      "area_basis": "flat_ceiling",
+      "heat_flow": "up",
+      "pitch_degrees": 30,
+      "pitch_cosine": 0.8660254037844387,
+      "ceiling_resistance_m2k_w": 0.15000000000000002,
+      "roof_void_resistance_m2k_w": 0.16,
+      "element": "rafter_roof_flat_ceiling",
+      "rsi": 0.1,
+      "rse": 0.04,
+      "layers": [
+        {
+          "name": "Insulation between rafters",
+          "original_index": 0,
+          "resistance_by_section": [
+            4.8,
+            0.923076923076923
+          ],
+          "effective_resistance": 3.5928143712574854,
+          "thickness_mm": 120
+        },
+        {
+          "name": "Continuous insulation below rafters",
+          "original_index": 1,
+          "resistance_by_section": [
+            2,
+            2
+          ],
+          "effective_resistance": 2,
+          "thickness_mm": 50
+        }
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0.047111802376717735,
+      "corrections": [],
+      "delta_u_total": 0,
+      "delta_u_applied": 0,
+      "corrections_omitted": false,
+      "total_thickness_mm": 170,
+      "ceiling_construction": {
+        "path_resistances": [
+          0.15000000000000002
+        ],
+        "r_upper": 0.15000000000000002,
+        "r_lower": 0.15000000000000002,
+        "r_total": 0.15000000000000002,
+        "element": "layered_roof",
+        "heat_flow": "up",
+        "rsi": 0.1,
+        "rse": 0,
+        "layers": [
+          {
+            "name": "Flat ceiling plasterboard",
+            "original_index": 0,
+            "resistance_by_section": [
+              0.05
+            ],
+            "effective_resistance": 0.05,
+            "thickness_mm": 12.5
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 6.666666666666666,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 6.666666666666666,
+        "u_value_5dp": 6.66667,
+        "u_value_2dp": 6.67,
+        "total_thickness_mm": 12.5,
+        "warnings": []
+      },
+      "surface_resistance_handling": "Sloped materials and Rse scale by cos(pitch); flat ceiling Rsi/materials and roof void remain unscaled."
+    }
+  },
+  {
+    "id": "tapered-roof",
+    "label": "Tapered flat roof — demonstration",
+    "input": {
+      "name": "Synthetic tapered flat roof — partitioned design",
+      "element": "tapered_roof",
+      "layers": [
+        {
+          "name": "Deck and finish",
+          "resistance": 0.2
+        }
+      ],
+      "roof": {
+        "conductivity_w_mk": 0.025,
+        "regions_partition_roof": true,
+        "regions": [
+          {
+            "name": "Main rectangular fall",
+            "shape": "rectangle",
+            "area_m2": 60,
+            "thicknesses_mm": [
+              80,
+              160
+            ]
+          },
+          {
+            "name": "Triangular drainage area",
+            "shape": "triangle",
+            "area_m2": 40,
+            "thicknesses_mm": [
+              80,
+              120,
+              160
+            ]
+          }
+        ]
+      }
+    },
+    "result": {
+      "method": "iso_6946_piecewise_taper",
+      "regions": [
+        {
+          "method": "iso_6946_analytic_taper",
+          "shape": "rectangle",
+          "base_resistance_m2k_w": 0.34,
+          "conductivity_w_mk": 0.025,
+          "thicknesses_mm": [
+            80,
+            160
+          ],
+          "vertex_total_resistances_m2k_w": [
+            3.5399999999999996,
+            6.739999999999999
+          ],
+          "effective_resistance_m2k_w": 4.969459582204323,
+          "u_uncorrected": 0.20122912430579143,
+          "u_value": 0.20122912430579143,
+          "u_value_5dp": 0.20123,
+          "u_value_2dp": 0.2,
+          "warnings": [],
+          "name": "Main rectangular fall",
+          "area_m2": 60,
+          "heat_loss_coefficient_w_k": 12.073747458347485
+        },
+        {
+          "method": "iso_6946_analytic_taper",
+          "shape": "triangle",
+          "base_resistance_m2k_w": 0.34,
+          "conductivity_w_mk": 0.025,
+          "thicknesses_mm": [
+            80,
+            120,
+            160
+          ],
+          "vertex_total_resistances_m2k_w": [
+            3.5399999999999996,
+            5.14,
+            6.739999999999999
+          ],
+          "effective_resistance_m2k_w": 5.055024223377804,
+          "u_uncorrected": 0.19782298873570833,
+          "u_value": 0.19782298873570833,
+          "u_value_5dp": 0.19782,
+          "u_value_2dp": 0.2,
+          "warnings": [],
+          "name": "Triangular drainage area",
+          "area_m2": 40,
+          "heat_loss_coefficient_w_k": 7.9129195494283335
+        }
+      ],
+      "total_area_m2": 100,
+      "heat_loss_coefficient_w_k": 19.986667007775818,
+      "r_total": 5.003335471646922,
+      "u_uncorrected": 0.19986667007775819,
+      "u_value": 0.19986667007775819,
+      "u_value_5dp": 0.19987,
+      "u_value_2dp": 0.2,
+      "warnings": [],
+      "element": "tapered_roof",
+      "base_construction": {
+        "path_resistances": [
+          0.34
+        ],
+        "r_upper": 0.34,
+        "r_lower": 0.34,
+        "r_total": 0.34,
+        "element": "layered_roof",
+        "heat_flow": "up",
+        "rsi": 0.1,
+        "rse": 0.04,
+        "layers": [
+          {
+            "name": "Deck and finish",
+            "original_index": 0,
+            "resistance_by_section": [
+              0.2
+            ],
+            "effective_resistance": 0.2,
+            "thickness_mm": 0
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 2.941176470588235,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 2.941176470588235,
+        "u_value_5dp": 2.94118,
+        "u_value_2dp": 2.94,
+        "total_thickness_mm": 0,
+        "warnings": []
+      },
+      "reference_area_m2": 100
+    }
+  },
+  {
+    "id": "heated-basement",
+    "label": "Heated basement floor and walls — demonstration",
+    "input": {
+      "name": "Synthetic heated basement — floor and below-ground walls",
+      "element": "heated_basement",
+      "layers": [
+        {
+          "name": "Slab insulation",
+          "thickness_mm": 100,
+          "conductivity": 0.025
+        }
+      ],
+      "wall_layers": [
+        {
+          "name": "Wall insulation",
+          "thickness_mm": 80,
+          "conductivity": 0.03
+        },
+        {
+          "name": "Concrete",
+          "thickness_mm": 200,
+          "conductivity": 2
+        }
+      ],
+      "ground": {
+        "area_m2": 80,
+        "exposed_perimeter_m": 36,
+        "wall_thickness_m": 0.3,
+        "soil_conductivity_w_mk": 2,
+        "rsi_m2k_w": 0.17,
+        "rse_m2k_w": 0.04,
+        "basement_depth_m": 2,
+        "wall_rsi_m2k_w": 0.13,
+        "wall_rse_m2k_w": 0.04,
+        "edge_insulation": "none"
+      }
+    },
+    "result": {
+      "area_m2": 80,
+      "exposed_perimeter_m": 36,
+      "characteristic_dimension_m": 4.444444444444445,
+      "wall_thickness_m": 0.3,
+      "soil_conductivity_w_mk": 2,
+      "rsi_m2k_w": 0.17,
+      "rse_m2k_w": 0.04,
+      "basement_depth_m": 2,
+      "floor_resistance_m2k_w": 4,
+      "equivalent_ground_thickness_m": 8.72,
+      "depth_adjusted_ground_thickness_m": 9.72,
+      "branch": "well_insulated",
+      "basement_floor_u_value_w_m2k": 0.170196671709531,
+      "wall_resistance_m2k_w": 2.766666666666667,
+      "wall_rsi_m2k_w": 0.13,
+      "wall_rse_m2k_w": 0.04,
+      "equivalent_wall_thickness_m": 5.873333333333334,
+      "wall_coupling_thickness_m": 5.873333333333334,
+      "wall_formula_uses_wall_thickness_instead_of_floor": true,
+      "basement_wall_u_value_w_m2k": 0.2561548149053857,
+      "below_ground_wall_area_m2": 72,
+      "total_ground_contact_area_m2": 152,
+      "basement_floor_heat_loss_coefficient_w_k": 13.61573373676248,
+      "basement_wall_heat_loss_coefficient_w_k": 18.443146673187773,
+      "basement_ground_heat_loss_coefficient_w_k": 32.058880409950255,
+      "element": "heated_basement",
+      "method": "iso_13370_steady_state_heated_basement",
+      "floor_area_normalised_u_value_w_m2k": 0.4007360051243782,
+      "u_value_reference_area": "floor_plus_below_ground_walls",
+      "warnings": [
+        "Steady-state ground heat transfer only. Seasonal heat flows, embedded heating and flowing groundwater are outside this method.",
+        "Wall/floor junction thermal bridging is separate; current standard and national conventions require review.",
+        "The reported U averages the floor and below-ground wall area. Above-ground walls are assessed separately."
+      ],
+      "u_value": 0.21091368690756748,
+      "u_value_5dp": 0.21091,
+      "u_value_2dp": 0.21,
+      "heat_loss_coefficient_w_k": 32.058880409950255,
+      "heat_flow": "down",
+      "floor_construction": {
+        "path_resistances": [
+          4
+        ],
+        "r_upper": 4,
+        "r_lower": 4,
+        "r_total": 4,
+        "element": "exposed_floor",
+        "heat_flow": "down",
+        "rsi": 0,
+        "rse": 0,
+        "layers": [
+          {
+            "name": "Slab insulation",
+            "original_index": 0,
+            "resistance_by_section": [
+              4
+            ],
+            "effective_resistance": 4,
+            "thickness_mm": 100
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 0.25,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.25,
+        "u_value_5dp": 0.25,
+        "u_value_2dp": 0.25,
+        "total_thickness_mm": 100,
+        "warnings": []
+      },
+      "wall_construction": {
+        "path_resistances": [
+          2.766666666666667
+        ],
+        "r_upper": 2.766666666666667,
+        "r_lower": 2.766666666666667,
+        "r_total": 2.766666666666667,
+        "element": "layered_wall",
+        "heat_flow": "horizontal",
+        "rsi": 0,
+        "rse": 0,
+        "layers": [
+          {
+            "name": "Wall insulation",
+            "original_index": 0,
+            "resistance_by_section": [
+              2.666666666666667
+            ],
+            "effective_resistance": 2.666666666666667,
+            "thickness_mm": 80
+          },
+          {
+            "name": "Concrete",
+            "original_index": 1,
+            "resistance_by_section": [
+              0.1
+            ],
+            "effective_resistance": 0.1,
+            "thickness_mm": 200
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 0.36144578313253006,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.36144578313253006,
+        "u_value_5dp": 0.36145,
+        "u_value_2dp": 0.36,
+        "total_thickness_mm": 280,
+        "warnings": []
+      },
+      "reference_area_m2": 152
+    }
+  },
+  {
+    "id": "unheated-basement",
+    "label": "Floor over unheated basement — demonstration",
+    "input": {
+      "name": "Synthetic unheated basement — separate floor deck",
+      "element": "unheated_basement",
+      "layers": [
+        {
+          "name": "Room-to-basement deck insulation",
+          "thickness_mm": 100,
+          "conductivity": 0.04
+        },
+        {
+          "name": "Timber deck",
+          "thickness_mm": 22,
+          "conductivity": 0.13
+        }
+      ],
+      "ground": {
+        "area_m2": 80,
+        "exposed_perimeter_m": 36,
+        "wall_thickness_m": 0.3,
+        "soil_conductivity_w_mk": 2,
+        "rsi_m2k_w": 0.17,
+        "rse_m2k_w": 0.04,
+        "basement_depth_m": 1.5,
+        "floor_resistance_m2k_w": 0.1,
+        "wall_resistance_m2k_w": 0.4,
+        "wall_rsi_m2k_w": 0.13,
+        "wall_rse_m2k_w": 0.04,
+        "edge_insulation": "none",
+        "above_ground_wall_height_m": 0.5,
+        "above_ground_wall_u_value_w_m2k": 2,
+        "ventilation": "external_air",
+        "air_changes_per_hour": 0.5,
+        "basement_air_volume_m3": 160
+      }
+    },
+    "result": {
+      "area_m2": 80,
+      "exposed_perimeter_m": 36,
+      "characteristic_dimension_m": 4.444444444444445,
+      "wall_thickness_m": 0.3,
+      "soil_conductivity_w_mk": 2,
+      "rsi_m2k_w": 0.17,
+      "rse_m2k_w": 0.04,
+      "basement_depth_m": 1.5,
+      "floor_resistance_m2k_w": 0.1,
+      "equivalent_ground_thickness_m": 0.9199999999999999,
+      "depth_adjusted_ground_thickness_m": 1.67,
+      "branch": "uninsulated_or_moderately_insulated",
+      "basement_floor_u_value_w_m2k": 0.572273879019339,
+      "wall_resistance_m2k_w": 0.4,
+      "wall_rsi_m2k_w": 0.13,
+      "wall_rse_m2k_w": 0.04,
+      "equivalent_wall_thickness_m": 1.1400000000000001,
+      "wall_coupling_thickness_m": 0.9199999999999999,
+      "wall_formula_uses_wall_thickness_instead_of_floor": false,
+      "basement_wall_u_value_w_m2k": 0.8482938774325391,
+      "below_ground_wall_area_m2": 54,
+      "total_ground_contact_area_m2": 134,
+      "basement_floor_heat_loss_coefficient_w_k": 45.78191032154712,
+      "basement_wall_heat_loss_coefficient_w_k": 45.807869381357115,
+      "basement_ground_heat_loss_coefficient_w_k": 91.58977970290424,
+      "element": "unheated_basement",
+      "method": "iso_13370_steady_state_unheated_basement",
+      "deck_u_value_w_m2k": 0.3323108384458078,
+      "deck_surface_resistance_each_m2k_w": 0.17,
+      "above_ground_wall_height_m": 0.5,
+      "above_ground_wall_u_value_w_m2k": 2,
+      "air_changes_per_hour": 0.5,
+      "basement_air_volume_m3": 160,
+      "above_ground_wall_heat_loss_coefficient_w_k": 36,
+      "ventilation_heat_loss_coefficient_w_k": 26.400000000000002,
+      "basement_external_heat_loss_coefficient_w_k": 153.98977970290423,
+      "temperature_reduction_factor": 0.8527763030417856,
+      "u_value_reference_area": "separating_floor",
+      "warnings": [
+        "Steady-state ground heat transfer only. Seasonal heat flows, embedded heating and flowing groundwater are outside this method.",
+        "Wall/floor junction thermal bridging is separate; current standard and national conventions require review.",
+        "The basement receives no active heating or internal/solar gains, and its ventilation air comes from outside."
+      ],
+      "u_value": 0.28338680827053203,
+      "u_value_5dp": 0.28339,
+      "u_value_2dp": 0.28,
+      "heat_loss_coefficient_w_k": 22.67094466164256,
+      "heat_flow": "down",
+      "floor_construction": {
+        "path_resistances": [
+          3.009230769230769
+        ],
+        "r_upper": 3.0092307692307694,
+        "r_lower": 3.009230769230769,
+        "r_total": 3.0092307692307694,
+        "element": "exposed_floor",
+        "heat_flow": "down",
+        "rsi": 0.17,
+        "rse": 0.17,
+        "layers": [
+          {
+            "name": "Room-to-basement deck insulation",
+            "original_index": 0,
+            "resistance_by_section": [
+              2.5
+            ],
+            "effective_resistance": 2.5,
+            "thickness_mm": 100
+          },
+          {
+            "name": "Timber deck",
+            "original_index": 1,
+            "resistance_by_section": [
+              0.1692307692307692
+            ],
+            "effective_resistance": 0.1692307692307692,
+            "thickness_mm": 22
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 7.378782883500529e-17,
+        "u_uncorrected": 0.3323108384458078,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.3323108384458078,
+        "u_value_5dp": 0.33231,
+        "u_value_2dp": 0.33,
+        "total_thickness_mm": 122,
+        "warnings": []
+      },
+      "reference_area_m2": 80
+    }
+  },
+  {
+    "id": "edge-insulated-slab",
+    "label": "Perimeter-insulated slab — demonstration",
+    "input": {
+      "name": "Synthetic slab with vertical perimeter insulation",
+      "element": "slab_on_ground",
+      "layers": [
+        {
+          "name": "Continuous insulation",
+          "thickness_mm": 80,
+          "conductivity": 0.03
+        }
+      ],
+      "ground": {
+        "area_m2": 80,
+        "exposed_perimeter_m": 36,
+        "wall_thickness_m": 0.3,
+        "soil_conductivity_w_mk": 2,
+        "rsi_m2k_w": 0.17,
+        "rse_m2k_w": 0.04,
+        "basement_depth_m": 0,
+        "edge_insulation_small_extent": true,
+        "edge_junction_thermal_bridge_free": true,
+        "edge_insulation": [
+          {
+            "orientation": "vertical",
+            "extent_m": 0.6,
+            "thickness_m": 0.08,
+            "resistance_m2k_w": 2.6666666666666665
+          }
+        ]
+      }
+    },
+    "result": {
+      "element": "slab_on_ground",
+      "method": "iso_13370_steady_state_slab_edge_insulation",
+      "area_m2": 80,
+      "exposed_perimeter_m": 36,
+      "characteristic_dimension_m": 4.444444444444445,
+      "perimeter_area_ratio_m_inv": 0.45,
+      "wall_thickness_m": 0.3,
+      "soil_conductivity_w_mk": 2,
+      "rsi_m2k_w": 0.17,
+      "rse_m2k_w": 0.04,
+      "floor_resistance_m2k_w": 2.666666666666667,
+      "equivalent_ground_thickness_m": 6.053333333333334,
+      "branch": "well_insulated",
+      "warnings": [
+        "Steady-state ground heat transfer only. Seasonal heat flows, embedded heating and flowing groundwater are outside this method.",
+        "Wall/floor junction thermal bridging is separate; current standard and national conventions require review.",
+        "Each candidate represents the full perimeter. The greatest reduction is used; alternatives are not added.",
+        "This analytical edge correction assumes narrow insulation and no significant thermal bridge in the detail."
+      ],
+      "u_value": 0.22447530917717468,
+      "u_value_5dp": 0.22448,
+      "u_value_2dp": 0.22,
+      "heat_loss_coefficient_w_k": 17.958024734173975,
+      "uncorrected_u_value": 0.24738867509620668,
+      "edge_insulation": [
+        {
+          "orientation": "vertical",
+          "extent_m": 0.6,
+          "thickness_m": 0.08,
+          "resistance_m2k_w": 2.6666666666666665,
+          "soil_conductivity_w_mk": 2,
+          "equivalent_ground_thickness_m": 6.053333333333334,
+          "additional_resistance_m2k_w": 2.6266666666666665,
+          "additional_equivalent_thickness_m": 5.253333333333333,
+          "edge_correction_w_mk": -0.05091859093118226
+        }
+      ],
+      "selected_edge_detail_index": 0,
+      "edge_correction_w_m2k": -0.02291336591903202,
+      "heat_flow": "down",
+      "floor_construction": {
+        "path_resistances": [
+          2.666666666666667
+        ],
+        "r_upper": 2.666666666666667,
+        "r_lower": 2.666666666666667,
+        "r_total": 2.666666666666667,
+        "element": "exposed_floor",
+        "heat_flow": "down",
+        "rsi": 0,
+        "rse": 0,
+        "layers": [
+          {
+            "name": "Continuous insulation",
+            "original_index": 0,
+            "resistance_by_section": [
+              2.666666666666667
+            ],
+            "effective_resistance": 2.666666666666667,
+            "thickness_mm": 80
+          }
+        ],
+        "fractions": [
+          1
+        ],
+        "cavity_plans": [],
+        "relative_resistance_spread": 0,
+        "u_uncorrected": 0.37499999999999994,
+        "corrections": [],
+        "delta_u_total": 0,
+        "delta_u_applied": 0,
+        "corrections_omitted": false,
+        "u_value": 0.37499999999999994,
+        "u_value_5dp": 0.375,
+        "u_value_2dp": 0.37,
+        "total_thickness_mm": 80,
+        "warnings": []
+      },
+      "reference_area_m2": 80
+    }
+  },
+  {
+    "id": "unheated-space-wall",
+    "label": "Wall to unheated space — demonstration",
+    "input": {
+      "name": "Synthetic wall adjoining an unheated space",
+      "element": "layered_wall",
+      "rse": 0.13,
+      "layers": [
+        {
+          "name": "Insulation",
+          "thickness_mm": 100,
+          "conductivity": 0.04
+        },
+        {
+          "name": "Plasterboard",
+          "thickness_mm": 12.5,
+          "conductivity": 0.21
+        }
+      ],
+      "unheated_space": {
+        "method": "heat_balance",
+        "h_inside_to_unheated_w_k": 8.16,
+        "h_unheated_to_outside_w_k": 3.05,
+        "inside_temperature_c": 20,
+        "outside_temperature_c": 0
+      }
+    },
+    "result": {
+      "path_resistances": [
+        2.819523809523809
+      ],
+      "r_upper": 2.819523809523809,
+      "r_lower": 2.819523809523809,
+      "r_total": 2.819523809523809,
+      "element": "layered_wall",
+      "heat_flow": "horizontal",
+      "rsi": 0.13,
+      "rse": 0.13,
+      "layers": [
+        {
+          "name": "Insulation",
+          "original_index": 0,
+          "resistance_by_section": [
+            2.5
+          ],
+          "effective_resistance": 2.5,
+          "thickness_mm": 100
+        },
+        {
+          "name": "Plasterboard",
+          "original_index": 1,
+          "resistance_by_section": [
+            0.05952380952380953
+          ],
+          "effective_resistance": 0.05952380952380952,
+          "thickness_mm": 12.5
+        }
+      ],
+      "fractions": [
+        1
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0,
+      "u_uncorrected": 0.3546698192872826,
+      "corrections": [],
+      "delta_u_total": 0,
+      "delta_u_applied": 0,
+      "corrections_omitted": false,
+      "u_value": 0.0964980329015354,
+      "u_value_5dp": 0.0965,
+      "u_value_2dp": 0.1,
+      "total_thickness_mm": 112.5,
+      "warnings": [],
+      "u_inside_to_unheated": 0.3546698192872826,
+      "unheated_space_adjustment": {
+        "method": "iso_13789_two_node_unheated_space",
+        "adjustment_factor": 0.272078501338091,
+        "h_inside_to_unheated_w_k": 8.16,
+        "h_unheated_to_outside_w_k": 3.05,
+        "effective_heat_loss_coefficient_w_k": 2.2201605709188224,
+        "warnings": [],
+        "u_value": 0.0964980329015354,
+        "u_value_5dp": 0.0965,
+        "u_value_2dp": 0.1,
+        "unheated_temperature_c": 14.558429973238178
+      },
+      "unheated_space_network_heat_loss_coefficient_w_k": 2.2201605709188224
+    }
+  },
+  {
+    "id": "recessed-fastener",
+    "label": "Recessed metal fasteners — demonstration",
+    "input": {
+      "name": "Synthetic roof with recessed metal fasteners",
+      "element": "layered_roof",
+      "omit_small_corrections": false,
+      "layers": [
+        {
+          "name": "Insulation",
+          "thickness_mm": 100,
+          "conductivity": 0.05
+        },
+        {
+          "name": "Deck and finish",
+          "resistance": 1.86
+        }
+      ],
+      "corrections": [
+        {
+          "kind": "recessed_fastener",
+          "layer_index": 0,
+          "conductivity": 50,
+          "area_mm2": 10,
+          "count_per_m2": 4,
+          "metal_penetration_mm": 50,
+          "both_ends_contact_metal": false
+        }
+      ]
+    },
+    "result": {
+      "path_resistances": [
+        4
+      ],
+      "r_upper": 4,
+      "r_lower": 4,
+      "r_total": 4,
+      "element": "layered_roof",
+      "heat_flow": "up",
+      "rsi": 0.1,
+      "rse": 0.04,
+      "layers": [
+        {
+          "name": "Insulation",
+          "original_index": 0,
+          "resistance_by_section": [
+            2
+          ],
+          "effective_resistance": 2,
+          "thickness_mm": 100
+        },
+        {
+          "name": "Deck and finish",
+          "original_index": 1,
+          "resistance_by_section": [
+            1.86
+          ],
+          "effective_resistance": 1.86,
+          "thickness_mm": 0
+        }
+      ],
+      "fractions": [
+        1
+      ],
+      "cavity_plans": [],
+      "relative_resistance_spread": 0,
+      "u_uncorrected": 0.25,
+      "corrections": [
+        {
+          "kind": "recessed_fastener",
+          "layer_index": 0,
+          "delta_u": 0.001
+        }
+      ],
+      "delta_u_total": 0.001,
+      "delta_u_applied": 0.001,
+      "corrections_omitted": false,
+      "u_value": 0.251,
+      "u_value_5dp": 0.251,
+      "u_value_2dp": 0.25,
+      "total_thickness_mm": 100,
+      "warnings": []
+    }
+  },
+  {
+    "id": "steel-mesh",
+    "label": "Steel web and flanges — explicit 2D example",
+    "input": {
+      "name": "Synthetic steel web and flanges — explicit 2D geometry",
+      "element": "thermal_mesh",
+      "mesh": {
+        "geometry": {
+          "width_mm": 600,
+          "height_mm": 202.5,
+          "base_conductivity_w_mk": 0.04,
+          "max_cell_size_mm": 20,
+          "minimum_cells_per_interval": 2,
+          "regions": [
+            {
+              "name": "Outer steel flange",
+              "x_mm": 275,
+              "y_mm": 50,
+              "width_mm": 50,
+              "height_mm": 1.2,
+              "conductivity_w_mk": 50
+            },
+            {
+              "name": "Steel web",
+              "x_mm": 299.4,
+              "y_mm": 51.2,
+              "width_mm": 1.2,
+              "height_mm": 137.6,
+              "conductivity_w_mk": 50
+            },
+            {
+              "name": "Inner steel flange",
+              "x_mm": 275,
+              "y_mm": 188.8,
+              "width_mm": 50,
+              "height_mm": 1.2,
+              "conductivity_w_mk": 50
+            },
+            {
+              "name": "Plasterboard",
+              "x_mm": 0,
+              "y_mm": 190,
+              "width_mm": 600,
+              "height_mm": 12.5,
+              "conductivity_w_mk": 0.21
+            }
+          ]
+        },
+        "boundaries": {
+          "top": {
+            "kind": "temperature",
+            "temperature_c": 0,
+            "surface_resistance_m2k_w": 0.04
+          },
+          "bottom": {
+            "kind": "temperature",
+            "temperature_c": 20,
+            "surface_resistance_m2k_w": 0.13
+          },
+          "left": {
+            "kind": "adiabatic"
+          },
+          "right": {
+            "kind": "adiabatic"
+          }
+        },
+        "max_refinements": 3,
+        "mesh_convergence_tolerance": 0.005
+      }
+    },
+    "result": {
+      "method": "two_dimensional_finite_volume",
+      "width_m": 0.6000000000000001,
+      "height_m": 0.20249999999999996,
+      "boundaries": {
+        "top": {
+          "kind": "temperature",
+          "temperature_c": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "surface_resistance_m2k_w": [
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04,
+            0.04
+          ]
+        },
+        "bottom": {
+          "kind": "temperature",
+          "temperature_c": [
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20,
+            20
+          ],
+          "surface_resistance_m2k_w": [
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13,
+            0.13
+          ]
+        },
+        "left": {
+          "kind": "adiabatic"
+        },
+        "right": {
+          "kind": "adiabatic"
+        }
+      },
+      "boundary_heat_flows_w_per_m": {
+        "top": -3.2260420761333672,
+        "bottom": 3.2260420754344294,
+        "left": 0,
+        "right": 0
+      },
+      "iterations": 166,
+      "preconditioner": "incomplete_cholesky",
+      "relative_residual": 7.617579520301697e-11,
+      "relative_heat_imbalance": 2.1665489167023613e-10,
+      "cells": 8704,
+      "references": [
+        "https://buildingphysics.com/download/iso/ISO_10211_HEAT2_HEAT3.pdf",
+        "https://www.iso.org/standard/65710.html"
+      ],
+      "element": "thermal_mesh",
+      "u_value": 0.26883683961953575,
+      "u_value_5dp": 0.26884,
+      "u_value_2dp": 0.27,
+      "mesh_refinement_history": [
+        {
+          "cells": 544,
+          "u_value": 0.2648585788245679
+        },
+        {
+          "cells": 2176,
+          "u_value": 0.26751739383818546,
+          "relative_change": 0.009938849117324247
+        },
+        {
+          "cells": 8704,
+          "u_value": 0.26883683961953575,
+          "relative_change": 0.004907979811165773
+        }
+      ],
+      "mesh_relative_change": 0.004907979811165773,
+      "warnings": [
+        "2D isotropic conduction only. Model every material/interface and applicable surface condition. Discrete 3D fixings, cavities and construction junctions need separate assessment."
+      ],
+      "mesh_fields_included": false
+    }
+  },
+  {
+    "id": "window-components",
+    "label": "Window with supplied frame, glazing and spacer values",
+    "input": {
+      "name": "Synthetic window component example",
+      "element": "window",
+      "opening": {
+        "total_area_m2": 2,
+        "projected_areas_non_overlapping": true,
+        "component_boundaries_consistent": true,
+        "components": [
+          {
+            "kind": "frame",
+            "area_m2": 0.4,
+            "u_value_w_m2k": 1.3,
+            "evidence": "Illustrative supplied frame value"
+          },
+          {
+            "kind": "glazing",
+            "area_m2": 1.6,
+            "u_value_w_m2k": 1.1,
+            "evidence": "Illustrative supplied glazing value"
+          }
+        ],
+        "edges": [
+          {
+            "length_m": 5,
+            "psi_w_mk": 0.04,
+            "evidence": "Illustrative supplied spacer value"
+          }
+        ]
+      }
+    },
+    "result": {
+      "element": "window",
+      "method": "supplied_components_projected_area_and_edge_heat_balance",
+      "reference_area_m2": 2,
+      "area_basis": "projected_whole_opening",
+      "components": [
+        {
+          "kind": "frame",
+          "area_m2": 0.4,
+          "u_value_w_m2k": 1.3,
+          "evidence": "Illustrative supplied frame value",
+          "heat_loss_coefficient_w_k": 0.52
+        },
+        {
+          "kind": "glazing",
+          "area_m2": 1.6,
+          "u_value_w_m2k": 1.1,
+          "evidence": "Illustrative supplied glazing value",
+          "heat_loss_coefficient_w_k": 1.7600000000000002
+        }
+      ],
+      "edges": [
+        {
+          "length_m": 5,
+          "psi_w_mk": 0.04,
+          "evidence": "Illustrative supplied spacer value",
+          "heat_loss_coefficient_w_k": 0.2
+        }
+      ],
+      "component_heat_loss_coefficient_w_k": 2.2800000000000002,
+      "edge_heat_loss_coefficient_w_k": 0.2,
+      "heat_loss_coefficient_w_k": 2.4800000000000004,
+      "u_value": 1.2400000000000002,
+      "u_value_5dp": 1.24,
+      "u_value_2dp": 1.24,
+      "warnings": [
+        "Glazing, frame/panel and edge values must use consistent boundary conditions and applicable geometry. Their supplied evidence has not been authenticated.",
+        "Installation junction bridges are separate. No glazing gas/radiation or frame-profile calculation is derived by this component method."
+      ]
+    }
+  },
+  {
+    "id": "door-components",
+    "label": "Door with supplied frame and opaque panel",
+    "input": {
+      "name": "Synthetic opaque door example",
+      "element": "door",
+      "opening": {
+        "total_area_m2": 2,
+        "projected_areas_non_overlapping": true,
+        "component_boundaries_consistent": true,
+        "components": [
+          {
+            "kind": "frame",
+            "area_m2": 0.3,
+            "u_value_w_m2k": 1.5,
+            "evidence": "Illustrative frame"
+          },
+          {
+            "kind": "panel",
+            "area_m2": 1.7,
+            "u_value_w_m2k": 0.8,
+            "evidence": "Illustrative panel"
+          }
+        ],
+        "edges": [
+          {
+            "length_m": 5,
+            "psi_w_mk": 0.03,
+            "evidence": "Illustrative assessed panel edge"
+          }
+        ]
+      }
+    },
+    "result": {
+      "element": "door",
+      "method": "supplied_components_projected_area_and_edge_heat_balance",
+      "reference_area_m2": 2,
+      "area_basis": "projected_whole_opening",
+      "components": [
+        {
+          "kind": "frame",
+          "area_m2": 0.3,
+          "u_value_w_m2k": 1.5,
+          "evidence": "Illustrative frame",
+          "heat_loss_coefficient_w_k": 0.44999999999999996
+        },
+        {
+          "kind": "panel",
+          "area_m2": 1.7,
+          "u_value_w_m2k": 0.8,
+          "evidence": "Illustrative panel",
+          "heat_loss_coefficient_w_k": 1.36
+        }
+      ],
+      "edges": [
+        {
+          "length_m": 5,
+          "psi_w_mk": 0.03,
+          "evidence": "Illustrative assessed panel edge",
+          "heat_loss_coefficient_w_k": 0.15
+        }
+      ],
+      "component_heat_loss_coefficient_w_k": 1.81,
+      "edge_heat_loss_coefficient_w_k": 0.15,
+      "heat_loss_coefficient_w_k": 1.96,
+      "u_value": 0.98,
+      "u_value_5dp": 0.98,
+      "u_value_2dp": 0.98,
+      "warnings": [
+        "Glazing, frame/panel and edge values must use consistent boundary conditions and applicable geometry. Their supplied evidence has not been authenticated.",
+        "Installation junction bridges are separate. No glazing gas/radiation or frame-profile calculation is derived by this component method."
+      ]
+    }
+  }
+]

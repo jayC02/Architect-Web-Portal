@@ -1,0 +1,15 @@
+{
+  "name": "Irish TGD L 2022 Example A4 — homogeneous slab",
+  "element": "slab_on_ground",
+  "layers": [{"name": "Insulation from published example", "thickness_mm": 100, "conductivity": 0.020}],
+  "ground": {
+    "area_m2": 63.4375,
+    "exposed_perimeter_m": 23.25,
+    "wall_thickness_m": 0.35,
+    "soil_conductivity_w_mk": 2,
+    "rsi_m2k_w": 0.17,
+    "rse_m2k_w": 0.04,
+    "basement_depth_m": 0,
+    "edge_insulation": "none"
+  }
+}

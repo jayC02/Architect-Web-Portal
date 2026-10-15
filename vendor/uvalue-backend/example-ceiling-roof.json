@@ -1,0 +1,12 @@
+{
+  "name":"Synthetic ceiling-insulated pitched roof",
+  "element":"ceiling_insulated_roof",
+  "fractions":[0.87,0.13],
+  "layers":[
+    {"name":"Continuous insulation over joists","thickness_mm":150,"conductivity":0.04},
+    {"name":"Insulation and joists","thickness_mm":100,"conductivities":[0.04,0.13]},
+    {"name":"Plasterboard","thickness_mm":12.5,"conductivity":0.21}
+  ],
+  "roof_space":{"roof_covering":"sheeted_or_tiles_with_underlay","ventilation":"natural","external_envelope_insulated":false},
+  "roof_inclusions":{"total_area_m2":100,"inclusions":[{"name":"Hatch (illustrative U)","area_m2":0.6,"u_value_w_m2k":1.5}]}
+}
