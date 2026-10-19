@@ -15,6 +15,11 @@ export class UploadRequestError extends Error {
   }
 }
 
+export const applicationFileSha256 = async (file: Blob): Promise<string> => {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
 export const isRetryableUploadError = (error: unknown) => {
   if (error instanceof Error && error.name === 'AbortError') return false;
   if (error instanceof TypeError) return true;
@@ -77,14 +82,21 @@ export const runUploadQueue = async <T>(
   }
 
   let next = 0;
+  const errors: unknown[] = [];
   const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
     while (next < items.length) {
       const index = next;
       next += 1;
-      await upload(items[index]);
+      try {
+        await upload(items[index]);
+      } catch (error) {
+        errors.push(error);
+      }
     }
   });
   await Promise.all(workers);
+  // Keep the caller busy until every worker stops, even when one upload fails.
+  if (errors.length) throw errors[0];
 };
 
 export const uploadPackageProgress = <T>(

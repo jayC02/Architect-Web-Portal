@@ -1,4 +1,5 @@
 import { readExecutionSnapshot } from '@/server/services/automation-state-model.service';
+import { documentContentDisposition } from '@/lib/server/content-disposition';
 export const prerender = false;
 
 import { AutomationJobStatus } from '@prisma/client';
@@ -10,10 +11,9 @@ import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError } from '@/lib/utils/http';
 import { assertDesktopJobAccess, requireDesktopAuth } from '@/server/auth/desktop-token';
 
-const safeFilename = (value: string) => value.replace(/[\r\n"\\]/g, '_');
 const headers = (mimeType: string, originalName: string) => ({
   'content-type': mimeType || 'application/octet-stream',
-  'content-disposition': `attachment; filename="${safeFilename(originalName)}"`,
+  'content-disposition': documentContentDisposition('attachment', originalName),
   'x-content-type-options': 'nosniff',
   'cache-control': 'private, no-store, max-age=0',
 });

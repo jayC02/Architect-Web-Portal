@@ -346,6 +346,8 @@ export const commitApplicationDraft = async (
       where: {
         id: draftId,
         organisationId: organisation.id,
+        resultingProjectId: null,
+        expiresAt: { gt: new Date() },
         status: {
           in: [
             ApplicationDraftStatus.NEEDS_REVIEW,
@@ -362,6 +364,16 @@ export const commitApplicationDraft = async (
     });
     if (!locked.count) throw new HttpError(409, 'This application draft is already being created.');
 
+    // Re-read after locking the draft; the preflight read may predate another tab's upload.
+    const lockedDraft = await tx.applicationDraft.findFirst({
+      where: { id: draftId, organisationId: organisation.id }, include: { documents: true },
+    });
+    if (!lockedDraft) throw new HttpError(404, 'Application draft not found.');
+    ensureReviewedDocumentsMatch(lockedDraft.documents.map(document => document.id), review);
+    if (lockedDraft.documents.some(document => document.uploadStatus !== 'READY')) {
+      throw new HttpError(409, 'Finish uploading every document before creating the application.');
+    }
+
     const records = await resolvePermanentRecords(tx, organisation.id, review);
     const lifecycleEvent = records.projectCreated
       ? await emitProjectCreatedLifecycleEvent(tx, {
@@ -376,7 +388,7 @@ export const commitApplicationDraft = async (
         })
       : null;
     const reviewById = new Map(review.documents.map((document) => [document.id, document]));
-    for (const document of current.documents) {
+    for (const document of lockedDraft.documents) {
       const reviewed = reviewById.get(document.id)!;
       const permanent = document.committedDocumentId
         ? await tx.projectDocument.findFirst({

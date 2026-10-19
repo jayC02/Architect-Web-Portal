@@ -54,7 +54,8 @@ const normaliseFilename = (filename: string) => {
     .replace(/[\u0000-\u001f<>:"|?*]/g, '_')
     .trim();
   if (!base || base === '.' || base === '..') throw new HttpError(400, 'Document filename is invalid.');
-  return base.slice(0, 180);
+  const extension = path.posix.extname(base).slice(0, 16);
+  return base.length <= 180 ? base : `${base.slice(0, 180 - extension.length)}${extension}`;
 };
 
 const intentKeyFor = (filename: string, size: number, clientSha256?: string | null) =>
@@ -121,7 +122,6 @@ export const addApplicationDraftDocuments = async (
     data: {
       status: ApplicationDraftStatus.UPLOADING,
       preparedData: Prisma.JsonNull,
-      confirmedData: Prisma.JsonNull,
       unresolvedQuestions: Prisma.JsonNull,
       analysisSummary: {
         phase: 'upload',
@@ -254,7 +254,6 @@ export const createApplicationDraftUploadIntent = async (
       data: {
         status: ApplicationDraftStatus.UPLOADING,
         preparedData: Prisma.JsonNull,
-        confirmedData: Prisma.JsonNull,
         unresolvedQuestions: Prisma.JsonNull,
         analysisSummary: {
           phase: 'upload',
@@ -286,18 +285,34 @@ export const finaliseApplicationDraftDocument = async (
   if (document.uploadStatus === ApplicationDraftDocumentUploadStatus.READY) return document;
   if (!mutableStatuses.has(draft.status)) throw new HttpError(409, 'Documents cannot be changed for this application draft.');
   const metadata = await getStoredDocumentMetadata(document.storageKey);
-  if (!metadata || metadata.sizeBytes <= 0 || metadata.sizeBytes !== document.sizeBytes) {
-    await deleteStoredDocument(document.storageKey).catch(() => undefined);
-    await prisma.applicationDraftDocument.updateMany({
-      where: { id: document.id, draftId, committedDocumentId: null },
-      data: { uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED, analysisError: 'The uploaded document was incomplete. Upload it again.' },
+  const verified = Boolean(metadata && metadata.sizeBytes > 0 && metadata.sizeBytes === document.sizeBytes);
+  const updated = await prisma.$transaction(async tx => {
+    const locked = await tx.applicationDraft.updateMany({
+      where: {
+        id: draftId, organisationId, resultingProjectId: null, expiresAt: { gt: new Date() },
+        status: { in: [...mutableStatuses] },
+      },
+      data: { updatedAt: new Date() },
     });
+    if (!locked.count) throw new HttpError(409, 'Documents cannot be changed for this application draft.');
+    const current = await tx.applicationDraftDocument.findFirst({ where: { id: document.id, draftId, committedDocumentId: null } });
+    if (!current) throw new HttpError(409, 'The document list changed. Reload the draft.');
+    if (current.uploadStatus === ApplicationDraftDocumentUploadStatus.READY) return current;
+    if (!verified) {
+      // Hold the parent lock so neither project creation nor another finalisation
+      // can turn this temporary object into a permanent file while it is removed.
+      await deleteStoredDocument(current.storageKey).catch(() => undefined);
+    }
+    return tx.applicationDraftDocument.update({
+      where: { id: current.id },
+      data: verified
+        ? { uploadStatus: ApplicationDraftDocumentUploadStatus.READY, finalisedAt: new Date(), analysisError: null }
+        : { uploadStatus: ApplicationDraftDocumentUploadStatus.FAILED, analysisError: 'The uploaded document was incomplete. Upload it again.' },
+    });
+  });
+  if (updated.uploadStatus !== ApplicationDraftDocumentUploadStatus.READY) {
     throw new HttpError(400, 'The uploaded document could not be verified. Upload it again.');
   }
-  const updated = await prisma.applicationDraftDocument.update({
-    where: { id: document.id },
-    data: { uploadStatus: ApplicationDraftDocumentUploadStatus.READY, finalisedAt: new Date(), analysisError: null },
-  });
   const finalised = await prisma.applicationDraftDocument.count({
     where: { draftId, uploadStatus: ApplicationDraftDocumentUploadStatus.READY },
   });
@@ -327,10 +342,14 @@ export const cancelApplicationDraft = async (
     throw new HttpError(409, 'This application is currently being created.');
   }
 
-  await prisma.applicationDraft.updateMany({
-    where: { id: draft.id, organisationId },
+  const cancelled = await prisma.applicationDraft.updateMany({
+    where: {
+      id: draft.id, organisationId, resultingProjectId: null,
+      status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING] },
+    },
     data: { status: ApplicationDraftStatus.CANCELLED },
   });
+  if (!cancelled.count) throw new HttpError(409, 'This application changed or is being created. It cannot be cancelled.');
   const temporaryDocuments = draft.documents.filter((document) => !document.committedDocumentId);
   await removeFiles(temporaryDocuments);
   if (temporaryDocuments.length) {
@@ -357,17 +376,17 @@ export const removeApplicationDraftDocument = async (
   if (!document) throw new HttpError(404, 'Draft document not found.');
   if (document.committedDocumentId) throw new HttpError(409, 'This document already belongs to a project.');
 
-  await deleteStoredDocument(document.storageKey);
-  await prisma.$transaction([
-    prisma.applicationDraftDocument.deleteMany({
-      where: { id: document.id, draftId: draft.id, committedDocumentId: null },
-    }),
-    prisma.applicationDraft.update({
-      where: { id: draft.id },
+  await prisma.$transaction(async (tx) => {
+    // Lock the parent before removing metadata. A concurrent commit must win or lose
+    // this same lock before either operation can touch permanent documents.
+    const changed = await tx.applicationDraft.updateMany({
+      where: {
+        id: draft.id, organisationId, resultingProjectId: null,
+        status: { in: [...mutableStatuses] }, expiresAt: { gt: new Date() },
+      },
       data: {
         status: ApplicationDraftStatus.UPLOADING,
         preparedData: Prisma.JsonNull,
-        confirmedData: Prisma.JsonNull,
         unresolvedQuestions: Prisma.JsonNull,
         analysisSummary: {
           phase: 'upload',
@@ -376,8 +395,14 @@ export const removeApplicationDraftDocument = async (
           message: 'Document removed. Analyse again when ready.',
         },
       },
-    }),
-  ]);
+    });
+    if (!changed.count) throw new HttpError(409, 'Documents cannot be changed for this application draft.');
+    const removed = await tx.applicationDraftDocument.deleteMany({
+      where: { id: document.id, draftId: draft.id, committedDocumentId: null },
+    });
+    if (!removed.count) throw new HttpError(409, 'The document list changed. Reload the draft.');
+  });
+  await removeFiles([document]);
 };
 
 export const cleanupExpiredApplicationDrafts = async (organisationId: string) => {
@@ -400,10 +425,14 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
     take: 20,
   });
   for (const draft of expired) {
-    await prisma.applicationDraft.updateMany({
-      where: { id: draft.id, organisationId },
+    const claimed = await prisma.applicationDraft.updateMany({
+      where: {
+        id: draft.id, organisationId, resultingProjectId: null, expiresAt: { lte: new Date() },
+        status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING] },
+      },
       data: { status: ApplicationDraftStatus.EXPIRED },
     });
+    if (!claimed.count) continue;
     const temporaryDocuments = draft.documents.filter((document) => !document.committedDocumentId);
     await removeFiles(temporaryDocuments);
     if (temporaryDocuments.length) {
@@ -434,11 +463,26 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
     },
     take: 50,
   });
-  await removeFiles(abandoned);
-  if (abandoned.length) {
-    await prisma.applicationDraftDocument.deleteMany({
-      where: { id: { in: abandoned.map((document) => document.id) }, committedDocumentId: null },
+  for (const document of abandoned) {
+    const removed = await prisma.$transaction(async (tx) => {
+      const parent = await tx.applicationDraft.updateMany({
+        where: {
+          id: document.draftId, organisationId, resultingProjectId: null,
+          status: { in: [...mutableStatuses] },
+        },
+        data: { updatedAt: new Date() },
+      });
+      if (!parent.count) return false;
+      const result = await tx.applicationDraftDocument.deleteMany({
+        where: {
+          id: document.id, committedDocumentId: null, updatedAt: { lte: unfinalisedBefore },
+          uploadStatus: { in: [ApplicationDraftDocumentUploadStatus.UPLOADING, ApplicationDraftDocumentUploadStatus.UPLOADED, ApplicationDraftDocumentUploadStatus.FAILED] },
+        },
+      });
+      if (result.count) await tx.applicationDraft.update({ where: { id: document.draftId }, data: { status: ApplicationDraftStatus.UPLOADING } });
+      return result.count > 0;
     });
+    if (removed) await removeFiles([document]);
   }
 };
 

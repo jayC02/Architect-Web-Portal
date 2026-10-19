@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import {
   applicationDraftAnalysisSummary,
+  evaluateApplicationDraftReadiness,
   parsedApplicationDraftReview,
   parsedPreparedApplicationDraft,
   type DraftReadinessIssue,
@@ -31,48 +32,64 @@ const readinessIssues = (value: unknown): DraftReadinessIssue[] => {
   });
 };
 
-export const applicationDraftResponse = (draft: DraftWithDocuments) => ({
-  id: draft.id,
-  status: draft.status,
-  notes: draft.notes,
-  suggestedApplicationType: draft.suggestedApplicationType,
-  selectedApplicationType: draft.selectedApplicationType,
-  prepared: parsedPreparedApplicationDraft(draft.preparedData),
-  review: parsedApplicationDraftReview(draft.confirmedData),
-  issues: readinessIssues(draft.unresolvedQuestions),
-  analysis: applicationDraftAnalysisSummary(draft.analysisSummary),
-  expiresAt: draft.expiresAt.toISOString(),
-  committedAt: draft.committedAt?.toISOString() ?? null,
-  createdAt: draft.createdAt.toISOString(),
-  updatedAt: draft.updatedAt.toISOString(),
-  result: draft.resultingProjectId ? {
-    projectId: draft.resultingProjectId,
-    planningId: draft.resultingPlanningId,
-    warrantId: draft.resultingWarrantId,
-    automationJobId: draft.resultingAutomationJobId,
-  } : null,
-  documents: draft.documents.map((document) => ({
-    id: document.id,
-    originalFilename: document.originalFilename,
-    mimeType: document.mimeType,
-    sizeBytes: document.sizeBytes,
-    uploadStatus: document.uploadStatus,
-    finalisedAt: document.finalisedAt?.toISOString() ?? null,
-    uploadError: document.uploadStatus === 'FAILED' ? document.analysisError : null,
-    analysisStatus: document.analysisStatus,
-    documentType: document.documentType,
-    documentStatus: document.documentStatus,
-    revision: document.revision,
-    drawingNumber: document.drawingNumber,
-    drawingTitle: document.drawingTitle,
-    classificationSource: document.classificationSource,
-    classificationReason: document.classificationReason,
-    needsManualReview:
-      document.analysisStatus === 'FALLBACK'
-      || document.analysisStatus === 'FAILED'
-      || document.documentStatus === 'IN_REVIEW',
-    previewUrl: `/api/application-drafts/${draft.id}/documents/${document.id}`,
-  })),
-});
+export const applicationDraftResponse = (draft: DraftWithDocuments) => {
+  const savedReview = parsedApplicationDraftReview(draft.confirmedData);
+  const reviewedById = new Map(savedReview?.documents.map(document => [document.id, document]));
+  const review = savedReview ? {
+    ...savedReview,
+    documents: draft.documents.map(document => reviewedById.get(document.id) ?? ({
+      id: document.id,
+      documentType: document.documentType,
+      documentStatus: document.documentStatus,
+      revision: document.revision,
+      drawingNumber: document.drawingNumber,
+      drawingTitle: document.drawingTitle,
+    })),
+  } : null;
+  const documentListChanged = review && JSON.stringify(review.documents) !== JSON.stringify(savedReview?.documents);
+  return ({
+    id: draft.id,
+    status: draft.status,
+    notes: draft.notes,
+    suggestedApplicationType: draft.suggestedApplicationType,
+    selectedApplicationType: draft.selectedApplicationType,
+    prepared: parsedPreparedApplicationDraft(draft.preparedData),
+    review,
+    issues: documentListChanged ? evaluateApplicationDraftReadiness(review) : readinessIssues(draft.unresolvedQuestions),
+    analysis: applicationDraftAnalysisSummary(draft.analysisSummary),
+    expiresAt: draft.expiresAt.toISOString(),
+    committedAt: draft.committedAt?.toISOString() ?? null,
+    createdAt: draft.createdAt.toISOString(),
+    updatedAt: draft.updatedAt.toISOString(),
+    result: draft.resultingProjectId ? {
+      projectId: draft.resultingProjectId,
+      planningId: draft.resultingPlanningId,
+      warrantId: draft.resultingWarrantId,
+      automationJobId: draft.resultingAutomationJobId,
+    } : null,
+    documents: draft.documents.map((document) => ({
+      id: document.id,
+      originalFilename: document.originalFilename,
+      mimeType: document.mimeType,
+      sizeBytes: document.sizeBytes,
+      uploadStatus: document.uploadStatus,
+      finalisedAt: document.finalisedAt?.toISOString() ?? null,
+      uploadError: document.uploadStatus === 'FAILED' ? document.analysisError : null,
+      analysisStatus: document.analysisStatus,
+      documentType: document.documentType,
+      documentStatus: document.documentStatus,
+      revision: document.revision,
+      drawingNumber: document.drawingNumber,
+      drawingTitle: document.drawingTitle,
+      classificationSource: document.classificationSource,
+      classificationReason: document.classificationReason,
+      needsManualReview:
+        document.analysisStatus === 'FALLBACK'
+        || document.analysisStatus === 'FAILED'
+        || document.documentStatus === 'IN_REVIEW',
+      previewUrl: `/api/application-drafts/${draft.id}/documents/${document.id}`,
+    })),
+  });
+};
 
 export type ApplicationDraftResponse = ReturnType<typeof applicationDraftResponse>;

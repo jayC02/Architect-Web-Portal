@@ -1,6 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
+import { documentContentDisposition } from '@/lib/server/content-disposition';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
@@ -10,11 +11,9 @@ import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 
-const inlineFilename = (filename: string) => filename.replace(/[\r\n"\\]/g, '_');
-
 const streamHeaders = (mimeType: string, originalName: string) => ({
   'content-type': mimeType || 'application/octet-stream',
-  'content-disposition': `inline; filename="${inlineFilename(originalName)}"`,
+  'content-disposition': documentContentDisposition('inline', originalName),
   'x-content-type-options': 'nosniff',
   'cache-control': 'private, max-age=60',
 });

@@ -1,4 +1,5 @@
 import ClientApplicantReview from './ClientApplicantReview';
+import { applicationFileSha256, retryTransientUpload, runUploadQueue, UploadRequestError } from '@/lib/application-upload-queue';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -98,7 +99,7 @@ const apiJson = async <T,>(url: string, init: RequestInit = {}): Promise<T> => {
     },
   });
   const payload = await response.json().catch(() => ({})) as T & ApiErrorPayload;
-  if (!response.ok) throw new Error(payload.error || 'The request could not be completed.');
+  if (!response.ok) throw new UploadRequestError(payload.error || 'The request could not be completed.', response.status);
   return payload;
 };
 
@@ -597,7 +598,7 @@ export default function ApplicationDraftReview({
 
   const siteLookupKey = JSON.stringify([review?.projectMode, review?.siteMode, review?.site]);
   useEffect(() => {
-    if (!review || review.projectMode !== 'create' || review.siteMode !== 'create'
+    if (working || !review || review.projectMode !== 'create' || review.siteMode !== 'create'
       || !['NEEDS_REVIEW', 'READY_TO_CREATE'].includes(draft.status)
       || (review.site.postcode && review.site.localAuthority)) return;
     const site = review.site;
@@ -646,10 +647,10 @@ export default function ApplicationDraftReview({
       }
     }, 700);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [siteLookupKey, draft.id, draft.status]);
+  }, [siteLookupKey, draft.id, draft.status, working]);
 
   if (
-    draft.status === 'UPLOADING'
+    (draft.status === 'UPLOADING' && !review)
     || draft.status === 'ANALYSING'
     || (draft.status === 'FAILED' && !review)
   ) {
@@ -863,17 +864,8 @@ export default function ApplicationDraftReview({
     setWorking('analyse');
     setError('');
     try {
-      setDraft((current) => ({
-        ...current,
-        status: 'ANALYSING',
-        analysis: {
-          ...current.analysis,
-          phase: 'document-analysis',
-          completed: 0,
-          total: current.documents.length,
-          message: 'Preparing document analysis',
-        },
-      }));
+      if (!await persistCurrentReview()) return;
+      setNotice('Analysing documents…');
       const payload = await apiJson<{ draft: ApplicationDraftResponse }>(
         `/api/application-drafts/${draft.id}/analyse`,
         { method: 'POST', body: JSON.stringify({ force: true }) },
@@ -883,6 +875,7 @@ export default function ApplicationDraftReview({
       setError(requestError instanceof Error ? requestError.message : 'The application could not be analysed again.');
     } finally {
       setWorking('');
+      setNotice('');
     }
   };
 
@@ -906,43 +899,46 @@ export default function ApplicationDraftReview({
     if (!files?.length) return;
     setWorking('files');
     setError('');
+    let uploadsStarted = false;
     try {
       const queue = Array.from(files);
       const invalid = queue.find((file) => (file.type && file.type !== 'application/pdf') || !file.name.toLowerCase().endsWith('.pdf'));
       if (invalid) throw new Error('PDF files only.');
-      let next = 0;
+      if (!await persistCurrentReview()) { setWorking(''); return; }
+      uploadsStarted = true;
       const uploadOne = async (file: File) => {
-        const intent = await apiJson<{
-          document: { id: string };
-          upload: { url: string; token: string } | null;
-        }>(`/api/application-drafts/${draft.id}/documents/upload-intent`, {
-          method: 'POST',
-          body: JSON.stringify({ filename: file.name, mimeType: file.type, size: file.size }),
-        });
-        if (intent.upload) {
-          const response = await fetch(intent.upload.url, {
-            method: 'PUT',
-            headers: {
-              'content-type': file.type || 'application/pdf',
-              'x-upsert': 'false',
-            },
-            body: file,
+        const clientSha256 = await applicationFileSha256(file);
+        await retryTransientUpload(async () => {
+          const intent = await apiJson<{
+            document: { id: string };
+            upload: { url: string; token: string } | null;
+          }>(`/api/application-drafts/${draft.id}/documents/upload-intent`, {
+            method: 'POST',
+            body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/pdf', size: file.size, clientSha256 }),
           });
-          if (!response.ok) {
-            const uploadError = await response.text().catch(() => '');
-            if (response.status !== 409 && !/already exists/i.test(uploadError)) {
-              throw new Error(`Could not upload ${file.name}.`);
+          if (intent.upload) {
+            const response = await fetch(intent.upload.url, {
+              method: 'PUT',
+              headers: {
+                'content-type': file.type || 'application/pdf',
+                'x-upsert': 'false',
+              },
+              body: file,
+            });
+            if (!response.ok) {
+              const uploadError = await response.text().catch(() => '');
+              if (response.status !== 409 && !/already exists/i.test(uploadError)) {
+                throw new UploadRequestError(`Could not upload ${file.name}.`, response.status);
+              }
             }
           }
-        }
-        await apiJson(`/api/application-drafts/${draft.id}/documents/${intent.document.id}/finalise`, {
-          method: 'POST',
-          body: JSON.stringify({}),
+          await apiJson(`/api/application-drafts/${draft.id}/documents/${intent.document.id}/finalise`, {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
         });
       };
-      await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
-        while (next < queue.length) await uploadOne(queue[next++]);
-      }));
+      await runUploadQueue(queue, 3, uploadOne);
       const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
       setDraft(payload.draft);
       setReview(payload.draft.review);
@@ -951,6 +947,14 @@ export default function ApplicationDraftReview({
       setWorking('');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The documents could not be added.');
+      if (uploadsStarted) {
+        // Some workers may have succeeded. Reconcile all files before allowing
+        // another save, removal or retry against the authoritative document set.
+        try {
+          const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
+          setDraft(payload.draft);
+        } catch { /* Keep the current edits visible while the connection is unavailable. */ }
+      }
       setWorking('');
     }
   };
@@ -960,6 +964,7 @@ export default function ApplicationDraftReview({
     setWorking('files');
     setError('');
     try {
+      if (!await persistCurrentReview()) { setWorking(''); return; }
       await apiJson<{ ok: boolean }>(
         `/api/application-drafts/${draft.id}/documents/${document.id}`,
         { method: 'DELETE', body: JSON.stringify({}) },
@@ -978,11 +983,12 @@ export default function ApplicationDraftReview({
   };
 
   const attentionCount = issues.length;
+  const incompleteUploads = draft.documents.some(document => document.uploadStatus !== 'READY');
   const preparedCount = draft.prepared?.summary.preparedFieldCount ?? 0;
   const analysedCount = draft.prepared?.summary.analysedCount ?? draft.documents.length;
 
   return (
-    <div>
+    <fieldset disabled={Boolean(working)} className="m-0 min-w-0 border-0 p-0">
       <header className="mb-6">
         <a href="/applications/new" className="inline-flex items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink">
           <ArrowLeft size={15} />
@@ -1001,8 +1007,8 @@ export default function ApplicationDraftReview({
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-secondary gap-2" onClick={() => void analyseAgain()} disabled={Boolean(working)}>
-              <RefreshCw size={15} />
-              Analyse again
+              <RefreshCw size={15} className={working === 'analyse' ? 'animate-spin' : ''} />
+              {working === 'analyse' ? 'Analysing…' : 'Analyse again'}
             </button>
             <button type="button" className="btn btn-secondary gap-2 text-red-700" onClick={() => void cancelDraft()} disabled={Boolean(working)}>
               <Trash2 size={15} />
@@ -1247,7 +1253,7 @@ export default function ApplicationDraftReview({
             issueFor={issueFor}
             onLookupPending={setClientLookupPending}
             onVisibilityChange={setClientReviewVisible}
-
+            paused={Boolean(working)}
           />
         ) : null}
         <Section
@@ -1417,6 +1423,11 @@ export default function ApplicationDraftReview({
                       <p className="mt-3 text-xs text-amber-800">Suggested using the deterministic fallback. Check this classification manually.</p>
                     ) : null}
                   </details>
+                  {source && source.uploadStatus !== 'READY' ? (
+                    <p role="alert" className="mt-3 text-sm text-red-700">
+                      {source.uploadError || 'This document has not finished uploading.'} Add this PDF again to retry, or remove it before continuing.
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
@@ -1522,13 +1533,13 @@ export default function ApplicationDraftReview({
             <p className={`self-center text-sm ${saveState === 'failed' ? 'text-red-700' : 'text-stone-500'}`} role="status" aria-live="polite">
               {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'failed' ? 'Could not save changes' : ''}
             </p>
-            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || (review.projectMode === 'create' && clientLookupPending)}>
+            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || incompleteUploads || (review.projectMode === 'create' && clientLookupPending)}>
               {working === 'commit' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
               {working === 'commit' ? 'Creating project...' : 'Create Project'}
             </button>
           </div>
         </div>
       </section>
-    </div>
+    </fieldset>
   );
 }

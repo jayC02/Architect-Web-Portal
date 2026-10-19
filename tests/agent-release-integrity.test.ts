@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFileSync,statSync} from 'node:fs';
+import {GET as download} from '../src/pages/agent/download';
+import {GET as release} from '../src/pages/api/desktop/releases/latest';
+
+const manifest=JSON.parse(readFileSync('src/config/agent-release.json','utf8'));
+const metadata=await release({} as any);
+const offered=await metadata.json();
+assert.equal(metadata.headers.get('Cache-Control'),'no-store');
+assert.equal(offered.version,manifest.version);
+assert.equal(offered.downloadUrl,manifest.downloadUrl);
+const redirect=await download({} as any);
+assert.equal(redirect.status,302);
+assert.equal(redirect.headers.get('Location'),manifest.downloadUrl);
+assert.equal(redirect.headers.get('Cache-Control'),'no-store');
+const file='public'+manifest.downloadUrl;
+assert.equal(statSync(file).size,manifest.sizeBytes);
+assert.equal(createHash('sha256').update(readFileSync(file)).digest('hex'),manifest.sha256);
+assert.ok(statSync('public'+manifest.sourceDownloadUrl).size>100000);
+console.log(`Verified Agent ${manifest.version} installer hash, size, source download and uncached update routes.`);

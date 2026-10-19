@@ -77,6 +77,7 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
   const setupStartedAt = useRef(0);
   const expectedAgentId = useRef<string | null>(null);
   const expectedVersion = useRef('');
+  const alreadyConnectedAgents = useRef(new Map<string, string>());
   const [updating, setUpdating] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -101,6 +102,7 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
       const ready = result.agents.find((item) => item.connected && item.usable && !item.revokedAt
         && (!expectedAgentId.current || item.id === expectedAgentId.current)
         && Boolean(item.lastSeenAt && new Date(item.lastSeenAt).getTime() >= setupStartedAt.current)
+        && alreadyConnectedAgents.current.get(item.id) !== item.agentVersion
         && versionAtLeast(item.agentVersion, expectedVersion.current));
       if (!ready) return;
       stopPolling();
@@ -120,7 +122,13 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
       setUpdating(false);
       setNotice('');
       setupStartedAt.current = Date.now();
-      expectedAgentId.current = connectedAgent?.id ?? null;
+      // An installer may be connecting a replacement computer. Only an in-place
+      // update below is tied to the registration shown before setup started.
+      expectedAgentId.current = null;
+      const beforeSetup = await apiRequest<{ agents: DesktopAgent[] }>('/api/settings/desktop-agents');
+      alreadyConnectedAgents.current = new Map(beforeSetup.agents
+        .filter(item => item.connected && item.usable && !item.revokedAt)
+        .map(item => [item.id, item.agentVersion]));
       const result = await apiRequest<{ release: Release; expiresAt: string }>('/api/settings/desktop-agents/setup', { method: 'POST' });
       setRelease(result.release);
       expectedVersion.current = result.release.version;
@@ -153,6 +161,7 @@ export default function AgentSetupFlow({ connectedAgent = null, compact = false,
         return;
       }
       expectedAgentId.current = agent.id;
+      alreadyConnectedAgents.current = new Map([[agent.id, agent.agentVersion]]);
       expectedVersion.current = latest.version;
       setupStartedAt.current = Date.now();
       setState('setting_up');

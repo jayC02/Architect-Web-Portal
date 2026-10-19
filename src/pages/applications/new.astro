@@ -225,6 +225,7 @@ const formatDate = (date: Date) =>
 <script>
   import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
   import {
+    applicationFileSha256,
     createSingleFlight,
     retryTransientUpload,
     runUploadQueue,
@@ -416,6 +417,7 @@ const formatDate = (date: Date) =>
     updateProgress();
     try {
       const currentDraftId = await ensureDraft();
+      const clientSha256 = await applicationFileSha256(file);
       const documentId = await retryTransientUpload(async () => {
         const intent = await api<{
           document: { id: string; uploadStatus: string };
@@ -425,6 +427,7 @@ const formatDate = (date: Date) =>
           filename: file.name,
           mimeType: file.type || 'application/pdf',
           size: file.size,
+          clientSha256,
         });
         if (intent.storage.warning) showError('Document storage is nearly full.');
         if (intent.storage.blocked) {

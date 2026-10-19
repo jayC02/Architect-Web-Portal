@@ -1,6 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
+import { documentContentDisposition } from '@/lib/server/content-disposition';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
@@ -9,8 +10,6 @@ import { withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
 import { removeApplicationDraftDocument } from '@/server/services/application-draft-files.service';
-
-const safeFilename = (filename: string) => filename.replace(/[\r\n"\\]/g, '_');
 
 const routeIds = (context: Parameters<APIRoute>[0]) => {
   const draftId = context.params.id;
@@ -41,7 +40,7 @@ export const GET: APIRoute = (context) =>
       status: 200,
       headers: {
         'content-type': document.mimeType || 'application/octet-stream',
-        'content-disposition': `inline; filename="${safeFilename(document.originalFilename)}"`,
+        'content-disposition': documentContentDisposition('inline', document.originalFilename),
         'x-content-type-options': 'nosniff',
         'cache-control': 'private, max-age=60',
       },

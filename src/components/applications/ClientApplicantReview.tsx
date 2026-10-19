@@ -16,6 +16,7 @@ type Props = {
   issueFor: (key: string) => string | undefined;
   onLookupPending: (pending: boolean) => void;
   onVisibilityChange: (visible: boolean) => void;
+  paused?: boolean;
 };
 const addressKeys = ['buildingNumber', 'addressLine1', 'addressLine2', 'townCity', 'postcode', 'country'] as const;
 const emptyPerson = (): ReviewPerson => ({ clientType: 'INDIVIDUAL', displayName: null, title: null, firstName: null,
@@ -98,7 +99,7 @@ function PersonDetails({ person, prefix, onChange, issueFor, readOnly, site, use
   </>;
 }
 
-export default function ClientApplicantReview({ draft, review, onChange, issueFor, onLookupPending, onVisibilityChange }: Props) {
+export default function ClientApplicantReview({ draft, review, onChange, issueFor, onLookupPending, onVisibilityChange, paused = false }: Props) {
   const [clients, setClients] = useState<ReviewClient[]>([]);
   const [pickerLoading, setPickerLoading] = useState(true);
   const [pickerError, setPickerError] = useState('');
@@ -152,6 +153,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
 
   // Read the organisation-scoped directory. Stale responses never replace edits or a newer choice.
   useEffect(() => {
+    if (paused) return;
     if (!lookup) { setMatchNotice(''); onLookupPending(false); return; }
     const controller = new AbortController();
     const snapshot = reviewPersonKey(current.current.review.client);
@@ -189,7 +191,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
       } finally { if (!controller.signal.aborted) onLookupPending(false); }
     }, !selectedId ? 300 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [lookup, selectedId, retry, onLookupPending]);
+  }, [lookup, selectedId, retry, onLookupPending, paused]);
 
   useEffect(() => {
     if (!selectedId) return;
