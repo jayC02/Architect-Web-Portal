@@ -34,7 +34,7 @@ const tx: any = {
   automationJobEvent: { upsert: async () => { releases++; } },
   agentRegistration: { updateMany: async () => ({ count: 1 }) },
 };
-assert.equal(await releaseAgentExecution(tx, 'org_a', 'agent_a', 'job_a', 'wrong'), false);
+assert.equal(await releaseAgentExecution(tx, 'org_a', 'agent_a', 'job_a', 'wrong'), true, 'an absent old execution is acknowledged without releasing another owner');
 assert.equal(releases, 0);
 assert.equal(await releaseAgentExecution(tx, 'org_a', 'agent_a', 'job_a', 'correct'), true);
 assert.equal(releases, 1);

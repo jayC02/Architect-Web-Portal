@@ -13,7 +13,7 @@ export const clientReviewFixture = (): ApplicationDraftResponse => {
   return {
     id: 'concept-a-review', status: 'NEEDS_REVIEW', notes: null, suggestedApplicationType: 'HOUSEHOLDER_PLANNING',
     selectedApplicationType: 'HOUSEHOLDER_PLANNING', prepared: null, issues: [],
-    analysis: { phase: 'complete', total: 1, completed: 1, message: 'Prepared' },
+    analysis: { phase: 'complete', total: 1, completed: 1, attentionCount: 0, message: 'Prepared' },
     expiresAt: '2027-01-01T00:00:00Z', committedAt: null, createdAt: '2026-10-14T00:00:00Z', updatedAt: '2026-10-14T00:00:00Z', result: null,
     review: {
       selectedApplicationType: 'HOUSEHOLDER_PLANNING', projectMode: 'create', existingProjectId: null,

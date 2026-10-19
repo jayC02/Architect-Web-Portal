@@ -32,12 +32,17 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (body.state !== 'READY' && body.currentJobId && body.agentRunId) {
-      const cancelled = await tx.automationJob.findFirst({
+      const owned = await tx.automationJob.findFirst({
         where: { id: body.currentJobId, organisationId: agent.organisationId,
-          claimedByAgentId: agent.id, agentRunId: body.agentRunId, status: AutomationJobStatus.CANCELLED },
-        select: { id: true, agentRunId: true },
+          claimedByAgentId: agent.id, agentRunId: body.agentRunId },
+        select: { status: true },
       });
-      if (cancelled) return [{ type: 'CANCEL_JOB', jobId: cancelled.id, agentRunId: cancelled.agentRunId }];
+      // A removed project or replaced claim must stop its old worker too. The
+      // command names only the execution reported by this authenticated Agent;
+      // it never cancels or renews a newer owner's job.
+      if (!owned || owned.status === AutomationJobStatus.CANCELLED) {
+        return [{ type: 'CANCEL_JOB', jobId: body.currentJobId, agentRunId: body.agentRunId }];
+      }
       await tx.automationJob.updateMany({
         where: {
           id: body.currentJobId,

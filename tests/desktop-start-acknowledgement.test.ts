@@ -31,6 +31,7 @@ function harness(status = 'CLAIMED', expired = false) {
     '@/server/services/desktop-execution.service': { lockOrganisationExecution: async () => {} },
     '@/server/services/automation-lifecycle.service': { assertAutomationJobTransition },
     '@/server/services/prepared-application-review.service': {},
+    '@/server/services/automation-state-model.service': { recordAutomationOwnership: async () => {} },
   };
   const exports: any = {};
   vm.runInNewContext(compiled, { exports, require: (name: string) => { assert.ok(name in modules, name); return modules[name]; }, Date, console });

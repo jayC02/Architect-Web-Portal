@@ -46,12 +46,20 @@ export const releaseAgentExecution = async (
     select: { id: true, status: true },
   });
   if (!job) {
-    // An expired, unstarted claim may already have been safely requeued.
-    // Acknowledge that no slot remains without releasing any newer owner.
-    return Boolean(await tx.automationJob.findFirst({
-      where: { id: jobId, organisationId, status: AutomationJobStatus.READY, claimedByAgentId: null, claimedDeviceId: null, agentRunId: null },
-      select: { id: true },
-    }));
+    // This exact execution no longer exists: the project may have been deleted,
+    // or an unstarted claim expired and was reassigned. The old Agent must be
+    // allowed to forget it without changing the job or any newer execution.
+    const owner = await tx.automationJob.findFirst({
+      where: { id: jobId, organisationId },
+      select: { claimedByAgentId: true, agentRunId: true },
+    });
+    if (!owner || owner.claimedByAgentId !== agentId || !owner.agentRunId) {
+      await tx.agentRegistration.updateMany({
+        where: { id: agentId, organisationId, currentJobId: jobId },
+        data: { currentJobId: null, operatingState: 'READY' },
+      });
+    }
+    return true;
   }
   const releasable: AutomationJobStatus[] = [
     AutomationJobStatus.AWAITING_PORTAL_REVIEW, AutomationJobStatus.COMPLETED,

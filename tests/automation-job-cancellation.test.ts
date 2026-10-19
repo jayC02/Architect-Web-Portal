@@ -101,7 +101,8 @@ assert.equal(unstarted.state().events.filter((event: any) => event.eventType ===
 const running = harness('IN_PROGRESS');
 assert.equal((await running.cancel()).pending, true);
 await assert.rejects(assertExecutionAvailable(running.tx, 'org'), /Another application/);
-assert.equal(await releaseAgentExecution(running.tx, 'org', 'agent', jobId, 'wrong-run'), false);
+assert.equal(await releaseAgentExecution(running.tx, 'org', 'agent', jobId, 'wrong-run'), true, 'only the absent old run is acknowledged');
+assert.equal(running.state().currentJobId, jobId, 'acknowledging an old run must not clear the current run');
 await assert.rejects(assertExecutionAvailable(running.tx, 'org'), /Another application/);
 assert.equal(await releaseAgentExecution(running.tx, 'org', 'agent', jobId, run), true);
 await assertExecutionAvailable(running.tx, 'org');
@@ -145,7 +146,10 @@ const pulse = (agentRunId: string) => heartbeat({ request: new Request('https://
   }),
 }) });
 assert.deepEqual((await (await pulse(run)).json()).commands, [{ type: 'CANCEL_JOB', jobId, agentRunId: run }]);
-assert.deepEqual((await (await pulse('22222222-2222-4222-8222-222222222222')).json()).commands, [], 'cancellation cannot target a newer or foreign run');
+const obsoleteRun = '22222222-2222-4222-8222-222222222222';
+assert.deepEqual((await (await pulse(obsoleteRun)).json()).commands, [{ type: 'CANCEL_JOB', jobId, agentRunId: obsoleteRun }], 'stop only the obsolete local identity reported by this Agent');
+assert.equal(route.state().job.agentRunId, run, 'the authoritative current run is never replaced');
+assert.equal(route.state().events.filter((event: any) => event.eventType === 'execution_released').length, 1, 'the obsolete heartbeat cannot release the real run');
 const restarted = harness('IN_PROGRESS'); await restarted.cancel();
 const reconnect = load('src/pages/api/desktop/heartbeat.ts', { ...route.modules,
   '@/lib/db/prisma': { prisma: restarted.database },
