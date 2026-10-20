@@ -67,7 +67,7 @@ assert.match(reviewComponent, /event\.key === 'Escape'/);
 assert.match(reviewComponent, />\s*Cancel\s*<\/button>/);
 assert.match(reviewComponent, /const previousReview = reviewRef\.current/);
 assert.match(reviewComponent, /const saved = await persistCurrentReview\(\)/, 'initial review and later corrections use the existing save path');
-assert.match(reviewComponent, /reviewRef\.current = previousReview/, 'failed category saves restore the last saved review');
+assert.doesNotMatch(reviewComponent, /reviewRef\.current = previousReview/, 'failed category saves must not restore a whole stale review over later edits');
 assert.equal(
   (reviewComponent.match(/void changeDocumentType\(document\.id, event\.target\.value\)/g) ?? []).length,
   2,

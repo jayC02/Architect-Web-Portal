@@ -159,20 +159,18 @@ assert.ok(
 );
 
 const reviewUi = fs.readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
-const clientSection = reviewUi.slice(
-  reviewUi.indexOf('title="Client and applicant"'),
-  reviewUi.indexOf('title="Agent and practice"'),
-);
+const clientSection = fs.readFileSync('src/components/applications/ClientApplicantReview.tsx', 'utf8');
 const confirmationSection = reviewUi.slice(
   reviewUi.indexOf('title="Confirmations"'),
-  reviewUi.indexOf('panel sticky bottom'),
 );
-assert.match(clientSection, /Client and applicant relationship/);
-assert.match(reviewUi, /Identity and contact/);
-assert.match(reviewUi, /Address details/);
-assert.match(clientSection, /<PersonFields[\s\S]*prefix="client"/);
-assert.match(clientSection, /Client is also the applicant/);
-assert.match(clientSection, /Client address is the same as the site address/);
+assert.match(reviewUi, /<ClientApplicantReview/, 'the main review uses the shared client/applicant form');
+assert.match(clientSection, /Is the client also the applicant\?/);
+assert.match(clientSection, /<h4>Identity<\/h4>/);
+assert.match(clientSection, /<h4>Contact<\/h4>/);
+assert.match(clientSection, /<h4>Address<\/h4>/);
+assert.match(clientSection, /<PersonDetails[\s\S]*prefix="client"/);
+assert.match(clientSection, /clientAddressSameAsSite/);
+assert.match(clientSection, /Use site address/);
 assert.doesNotMatch(clientSection, /EvidenceList|View source evidence/);
 assert.doesNotMatch(confirmationSection, /EvidenceList|View source evidence/);
 assert.match(confirmationSection, /Application declarations prepared/);

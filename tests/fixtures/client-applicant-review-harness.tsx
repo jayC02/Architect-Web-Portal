@@ -22,4 +22,4 @@ if (scenario === 'separate') {
 }
 draft.issues = evaluateClientApplicationDraftReadiness(draft.review!);
 createRoot(document.getElementById('root')!).render(<ApplicationDraftReview initialDraft={draft}
-  documentTypes={[{value:'LOCATION_PLAN',label:'Location Plan'}]} typeOfWorkOptions={[]} certifierPresets={[]} />);
+  documentTypes={[{value:'LOCATION_PLAN',label:'Location Plan'},{value:'OTHER',label:'Other'}]} typeOfWorkOptions={[]} certifierPresets={[]} />);

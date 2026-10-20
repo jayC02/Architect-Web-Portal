@@ -3,7 +3,7 @@ import { Check, ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import type { ApplicationDraftResponse } from '@/server/services/application-draft-view.service';
 import {
-  clientDifferences, exactNameClients, personFromDirectory, selectDirectoryClient, reviewPersonKey,
+  exactNameClients, personFromDirectory, selectDirectoryClient, reviewPersonKey,
   type ReviewClient, type ReviewPerson,
 } from '@/lib/clients/application-review';
 import './client-applicant-review.css';
@@ -33,11 +33,6 @@ const preparedPerson = (draft: ApplicationDraftResponse): ReviewPerson => {
   person.displayName ||= person.companyName || [person.firstName, person.lastName].filter(Boolean).join(' ') || null;
   return person;
 };
-const ignoredDefaults = (review: Review, draft: ApplicationDraftResponse): (keyof ReviewPerson)[] => [
-  ...(review.clientAddressSameAsSite ? addressKeys : []),
-  ...Object.entries(draft.prepared?.client ?? {}).filter(([, field]) => field.status === 'default')
-    .map(([key]) => key as keyof ReviewPerson),
-];
 
 function PersonField({ person, name, label, prefix, onChange, issue, required = false, readOnly = false, options }: {
   person: ReviewPerson; name: keyof ReviewPerson; label: string; prefix: string;
@@ -177,14 +172,11 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
         const matches = exactNameClients(latest.review.client, payload.clients);
         if (matches.length === 1 && payload.clients.length < 100) {
           const record = matches[0];
-          const conflicts = clientDifferences(latest.review.client, personFromDirectory(record), ignoredDefaults(latest.review, latest.draft));
-          if (conflicts.length || Object.values(latest.draft.prepared?.client ?? {}).some(field => field.status === 'conflict')) {
-            setMatchNotice('Choose the correct client from the list above.');
-          } else {
-            previousPrepared.current = latest.review.client;
-            latest.onChange(value => value.clientMode === 'create' && reviewPersonKey(value.client) === snapshot
-              ? selectDirectoryClient(value, record) : value, true);
-          }
+          // A unique saved-client match supplies the default details. The
+          // snapshot check above protects corrections entered during lookup.
+          previousPrepared.current = latest.review.client;
+          latest.onChange(value => value.clientMode === 'create' && reviewPersonKey(value.client) === snapshot
+            ? selectDirectoryClient(value, record) : value, true);
         } else if (matches.length > 1) setMatchNotice('Choose the correct client from the list above.');
       } catch (error) {
         if (!controller.signal.aborted) setLookupError(error instanceof Error ? error.message : 'Could not load saved clients.');

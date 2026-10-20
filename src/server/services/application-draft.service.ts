@@ -587,13 +587,18 @@ const buildInitialReview = (
     const previous = existingReview.success
       ? existingReview.data.documents.find((item) => item.id === document.id)
       : undefined;
-    return previous ?? {
+    // Autosave includes new PDFs before analysis has classified them. Their
+    // default Other/IN_REVIEW entry is not an accepted category decision.
+    const placeholder = previous?.documentType === DocumentType.OTHER
+      && previous.documentStatus === DocumentStatus.IN_REVIEW;
+    if (previous && !placeholder) return previous;
+    return {
       id: document.id,
       documentType: document.documentType,
       documentStatus: acceptedByDefault ? DocumentStatus.APPROVED : DocumentStatus.IN_REVIEW,
-      revision: document.revision,
-      drawingNumber: document.drawingNumber,
-      drawingTitle: document.drawingTitle,
+      revision: previous?.revision ?? document.revision,
+      drawingNumber: previous?.drawingNumber ?? document.drawingNumber,
+      drawingTitle: previous?.drawingTitle ?? document.drawingTitle,
     };
   });
 

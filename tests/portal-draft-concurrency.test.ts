@@ -17,7 +17,8 @@ import {test} from 'node:test';
 function harness(commit=false){
  const review=schemas.applicationDraftReviewSchema.parse(clientReviewFixture().review);
  const state:any={id:'draft',organisationId:'org',status:'NEEDS_REVIEW',expiresAt:new Date('2099-01-01'),updatedAt:new Date(),resultingProjectId:null,confirmedData:review,
-  documents:[{id:'location-plan',uploadStatus:'READY',documentType:'LOCATION_PLAN'}]};
+  documents:[{id:'location-plan',uploadStatus:'READY',documentType:'LOCATION_PLAN',originalFilename:'Location plan.pdf',analysisStatus:'SUCCESS',confidence:0.95,
+   revision:null,drawingNumber:null,drawingTitle:null}]};
  let beforeWrite:(()=>void)|undefined;let childWrites=0;let permanentQueries=0;
  const matches=(where:any)=>Object.entries(where).every(([key,value]:[string,any])=>{
   if(value&&typeof value==='object'&&!(value instanceof Date)){
@@ -32,6 +33,7 @@ function harness(commit=false){
    beforeWrite?.();beforeWrite=undefined;if(!matches(where))return {count:0};Object.assign(state,data);return {count:1};
   },update:async({data}:any)=>{Object.assign(state,data);return state;}},
   applicationDraftDocument:{updateMany:async()=>{childWrites++;return {count:1};}},
+  organisationDefaults:{findUnique:async()=>null},
   client:{create:unexpected,findFirst:unexpected},project:{create:unexpected,findFirst:unexpected},
   $transaction:async(fn:any)=>fn(db),
  };
@@ -42,7 +44,9 @@ function harness(commit=false){
   '@/lib/validation/domain':{BUILDING_WARRANT_CONFIRMATION_DEFAULTS},
   '@/lib/addresses/draft-address':{normaliseDraftAddresses},'@/lib/addresses/uk-address':{normaliseUkAddress},
   '@/server/services/application-draft.service':{evaluateApplicationDraftReadiness:()=>[],getApplicationDraftForOrganisation:async()=>structuredClone(state)},
-  '@/server/services/pdf-classification.service':{configuredDocumentAnalysisIdentity:()=>({provider:'test',model:'test'})},
+  '@/server/services/pdf-classification.service':{configuredDocumentAnalysisIdentity:()=>({provider:'test',model:'test'}),classificationDetailsFromAudit:()=>({manualReviewRequired:false})},
+  '@/server/services/site-address-lookup.service':{lookupSiteAddress:async()=>({fields:{},sources:{},status:'incomplete'})},
+  '@/server/services/application-draft-matching.service':{findApplicationDraftMatches:async()=>({clients:[],sites:[],projects:[],strongClient:null,strongSite:null}),matchValuesFromPreparation:()=>({})},
  };
  const file=`src/server/services/application-draft${commit?'-commit':''}.service.ts`;
  const compiled=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -85,4 +89,39 @@ test('a duplicate analysis request cannot mark the active analysis as failed',as
  const h=harness();h.state.status='ANALYSING';
  await assert.rejects(h.api.analyseApplicationDraft('draft','org'),/already being analysed/);
  assert.equal(h.state.status,'ANALYSING');
+});
+
+test('saving a client edit before analysing a newly added PDF does not freeze its placeholder category',async()=>{
+ const h=harness();
+ h.review.client.email='corrected@example.test';
+ Object.assign(h.review.documents[0],{documentType:'OTHER',documentStatus:'IN_REVIEW',revision:'C',drawingNumber:'Architect-12'});
+ Object.assign(h.state.documents[0],{documentType:'OTHER',analysisStatus:'PENDING'});
+ await h.api.saveApplicationDraftReview('draft','org',h.review);
+ // The classifier has now recognised the newly added PDF; synthesis must use it.
+ Object.assign(h.state.documents[0],{documentType:'LOCATION_PLAN',analysisStatus:'SUCCESS',confidence:0.95,drawingTitle:'Detected location plan'});
+ const result=await h.api.prepareApplicationDraft('draft','org');
+ assert.equal(result.review.client.email,'corrected@example.test');
+ assert.equal(result.review.documents[0].documentType,'LOCATION_PLAN');
+ assert.equal(result.review.documents[0].documentStatus,'APPROVED');
+ assert.equal(result.review.documents[0].drawingTitle,'Detected location plan');
+ assert.equal(result.review.documents[0].revision,'C');
+ assert.equal(result.review.documents[0].drawingNumber,'Architect-12');
+});
+
+test('reanalysis preserves an explicitly accepted Other category and drawing edits',async()=>{
+ const h=harness();Object.assign(h.review.documents[0],{documentType:'OTHER',documentStatus:'APPROVED',drawingTitle:'Architect title',revision:'B'});
+ h.state.confirmedData=structuredClone(h.review);
+ const result=await h.api.prepareApplicationDraft('draft','org');
+ assert.equal(result.review.documents[0].documentType,'OTHER');
+ assert.equal(result.review.documents[0].drawingTitle,'Architect title');
+ assert.equal(result.review.documents[0].revision,'B');
+});
+
+test('placeholder recovery does not replace an existing non-Other review category',async()=>{
+ const h=harness();h.review.documents[0].documentStatus='IN_REVIEW';
+ h.state.confirmedData=structuredClone(h.review);
+ h.state.documents[0].documentType='OTHER';
+ const result=await h.api.prepareApplicationDraft('draft','org');
+ assert.equal(result.review.documents[0].documentType,'LOCATION_PLAN');
+ assert.equal(result.review.documents[0].documentStatus,'IN_REVIEW');
 });

@@ -121,7 +121,7 @@ export const reconcileStaleAgentJobs = async (input: {
       leaseExpiresAt: { lte: now },
       status: { in: [AutomationJobStatus.CLAIMED, AutomationJobStatus.IN_PROGRESS] },
     },
-    select: { id: true, organisationId: true, projectId: true, type: true, status: true, claimedByAgentId: true, claimedDeviceId: true },
+    select: { id: true, organisationId: true, projectId: true, type: true, status: true, claimedByAgentId: true, claimedDeviceId: true, agentRunId: true },
     take: 50,
   });
   let returnedReady = 0;
@@ -129,10 +129,21 @@ export const reconcileStaleAgentJobs = async (input: {
   for (const job of expired) {
     await database.$transaction(async (tx) => {
     await lockOrganisationExecution(tx, job.organisationId);
+    // The scan predates this lock. A heartbeat, start, cancellation or replacement
+    // claim can make it obsolete; do not journal an interruption for a newer run.
+    const current = await tx.automationJob.findFirst({
+      where: {
+        id: job.id, organisationId: job.organisationId, status: job.status,
+        claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId,
+        agentRunId: job.agentRunId, leaseExpiresAt: { lte: now },
+      },
+      select: { id: true },
+    });
+    if (!current) return;
     if (job.status === AutomationJobStatus.CLAIMED) {
       await recordAutomationOwnership(tx, { organisationId: job.organisationId, jobId: job.id }, { reason: 'claim_expired', state: 'INTERRUPTED' });
       const released = await tx.automationJob.updateMany({
-        where: { id: job.id, status: AutomationJobStatus.CLAIMED, claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId, leaseExpiresAt: { lte: now } },
+        where: { id: job.id, organisationId: job.organisationId, status: AutomationJobStatus.CLAIMED, claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId, agentRunId: job.agentRunId, leaseExpiresAt: { lte: now } },
         data: {
           status: AutomationJobStatus.READY,
           claimedByAgentId: null,
@@ -152,7 +163,7 @@ export const reconcileStaleAgentJobs = async (input: {
       return;
     }
     const stopped = await tx.automationJob.updateMany({
-      where: { id: job.id, status: AutomationJobStatus.IN_PROGRESS, claimedByAgentId: job.claimedByAgentId, leaseExpiresAt: { lte: now } },
+      where: { id: job.id, organisationId: job.organisationId, status: AutomationJobStatus.IN_PROGRESS, claimedByAgentId: job.claimedByAgentId, claimedDeviceId: job.claimedDeviceId, agentRunId: job.agentRunId, leaseExpiresAt: { lte: now } },
       data: {
         status: AutomationJobStatus.NEEDS_REVIEW,
         leaseExpiresAt: null,

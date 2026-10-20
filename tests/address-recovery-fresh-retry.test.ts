@@ -12,9 +12,11 @@ assert.match(correctionRoute, /requireDesktopAuth/, 'postcode correction require
 assert.match(correctionRoute, /assertDesktopJobAccess/, 'job-scoped tokens cannot correct another job');
 assert.match(
   restartService,
-  /claimedDeviceId: input\.desktopAccess\.id[\s\S]*oldJob\.status !== AutomationJobStatus\.FAILED_RETRYABLE/,
-  'only the device-owned safely failed run can request correction',
+  /claimedDeviceId: input\.desktopAccess\.id/,
+  'the desktop correction can only read its device-owned attempt',
 );
+assert.match(restartService, /recovery\.retrySafe/, 'retry eligibility uses the shared failure recovery contract');
+assert.match(restartService, /!input\.desktopAccess[\s\S]*ADDRESS_RESOLUTION_FAILED[\s\S]*SITE_DATA_INVALID/, 'postcode correction still requires a desktop-owned address failure');
 assert.match(
   restartService,
   /automationJobSnapshotV2Schema\.safeParse\(oldJob\.dataSnapshot\)[\s\S]*snapshot\.data\.site\.id/,

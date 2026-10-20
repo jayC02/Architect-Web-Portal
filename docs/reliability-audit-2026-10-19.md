@@ -2,6 +2,10 @@
 
 This pass found and fixed additional failures in document uploads, draft review, project creation, Agent setup and queue interaction. The changes are local and ready for deployment with Agent **4.2.8**. No customer automation was rerun, no government proposal was created, and no application was submitted or paid for during this audit.
 
+Follow-up: the [20 October regression review](<D:/Jayveer/Documents/websites/Architect Web Portal/docs/regression-review-2026-10-20.md>) caught and corrected a saved-category interaction introduced by review preservation, and added lost-response recovery for document removal. Its additional portal corrections must be deployed too.
+
+The subsequent [full reliability recheck](<D:/Jayveer/Documents/websites/Architect Web Portal/docs/full-reliability-recheck-2026-10-20.md>) records the completed cross-check of earlier fixes and further corrections.
+
 Production was checked read-only in Chrome: the sign-in page loaded without console errors, and `/api/desktop/releases/latest` still advertised **4.2.7**. The authenticated portal flows below were verified with the actual React components against isolated API fixtures; this was not a signed-in production acceptance test.
 
 | Priority | Failure found | Change and evidence |

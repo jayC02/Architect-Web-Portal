@@ -507,6 +507,7 @@ export default function ApplicationDraftReview({
   const autosaveTimer = useRef<number | null>(null);
   const autosaveInFlight = useRef<Promise<boolean> | null>(null);
   const lastSavedReview = useRef(initialDraft.review ? JSON.stringify(initialDraft.review) : '');
+  const draftSynchronised = useRef(false);
   const firstReviewRender = useRef(true);
   const saveImmediately = useRef(false);
   const categorySaveInFlight = useRef<string | null>(null);
@@ -522,6 +523,11 @@ export default function ApplicationDraftReview({
   }, [issues]);
 
   useEffect(() => {
+    // A user can type after a save is acknowledged but before this response
+    // effect runs. Keep those newer edits; the autosave loop will persist them.
+    const unsavedEdits = reviewRef.current && JSON.stringify(reviewRef.current) !== lastSavedReview.current;
+    if (draftSynchronised.current && unsavedEdits) return;
+    draftSynchronised.current = true;
     if (draft.review) {
       const resolved = reviewWithResolvedRoute(draft);
       reviewRef.current = resolved;
@@ -803,9 +809,22 @@ export default function ApplicationDraftReview({
     if (saved) {
       setEditingDocumentId(null);
     } else {
-      reviewRef.current = previousReview;
-      setReview(previousReview);
-      setIssues(evaluateClientApplicationDraftReadiness(previousReview));
+      const currentReview = reviewRef.current;
+      const previousDocument = previousReview.documents.find(document => document.id === id);
+      if (currentReview && previousDocument) {
+        // Roll back this category, keeping fields edited while its save waited.
+        const restored = {
+          ...currentReview,
+          documents: currentReview.documents.map(document => document.id === id ? {
+            ...document,
+            documentType: previousDocument.documentType,
+            documentStatus: previousDocument.documentStatus,
+          } : document),
+        };
+        reviewRef.current = restored;
+        setReview(restored);
+        setIssues(evaluateClientApplicationDraftReadiness(restored));
+      }
     }
     categorySaveInFlight.current = null;
     setSavingCategoryId(null);
@@ -978,6 +997,16 @@ export default function ApplicationDraftReview({
       setWorking('');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The document could not be removed.');
+      try {
+        // A DELETE can succeed even if its response is lost. Recover from the
+        // current server state before another edit or removal uses this list.
+        const payload = await apiJson<{ draft: ApplicationDraftResponse }>(`/api/application-drafts/${draft.id}`);
+        setDraft(payload.draft);
+        if (!payload.draft.documents.some(candidate => candidate.id === document.id)) {
+          setError('');
+          setNotice(`${document.originalFilename} was removed.`);
+        }
+      } catch { /* Keep saved details visible while the connection is unavailable. */ }
       setWorking('');
     }
   };

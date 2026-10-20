@@ -25,7 +25,7 @@ const server=http.createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({channel:'chrome',headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
-let draft,failSave,failAnalyse,transientUploads,actions,intents,patchDelay,failFinalise,uploadNames;
+let draft,failSave,failAnalyse,transientUploads,actions,intents,patchDelay,failFinalise,uploadNames,loseRemoveResponse;
 let setupAgents=[],setupPolls=0;
 const errors=[];const checks=[];
 page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
@@ -40,7 +40,10 @@ await page.route('**/api/**',async route=>{
   if(method==='PATCH'){
    if(patchDelay)await new Promise(resolve=>setTimeout(resolve,patchDelay));
    if(failSave)return reply(503,{error:'Save unavailable'});
-   draft.review=request.postDataJSON().review;actions.push('save');return reply(200,{draft,issues:[]});
+   const review=request.postDataJSON().review;
+   const ids=new Set(draft.documents.map(document=>document.id));
+   if(review.documents.length!==ids.size||review.documents.some(document=>!ids.has(document.id)))return reply(400,{error:'Review every document in this application draft.'});
+   draft.review=review;actions.push('save');return reply(200,{draft,issues:[]});
   }
   return reply(200,{draft});
  }
@@ -70,14 +73,16 @@ await page.route('**/api/**',async route=>{
   draft.status='UPLOADING';actions.push('finalise');return reply(200,{ok:true});
  }
  if(method==='DELETE'&&url.pathname.endsWith('/documents/location-plan')){
-  actions.push(`remove:${draft.review.client.email}`);draft.documents=[];draft.review.documents=[];draft.status='UPLOADING';return reply(200,{ok:true});
+  actions.push(`remove:${draft.review.client.email}`);draft.documents=[];draft.review.documents=[];draft.status='UPLOADING';
+  if(loseRemoveResponse)return route.abort('failed');
+  return reply(200,{ok:true});
  }
  return reply(404,{error:`Unexpected fixture request ${method} ${url.pathname}`});
 });
 const email=()=>page.locator('.client-review').getByRole('textbox',{name:'client Email',exact:true});
 const waitFor=async(predicate,message)=>{for(let i=0;i<150;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,30));}throw new Error(message);};
 const open=async()=>{
- draft=clientReviewFixture();failSave=false;failAnalyse=false;failFinalise=false;transientUploads=0;patchDelay=0;actions=[];intents=[];uploadNames=new Map();
+ draft=clientReviewFixture();failSave=false;failAnalyse=false;failFinalise=false;loseRemoveResponse=false;transientUploads=0;patchDelay=0;actions=[];intents=[];uploadNames=new Map();
  await page.goto(`http://127.0.0.1:${server.address().port}`);await email().waitFor();
  await page.waitForTimeout(750);
  await page.locator('summary').filter({hasText:'Documents'}).click();
@@ -93,6 +98,61 @@ try{
  check('Reanalysis flushes the most recent edit before starting',actions.indexOf('save')<actions.indexOf('analyse:before-analysis@example.test'));
  await waitFor(async()=>await email().isEnabled(),'review did not unlock');
  check('Reanalysis preserves the edit on screen',await email().inputValue()==='before-analysis@example.test');
+
+ await open();patchDelay=250;
+ const firstSave=page.waitForRequest(request=>request.method()==='PATCH'&&request.url().endsWith('/concept-a-review'));
+ await email().fill('first-edit@example.test');await firstSave;
+ await email().fill('latest-edit@example.test');
+ await waitFor(()=>draft.review.client.email==='latest-edit@example.test','latest edit was not saved after the earlier response');
+ check('An earlier autosave response does not replace newer typing',await email().inputValue()==='latest-edit@example.test');
+
+ await open();patchDelay=180;
+ const relationshipSave=page.waitForRequest(request=>request.method()==='PATCH'&&request.url().endsWith('/concept-a-review'));
+ await page.locator('.client-review').getByRole('radio',{name:'No, a different applicant'}).check();await relationshipSave;
+ await page.locator('.client-review').getByRole('radio',{name:'Yes, use the client'}).check();
+ await email().fill('relationship-edit@example.test');
+ await waitFor(()=>draft.review.client.email==='relationship-edit@example.test','typing after a relationship change was not saved');
+ check('Slow relationship saves retain the latest email and same-client applicant',await email().inputValue()==='relationship-edit@example.test'&&!draft.review.applicantDifferentFromClient&&draft.review.applicant.email==='relationship-edit@example.test');
+
+ await open();
+ await page.evaluate(()=>{
+  const decode=Response.prototype.json;
+  Response.prototype.json=function(){
+   return decode.call(this).then(payload=>{
+    if(payload?.draft?.review?.client?.email==='acknowledged@example.test'){
+     // Interleave a real input event after acknowledgement, before React's
+     // pending response render/effect can replace the controlled form values.
+     let remaining=4;
+     const type=()=>{
+      if(--remaining>0){queueMicrotask(type);return;}
+      const field=document.querySelector('[aria-label="client Email"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,'typed-after-ack@example.test');
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+      window.__interleavedTypingFired=true;
+     };
+     queueMicrotask(type);
+    }
+    return payload;
+   });
+  };
+ });
+ await email().fill('acknowledged@example.test');
+ await waitFor(()=>page.evaluate(()=>window.__interleavedTypingFired),'interleaved input did not run');
+ await waitFor(()=>draft.review.client.email==='typed-after-ack@example.test','save acknowledgement replaced newer input before synchronization');
+ check('Typing between save acknowledgement and form synchronization survives',await email().inputValue()==='typed-after-ack@example.test');
+
+ await open();failSave=true;patchDelay=250;
+ await page.getByRole('button',{name:'Change category for Proposed plans.pdf',exact:true}).click();
+ const categorySave=page.waitForRequest(request=>request.method()==='PATCH'&&request.url().endsWith('/concept-a-review'));
+ await page.getByRole('combobox',{name:'Change category for Proposed plans.pdf',exact:true}).selectOption('OTHER');
+ await categorySave;await email().fill('edited-during-category-save@example.test');
+ await waitFor(async()=>await page.getByRole('combobox',{name:'Change category for Proposed plans.pdf',exact:true}).isEnabled(),'failed category save did not finish');
+ check('A failed category save preserves edits entered in other fields',await email().inputValue()==='edited-during-category-save@example.test');
+ check('A failed category save restores the previous category',await page.getByRole('combobox',{name:'Change category for Proposed plans.pdf',exact:true}).inputValue()==='LOCATION_PLAN');
+ failSave=false;
+ await page.getByRole('button',{name:'Analyse again',exact:true}).click();
+ await waitFor(()=>actions.some(action=>action==='analyse:edited-during-category-save@example.test'),'retained edits could not be saved after the category failure');
+ check('Recovered category failure saves the retained edits on retry',draft.review.client.email==='edited-during-category-save@example.test'&&draft.review.documents[0].documentType==='LOCATION_PLAN');
 
  await open();failSave=true;
  await email().fill('unsaved@example.test');await page.getByRole('button',{name:'Analyse again',exact:true}).click();
@@ -110,6 +170,16 @@ try{
  check('Removing a document first saves current details',actions.indexOf('save')<actions.indexOf('remove:before-remove@example.test'));
  await waitFor(async()=>await email().isEnabled(),'review disappeared after document removal');
  check('Changing documents retains the review controls',await email().inputValue()==='before-remove@example.test');
+
+ await open();loseRemoveResponse=true;await email().fill('lost-response@example.test');
+ await page.getByRole('button',{name:'Remove Proposed plans.pdf',exact:true}).click();
+ await waitFor(()=>actions.some(action=>action.startsWith('remove:')),'remove did not reach the server');
+ await waitFor(async()=>await email().isEnabled(),'review did not unlock after lost response');
+ check('A successful removal with a lost response reconciles the actual document list',await page.getByRole('button',{name:'Remove Proposed plans.pdf',exact:true}).count()===0);
+ check('Lost removal responses preserve saved edits',await email().inputValue()==='lost-response@example.test');
+ await email().fill('after-recovery@example.test');
+ await waitFor(()=>draft.review.client.email==='after-recovery@example.test','editing could not resume after recovering the lost response');
+ check('Further edits save against the reconciled document list',draft.review.documents.length===0);
 
  await open();failSave=true;await email().fill('keep-me@example.test');
  await page.getByRole('button',{name:'Remove Proposed plans.pdf',exact:true}).click();await page.getByText('Save unavailable',{exact:true}).waitFor();

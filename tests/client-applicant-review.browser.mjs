@@ -98,12 +98,11 @@ try{
   await open('complete',[savedClient,{...savedClient,id:'duplicate',email:'other@example.test'}]);
   await client.getByText('Choose the correct client from the list above.').waitFor();
   check('Duplicate names are not automatically linked',!patches.some(p=>p.clientMode==='existing'));
-  await open('complete',[{...savedClient,email:'different@example.test'}]);
-  await client.getByText('Choose the correct client from the list above.').waitFor();
-  check('Conflicting email is not silently replaced',await input('Email').inputValue()==='laura@example.test');
-  await client.getByRole('combobox',{name:'Search existing clients'}).selectOption(savedClient.id);
-  await waitFor(()=>patches.some(p=>p.client.email==='different@example.test'),'explicit conflict selection was not saved');
-  check('Explicit conflict selection reuses the saved record',patches.at(-1).clientMode==='existing');
+  await open('complete',[{...savedClient,email:'different@example.test',buildingNumber:'99',addressLine1:'Saved Street'}]);
+  await waitFor(()=>patches.some(p=>p.existingClientId===savedClient.id),'unique saved-client default was not selected when scanned details differed');
+  check('A unique saved client takes precedence over a differing scanned email',await input('Email').inputValue()==='different@example.test');
+  check('A unique saved client supplies its own address',await input('Building number').inputValue()==='99'&&await input('Street').inputValue()==='Saved Street');
+  check('The matched saved record remains the linked client',patches.at(-1).clientMode==='existing');
   await open('missing');
   await input('Email').focus();
   await input('Email').blur();
@@ -181,4 +180,8 @@ try{
   check('No browser runtime errors',errors.length===0);
   await fs.writeFile(path.join(output,'browser-results.json'),JSON.stringify({checks,errors},null,2));
   console.log(`${checks.length} browser checks passed; screenshots in ${output}`);
+}catch(error){
+  await fs.writeFile(path.join(output,'failure.json'),JSON.stringify({message:error.message,email:await input('Email').inputValue().catch(()=>null),patches:patches.slice(-6),errors},null,2));
+  await page.screenshot({path:path.join(output,'failure.png'),fullPage:true});
+  throw error;
 }finally{await browser.close();await new Promise(r=>server.close(r));}
