@@ -12,6 +12,7 @@ import {HttpError} from '../src/lib/utils/http';
 import {clientReviewFixture} from './fixtures/client-applicant-review';
 import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
+import {resolveLocationPlans} from '../src/lib/location-plan';
 
 // Deterministic interleavings against real service functions. These do not replace a PostgreSQL integration test.
 function harness(commit=false){
@@ -39,6 +40,7 @@ function harness(commit=false){
  };
  const modules:any={
   'node:crypto':{randomUUID},'@prisma/client':enums,'@/lib/db/prisma':{prisma:db},
+  '@/lib/location-plan':{resolveLocationPlans},
   '@/lib/utils/http':{HttpError},'@/lib/application-upload-limits':{APPLICATION_UPLOAD_LIMITS},
   '@/lib/validation/application-draft':schemas,
   '@/lib/validation/domain':{BUILDING_WARRANT_CONFIRMATION_DEFAULTS},

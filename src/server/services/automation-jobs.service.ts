@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { resolveLocationPlans } from '@/lib/location-plan';
 import {
   AutomationJobSourceType,
   AutomationJobType,
@@ -191,7 +192,7 @@ const documentRelevance = (type: DocumentType) => {
   ];
 };
 
-const mapDocument = (document: ProjectDocument) => ({
+const mapDocument = (document: ProjectDocument, locationPlanId?: string) => ({
   id: document.id,
   originalFilename: document.originalName || document.fileName,
   filename: document.originalName || document.fileName,
@@ -205,7 +206,7 @@ const mapDocument = (document: ProjectDocument) => ({
   classificationSource: document.sortSource,
   confidence: document.sortConfidence,
   reviewState: document.status,
-  required: document.type === DocumentType.LOCATION_PLAN,
+  required: document.type === DocumentType.LOCATION_PLAN || document.id === locationPlanId,
   relevance: documentRelevance(document.type),
   downloadRef: { documentId: document.id },
   updatedAt: document.updatedAt.toISOString(),
@@ -419,6 +420,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         updatedAt: null,
       };
 
+  const locationPlanId = resolveLocationPlans(documents, (document) => document.type)[0]?.id;
   const baseSnapshot = {
     contractVersion: 'architectpro.automation-job' as const,
     snapshotVersion: 2 as const,
@@ -523,7 +525,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       feeCalculation,
       updatedAt: asIso(warrant?.updatedAt),
     },
-    documents: documents.map(mapDocument),
+    documents: documents.map((document) => mapDocument(document, locationPlanId)),
   };
 
   const preflight = evaluateAutomationPreflight(baseSnapshot);

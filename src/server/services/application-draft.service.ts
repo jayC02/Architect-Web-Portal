@@ -1,4 +1,5 @@
 import { normaliseUkAddress } from '@/lib/addresses/uk-address';
+import { resolveLocationPlans } from '@/lib/location-plan';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import { lookupSiteAddress } from '@/server/services/site-address-lookup.service';
 import { createHash } from 'node:crypto';
@@ -823,7 +824,7 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     }
   }
 
-  const locationPlans = review.documents.filter((document) => document.documentType === DocumentType.LOCATION_PLAN);
+  const locationPlans = resolveLocationPlans(review.documents, (document) => document.documentType);
   if (locationPlans.length !== 1) {
     issues.push({
       key: 'documents.locationPlan',

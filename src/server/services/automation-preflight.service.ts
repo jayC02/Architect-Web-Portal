@@ -1,4 +1,5 @@
 import { AutomationJobType, DocumentStatus, DocumentType } from '@prisma/client';
+import { resolveLocationPlans } from '@/lib/location-plan';
 
 type Issue = {
   code: string;
@@ -91,7 +92,7 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   requireValue('applicant.address.townCity', snapshot.applicant.address.townCity, 'Add the applicant town or city.');
   requireValue('applicant.address.postcode', snapshot.applicant.address.postcode, 'Add the applicant postcode.');
 
-  const locationPlans = snapshot.documents.filter((document) => document.categoryKey === DocumentType.LOCATION_PLAN);
+  const locationPlans = resolveLocationPlans(snapshot.documents, (document) => document.categoryKey);
   const locationPlanStatus = locationPlans.some((document) => document.reviewState !== DocumentStatus.DRAFT)
     ? 'REVIEWED'
     : locationPlans.length

@@ -7,6 +7,10 @@ import '../../src/styles/global.css';
 const scenario = new URLSearchParams(location.search).get('state');
 const draft = clientReviewFixture();
 if (scenario === 'restored') draft.review = JSON.parse(sessionStorage.getItem('saved-review')!);
+if (scenario === 'site-plan') {
+  draft.review!.documents[0].documentType = 'SITE_PLAN';
+  draft.documents[0].documentType = 'SITE_PLAN';
+}
 if (scenario === 'missing' || scenario === 'auto' || scenario === 'delayed') {
   draft.review!.client.email = null;
   for (const key of ['buildingNumber', 'addressLine1', 'townCity', 'postcode'] as const) draft.review!.client[key] = null;
@@ -22,4 +26,4 @@ if (scenario === 'separate') {
 }
 draft.issues = evaluateClientApplicationDraftReadiness(draft.review!);
 createRoot(document.getElementById('root')!).render(<ApplicationDraftReview initialDraft={draft}
-  documentTypes={[{value:'LOCATION_PLAN',label:'Location Plan'},{value:'OTHER',label:'Other'}]} typeOfWorkOptions={[]} certifierPresets={[]} />);
+  documentTypes={[{value:'LOCATION_PLAN',label:'Location Plan'},{value:'SITE_PLAN',label:'Site / Block Plan'},{value:'BLOCK_PLAN',label:'Site / Block Plan'},{value:'OTHER',label:'Other'}]} typeOfWorkOptions={[]} certifierPresets={[]} />);

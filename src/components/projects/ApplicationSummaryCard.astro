@@ -49,7 +49,7 @@ const {
   recoveryContext,
 } = Astro.props;
 ---
-<section id={id} class="flex h-full scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white">
+<section id={id} class="flex min-w-0 scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white [overflow-wrap:anywhere]">
   <header class="flex items-start justify-between gap-4 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
     <div class="flex min-w-0 items-start gap-3">
       <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-moss text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]" aria-hidden="true"><Building2 size={19} strokeWidth={1.8} /></span>
@@ -63,7 +63,7 @@ const {
     </div>
   </header>
 
-  <dl class="grid flex-1 gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
+  <dl class="grid content-start gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
     <div class="min-w-0">
       <dt class="label">Address</dt>
       <dd class="break-words text-sm font-medium leading-6 text-ink">{address}</dd>
@@ -86,7 +86,7 @@ const {
     </div>
   </dl>
 
-  <footer class="mt-auto border-t border-stone-200 bg-moss/[0.035]">
+  <footer class="border-t border-stone-200 bg-moss/[0.035]">
     <DesktopAutomationStatus
       projectId={projectId}
       type={applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_PLANNING : AutomationJobType.BUILDING_WARRANT}

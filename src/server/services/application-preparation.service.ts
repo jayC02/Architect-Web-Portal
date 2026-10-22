@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { AutomationJobType, DocumentStatus, DocumentType, type Prisma } from '@prisma/client';
+import { resolveLocationPlans } from '@/lib/location-plan';
+import { AutomationJobType, DocumentStatus, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import {
@@ -214,7 +215,7 @@ export const buildApplicationPreparationDraft = async (
     });
   }
 
-  const locationPlans = documents.filter((document) => document.type === DocumentType.LOCATION_PLAN);
+  const locationPlans = resolveLocationPlans(documents, (document) => document.type);
   const unresolvedClassifications = documents
     .filter((document) =>
       document.status === DocumentStatus.IN_REVIEW

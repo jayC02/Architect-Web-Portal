@@ -1,4 +1,5 @@
 import ClientApplicantReview from './ClientApplicantReview';
+import { resolveLocationPlans } from '@/lib/location-plan';
 import { applicationFileSha256, retryTransientUpload, runUploadQueue, UploadRequestError } from '@/lib/application-upload-queue';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
@@ -835,7 +836,7 @@ export default function ApplicationDraftReview({
   const building = hasRoute(route, 'building');
   const planning = hasRoute(route, 'planning');
   const draftDocumentsById = new Map(draft.documents.map((document) => [document.id, document]));
-  const locationPlanCount = review.documents.filter((document) => String(document.documentType) === 'LOCATION_PLAN').length;
+  const locationPlanCount = resolveLocationPlans(review.documents, (document) => String(document.documentType)).length;
   const attentionDocumentIds = new Set(
     review.documents
       .filter((document) =>

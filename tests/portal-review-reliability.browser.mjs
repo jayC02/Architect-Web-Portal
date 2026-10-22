@@ -81,9 +81,12 @@ await page.route('**/api/**',async route=>{
 });
 const email=()=>page.locator('.client-review').getByRole('textbox',{name:'client Email',exact:true});
 const waitFor=async(predicate,message)=>{for(let i=0;i<150;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,30));}throw new Error(message);};
-const open=async()=>{
+const open=async(scenario='')=>{
  draft=clientReviewFixture();failSave=false;failAnalyse=false;failFinalise=false;loseRemoveResponse=false;transientUploads=0;patchDelay=0;actions=[];intents=[];uploadNames=new Map();
- await page.goto(`http://127.0.0.1:${server.address().port}`);await email().waitFor();
+ if(scenario==='site-plan'){
+  draft.documents[0].documentType='SITE_PLAN';draft.review.documents[0].documentType='SITE_PLAN';
+ }
+ await page.goto(`http://127.0.0.1:${server.address().port}${scenario?'?state='+scenario:''}`);await email().waitFor();
  await page.waitForTimeout(750);
  await page.locator('summary').filter({hasText:'Documents'}).click();
  await page.getByRole('checkbox',{name:'Show all documents',exact:true}).check();
@@ -91,6 +94,10 @@ const open=async()=>{
 };
 const check=(label,result)=>{assert.ok(result,label);checks.push(label);};
 try{
+ await open('site-plan');
+ check('A reviewed site/block plan clears the missing-location review count',!(await page.locator('summary').filter({hasText:'Documents'}).innerText()).includes('1 to review'));
+ check('A reviewed site/block plan enables project creation',await page.getByRole('button',{name:'Create Project',exact:true}).isEnabled());
+ await page.screenshot({path:path.join(output,'site-plan-fallback.png'),fullPage:true});
  await open();patchDelay=180;
  await email().fill('before-analysis@example.test');
  await page.getByRole('button',{name:'Analyse again',exact:true}).click();

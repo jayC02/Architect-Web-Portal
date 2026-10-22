@@ -1,4 +1,5 @@
 import type { ApplicationDraftReview } from '@/lib/validation/application-draft';
+import { resolveLocationPlans } from '@/lib/location-plan';
 
 export type ClientReadinessIssue = {
   key: string;
@@ -96,7 +97,7 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
       addMissing(issues, 'confirmations', 'confirmations.proposedParkingSpaces', 'Proposed parking spaces', review.confirmations.proposedParkingSpaces, 'Enter the proposed number of parking spaces.');
     }
   }
-  const locationPlans = review.documents.filter((document) => String(document.documentType) === 'LOCATION_PLAN');
+  const locationPlans = resolveLocationPlans(review.documents, (document) => String(document.documentType));
   if (locationPlans.length !== 1) issues.push({ key: 'documents.locationPlan', section: 'documents', label: 'Location Plan', message: locationPlans.length ? 'Keep exactly one current Location Plan.' : 'Choose one Location Plan.' });
   for (const document of review.documents) if (String(document.documentStatus) === 'IN_REVIEW' || String(document.documentStatus) === 'DRAFT') issues.push({ key: `documents.${document.id}`, section: 'documents', label: 'Document review', message: 'Review this document classification before creating the application.' });
   return [...new Map(issues.map((issue) => [issue.key, issue])).values()];
