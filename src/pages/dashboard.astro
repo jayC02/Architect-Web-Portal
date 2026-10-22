@@ -2,7 +2,7 @@
 import AppShell from '@/components/layout/AppShell.astro';
 import PracticeCalendar from '@/components/calendar/PracticeCalendar';
 import DesktopAutomationSetupCard from '@/components/dashboard/DesktopAutomationSetupCard';
-import LiveDataPanel from '@/components/live/LiveDataPanel';
+import DashboardWorkspace from '@/components/dashboard/DashboardWorkspace';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
@@ -11,40 +11,11 @@ if (!auth) return Astro.redirect('/login');
 const selectedRange = Number(Astro.url.searchParams.get('deadlineRange') ?? 14);
 const deadlineRange = [7, 14, 30].includes(selectedRange) ? selectedRange : 14;
 ---
-<AppShell title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <div class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-moss">{auth.organisation.name}</p>
-      <h1 class="mt-2 text-4xl font-semibold tracking-normal text-ink">Dashboard</h1>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      <a href="/projects/new" class="btn btn-secondary">Create manually</a>
-      <a href="/applications/new" class="btn btn-primary gap-2">+ New application</a>
-    </div>
-  </div>
-  <div class="mb-4 flex flex-wrap gap-2">
-    {[
-      { label: 'This week', value: 7 },
-      { label: 'Next 14 days', value: 14 },
-      { label: 'Next 30 days', value: 30 },
-    ].map((option) => (
-      <a
-        href={`/dashboard?deadlineRange=${option.value}`}
-        class:list={[
-          'rounded-full border px-3 py-1.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40',
-          deadlineRange === option.value ? 'border-ink bg-ink text-paper' : 'border-stone-200 bg-stone-50 text-stone-600 hover:bg-white hover:text-ink',
-        ]}
-      >
-        {option.label}
-      </a>
-    ))}
-  </div>
-
-  <LiveDataPanel client:idle variant="dashboard" endpoint={`/api/dashboard/summary?deadlineRange=${deadlineRange}`} />
-
+<AppShell dashboard title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <DashboardWorkspace client:load initialRange={deadlineRange} />
   <DesktopAutomationSetupCard client:idle />
-
-  <div class="mt-6">
-    <PracticeCalendar client:visible compact />
-  </div>
+  <details class="practice-calendar">
+    <summary><span><strong>Practice calendar</strong><span>Your deadlines, month by month</span></span><span class="practice-calendar-toggle">View calendar</span></summary>
+    <div class="practice-calendar-content"><PracticeCalendar client:visible compact /></div>
+  </details>
 </AppShell>

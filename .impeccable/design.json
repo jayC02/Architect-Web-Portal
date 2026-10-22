@@ -1,0 +1,492 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T18:56:00Z",
+  "title": "Design System: Architect Pro dashboard",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Practice Indigo",
+        "canonical": "#4e5fc1",
+        "tonalRamp": [
+          "oklch(15.00% 0.1534 272.61)",
+          "oklch(26.43% 0.1534 272.61)",
+          "oklch(37.86% 0.1534 272.61)",
+          "oklch(49.29% 0.1534 272.61)",
+          "oklch(60.71% 0.1534 272.61)",
+          "oklch(72.14% 0.1534 272.61)",
+          "oklch(83.57% 0.1534 272.61)",
+          "oklch(95.00% 0.1534 272.61)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Deep Indigo",
+        "canonical": "#3f4fa8",
+        "tonalRamp": [
+          "oklch(15.00% 0.1432 272.00)",
+          "oklch(26.43% 0.1432 272.00)",
+          "oklch(37.86% 0.1432 272.00)",
+          "oklch(49.29% 0.1432 272.00)",
+          "oklch(60.71% 0.1432 272.00)",
+          "oklch(72.14% 0.1432 272.00)",
+          "oklch(83.57% 0.1432 272.00)",
+          "oklch(95.00% 0.1432 272.00)"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Indigo Wash",
+        "canonical": "#edf0fc",
+        "tonalRamp": [
+          "oklch(15.00% 0.0164 274.82)",
+          "oklch(26.43% 0.0164 274.82)",
+          "oklch(37.86% 0.0164 274.82)",
+          "oklch(49.29% 0.0164 274.82)",
+          "oklch(60.71% 0.0164 274.82)",
+          "oklch(72.14% 0.0164 274.82)",
+          "oklch(83.57% 0.0164 274.82)",
+          "oklch(95.00% 0.0164 274.82)"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Cool Mist",
+        "canonical": "#f5f7fb",
+        "tonalRamp": [
+          "oklch(15.00% 0.0057 264.53)",
+          "oklch(26.43% 0.0057 264.53)",
+          "oklch(37.86% 0.0057 264.53)",
+          "oklch(49.29% 0.0057 264.53)",
+          "oklch(60.71% 0.0057 264.53)",
+          "oklch(72.14% 0.0057 264.53)",
+          "oklch(83.57% 0.0057 264.53)",
+          "oklch(95.00% 0.0057 264.53)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Working White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.00% 0.0000 89.88)",
+          "oklch(26.43% 0.0000 89.88)",
+          "oklch(37.86% 0.0000 89.88)",
+          "oklch(49.29% 0.0000 89.88)",
+          "oklch(60.71% 0.0000 89.88)",
+          "oklch(72.14% 0.0000 89.88)",
+          "oklch(83.57% 0.0000 89.88)",
+          "oklch(95.00% 0.0000 89.88)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Steel Blue",
+        "canonical": "#eaf0f7",
+        "tonalRamp": [
+          "oklch(15.00% 0.0114 252.09)",
+          "oklch(26.43% 0.0114 252.09)",
+          "oklch(37.86% 0.0114 252.09)",
+          "oklch(49.29% 0.0114 252.09)",
+          "oklch(60.71% 0.0114 252.09)",
+          "oklch(72.14% 0.0114 252.09)",
+          "oklch(83.57% 0.0114 252.09)",
+          "oklch(95.00% 0.0114 252.09)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#263449",
+        "tonalRamp": [
+          "oklch(15.00% 0.0421 258.30)",
+          "oklch(26.43% 0.0421 258.30)",
+          "oklch(37.86% 0.0421 258.30)",
+          "oklch(49.29% 0.0421 258.30)",
+          "oklch(60.71% 0.0421 258.30)",
+          "oklch(72.14% 0.0421 258.30)",
+          "oklch(83.57% 0.0421 258.30)",
+          "oklch(95.00% 0.0421 258.30)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Slate Text",
+        "canonical": "#637085",
+        "tonalRamp": [
+          "oklch(15.00% 0.0365 259.97)",
+          "oklch(26.43% 0.0365 259.97)",
+          "oklch(37.86% 0.0365 259.97)",
+          "oklch(49.29% 0.0365 259.97)",
+          "oklch(60.71% 0.0365 259.97)",
+          "oklch(72.14% 0.0365 259.97)",
+          "oklch(83.57% 0.0365 259.97)",
+          "oklch(95.00% 0.0365 259.97)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Pale Rule",
+        "canonical": "#e4e9f0",
+        "tonalRamp": [
+          "oklch(15.00% 0.0109 256.70)",
+          "oklch(26.43% 0.0109 256.70)",
+          "oklch(37.86% 0.0109 256.70)",
+          "oklch(49.29% 0.0109 256.70)",
+          "oklch(60.71% 0.0109 256.70)",
+          "oklch(72.14% 0.0109 256.70)",
+          "oklch(83.57% 0.0109 256.70)",
+          "oklch(95.00% 0.0109 256.70)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Indigo",
+        "canonical": "#7386df",
+        "tonalRamp": [
+          "oklch(15.00% 0.1348 272.98)",
+          "oklch(26.43% 0.1348 272.98)",
+          "oklch(37.86% 0.1348 272.98)",
+          "oklch(49.29% 0.1348 272.98)",
+          "oklch(60.71% 0.1348 272.98)",
+          "oklch(72.14% 0.1348 272.98)",
+          "oklch(83.57% 0.1348 272.98)",
+          "oklch(95.00% 0.1348 272.98)"
+        ]
+      },
+      "lead": {
+        "role": "secondary",
+        "displayName": "Lead Slate",
+        "canonical": "#8b98ab",
+        "tonalRamp": [
+          "oklch(15.00% 0.0319 257.78)",
+          "oklch(26.43% 0.0319 257.78)",
+          "oklch(37.86% 0.0319 257.78)",
+          "oklch(49.29% 0.0319 257.78)",
+          "oklch(60.71% 0.0319 257.78)",
+          "oklch(72.14% 0.0319 257.78)",
+          "oklch(83.57% 0.0319 257.78)",
+          "oklch(95.00% 0.0319 257.78)"
+        ]
+      },
+      "documents": {
+        "role": "secondary",
+        "displayName": "Documents Violet",
+        "canonical": "#9b83c1",
+        "tonalRamp": [
+          "oklch(15.00% 0.0939 301.64)",
+          "oklch(26.43% 0.0939 301.64)",
+          "oklch(37.86% 0.0939 301.64)",
+          "oklch(49.29% 0.0939 301.64)",
+          "oklch(60.71% 0.0939 301.64)",
+          "oklch(72.14% 0.0939 301.64)",
+          "oklch(83.57% 0.0939 301.64)",
+          "oklch(95.00% 0.0939 301.64)"
+        ]
+      },
+      "planning": {
+        "role": "secondary",
+        "displayName": "Planning Blue",
+        "canonical": "#6c86c6",
+        "tonalRamp": [
+          "oklch(15.00% 0.1017 266.64)",
+          "oklch(26.43% 0.1017 266.64)",
+          "oklch(37.86% 0.1017 266.64)",
+          "oklch(49.29% 0.1017 266.64)",
+          "oklch(60.71% 0.1017 266.64)",
+          "oklch(72.14% 0.1017 266.64)",
+          "oklch(83.57% 0.1017 266.64)",
+          "oklch(95.00% 0.1017 266.64)"
+        ]
+      },
+      "warrant": {
+        "role": "secondary",
+        "displayName": "Warrant Teal",
+        "canonical": "#488b85",
+        "tonalRamp": [
+          "oklch(15.00% 0.0691 187.89)",
+          "oklch(26.43% 0.0691 187.89)",
+          "oklch(37.86% 0.0691 187.89)",
+          "oklch(49.29% 0.0691 187.89)",
+          "oklch(60.71% 0.0691 187.89)",
+          "oklch(72.14% 0.0691 187.89)",
+          "oklch(83.57% 0.0691 187.89)",
+          "oklch(95.00% 0.0691 187.89)"
+        ]
+      },
+      "complete": {
+        "role": "secondary",
+        "displayName": "Completion Green",
+        "canonical": "#7c9d70",
+        "tonalRamp": [
+          "oklch(15.00% 0.0745 137.50)",
+          "oklch(26.43% 0.0745 137.50)",
+          "oklch(37.86% 0.0745 137.50)",
+          "oklch(49.29% 0.0745 137.50)",
+          "oklch(60.71% 0.0745 137.50)",
+          "oklch(72.14% 0.0745 137.50)",
+          "oklch(83.57% 0.0745 137.50)",
+          "oklch(95.00% 0.0745 137.50)"
+        ]
+      },
+      "planning-soft": {
+        "role": "secondary",
+        "displayName": "Planning Tint",
+        "canonical": "#ecf1fb",
+        "tonalRamp": [
+          "oklch(15.00% 0.0145 264.50)",
+          "oklch(26.43% 0.0145 264.50)",
+          "oklch(37.86% 0.0145 264.50)",
+          "oklch(49.29% 0.0145 264.50)",
+          "oklch(60.71% 0.0145 264.50)",
+          "oklch(72.14% 0.0145 264.50)",
+          "oklch(83.57% 0.0145 264.50)",
+          "oklch(95.00% 0.0145 264.50)"
+        ]
+      },
+      "planning-ink": {
+        "role": "secondary",
+        "displayName": "Planning Text",
+        "canonical": "#4a65a3",
+        "tonalRamp": [
+          "oklch(15.00% 0.1038 265.16)",
+          "oklch(26.43% 0.1038 265.16)",
+          "oklch(37.86% 0.1038 265.16)",
+          "oklch(49.29% 0.1038 265.16)",
+          "oklch(60.71% 0.1038 265.16)",
+          "oklch(72.14% 0.1038 265.16)",
+          "oklch(83.57% 0.1038 265.16)",
+          "oklch(95.00% 0.1038 265.16)"
+        ]
+      },
+      "danger": {
+        "role": "secondary",
+        "displayName": "Urgent Rose",
+        "canonical": "#ad5156",
+        "tonalRamp": [
+          "oklch(15.00% 0.1206 18.52)",
+          "oklch(26.43% 0.1206 18.52)",
+          "oklch(37.86% 0.1206 18.52)",
+          "oklch(49.29% 0.1206 18.52)",
+          "oklch(60.71% 0.1206 18.52)",
+          "oklch(72.14% 0.1206 18.52)",
+          "oklch(83.57% 0.1206 18.52)",
+          "oklch(95.00% 0.1206 18.52)"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Review Ochre",
+        "canonical": "#87642d",
+        "tonalRamp": [
+          "oklch(15.00% 0.0848 76.30)",
+          "oklch(26.43% 0.0848 76.30)",
+          "oklch(37.86% 0.0848 76.30)",
+          "oklch(49.29% 0.0848 76.30)",
+          "oklch(60.71% 0.0848 76.30)",
+          "oklch(72.14% 0.0848 76.30)",
+          "oklch(83.57% 0.0848 76.30)",
+          "oklch(95.00% 0.0848 76.30)"
+        ]
+      },
+      "ready": {
+        "role": "secondary",
+        "displayName": "Prepared Green",
+        "canonical": "#45796f",
+        "tonalRamp": [
+          "oklch(15.00% 0.0584 180.23)",
+          "oklch(26.43% 0.0584 180.23)",
+          "oklch(37.86% 0.0584 180.23)",
+          "oklch(49.29% 0.0584 180.23)",
+          "oklch(60.71% 0.0584 180.23)",
+          "oklch(72.14% 0.0584 180.23)",
+          "oklch(83.57% 0.0584 180.23)",
+          "oklch(95.00% 0.0584 180.23)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Page headline",
+        "purpose": "The dashboard's primary heading."
+      },
+      "title": {
+        "displayName": "Register title",
+        "purpose": "The primary working area's title."
+      },
+      "body": {
+        "displayName": "UI body",
+        "purpose": "The dashboard's base UI text."
+      },
+      "label": {
+        "displayName": "Secondary label",
+        "purpose": "Supporting information and labels."
+      },
+      "metric": {
+        "displayName": "Summary figure",
+        "purpose": "Tabular summary counts; compact on phones."
+      }
+    },
+    "shadows": [
+      {
+        "name": "active-navigation",
+        "value": "0 3px 9px #34508109",
+        "purpose": "Current page link on the rail."
+      },
+      {
+        "name": "selected-filter",
+        "value": "0 1px 4px #273a5a13",
+        "purpose": "Selected filter within its well."
+      },
+      {
+        "name": "search-focus",
+        "value": "0 0 0 2px #4e5fc11a",
+        "purpose": "Functional focus ring."
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "0 10px 25px #26344918",
+        "purpose": "Navigation popover."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "background 150ms ease",
+        "purpose": "Button hover response; disabled under reduced motion."
+      },
+      {
+        "name": "loading-pulse",
+        "value": "practice-loading 1.8s ease-in-out infinite",
+        "purpose": "Skeleton loading only; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1279px"
+      },
+      {
+        "name": "stacked-content",
+        "value": "1050px"
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "767px"
+      },
+      {
+        "name": "compact-phone",
+        "value": "560px"
+      },
+      {
+        "name": "wide-desktop",
+        "value": "1650px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main creation action; indigo with a deeper hover state.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\">New application</button>",
+      "css": ".ds-button-primary{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 15px;border:1px solid transparent;border-radius:7px;background:#4e5fc1;color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:background 150ms ease}.ds-button-primary:hover{background:#3f4fa8}.ds-button-primary:focus-visible{outline:3px solid #7386df;outline-offset:3px;}.ds-button-primary:disabled{opacity:.6;cursor:wait}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none}}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Recovery and secondary actions use a pale border.",
+      "html": "<button class=\"ds-button-secondary\" type=\"button\">Clear filters</button>",
+      "css": ".ds-button-secondary{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;display:inline-flex;align-items:center;justify-content:center;min-height:38px;border:1px solid #d7deea;border-radius:7px;background:#fff;padding:8px 13px;font-size:12px;color:#445570;cursor:pointer}.ds-button-secondary:hover{background:#edf0fc}.ds-button-secondary:focus-visible{outline:3px solid #7386df;outline-offset:3px;}"
+    },
+    {
+      "name": "Project search",
+      "kind": "input",
+      "refersTo": "search",
+      "description": "Compact search with a clear accessible label and functional focus ring.",
+      "html": "<label class=\"ds-search\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><path d=\"m21 21-4.3-4.3\"></path></svg><input type=\"search\" aria-label=\"Search shown projects\" placeholder=\"Find a project…\"></label>",
+      "css": ".ds-search{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;display:flex;align-items:center;gap:7px;padding:0 9px;border:1px solid #e0e6ef;border-radius:6px;max-width:185px;height:34px;color:#75829a;background:#fff}.ds-search:focus-within{border-color:#6d7ccd;box-shadow:0 0 0 2px #4e5fc11a}.ds-search input{font:11px \"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;min-width:0;width:100%;border:0;background:transparent;color:#263449;outline:0;padding:5px 0;caret-color:#4e5fc1}.ds-search input::placeholder{color:#69788d;opacity:1}.ds-search svg{flex-shrink:0}"
+    },
+    {
+      "name": "Current navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "White current-page link on the pale steel-blue rail.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"Example navigation\"><a class=\"ds-nav-active\" href=\"#overview\" aria-current=\"page\"><svg width=\"19\" height=\"19\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"9\" rx=\"1\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\" rx=\"1\"></rect><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\" rx=\"1\"></rect><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\" rx=\"1\"></rect></svg>Overview</a></nav>",
+      "css": ".ds-rail{background:#eaf0f7;padding:12px;max-width:200px}.ds-nav-active{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;display:flex;align-items:center;gap:12px;min-height:45px;padding:10px 13px;border-radius:7px;background:#fff;color:#4759b5;font-size:13px;font-weight:550;box-shadow:0 3px 9px #34508109;text-decoration:none}.ds-nav-active:hover{color:#3f4fa8}.ds-nav-active:focus-visible{outline:3px solid #7386df;outline-offset:3px;}"
+    },
+    {
+      "name": "Planning stage",
+      "kind": "chip",
+      "refersTo": "stage-planning",
+      "description": "Stage text accompanies its phase colour.",
+      "html": "<span class=\"ds-stage\">Planning</span><span class=\"ds-stage-track\" aria-label=\"Planning, stage 3 of 5\"><span></span><span></span><span></span><span></span><span></span></span>",
+      "css": ".ds-stage{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;display:inline-block;border-radius:4px;padding:3px 7px;font-size:10px;font-weight:550;color:#4a65a3;background:#ecf1fb}.ds-stage-track{display:flex;width:76px;gap:3px;margin-top:9px}.ds-stage-track span{flex:1;height:3px;border-radius:1px;background:#e9edf3}.ds-stage-track span:nth-child(-n+3){background:#6c86c6}"
+    },
+    {
+      "name": "Project register surface",
+      "kind": "card",
+      "refersTo": "register",
+      "description": "A flat bordered working surface with aligned project information.",
+      "html": "<section class=\"ds-register\"><h2>Active projects</h2><p>Recently updated across your practice</p><a href=\"#project\" class=\"ds-register-row\"><strong>Project name</strong><span>Site address and client</span></a></section>",
+      "css": ".ds-register{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;background:#fff;border:1px solid #e4e9f0;border-radius:12px;overflow:hidden;color:#263449;max-width:460px}.ds-register h2{font-size:16px;font-weight:650;margin:21px 21px 4px;line-height:1.4;letter-spacing:-.015em}.ds-register p{font-size:11px;color:#637085;margin:0 21px 18px}.ds-register-row{display:block;padding:17px 21px;border-top:1px solid #edf0f5;text-decoration:none;color:#2e3d55}.ds-register-row strong{display:block;font-size:13px;font-weight:600}.ds-register-row span{display:block;margin-top:5px;font-size:11px;color:#637187}.ds-register-row:hover{background:#fafbfe}.ds-register-row:hover strong{text-decoration:underline;color:#4e5fc1}.ds-register-row:focus-visible{outline:3px solid #7386df;outline-offset:3px;}"
+    },
+    {
+      "name": "Project filters",
+      "kind": "custom",
+      "description": "Pressed state is shown by a white button within a pale well.",
+      "html": "<div class=\"ds-filters\" role=\"group\" aria-label=\"Filter shown projects\"><button type=\"button\" aria-pressed=\"true\">All projects</button><button type=\"button\" aria-pressed=\"false\">Needs attention</button></div>",
+      "css": ".ds-filters{display:inline-flex;padding:3px;border-radius:6px;background:#f1f4f9;gap:3px}.ds-filters button{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;border:0;background:none;color:#647188;border-radius:4px;font-size:10px;font-weight:550;padding:6px 9px;min-height:30px;cursor:pointer}.ds-filters button[aria-pressed=true]{background:#fff;color:#3f506f;box-shadow:0 1px 4px #273a5a13}.ds-filters button:hover{color:#4e5fc1}.ds-filters button:focus-visible{outline:3px solid #7386df;outline-offset:3px;}"
+    },
+    {
+      "name": "Phase distribution",
+      "kind": "custom",
+      "description": "Proportional segments carry the same palette as individual project stages; the live component supplies counts and linked labels.",
+      "html": "<div class=\"ds-phase-track\" role=\"img\" aria-label=\"Example phase distribution: lead, documents, planning, building warrant and complete\"><span></span><span></span><span></span><span></span><span></span></div><p class=\"ds-phase-label\">Lead · Documents · Planning · Building warrant · Complete</p>",
+      "css": ".ds-phase-track{display:flex;gap:4px;min-height:10px;overflow:hidden;border-radius:3px;background:#e7ecf3;max-width:600px}.ds-phase-track span:nth-child(1){flex:2;background:#8b98ab}.ds-phase-track span:nth-child(2){flex:4;background:#9b83c1}.ds-phase-track span:nth-child(3){flex:3;background:#6c86c6}.ds-phase-track span:nth-child(4){flex:3;background:#488b85}.ds-phase-track span:nth-child(5){flex:6;background:#7c9d70}.ds-phase-label{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;font-size:10px;color:#5c687c;margin:13px 0 0}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The civic architecture centre",
+    "overview": "This system applies to the redesigned `/dashboard` and elements inside `.practice-shell`. It describes the built dashboard, not an application-wide theme migration. Other routes retain their existing warm palette and components.\n\nCool steel-blue navigation, white work surfaces and compact system typography give the practice a clear working environment. Brand expression comes from the shared project-stage palette and precise alignment, while navigation, search, filters and date controls remain familiar.",
+    "keyCharacteristics": [
+      "A project register with stage and next action visible together.",
+      "Cool tonal layering with indigo selection and restrained state colours.",
+      "Responsive density that preserves access to projects on small screens.",
+      "Existing Architect Pro logo assets and consistent Lucide line icons."
+    ],
+    "rules": [
+      {
+        "name": "The Shared Phase Rule",
+        "body": "A project stage uses the same colour family in the pipeline and the project register. Always pair colour with a text label.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Voice Rule",
+        "body": "Preserve sentence case and the same UI family across headings, labels and actions.",
+        "section": "typography"
+      },
+      {
+        "name": "The Working View Rule",
+        "body": "At 390×844, retain the first project's name, stage and next action in the first viewport. Density changes serve the task.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "**Do** keep the shared phase colours and explicit stage labels.",
+      "**Do** preserve visible keyboard focus and semantic control states.",
+      "**Do** compact secondary information before pushing project records down on phones.",
+      "**Do** label preview data and keep it separate from live practice records.",
+      "**Do** scope this system to the dashboard until another route is deliberately migrated."
+    ],
+    "donts": [
+      "**Don't** replace real project information with decorative architectural drawings.",
+      "**Don't** add shadows to every work surface.",
+      "**Don't** communicate urgency or project stage through colour alone.",
+      "**Don't** treat the current 9–10px metadata as a default body-text size.",
+      "**Don't** infer practice counts, activity trends or connection health from decorative placeholders."
+    ]
+  }
+}

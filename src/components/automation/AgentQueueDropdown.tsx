@@ -10,7 +10,7 @@ type Queue = { active: Job[] };
 const progressClassName = 'h-2 w-full appearance-none overflow-hidden rounded-full bg-stone-200 [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-stone-200 [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-moss [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-moss';
 const labels: Record<string, string> = { READY: 'Queued', CLAIMED: 'Starting', IN_PROGRESS: 'In progress', NEEDS_REVIEW: 'Needs attention', CANCELLED: 'Stopping' };
 
-export default function AgentQueueDropdown() {
+export default function AgentQueueDropdown({ floatingEnabled = true }: { floatingEnabled?: boolean } = {}) {
   const [queue, setQueue] = useState<Queue | null>(null);
   const [error, setError] = useState(false);
   const [open, setOpen] = useState(false);
@@ -32,6 +32,7 @@ export default function AgentQueueDropdown() {
   const keepJob = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (cancelPrompt) keepJob.current?.focus(); }, [cancelPrompt]);
   useEffect(() => {
+    if (!floatingEnabled) return;
     const originalPosition = anchor.current;
     if (!originalPosition) return;
     const navigation = document.querySelector<HTMLElement>('[data-mobile-navigation-header]');
@@ -65,7 +66,7 @@ export default function AgentQueueDropdown() {
       observer.disconnect(); sizeObserver.disconnect(); navigationObserver.disconnect();
       window.removeEventListener('resize', observePosition);
     };
-  }, []);
+  }, [floatingEnabled]);
   useEffect(() => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;

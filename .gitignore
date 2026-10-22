@@ -6,3 +6,4 @@ dist
 .env.local
 public/uploads
 output
+.impeccable/review/

@@ -1,0 +1,52 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
+import AgentQueueDropdown from '@/components/automation/AgentQueueDropdown';
+import { LayoutDashboard, FolderKanban, CalendarDays, Calculator, CircleDollarSign, Settings, LogOut, Menu, ArrowUpRight } from 'lucide-react';
+import type { OrganisationRole } from '@prisma/client';
+import '@/styles/dashboard.css';
+
+interface Props {
+  title: string;
+  user: { name: string; email: string };
+  organisation: { name: string };
+  role: OrganisationRole;
+  preview?: boolean;
+}
+const { title, user, organisation, role, preview = false } = Astro.props;
+const navigation = [
+  { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Projects', href: '/projects', icon: FolderKanban },
+  { label: 'Calendar', href: '/calendar', icon: CalendarDays },
+  { label: 'U-value calculator', href: '/tools/u-value', icon: Calculator },
+  ...(['OWNER', 'ADMIN'].includes(role) ? [{ label: 'Finance', href: '/finance', icon: CircleDollarSign }] : []),
+];
+const initials = user.name.split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase();
+const roleLabel = role === 'OWNER' ? 'Practice owner' : role === 'ADMIN' ? 'Administrator' : 'Team member';
+---
+<BaseLayout title={`${title} | Architect Pro`} noindex>
+  <div class="practice-shell">
+    <a class="practice-skip" href="#practice-main">Skip to dashboard</a>
+    <aside class="practice-sidebar" aria-label="Workspace sidebar">
+      <a href="/dashboard" class="practice-brand"><BrandLogo class="w-full h-auto" /></a>
+      <div class="practice-organisation"><span class="practice-org-mark" aria-hidden="true">{organisation.name.slice(0, 1).toUpperCase()}</span><span>{organisation.name}</span></div>
+      <nav aria-label="Primary navigation" class="practice-navigation">
+        {navigation.map(({ label, href, icon: Icon }) => <a href={href} class:list={['practice-nav-link', href === '/dashboard' && 'is-current']} aria-current={href === '/dashboard' ? 'page' : undefined}><Icon size={19} strokeWidth={1.7} aria-hidden="true" /><span>{label}</span></a>)}
+      </nav>
+      <div class="practice-sidebar-bottom">
+        <a href="/settings/integrations" class="practice-connection"><span class="practice-connection-icon"><ArrowUpRight size={17} aria-hidden="true" /></span><span><strong>Desktop automation</strong><span>Manage your connection</span></span></a>
+        <a href="/settings" class="practice-nav-link"><Settings size={19} strokeWidth={1.7} aria-hidden="true" /><span>Settings</span></a>
+        <div class="practice-profile"><span class="practice-avatar">{initials}</span><span class="practice-profile-name"><strong>{user.name}</strong><span>{roleLabel}</span></span><button type="button" data-logout class="practice-signout" aria-label="Sign out" title="Sign out"><LogOut size={17} aria-hidden="true" /></button></div>
+      </div>
+    </aside>
+    <div class="practice-body">
+      <header class="practice-topbar" data-mobile-navigation-header>
+        <div class="practice-breadcrumb"><span>Workspace</span><span aria-hidden="true">/</span><strong>Overview</strong></div>
+        <a href="/dashboard" class="practice-mobile-brand"><BrandLogo variant="mark" class="h-8 w-8" /></a>
+        <div class="practice-topbar-actions">{preview && <span class="practice-preview-label">Preview · sample data</span>}<AgentQueueDropdown floatingEnabled={false} client:load /><details class="practice-mobile-menu"><summary aria-label="Open navigation"><Menu size={21} aria-hidden="true" /></summary><nav aria-label="Mobile navigation">{navigation.map(({ label, href, icon: Icon }) => <a href={href} aria-current={href === '/dashboard' ? 'page' : undefined}><Icon size={18} aria-hidden="true" />{label}</a>)}<a href="/settings"><Settings size={18} aria-hidden="true" />Settings</a><button type="button" data-logout><LogOut size={18} aria-hidden="true" />Sign out</button></nav></details></div>
+      </header>
+      <main id="practice-main" class="practice-main" tabindex="-1"><slot /></main>
+      <footer class="practice-footer"><span>Architect Pro</span><span>Your practice, in perspective.</span></footer>
+    </div>
+  </div>
+</BaseLayout>

@@ -2,6 +2,7 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import AgentQueueDropdown from '@/components/automation/AgentQueueDropdown';
 import BrandLogo from '@/components/brand/BrandLogo.astro';
+import DashboardShell from '@/components/dashboard/DashboardShell.astro';
 import type { OrganisationRole } from '@prisma/client';
 import {
   CalendarDays,
@@ -19,9 +20,11 @@ interface Props {
   user: { name: string; email: string };
   organisation: { name: string };
   role: OrganisationRole;
+  dashboard?: boolean;
+  preview?: boolean;
 }
 
-const { title, user, organisation, role } = Astro.props;
+const { title, user, organisation, role, dashboard = false, preview = false } = Astro.props;
 type NavigationItem = {
   label: string;
   href: string;
@@ -60,7 +63,7 @@ const isActive = ({ activePrefixes }: NavigationItem) => activePrefixes.some((pr
   pathname === prefix || pathname.startsWith(`${prefix}/`),
 );
 ---
-<BaseLayout title={`${title} | Architect Pro`} noindex={true}>
+{dashboard ? <DashboardShell title={title} user={user} organisation={organisation} role={role} preview={preview}><slot /></DashboardShell> : <BaseLayout title={`${title} | Architect Pro`} noindex={true}>
   <div class="min-h-screen bg-paper">
     <aside class="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-stone-200/80 bg-[#fbfaf6] lg:flex">
       <div class="px-5 py-5">
@@ -148,4 +151,4 @@ const isActive = ({ activePrefixes }: NavigationItem) => activePrefixes.some((pr
       </main>
     </div>
   </div>
-</BaseLayout>
+</BaseLayout>}

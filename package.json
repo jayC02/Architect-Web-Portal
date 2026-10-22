@@ -7,6 +7,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "preview:dashboard": "node scripts/preview-dashboard.mjs",
+    "verify:dashboard": "node scripts/verify-dashboard.browser.mjs",
     "check": "astro check",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

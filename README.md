@@ -100,6 +100,14 @@ An unfinished draft expires after seven days. Objects that were uploaded but nev
 
 ## Validation
 
+The dashboard redesign has an isolated, read-only preview using labelled sample data:
+
+```powershell
+npm run preview:dashboard
+```
+
+Open `http://127.0.0.1:4322/dashboard`. This renders the dashboard components without authentication, database access or live API mutations. Project and application links explain their destination in the full application. Use `?state=empty` or `?state=error` to inspect recovery states. With the preview running, `npm run verify:dashboard` checks the interactive flows and responsive layout and saves screenshots under `output/dashboard-preview/`.
+
 - `npm run check`
 - `npm run test:security`
 - `npm run build`
