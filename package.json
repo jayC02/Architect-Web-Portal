@@ -9,6 +9,8 @@
     "preview": "astro preview",
     "preview:dashboard": "node scripts/preview-dashboard.mjs",
     "verify:dashboard": "node scripts/verify-dashboard.browser.mjs",
+    "preview:homepage": "node scripts/preview-dashboard.mjs --homepage",
+    "verify:homepage": "node scripts/verify-homepage.browser.mjs",
     "check": "astro check",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

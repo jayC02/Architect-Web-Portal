@@ -4,18 +4,23 @@ import PracticeCalendar from '@/components/calendar/PracticeCalendar';
 import DesktopAutomationSetupCard from '@/components/dashboard/DesktopAutomationSetupCard';
 import DashboardWorkspace from '@/components/dashboard/DashboardWorkspace';
 import { requirePageAuth } from '@/lib/server/page-auth';
+import '@/styles/dashboard.css';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
 const selectedRange = Number(Astro.url.searchParams.get('deadlineRange') ?? 14);
 const deadlineRange = [7, 14, 30].includes(selectedRange) ? selectedRange : 14;
+const selectedPhase = Astro.url.searchParams.get('projectPhase') ?? 'all';
+const projectPhase = ['lead', 'documents', 'planning', 'warrant', 'complete'].includes(selectedPhase) ? selectedPhase : 'all';
 ---
-<AppShell dashboard title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <DashboardWorkspace client:load initialRange={deadlineRange} />
+<AppShell title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="dashboard-surface">
+  <DashboardWorkspace client:load initialRange={deadlineRange} initialPhase={projectPhase} />
   <DesktopAutomationSetupCard client:idle />
   <details class="practice-calendar">
     <summary><span><strong>Practice calendar</strong><span>Your deadlines, month by month</span></span><span class="practice-calendar-toggle">View calendar</span></summary>
-    <div class="practice-calendar-content"><PracticeCalendar client:visible compact /></div>
+    <div class="practice-calendar-content"><PracticeCalendar client:visible compact dashboardDates /></div>
   </details>
+  </div>
 </AppShell>

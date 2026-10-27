@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-22T18:56:00Z",
-  "title": "Design System: Architect Pro dashboard",
+  "generatedAt": "2026-10-22T18:28:16.780Z",
+  "title": "Design System: Architect Pro dashboard and public homepage",
   "extensions": {
     "colorMeta": {
       "primary": {
@@ -303,6 +303,81 @@
           "oklch(83.57% 0.0584 180.23)",
           "oklch(95.00% 0.0584 180.23)"
         ]
+      },
+      "public-line": {
+        "role": "neutral",
+        "displayName": "Public Rule",
+        "canonical": "#e0e6ef",
+        "tonalRamp": [
+          "oklch(15.00% 0.0138 258.35)",
+          "oklch(26.43% 0.0138 258.35)",
+          "oklch(37.86% 0.0138 258.35)",
+          "oklch(49.29% 0.0138 258.35)",
+          "oklch(60.71% 0.0138 258.35)",
+          "oklch(72.14% 0.0138 258.35)",
+          "oklch(83.57% 0.0138 258.35)",
+          "oklch(95.00% 0.0138 258.35)"
+        ]
+      },
+      "public-demo-border": {
+        "role": "neutral",
+        "displayName": "Workbench Border",
+        "canonical": "#d6deeb",
+        "tonalRamp": [
+          "oklch(15.00% 0.0198 260.17)",
+          "oklch(26.43% 0.0198 260.17)",
+          "oklch(37.86% 0.0198 260.17)",
+          "oklch(49.29% 0.0198 260.17)",
+          "oklch(60.71% 0.0198 260.17)",
+          "oklch(72.14% 0.0198 260.17)",
+          "oklch(83.57% 0.0198 260.17)",
+          "oklch(95.00% 0.0198 260.17)"
+        ]
+      },
+      "public-demo-rail": {
+        "role": "neutral",
+        "displayName": "Workbench Rail",
+        "canonical": "#f0f4fa",
+        "tonalRamp": [
+          "oklch(15.00% 0.0091 258.34)",
+          "oklch(26.43% 0.0091 258.34)",
+          "oklch(37.86% 0.0091 258.34)",
+          "oklch(49.29% 0.0091 258.34)",
+          "oklch(60.71% 0.0091 258.34)",
+          "oklch(72.14% 0.0091 258.34)",
+          "oklch(83.57% 0.0091 258.34)",
+          "oklch(95.00% 0.0091 258.34)"
+        ]
+      },
+      "public-closing": {
+        "role": "neutral",
+        "displayName": "Closing Indigo Tint",
+        "canonical": "#e6ecf8",
+        "tonalRamp": [
+          "oklch(15.00% 0.0174 264.48)",
+          "oklch(26.43% 0.0174 264.48)",
+          "oklch(37.86% 0.0174 264.48)",
+          "oklch(49.29% 0.0174 264.48)",
+          "oklch(60.71% 0.0174 264.48)",
+          "oklch(72.14% 0.0174 264.48)",
+          "oklch(83.57% 0.0174 264.48)",
+          "oklch(95.00% 0.0174 264.48)"
+        ]
+      },
+      "public-diagram-label": {
+        "role": "neutral",
+        "displayName": "Plan Label",
+        "canonical": "#536780",
+        "tonalRamp": [
+          "oklch(15.00% 0.0467 254.24)",
+          "oklch(26.43% 0.0467 254.24)",
+          "oklch(37.86% 0.0467 254.24)",
+          "oklch(49.29% 0.0467 254.24)",
+          "oklch(60.71% 0.0467 254.24)",
+          "oklch(72.14% 0.0467 254.24)",
+          "oklch(83.57% 0.0467 254.24)",
+          "oklch(95.00% 0.0467 254.24)"
+        ]
       }
     },
     "typographyMeta": {
@@ -325,6 +400,14 @@
       "metric": {
         "displayName": "Summary figure",
         "purpose": "Tabular summary counts; compact on phones."
+      },
+      "public-headline": {
+        "displayName": "Public headline",
+        "purpose": "Self-hosted Manrope for the public homepage offer; separate from dashboard UI headings."
+      },
+      "public-body": {
+        "displayName": "Public body",
+        "purpose": "Self-hosted Manrope for public content; the application workbench retains its system UI family."
       }
     },
     "shadows": [
@@ -359,6 +442,11 @@
         "name": "loading-pulse",
         "value": "practice-loading 1.8s ease-in-out infinite",
         "purpose": "Skeleton loading only; disabled under reduced motion."
+      },
+      {
+        "name": "public-control-transition",
+        "value": "background 160ms ease",
+        "purpose": "Public action hover response; disabled under reduced motion."
       }
     ],
     "breakpoints": [
@@ -381,6 +469,18 @@
       {
         "name": "wide-desktop",
         "value": "1650px"
+      },
+      {
+        "name": "public-compact-desktop",
+        "value": "1150px"
+      },
+      {
+        "name": "public-stacked-workbench",
+        "value": "900px"
+      },
+      {
+        "name": "public-phone",
+        "value": "600px"
       }
     ]
   },
@@ -446,16 +546,33 @@
       "description": "Proportional segments carry the same palette as individual project stages; the live component supplies counts and linked labels.",
       "html": "<div class=\"ds-phase-track\" role=\"img\" aria-label=\"Example phase distribution: lead, documents, planning, building warrant and complete\"><span></span><span></span><span></span><span></span><span></span></div><p class=\"ds-phase-label\">Lead · Documents · Planning · Building warrant · Complete</p>",
       "css": ".ds-phase-track{display:flex;gap:4px;min-height:10px;overflow:hidden;border-radius:3px;background:#e7ecf3;max-width:600px}.ds-phase-track span:nth-child(1){flex:2;background:#8b98ab}.ds-phase-track span:nth-child(2){flex:4;background:#9b83c1}.ds-phase-track span:nth-child(3){flex:3;background:#6c86c6}.ds-phase-track span:nth-child(4){flex:3;background:#488b85}.ds-phase-track span:nth-child(5){flex:6;background:#7c9d70}.ds-phase-label{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,sans-serif;font-size:10px;color:#5c687c;margin:13px 0 0}"
+    },
+    {
+      "name": "Public primary action",
+      "kind": "button",
+      "refersTo": "public-button-primary",
+      "description": "The homepage creation and preparation action, sharing indigo with the working product.",
+      "html": "<button class=\"ds-public-button\" type=\"button\">Create workspace</button>",
+      "css": ".ds-public-button{font-family:Manrope,\"Segoe UI\",sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:43px;padding:11px 17px;border:1px solid transparent;border-radius:7px;background:#4e5fc1;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background 160ms ease}.ds-public-button:hover{background:#3f4fa8}.ds-public-button:focus-visible{outline:3px solid #7386df;outline-offset:4px}.ds-public-button:disabled{color:#f8f9fc;background:#8490c7;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-public-button{transition:none}}"
+    },
+    {
+      "name": "Public application workbench",
+      "kind": "custom",
+      "refersTo": "public-demo",
+      "description": "A flat, clearly labelled illustrative workspace with system UI text; the live component supplies its guarded steps.",
+      "html": "<section class=\"ds-public-demo\" aria-label=\"Example application workbench\"><div class=\"ds-public-window\"><strong>Willow Road extension</strong><span>Interactive example</span></div><div class=\"ds-public-content\"><h3>Start with your drawings.</h3><p>Try the example files. Select a drawing to take a closer look.</p></div><p class=\"ds-public-disclosure\">Sample project and documents. Nothing is uploaded or submitted.</p></section>",
+      "css": ".ds-public-demo{font-family:\"Segoe UI Variable Text\",\"Segoe UI\",sans-serif;background:#fff;color:#263449;border:1px solid #d6deeb;border-radius:14px;overflow:hidden;max-width:650px}.ds-public-window{display:flex;align-items:center;gap:13px;min-height:50px;padding:10px 22px;border-bottom:1px solid #e0e6ef;color:#52627a}.ds-public-window strong{font-size:12px;font-weight:600}.ds-public-window span{font-size:10px;background:#edf0fc;color:#5261a8;border-radius:4px;padding:2px 7px}.ds-public-content{padding:24px 30px 20px}.ds-public-content h3{font-size:19px;line-height:1.35;letter-spacing:-.02em;font-weight:600;margin:0}.ds-public-content p{font-size:12px;color:#637085;margin:5px 0 0;line-height:1.6}.ds-public-disclosure{padding:10px 21px;margin:0;background:#fafbfd;border-top:1px solid #e0e6ef;color:#637085;font-size:10px}@media(max-width:600px){.ds-public-demo{border-radius:11px}.ds-public-window{padding:11px 13px;flex-wrap:wrap}.ds-public-content{padding:22px 17px 18px}.ds-public-disclosure{padding:10px 13px}}"
     }
   ],
   "narrative": {
     "northStar": "The civic architecture centre",
-    "overview": "This system applies to the redesigned `/dashboard` and elements inside `.practice-shell`. It describes the built dashboard, not an application-wide theme migration. Other routes retain their existing warm palette and components.\n\nCool steel-blue navigation, white work surfaces and compact system typography give the practice a clear working environment. Brand expression comes from the shared project-stage palette and precise alignment, while navigation, search, filters and date controls remain familiar.",
+    "overview": "The working-product roles apply to the redesigned `/dashboard` and elements inside `.practice-shell`. The additive public roles apply to `/` inside `.home-page`, including its application demonstration. This is not an application-wide theme migration; other routes retain their existing warm palette and components.\n\nCool steel-blue navigation, white work surfaces and compact system typography give the practice a clear working environment. Brand expression comes from the shared project-stage palette and precise alignment, while navigation, search, filters and date controls remain familiar.\n\nThe public homepage extends that palette with self-hosted Manrope and a wider, more open composition. Its interactive application workbench is the proof: visitors inspect illustrative drawings, prepare an example and review it before signing in. The embedded workbench keeps familiar system UI typography.",
     "keyCharacteristics": [
       "A project register with stage and next action visible together.",
       "Cool tonal layering with indigo selection and restrained state colours.",
       "Responsive density that preserves access to projects on small screens.",
-      "Existing Architect Pro logo assets and consistent Lucide line icons."
+      "Existing Architect Pro logo assets and consistent Lucide line icons.",
+      "A public introduction centred on a functioning, explicitly illustrative application demonstration."
     ],
     "rules": [
       {
@@ -479,13 +596,14 @@
       "**Do** preserve visible keyboard focus and semantic control states.",
       "**Do** compact secondary information before pushing project records down on phones.",
       "**Do** label preview data and keep it separate from live practice records.",
-      "**Do** scope this system to the dashboard until another route is deliberately migrated."
+      "**Do** keep the dashboard and public-homepage roles scoped to their deliberately migrated surfaces."
     ],
     "donts": [
       "**Don't** replace real project information with decorative architectural drawings.",
       "**Don't** add shadows to every work surface.",
       "**Don't** communicate urgency or project stage through colour alone.",
       "**Don't** treat the current 9–10px metadata as a default body-text size.",
+      "**Don't** promote 8–10px plan-preview metadata into a general public text role.",
       "**Don't** infer practice counts, activity trends or connection health from decorative placeholders."
     ]
   }

@@ -108,6 +108,8 @@ npm run preview:dashboard
 
 Open `http://127.0.0.1:4322/dashboard`. This renders the dashboard components without authentication, database access or live API mutations. Project and application links explain their destination in the full application. Use `?state=empty` or `?state=error` to inspect recovery states. With the preview running, `npm run verify:dashboard` checks the interactive flows and responsive layout and saves screenshots under `output/dashboard-preview/`.
 
+For the public homepage, run `npm run preview:homepage` and open `http://127.0.0.1:4323/`. This preview includes the interactive planning/building-warrant example, dashboard and existing login/registration screens; all mutations are blocked. `npm run verify:homepage` checks the demo, responsive layout, entry redirects and account navigation and saves screenshots under `output/homepage-preview/`. Its synthetic signed-in header exists only in the isolated preview, outside production source.
+
 - `npm run check`
 - `npm run test:security`
 - `npm run build`

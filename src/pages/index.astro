@@ -1,6 +1,5 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro';
-import AuthEntryScreen from '@/components/auth/AuthEntryScreen.astro';
+import HomePage from '@/components/home/HomePage.astro';
 import { getSessionUser } from '@/lib/auth/session';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
 
@@ -12,14 +11,11 @@ if (await getSessionUser(Astro)) {
   return Astro.redirect('/dashboard');
 }
 
-const message =
-  Astro.url.searchParams.get('reset') === 'success'
-    ? 'Your password has been updated. Sign in with your new password.'
-    : null;
-const authError = Astro.url.searchParams.has('authError')
-  ? 'Google sign-in could not be completed. Please try again.'
-  : null;
+// Keep older account-recovery and sign-in links working after separating the homepage.
+const loginParameters = new URLSearchParams();
+if (Astro.url.searchParams.get('reset') === 'success') loginParameters.set('reset', 'success');
+if (Astro.url.searchParams.has('authError')) loginParameters.set('authError', Astro.url.searchParams.get('authError') ?? 'google_failed');
+if (Astro.url.searchParams.has('returnTo')) loginParameters.set('returnTo', Astro.url.searchParams.get('returnTo') ?? '/dashboard');
+if (loginParameters.size) return Astro.redirect(`/login?${loginParameters.toString()}`);
 ---
-<BaseLayout title="Sign in | Architect Pro" noindex>
-  <AuthEntryScreen {message} {authError} />
-</BaseLayout>
+<HomePage />

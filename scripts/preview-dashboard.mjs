@@ -6,7 +6,8 @@ import tailwind from '@astrojs/tailwind';
 
 // Isolated, read-only preview: no application middleware, database or credentials.
 const root = process.cwd();
-const previewRoot = path.join(root, 'output/dashboard-preview');
+const includeHomepage = process.argv.includes('--homepage');
+const previewRoot = path.join(root, includeHomepage ? 'output/homepage-preview' : 'output/dashboard-preview');
 const pages = path.join(previewRoot, 'src/pages');
 await fs.mkdir(pages, { recursive: true });
 const today = new Date();
@@ -54,11 +55,17 @@ const previewSource = source
   .replace(/const auth = await requirePageAuth\(Astro as never\);\s*if \(!auth\) return Astro.redirect\('\/login'\);/, `const auth = ${JSON.stringify(auth)};`)
   .replace('<AppShell ', '<AppShell preview ');
 await fs.writeFile(path.join(pages, 'dashboard.astro'), previewSource);
-await fs.writeFile(path.join(pages, 'index.astro'), "---\nreturn Astro.redirect('/dashboard');\n---\n");
+const withoutSession = (source) => source.replace(/import \{ getSessionUser \} from [^;]+;/, "const getSessionUser = async (context) => context.request.headers.get('x-preview-signed-in') === 'yes' ? { id: 'preview-user' } : null;");
+if (includeHomepage) {
+  for (const route of ['index', 'login', 'register', 'privacy', 'terms']) {
+    const source = await fs.readFile(path.join(root, `src/pages/${route}.astro`), 'utf8');
+    await fs.writeFile(path.join(pages, `${route}.astro`), withoutSession(source));
+  }
+} else await fs.writeFile(path.join(pages, 'index.astro'), "---\nreturn Astro.redirect('/dashboard');\n---\n");
 await fs.writeFile(path.join(pages, '[...path].astro'), `---\nimport BaseLayout from '@/layouts/BaseLayout.astro';\n---\n<BaseLayout title="Dashboard preview | Architect Pro" noindex><main style="max-width:650px;margin:12vh auto;padding:32px;font-family:Segoe UI,sans-serif"><h1>This is a dashboard preview</h1><p>Project and application links connect to their existing pages in the full application. This isolated preview uses sample data and does not access your records.</p><a href="/dashboard" style="display:inline-block;margin-top:20px;text-decoration:underline">Back to dashboard</a></main></BaseLayout>`);
 const server = await dev({
   root: previewRoot, configFile: false, publicDir: path.join(root, 'public'),
-  devToolbar: { enabled: false }, server: { host: '127.0.0.1', port: 4322 },
+  devToolbar: { enabled: false }, server: { host: '127.0.0.1', port: includeHomepage ? 4323 : 4322 },
   integrations: [react(), tailwind({ configFile: path.join(root, 'tailwind.config.mjs'), applyBaseStyles: false })],
   vite: {
     resolve: { alias: { '@': path.join(root, 'src') } },
@@ -89,5 +96,6 @@ const server = await dev({
   },
 });
 console.log(`DASHBOARD_PREVIEW_URL=http://127.0.0.1:${server.address.port}/dashboard`);
+if (includeHomepage) console.log(`HOMEPAGE_PREVIEW_URL=http://127.0.0.1:${server.address.port}/`);
 const stop = async () => { await server.stop(); process.exit(0); };
 process.on('SIGINT', stop); process.on('SIGTERM', stop);

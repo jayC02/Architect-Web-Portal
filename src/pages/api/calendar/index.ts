@@ -15,13 +15,15 @@ export const GET: APIRoute = (context) =>
     const requestedMonth = new URL(context.request.url).searchParams.get('month');
     const month = normaliseCalendarMonth(requestedMonth);
     const { gridStart, gridEnd } = getCalendarGridRange(month);
+    const dashboardDates = new URL(context.request.url).searchParams.get('dashboardDates') === 'true';
 
     const [deadlines, googleConnection] = await withPerf('api.calendar.month', () => Promise.all([
       prisma.deadline.findMany({
         where: {
           organisationId: organisation.id,
           status: { not: DeadlineStatus.CANCELLED },
-          dueDate: { gte: gridStart, lt: gridEnd },
+          // Dashboard displays London calendar days, including midnight during BST.
+          dueDate: { gte: dashboardDates ? new Date(gridStart.getTime() - 86400000) : gridStart, lt: gridEnd },
         },
         orderBy: [{ dueDate: 'asc' }, { priority: 'desc' }, { title: 'asc' }],
         select: {

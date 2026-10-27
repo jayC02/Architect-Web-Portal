@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import GoogleLogo from '@/components/integrations/GoogleLogo';
+import { dashboardDayKey } from '@/lib/dashboard/overview';
 
 type CalendarDeadline = {
   id: string;
@@ -31,6 +32,7 @@ type Props = {
   showIntegrationControls?: boolean;
   canManageIntegration?: boolean;
   showPageHeader?: boolean;
+  dashboardDates?: boolean;
 };
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -54,19 +56,19 @@ const monthLabel = (month: string) => new Intl.DateTimeFormat('en-GB', {
 }).format(new Date(`${month}-01T12:00:00.000Z`));
 const human = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const deadlineHref = (deadline: CalendarDeadline) => deadline.project?.id
-  ? `/deadlines?projectId=${deadline.project.id}`
+const deadlineHref = (deadline: CalendarDeadline, dashboardDates: boolean) => deadline.project?.id
+  ? dashboardDates ? `/projects/${deadline.project.id}#deadlines` : `/deadlines?projectId=${deadline.project.id}`
   : '/deadlines';
 
-const deadlineTone = (deadline: CalendarDeadline, today: string) => {
+const deadlineTone = (deadline: CalendarDeadline, today: string, dashboardDates: boolean) => {
   if (deadline.status === 'COMPLETED') return 'border-stone-200 bg-stone-100 text-stone-500 line-through';
-  if (deadline.status === 'OVERDUE' || dateKey(deadline.dueDate) < today) return 'border-red-200 bg-red-50 text-red-800';
+  if (dashboardDates ? dashboardDayKey(deadline.dueDate) < today : deadline.status === 'OVERDUE' || dateKey(deadline.dueDate) < today) return 'border-red-200 bg-red-50 text-red-800';
   if (deadline.priority === 'CRITICAL' || deadline.priority === 'HIGH' || deadline.status === 'DUE_SOON') return 'border-amber-200 bg-amber-50 text-amber-900';
   return 'border-moss/20 bg-moss/10 text-moss';
 };
 
-export default function PracticeCalendar({ compact = false, showIntegrationControls = false, canManageIntegration = false, showPageHeader = false }: Props) {
-  const [month, setMonth] = useState(initialMonth);
+export default function PracticeCalendar({ compact = false, showIntegrationControls = false, canManageIntegration = false, showPageHeader = false, dashboardDates = false }: Props) {
+  const [month, setMonth] = useState(() => dashboardDates ? dashboardDayKey(new Date()).slice(0, 7) : initialMonth());
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,14 +80,14 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
     setLoading(true);
     setError('');
     try {
-      const response = await apiRequest<CalendarResponse>(`/api/calendar?month=${month}`, { signal });
+      const response = await apiRequest<CalendarResponse>(`/api/calendar?month=${month}${dashboardDates ? '&dashboardDates=true' : ''}`, { signal });
       setData(response);
     } catch (requestError) {
       if ((requestError as Error).name !== 'AbortError') setError((requestError as Error).message || 'Calendar could not be loaded.');
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [month]);
+  }, [month, dashboardDates]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,16 +107,16 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
   const deadlinesByDate = useMemo(() => {
     const grouped = new Map<string, CalendarDeadline[]>();
     for (const deadline of data?.deadlines ?? []) {
-      const key = dateKey(deadline.dueDate);
+      const key = dashboardDates ? dashboardDayKey(deadline.dueDate) : dateKey(deadline.dueDate);
       grouped.set(key, [...(grouped.get(key) ?? []), deadline]);
     }
     return grouped;
-  }, [data]);
+  }, [data, dashboardDates]);
   const monthDeadlines = useMemo(
-    () => (data?.deadlines ?? []).filter((deadline) => dateKey(deadline.dueDate).startsWith(month)),
-    [data, month],
+    () => (data?.deadlines ?? []).filter((deadline) => (dashboardDates ? dashboardDayKey(deadline.dueDate) : dateKey(deadline.dueDate)).startsWith(month)),
+    [data, month, dashboardDates],
   );
-  const today = localDateKey(new Date());
+  const today = dashboardDates ? dashboardDayKey(new Date()) : localDateKey(new Date());
   const linked = data?.googleConnection?.status === 'CONNECTED' || data?.googleConnection?.status === 'ERROR';
 
   const syncCalendar = async () => {
@@ -189,7 +191,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} className="btn btn-secondary h-10 w-10 p-0" aria-label="Previous month"><ChevronLeft size={17} /></button>
-          <button type="button" onClick={() => setMonth(initialMonth())} className="btn btn-secondary h-10 px-4">Today</button>
+          <button type="button" onClick={() => setMonth(dashboardDates ? dashboardDayKey(new Date()).slice(0, 7) : initialMonth())} className="btn btn-secondary h-10 px-4">Today</button>
           <button type="button" onClick={() => setMonth(shiftMonth(month, 1))} className="btn btn-secondary h-10 w-10 p-0" aria-label="Next month"><ChevronRight size={17} /></button>
         </div>
       </header>
@@ -227,7 +229,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
                     <div className={`mb-2 flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${key === today ? 'bg-ink text-white' : inMonth ? 'text-stone-700' : 'text-stone-400'}`}>{dayLabel(day)}</div>
                     <div className="space-y-1">
                       {events.slice(0, compact ? 2 : 3).map((deadline) => (
-                        <a key={deadline.id} href={deadlineHref(deadline)} title={`${deadline.title}${deadline.project ? ` - ${deadline.project.name}` : ''}`} className={`block truncate rounded border-l-2 px-2 py-1 text-[11px] font-medium no-underline transition hover:brightness-95 ${deadlineTone(deadline, today)}`}>
+                        <a key={deadline.id} href={deadlineHref(deadline, dashboardDates)} title={`${deadline.title}${deadline.project ? ` - ${deadline.project.name}` : ''}`} className={`block truncate rounded border-l-2 px-2 py-1 text-[11px] font-medium no-underline transition hover:brightness-95 ${deadlineTone(deadline, today, dashboardDates)}`}>
                           {deadline.title}
                         </a>
                       ))}
@@ -241,8 +243,8 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
 
           <div className="divide-y divide-stone-200 md:hidden">
             {monthDeadlines.length ? monthDeadlines.map((deadline) => (
-              <a key={deadline.id} href={deadlineHref(deadline)} className="grid grid-cols-[74px_minmax(0,1fr)] gap-3 px-4 py-3 transition hover:bg-stone-50">
-                <time className="text-sm font-semibold text-stone-600">{fullDate(deadline.dueDate).split(' ').slice(0, 2).join(' ')}</time>
+              <a key={deadline.id} href={deadlineHref(deadline, dashboardDates)} className="grid grid-cols-[74px_minmax(0,1fr)] gap-3 px-4 py-3 transition hover:bg-stone-50">
+                <time className="text-sm font-semibold text-stone-600">{(dashboardDates ? new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'Europe/London' }).format(new Date(deadline.dueDate)) : fullDate(deadline.dueDate).split(' ').slice(0, 2).join(' '))}</time>
                 <span className="min-w-0">
                   <span className="block truncate font-semibold text-ink">{deadline.title}</span>
                   <span className="mt-1 block truncate text-xs text-stone-500">{deadline.project?.name ?? 'General'} - {human(deadline.type)}</span>

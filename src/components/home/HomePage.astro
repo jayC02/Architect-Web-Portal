@@ -1,0 +1,43 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import BrandLogo from '@/components/brand/BrandLogo.astro';
+import ApplicationDemo from './ApplicationDemo';
+import { ArrowDown, ArrowRight, Check, FileCheck2, FolderKanban, CalendarDays, ShieldCheck, ChevronDown } from 'lucide-react';
+import '@/styles/homepage.css';
+---
+<BaseLayout title="Architect Pro | From drawings to prepared applications" description="Prepare planning permission and building warrant applications from your project documents. Try an interactive example, then bring your practice together in Architect Pro.">
+  <div class="home-page">
+    <a href="#home-content" class="home-skip">Skip to content</a>
+    <header class="home-header">
+      <a href="/" class="home-logo" aria-label="Architect Pro home"><BrandLogo class="h-auto w-full" /></a>
+      <nav class="home-navigation" aria-label="Homepage navigation"><a href="#product-demo">Try the demo</a><a href="#how-it-works">How it works</a><a href="#questions">Questions</a></nav>
+      <div class="home-account-links"><a href="/login" class="home-signin">Sign in</a><a href="/register" class="home-button-primary">Create workspace<ArrowRight size={15} aria-hidden="true" /></a></div>
+    </header>
+    <main id="home-content">
+      <section class="home-opening" aria-labelledby="home-heading">
+        <div class="home-intro"><h1 id="home-heading">From your drawings<br />to a prepared application.</h1><div class="home-intro-copy"><p>Planning permission and building warrants, prepared from the documents you already have. Less re-entering. More room for the work you do best.</p><a href="#product-demo" class="home-demo-link">See it for yourself<ArrowDown size={16} aria-hidden="true" /></a></div></div>
+        <ApplicationDemo client:load />
+        <div class="home-demo-caption"><span>Choose an application. Explore the drawings. See what comes next.</span><span>No account needed to try the example.</span></div>
+      </section>
+      <section id="how-it-works" class="home-workflow" aria-labelledby="workflow-heading">
+        <div class="home-section-intro"><h2 id="workflow-heading">The paperwork moves.<br />Your project stays together.</h2><p>From the first upload to the next council response, keep the application connected to the people, drawings and decisions behind it.</p></div>
+        <div class="home-workflow-body">
+          <ol class="home-workflow-steps">
+            <li><span class="home-workflow-number">1</span><div><h3>Bring the project in</h3><p>Upload drawings, specifications and supporting documents. Keep clients and sites linked to the same project.</p></div></li>
+            <li><span class="home-workflow-number">2</span><div><h3>Give preparation a head start</h3><p>AI suggests document types and application information. Review the supporting sources and correct the details.</p></div></li>
+            <li><span class="home-workflow-number">3</span><div><h3>Review, then keep moving</h3><p>Check the prepared application, manage your next actions and keep an eye on the deadlines that follow.</p></div></li>
+          </ol>
+          <div class="home-project-context" aria-label="Illustrative connected project overview"><div class="home-context-heading"><FolderKanban size={18} aria-hidden="true" /><span>One connected project</span><span class="home-context-example">Example</span></div><h3>Willow Road extension</h3><div class="home-context-address">24 Willow Road, Glasgow</div><div class="home-context-phases" aria-label="Example project phases"><span class="is-complete">Documents<Check size={12} aria-hidden="true" /></span><span class="is-current">Planning</span><span>Building warrant</span></div><div class="home-context-row"><FileCheck2 size={17} aria-hidden="true" /><span><strong>Documents, where they belong</strong><span>Drawings and specifications linked to the application.</span></span></div><div class="home-context-row"><CalendarDays size={17} aria-hidden="true" /><span><strong>The next date, in view</strong><span>Internal deadlines alongside application target dates.</span></span></div><div class="home-context-row"><ShieldCheck size={17} aria-hidden="true" /><span><strong>A clear review point</strong><span>Prepared information stays open to your judgement.</span></span></div></div>
+        </div>
+      </section>
+      <section id="questions" class="home-questions" aria-labelledby="questions-heading"><div><h2 id="questions-heading">A little clarity<br />before you start.</h2><p>A tool for the preparation.<br />Your practice brings the expertise.</p></div><div class="home-faq-list">
+        <details><summary>What does the application demo show?<ChevronDown size={19} aria-hidden="true" /></summary><p>It is an interactive example of selecting supporting documents, viewing prepared application details and reviewing the result. All information is illustrative. The demo runs in your browser and does not upload documents, call an AI service or submit an application.</p></details>
+        <details><summary>Can I prepare planning and building warrant applications?<ChevronDown size={19} aria-hidden="true" /></summary><p>Yes. Architect Pro supports planning permission and building warrant preparation, with documents, project information and review steps connected to the relevant application.</p></details>
+        <details><summary>Do I still review the application?<ChevronDown size={19} aria-hidden="true" /></summary><p>Yes. AI prepares suggested information for you to check. Review the drawings, applicant details, declarations and fees before continuing with your application workflow. The example does not represent approval from a council.</p></details>
+        <details><summary>Where does the desktop Agent fit in?<ChevronDown size={19} aria-hidden="true" /></summary><p>The connected Architect Pro Agent handles desktop portal preparation as part of your application workflow. Your web workspace keeps projects, documents, application status and deadlines together.</p></details>
+      </div></section>
+      <section class="home-closing" aria-labelledby="closing-heading"><div><h2 id="closing-heading">Make your next application<br />a clearer process.</h2><p>Bring your drawings. Keep your judgement.</p></div><a href="/register" class="home-button-primary">Create your workspace<ArrowRight size={17} aria-hidden="true" /></a></section>
+    </main>
+    <footer class="home-footer"><a href="/" class="home-footer-brand"><BrandLogo class="h-auto w-full" /></a><span>&copy; {new Date().getFullYear()} Architect Pro</span><nav aria-label="Footer navigation"><a href="/login">Sign in</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>
+  </div>
+</BaseLayout>
