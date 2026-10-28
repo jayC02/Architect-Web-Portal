@@ -13,10 +13,10 @@ const [clients, sites] = await Promise.all([
   prisma.site.findMany({ where: { organisationId: auth.organisation.id }, orderBy: { updatedAt: 'desc' } }),
 ]);
 ---
-<AppShell title="New project" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+<AppShell title="Manual project" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <a href="/projects" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to projects</a>
-    <h1 class="mt-2 text-3xl font-semibold">New project</h1>
+    <h1 class="mt-2 text-3xl font-semibold">Manual project</h1>
   </div>
 
   <form data-api-form data-action="/api/projects" data-method="POST" class="panel grid gap-5 rounded-lg p-5 lg:grid-cols-2">

@@ -16,12 +16,12 @@ const pages = path.join(previewRoot, 'src/pages');
 const organisationId = process.env.DASHBOARD_ORGANISATION_ID;
 if (!organisationId) throw new Error('Set DASHBOARD_ORGANISATION_ID to the practice to preview.');
 const membership = await prisma.organisationMember.findFirst({
-  where: { organisationId }, select: { role: true, user: { select: { name: true, email: true } }, organisation: { select: { name: true } } }, orderBy: { createdAt: 'asc' },
+  where: { organisationId }, select: { role: true, user: { select: { id: true, name: true, email: true } }, organisation: { select: { name: true } } }, orderBy: { createdAt: 'asc' },
 });
 if (!membership) throw new Error('Practice membership not found.');
-const auth = { user: { name: membership.user.name, email: membership.user.email }, organisation: { id: organisationId, name: membership.organisation.name }, membership: { role: membership.role } };
+const auth = { user: membership.user, organisation: { id: organisationId, name: membership.organisation.name }, membership: { role: membership.role } };
 await fs.mkdir(pages, { recursive: true });
-for (const route of ['dashboard', 'projects/index', 'calendar', 'deadlines']) {
+for (const route of ['dashboard', 'projects/index', 'projects/[id]', 'calendar', 'deadlines']) {
   const source = await fs.readFile(path.join(root, `src/pages/${route}.astro`), 'utf8');
   const target = path.join(pages, `${route}.astro`);
   await fs.mkdir(path.dirname(target), { recursive: true });

@@ -1,9 +1,10 @@
 export const prerender = false;
 
-import { ActionItemKind, ActionItemStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus } from '@prisma/client';
+import { ActionItemKind, ActionItemStatus, DeadlineStatus, DocumentStatus, ProjectStage, ProjectStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { getProjectNextAction } from '@/lib/projects/next-action';
+import { hasLocationPlanDocument, locationPlanPresenceWhere } from '@/lib/location-plan';
 import { currentDashboardJobs, dashboardAutomationState, dashboardDayKey, dashboardDeadlineWindow, dashboardPhase, dashboardPreparationCurrent } from '@/lib/dashboard/overview';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 import { currentAutomationSourceUpdatedAt } from '@/server/services/automation-jobs.service';
@@ -73,15 +74,7 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
                 AND ai."dedupeKey" = ('warrant:' || w.id || ':final-review')
             ))
           ORDER BY w."firstResponseTargetDate" ASC NULLS LAST, w."updatedAt" ASC
-        ) warrant_row), '[]'::jsonb) AS "warrantsAwaitingAction",
-        COALESCE((SELECT jsonb_agg(to_jsonb(project_row)) FROM (
-          SELECT p.id, p.name
-          FROM "Project" p
-          WHERE p."organisationId" = ${orgId} AND p.status NOT IN ('COMPLETED', 'ARCHIVED') AND p.stage <> 'ARCHIVED' AND NOT EXISTS (
-            SELECT 1 FROM "ProjectDocument" d WHERE d."projectId" = p.id AND d."organisationId" = ${orgId} AND d.type = ${DocumentType.LOCATION_PLAN}::"DocumentType" AND d.status NOT IN ('REJECTED', 'SUPERSEDED')
-          )
-          ORDER BY p."updatedAt" DESC
-        ) project_row), '[]'::jsonb) AS "missingLocationPlanProjects"
+        ) warrant_row), '[]'::jsonb) AS "warrantsAwaitingAction"
     `);
 
     const [documentsNeedingReview, automationJobs, preparedReviewActions, pipelineProjects, documentStatusCounts, activeProjects, documentReviewProjects] = await Promise.all([
@@ -122,7 +115,7 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
           siteAddress: true,
           client: { select: { name: true } },
           site: { select: { addressLine1: true, postcode: true } },
-          documents: { where: { OR: [{ status: DocumentStatus.IN_REVIEW }, { type: DocumentType.LOCATION_PLAN }] }, select: { status: true, type: true } },
+          documents: { where: { OR: [{ status: DocumentStatus.IN_REVIEW }, locationPlanPresenceWhere] }, select: { status: true, type: true } },
           deadlines: { where: { status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] } }, orderBy: { dueDate: 'asc' }, take: 1, select: { title: true, dueDate: true } },
           planningApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
           warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
@@ -184,12 +177,13 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
       automationReady: automationJobsReady,
     };
 
-    const missingDocumentWarnings = (Array.isArray(row?.missingLocationPlanProjects) ? row.missingLocationPlanProjects : [])
-      .map((project: { id: string; name: string }) => ({ project, missing: ['Location Plan'] }));
+    const missingDocumentWarnings = activeProjects
+      .filter((project) => project.status !== ProjectStatus.COMPLETED && !hasLocationPlanDocument(project.documents))
+      .map(({ id, name }) => ({ project: { id, name }, missing: ['Location Plan'] }));
 
     const projectSummaries = activeProjects.map((project) => {
       const documentReviewCount = project.documents.filter((document) => document.status === DocumentStatus.IN_REVIEW).length;
-      const hasLocationPlan = project.documents.some(document => document.type === DocumentType.LOCATION_PLAN && document.status !== DocumentStatus.REJECTED && document.status !== DocumentStatus.SUPERSEDED);
+      const hasLocationPlan = hasLocationPlanDocument(project.documents);
       const readyAutomationJobCount = currentJobs.filter(job => job.projectId === project.id && job.dashboardState === 'ready').length;
       const nextDeadline = project.deadlines[0] ?? null;
       const nextAction = getProjectNextAction({

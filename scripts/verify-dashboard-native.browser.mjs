@@ -17,6 +17,7 @@ const rows = () => page.locator('.practice-project-table tbody tr');
 const search = () => page.getByRole('searchbox', { name: 'Search active projects' });
 try {
   await page.goto(`${base}/dashboard`); await ready();
+  check('Dashboard primary action opens AI-assisted application creation', await page.locator('.practice-page-heading .btn-primary').getAttribute('href') === '/applications/new');
   const summary = await page.evaluate(async () => (await fetch('/api/dashboard/summary?deadlineRange=14')).json());
   check('Real project count matches the API', await rows().count() === Math.min(summary.activeProjects, 6));
   check('Document approvals match actual records', (await page.locator('.practice-document-total').innerText()).includes(`${summary.documentOverview.reviewed} approved of ${summary.documentOverview.total}`));
@@ -62,7 +63,8 @@ try {
     check(`Deadline ${range}-day range updates URL and data`, new URL(page.url()).searchParams.get('deadlineRange') === String(range));
   }
   const review = page.locator('.practice-review-projects');
-  await review.locator('summary').click();
+  if (summary.documentOverview.projects.length) await review.locator('summary').click();
+  else check('Actual data with no pending documents shows the review empty state', await page.getByText('No documents are waiting for review.', { exact: true }).isVisible());
   const visibleDestinations = await page.locator('a[href]').evaluateAll(links => [...new Set(links.map(link => link.getAttribute('href')).filter(href => href?.startsWith('/') && !href.startsWith('//')))]);
   const destinations = [...new Set([...visibleDestinations, ...summary.needsAttention.map(item => item.href)])];
   const routeFiles = [];
@@ -74,8 +76,10 @@ try {
     const publicFile = await fs.access(path.join('public', pathname)).then(() => true, () => false);
     check(`Visible link resolves: ${href}`, matches || publicFile);
   }
-  check('Document review opens the right project file workflow', await review.locator('a').first().getAttribute('href') === `/projects/${summary.documentOverview.projects[0].id}/files`);
-  await review.locator('summary').click();
+  if (summary.documentOverview.projects.length) {
+    check('Document review opens the right project file workflow', await review.locator('a').first().getAttribute('href') === `/projects/${summary.documentOverview.projects[0].id}/files`);
+    await review.locator('summary').click();
+  }
   for (const id of ['active-projects', 'upcoming-deadlines', 'document-review', 'automation-status']) {
     await page.locator(`.practice-summary a[href="#${id}"]`).click();
     check(`Statistic navigates to ${id}`, new URL(page.url()).hash === `#${id}`);
@@ -123,6 +127,7 @@ try {
   await page.screenshot({ path: path.join(output, 'projects-reference.png'), fullPage: true });
   // Use synthetic records only in browser memory to cover states absent from the real practice.
   const fixtures = { ...summary, activeProjects: 9,
+    documentOverview: { ...summary.documentOverview, needsReview: 1, projects: [{ id: 'fixture-0', name: 'Fixture project 0', count: 1 }] },
     completedProjectSummaries: [{ ...project, id: 'fixture-completed', status: 'COMPLETED', stage: 'LEAD', nextAction: { label: 'View completed project', href: '/projects/fixture-completed' } }],
     pipeline: [{ key: 'lead', label: 'Lead', count: 0 }, { key: 'documents', label: 'Documents', count: 1 }, { key: 'planning', label: 'Planning', count: 8 }, { key: 'warrant', label: 'Building warrant', count: 0 }, { key: 'complete', label: 'Completion', count: 1 }],
     activeProjectSummaries: Array.from({ length: 9 }, (_, index) => ({ ...project, id: `fixture-${index}`, name: `Fixture project ${index}`, siteSummary: `Site ${index}`, clientName: `Client ${index}`, internalReference: `REF-${index}`, stage: index === 8 ? 'SURVEY' : 'PLANNING', needsAttention: index === 8, nextAction: { label: 'Open project', href: `/projects/fixture-${index}`, tone: 'neutral' } })),
@@ -137,6 +142,9 @@ try {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...data, deadlineRange: range }) });
   });
   await page.goto(`${base}/dashboard`); await ready();
+  await review.locator('summary').click();
+  check('Document review opens the right project file workflow with pending documents', await review.locator('a').first().getAttribute('href') === '/projects/fixture-0/files');
+  await review.locator('summary').click();
   await page.getByRole('button', { name: 'Next project page' }).click();
   check('Pagination exposes projects after the sixth row', await rows().count() === 3);
   await page.getByRole('button', { name: 'Previous project page' }).click();
@@ -183,8 +191,9 @@ try {
   await page.goto(`${base}/dashboard?projectPhase=documents`); await ready();
   check('Stage filters survive direct navigation and reload', await rows().count() === 1 && (await rows().innerText()).includes('Fixture project 8'));
   state = 'empty'; await page.reload();
-  await page.getByRole('heading', { name: 'Your next project starts here' }).waitFor();
-  check('Empty practice offers project creation', await page.locator('.practice-empty').getByRole('link', { name: 'Create project', exact: true }).isVisible());
+  await page.getByRole('heading', { name: 'Start your first application' }).waitFor();
+  check('Empty dashboard prioritises AI-assisted application creation', await page.locator('.practice-empty').getByRole('link', { name: 'New application', exact: true }).getAttribute('href') === '/applications/new');
+  check('Empty dashboard retains a clearly labelled manual fallback', await page.locator('.practice-empty').getByRole('link', { name: 'Manual project', exact: true }).getAttribute('href') === '/projects/new');
   check('Empty attention state is handled', await page.getByText('All clear for now', { exact: true }).isVisible());
   await page.route('**/api/auth/logout', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true }) }));
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();

@@ -17,6 +17,7 @@ import ProjectFees from '@/components/projects/ProjectFees.astro';
 import ProjectLinkedRecordEditor from '@/components/projects/ProjectLinkedRecordEditor';
 import { prisma } from '@/lib/db/prisma';
 import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
+import { hasLocationPlanDocument } from '@/lib/location-plan';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
@@ -192,9 +193,7 @@ const documentCount = documentStats.reduce((total, group) => total + group._coun
 const documentReviewCount = documentStats
   .filter((group) => group.status === DocumentStatus.IN_REVIEW)
   .reduce((total, group) => total + group._count._all, 0);
-const locationPlanCount = documentStats
-  .filter((group) => group.type === DocumentType.LOCATION_PLAN)
-  .reduce((total, group) => total + group._count._all, 0);
+const hasLocationPlan = hasLocationPlanDocument(projectDocuments);
 const planningDocumentTypes = new Set<DocumentType>([
   DocumentType.LOCATION_PLAN,
   DocumentType.SITE_PLAN,
@@ -268,7 +267,7 @@ const nextAction = getProjectNextAction({
   stage: project.stage,
   documentCount,
   documentReviewCount,
-  hasLocationPlan: locationPlanCount > 0,
+  hasLocationPlan,
   planningStatus: latestPlanning?.status,
   warrantStatus: latestWarrant?.status,
   readyAutomationJobCount,
@@ -544,7 +543,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         <a class="btn btn-primary gap-2" href={`/documents/upload?projectId=${project.id}`}><Upload size={15} aria-hidden="true" />Upload documents</a>
       </div>
     </div>
-    {locationPlanCount === 0 && <a href={`/documents/upload?projectId=${project.id}`} class="mt-4 block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100">Location plan missing</a>}
+    {!hasLocationPlan && <a href={`/documents/upload?projectId=${project.id}`} class="mt-4 block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100">Location plan missing</a>}
     {projectDocuments.length ? (
       <>
         <div data-document-view class="mt-4 overflow-hidden rounded-lg border border-stone-200">

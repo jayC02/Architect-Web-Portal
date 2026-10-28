@@ -1,9 +1,10 @@
 ﻿---
-import { AutomationJobStatus, DeadlineStatus, DocumentStatus, DocumentType, ProjectStage, ProjectStatus, type Prisma } from '@prisma/client';
+import { AutomationJobStatus, DeadlineStatus, DocumentStatus, ProjectStage, ProjectStatus, type Prisma } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import ProjectsSectionNavigation from '@/components/projects/ProjectsSectionNavigation.astro';
 import { prisma } from '@/lib/db/prisma';
 import { formatDate, humanizeEnum } from '@/lib/format';
+import { hasLocationPlanDocument, locationPlanPresenceWhere } from '@/lib/location-plan';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
 import { requirePageAuth } from '@/lib/server/page-auth';
 
@@ -48,7 +49,7 @@ const projects = await prisma.project.findMany({
     client: { select: { name: true } },
     site: { select: { addressLine1: true, townCity: true, postcode: true } },
     documents: {
-      where: { OR: [{ status: DocumentStatus.IN_REVIEW }, { type: DocumentType.LOCATION_PLAN }] },
+      where: { OR: [{ status: DocumentStatus.IN_REVIEW }, locationPlanPresenceWhere] },
       select: { id: true, status: true, type: true },
     },
     planningApplications: {
@@ -80,7 +81,7 @@ const projects = await prisma.project.findMany({
 
 const projectRows = projects.map((project) => {
   const documentReviewCount = project.documents.filter((document) => document.status === DocumentStatus.IN_REVIEW).length;
-  const hasLocationPlan = project.documents.some((document) => document.type === DocumentType.LOCATION_PLAN);
+  const hasLocationPlan = hasLocationPlanDocument(project.documents);
   const nextDeadline = project.deadlines[0] ?? null;
   const readyAutomationJobCount = project._count.automationJobs;
   const nextAction = getProjectNextAction({
@@ -127,7 +128,7 @@ const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-m
       <p class="mt-1 text-sm text-stone-500">A clean register of project records, deadlines and document actions.</p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <a href="/projects/new" class="btn btn-secondary">Create manually</a>
+        <a href="/projects/new" class="btn btn-secondary">Manual project</a>
         <a href="/applications/new" class="btn btn-primary">New application</a>
       </div>
     </div>
@@ -251,10 +252,11 @@ const automationTextClass = (count: number) => count > 0 ? 'font-semibold text-m
   ) : (
     <section class="panel rounded-lg p-8 text-center">
       <h2 class="text-xl font-semibold">{hasFilters ? 'No projects match these filters' : 'No projects yet'}</h2>
-      <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">{hasFilters ? 'Clear the filters or try a different search.' : 'Create your first project to organise documents, applications and deadlines.'}</p>
-      <div class="mt-5 flex justify-center gap-2">
+      <p class="mx-auto mt-2 max-w-xl text-sm text-stone-500">{hasFilters ? 'Clear the filters or try a different search.' : 'Upload your project documents to prepare your first application with AI.'}</p>
+      <div class="mt-5 flex flex-wrap justify-center gap-2">
         {hasFilters && <a class="btn btn-secondary" href="/projects">Clear filters</a>}
-        <a class="btn btn-primary" href="/projects/new">New project</a>
+        <a class="btn btn-primary" href="/applications/new">New application</a>
+        <a class="btn btn-secondary" href="/projects/new">Manual project</a>
       </div>
     </section>
   )}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { AutomationJobType, DocumentStatus, DocumentType } from '@prisma/client';
-import { resolveLocationPlans } from '../src/lib/location-plan';
+import { hasLocationPlanDocument, resolveLocationPlans } from '../src/lib/location-plan';
 import { evaluateClientApplicationDraftReadiness } from '../src/lib/application-draft-readiness';
 import { evaluateApplicationDraftReadiness } from '../src/server/services/application-draft.service';
 import { evaluateAutomationPreflight } from '../src/server/services/automation-preflight.service';
@@ -35,6 +35,21 @@ const candidates = [{ id: 'site', type: 'SITE_PLAN' }, { id: 'block', type: 'BLO
 assert.equal(resolveLocationPlans(candidates, doc => doc.type)[0].id, 'site');
 assert.equal(resolveLocationPlans([...candidates, { id: 'location', type: 'LOCATION_PLAN' }], doc => doc.type)[0].id, 'location');
 assert.deepEqual(resolveLocationPlans([{ type: 'PROPOSED_DRAWING' }, { type: 'OTHER' }], doc => doc.type), [], 'ordinary plans never fill this role');
+
+// Project warnings and next actions distinguish missing from awaiting review.
+for (const type of [DocumentType.LOCATION_PLAN, DocumentType.SITE_PLAN, DocumentType.BLOCK_PLAN]) {
+  for (const status of [DocumentStatus.APPROVED, DocumentStatus.DRAFT, DocumentStatus.IN_REVIEW]) {
+    assert.equal(hasLocationPlanDocument([{ type, status }]), true, `${type}/${status} is present; readiness still checks review separately`);
+  }
+  for (const status of [DocumentStatus.REJECTED, DocumentStatus.SUPERSEDED]) {
+    assert.equal(hasLocationPlanDocument([{ type, status }]), false, `${type}/${status} cannot satisfy presence`);
+  }
+}
+assert.equal(hasLocationPlanDocument([]), false);
+assert.equal(hasLocationPlanDocument([{ type: 'PROPOSED_DRAWING', status: 'APPROVED' }]), false);
+assert.equal(hasLocationPlanDocument([
+  { type: 'LOCATION_PLAN', status: 'SUPERSEDED' }, { type: 'SITE_PLAN', status: 'APPROVED' },
+]), true, 'an inactive explicit record must not hide an available fallback');
 
 const now = new Date('2026-10-22T12:00:00Z');
 const review = clientReviewFixture().review!;

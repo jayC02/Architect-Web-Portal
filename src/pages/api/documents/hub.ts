@@ -1,9 +1,10 @@
 export const prerender = false;
 
-import { DocumentType, ProjectStatus } from '@prisma/client';
+import { ProjectStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { documentGroupType } from '@/lib/document-categories';
+import { locationPlanPresenceWhere } from '@/lib/location-plan';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { withPerf } from '@/lib/utils/perf';
@@ -47,7 +48,7 @@ export const GET: APIRoute = (context) =>
           take: 12,
         }),
         prisma.project.findMany({
-          where: { ...activeProjectWhere, documents: { none: { type: DocumentType.LOCATION_PLAN } } },
+          where: { ...activeProjectWhere, documents: { none: locationPlanPresenceWhere } },
           select: { id: true },
         }),
       ]),
