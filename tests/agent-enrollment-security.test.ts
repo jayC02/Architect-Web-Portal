@@ -50,7 +50,7 @@ assert.match(authoriseRoute, /installationId:\s*body\.installationId/);
 assert.match(authoriseRoute, /codeChallenge:\s*body\.codeChallenge/);
 assert.match(exchangeRoute, /verifyPkceChallenge\(body\.codeVerifier, enrollment\.codeChallenge\)/);
 assert.match(exchangeRoute, /usedAt:\s*null, expiresAt:\s*\{ gt: now \}/);
-assert.match(exchangeRoute, /connected to another Architect Pro practice/);
+assert.match(exchangeRoute, /connected to another Architect Pro organisation/);
 assert.match(exchangeRoute, /existing\.organisationId !== enrollment\.organisationId && existing\.enabled && !existing\.revokedAt/);
 assert.match(exchangeRoute, /agentRegistration\.update/);
 assert.match(registrationRoute, /requireAgentAuth/);

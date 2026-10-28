@@ -266,7 +266,7 @@ export default function GoogleCalendarIntegration() {
                 className={`rounded-lg border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${google.gmailRequireReview ? 'border-ink bg-stone-50' : 'border-stone-200 bg-white hover:border-stone-400'}`}
               >
                 <span className="block font-semibold">Review every update</span>
-                <span className="mt-1 block text-sm leading-5 text-stone-500">Recommended while the integration learns the practice's email patterns.</span>
+                <span className="mt-1 block text-sm leading-5 text-stone-500">Recommended while the integration learns your organisation's email patterns.</span>
               </button>
               <button
                 type="button"

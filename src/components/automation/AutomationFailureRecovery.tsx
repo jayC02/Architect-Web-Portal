@@ -127,7 +127,7 @@ export default function AutomationFailureRecovery({
       <ClientForm client={context.client} compactApplicant submitLabel="Save and retry application" onClose={() => setEditor(null)} />
       {saveMessage && <p role="status" className="mt-3 text-sm font-medium text-stone-700">{saveMessage}</p>}
     </DirectoryDrawer>}
-    {editor === 'agent' && <DirectoryDrawer title="Agent information required" description="Update the practice details used when preparing applications." onClose={() => setEditor(null)}>
+    {editor === 'agent' && <DirectoryDrawer title="Agent information required" description="Update the organisation details used when preparing applications." onClose={() => setEditor(null)}>
       <AgentDefaultsForm defaults={context.agentDefaults} organisationName={context.organisationName} compact submitLabel="Save and retry application" onClose={() => setEditor(null)} />
       {saveMessage && <p role="status" className="mt-3 text-sm font-medium text-stone-700">{saveMessage}</p>}
     </DirectoryDrawer>}

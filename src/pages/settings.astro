@@ -9,11 +9,11 @@ if (!auth) return Astro.redirect('/login');
 <AppShell title="Settings" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-7 max-w-2xl">
     <h1 class="text-3xl font-semibold text-ink">Settings</h1>
-    <p class="mt-2 text-sm leading-6 text-stone-600">Manage your practice and Architect Pro connections.</p>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Manage your organisation and Architect Pro connections.</p>
   </div>
   <nav aria-label="Settings areas" class="grid gap-4 md:grid-cols-2">
     {[
-      { title: 'Practice', description: 'Practice details and default application contact', href: '/settings/practice', icon: Building2 },
+      { title: 'Organisation', description: 'Organisation details and default application contact', href: '/settings/practice', icon: Building2 },
       { title: 'Certifiers', description: 'Saved Building Standards certifiers', href: '/settings/certifiers', icon: UserRoundCheck },
       { title: 'Integrations', description: 'Desktop Agent, Google Calendar, Gmail and Xero', href: '/settings/integrations', icon: Link2 },
       { title: 'Preferences', description: 'Simple user-facing behaviour and notifications', href: '/settings/preferences', icon: SlidersHorizontal },

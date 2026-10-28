@@ -88,7 +88,7 @@ try {
   check('Sign-in navigation reaches the real form', await page.locator('form[data-action="/api/auth/login"]').count() === 1);
   await open();
   await page.getByRole('link', { name: 'Create workspace', exact: true }).click();
-  await page.getByRole('heading', { name: 'Create practice workspace' }).waitFor();
+  await page.getByRole('heading', { name: 'Create workspace' }).waitFor();
   check('Workspace call to action reaches registration', await page.locator('form[data-action="/api/auth/register"]').count() === 1);
   await open();
   await page.emulateMedia({ reducedMotion: 'reduce' });

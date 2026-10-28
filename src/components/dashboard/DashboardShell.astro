@@ -22,7 +22,7 @@ const navigation = [
   ...(['OWNER', 'ADMIN'].includes(role) ? [{ label: 'Finance', href: '/finance', icon: CircleDollarSign }] : []),
 ];
 const initials = user.name.split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase();
-const roleLabel = role === 'OWNER' ? 'Practice owner' : role === 'ADMIN' ? 'Administrator' : 'Team member';
+const roleLabel = role === 'OWNER' ? 'Owner' : role === 'ADMIN' ? 'Administrator' : 'Team member';
 ---
 <BaseLayout title={`${title} | Architect Pro`} noindex>
   <div class="practice-shell">
@@ -46,7 +46,7 @@ const roleLabel = role === 'OWNER' ? 'Practice owner' : role === 'ADMIN' ? 'Admi
         <div class="practice-topbar-actions">{preview && <span class="practice-preview-label">Preview · sample data</span>}<AgentQueueDropdown floatingEnabled={false} client:load /><details class="practice-mobile-menu"><summary aria-label="Open navigation"><Menu size={21} aria-hidden="true" /></summary><nav aria-label="Mobile navigation">{navigation.map(({ label, href, icon: Icon }) => <a href={href} aria-current={href === '/dashboard' ? 'page' : undefined}><Icon size={18} aria-hidden="true" />{label}</a>)}<a href="/settings"><Settings size={18} aria-hidden="true" />Settings</a><button type="button" data-logout><LogOut size={18} aria-hidden="true" />Sign out</button></nav></details></div>
       </header>
       <main id="practice-main" class="practice-main" tabindex="-1"><slot /></main>
-      <footer class="practice-footer"><span>Architect Pro</span><span>Your practice, in perspective.</span></footer>
+      <footer class="practice-footer"><span>Architect Pro</span><span>Your projects, in perspective.</span></footer>
     </div>
   </div>
 </BaseLayout>

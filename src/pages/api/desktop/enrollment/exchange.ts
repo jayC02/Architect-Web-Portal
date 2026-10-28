@@ -46,7 +46,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       existing = await tx.agentRegistration.findUnique({ where: { installationId: body.installationId } });
     }
     if (existing && existing.organisationId !== enrollment.organisationId && existing.enabled && !existing.revokedAt) {
-      throw new HttpError(403, 'This computer is connected to another Architect Pro practice. Choose Reset & reconnect in the Agent. If its old connection is no longer available, ask an administrator of the previous practice to disconnect this computer in Settings, then try again.');
+      throw new HttpError(403, 'This computer is connected to another Architect Pro organisation. Choose Reset & reconnect in the Agent. If its old connection is no longer available, ask an administrator of the previous organisation to disconnect this computer in Settings, then try again.');
     }
     if (existing) await assertAgentConnectionResettable(tx, existing.organisationId, existing.id);
     const data = {

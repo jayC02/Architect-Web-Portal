@@ -1287,13 +1287,13 @@ export default function ApplicationDraftReview({
           />
         ) : null}
         <Section
-          title="Agent and practice"
+          title="Agent and organisation"
           summary={[review.agent.practiceName, review.agent.firstName, review.agent.lastName].filter(Boolean).join(' ') || 'Organisation defaults need attention'}
           issueCount={issuesBySection.get('agent') ?? 0}
         >
           <p className="mb-5 text-sm text-stone-500">Organisation defaults are applied automatically. Change these only for this application, or save the edits as the new normal default.</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Practice name" value={review.agent.practiceName} onChange={(value) => updateAgent('practiceName', value)} issue={issueFor('agent.practiceName')} required />
+            <Field label="Organisation name" value={review.agent.practiceName} onChange={(value) => updateAgent('practiceName', value)} issue={issueFor('agent.practiceName')} required />
             <Field label="First name" value={review.agent.firstName} onChange={(value) => updateAgent('firstName', value)} issue={issueFor('agent.firstName')} required />
             <Field label="Last name" value={review.agent.lastName} onChange={(value) => updateAgent('lastName', value)} issue={issueFor('agent.lastName')} required />
             <Field label="Email" type="email" value={review.agent.email} onChange={(value) => updateAgent('email', value)} issue={issueFor('agent.email')} required />

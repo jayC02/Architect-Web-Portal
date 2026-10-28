@@ -217,7 +217,7 @@ function NeedsAttentionPanel({ items }: { items: AnyRecord[] }) {
       </div>
       <div className="space-y-2">
         {items.length ? items.map((item) => <AttentionItem key={item.id} item={item} />) : (
-          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No urgent practice items found.</div>
+          <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-500">No urgent items found.</div>
         )}
       </div>
     </article>
@@ -655,7 +655,7 @@ function Deadlines({ data }: { data: AnyRecord }) {
       {deadlines.length ? (
         <DeadlineDirectoryTable deadlines={filteredDeadlines} onView={(deadline) => setDrawer({ mode: 'view', item: deadline })} onEdit={(deadline) => setDrawer({ mode: 'edit', item: deadline })} />
       ) : (
-        <DirectoryEmptyState title="No deadlines yet" text="Add your first deadline to keep project dates visible in the practice calendar." actionLabel="New deadline" onAction={() => setDrawer({ mode: 'create' })} />
+        <DirectoryEmptyState title="No deadlines yet" text="Add your first deadline to keep project dates visible in the calendar." actionLabel="New deadline" onAction={() => setDrawer({ mode: 'create' })} />
       )}
 
       {deadlines.length > 0 && !filteredDeadlines.length && <EmptyState>No deadlines match your search.</EmptyState>}
@@ -922,7 +922,7 @@ function WorkflowTargetsSettings({ targets, canManage }: { targets: AnyRecord[];
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 id="automatic-workflow-reminders-heading" className="text-xl font-semibold">Automatic workflow reminders</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Internal practice targets only. These dates are not statutory or council deadlines.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Internal targets only. These dates are not statutory or council deadlines.</p>
         </div>
         {!canManage && <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Owner or Admin access required</span>}
       </div>

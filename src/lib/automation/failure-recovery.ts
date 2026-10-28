@@ -57,7 +57,7 @@ const categoryPresentation: Record<string, { headline: string; stage: string; ex
   AUTHENTICATION_FAILED: { headline: "Couldn't sign in to eDevelopment", stage: 'login', explanation: 'The application did not progress beyond sign-in.' },
   ADDRESS_RESOLUTION_FAILED: { headline: 'Property address could not be resolved', stage: 'address_selection', explanation: 'Architect Pro stopped rather than selecting the wrong property.' },
   APPLICANT_DATA_INVALID: { headline: 'Applicant information required', stage: 'applicant_details', explanation: 'Correct the applicant information before starting another attempt.' },
-  AGENT_DATA_INVALID: { headline: 'Agent information required', stage: 'agent_details', explanation: 'Correct the practice or agent information before starting another attempt.' },
+  AGENT_DATA_INVALID: { headline: 'Agent information required', stage: 'agent_details', explanation: 'Correct the organisation or agent information before starting another attempt.' },
   SITE_DATA_INVALID: { headline: 'Site information required', stage: 'address_selection', explanation: 'Correct the saved site information before starting another attempt.' },
   TYPE_OF_WORK_REQUIRED: { headline: 'Type of work required', stage: 'main_details', explanation: 'Select at least one type of work before running the application.' },
   DOCUMENT_UPLOAD_FAILED: { headline: 'Supporting documents need review', stage: 'documents', explanation: 'Review the project documents before starting another attempt.' },

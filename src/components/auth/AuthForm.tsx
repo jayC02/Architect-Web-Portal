@@ -59,7 +59,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           {mode === 'login' ? <LogIn size={20} /> : <Building2 size={20} />}
         </div>
         <div>
-          <h1 className="text-2xl font-semibold text-ink">{mode === 'login' ? 'Sign in' : 'Create practice workspace'}</h1>
+          <h1 className="text-2xl font-semibold text-ink">{mode === 'login' ? 'Sign in' : 'Create workspace'}</h1>
           <p className="text-sm text-stone-500">
             {mode === 'login' ? 'Open your project dashboard.' : 'Start with an owner account and organisation.'}
           </p>

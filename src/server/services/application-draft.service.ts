@@ -739,7 +739,7 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     addMissing(issues, 'client', 'applicant.buildingNumber', 'Applicant building number', applicant?.buildingNumber, 'Enter the applicant building number.');
   }
 
-  addMissing(issues, 'agent', 'agent.practiceName', 'Practice name', review.agent.practiceName, 'Confirm the normal practice name.');
+  addMissing(issues, 'agent', 'agent.practiceName', 'Organisation name', review.agent.practiceName, 'Confirm the organisation name.');
   addMissing(issues, 'agent', 'agent.firstName', 'Agent first name', review.agent.firstName, 'Confirm the agent first name.');
   addMissing(issues, 'agent', 'agent.lastName', 'Agent last name', review.agent.lastName, 'Confirm the agent last name.');
   addMissing(issues, 'agent', 'agent.email', 'Agent email', review.agent.email, 'Confirm the agent email.');

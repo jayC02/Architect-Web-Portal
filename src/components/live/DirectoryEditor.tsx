@@ -90,10 +90,10 @@ export function AgentDefaultsForm({
   certifierPresets?: DirectoryRecord[];
   onClose?: () => void;
 }) {
-  return <form data-api-form data-field-errors data-action="/api/settings/organisation-defaults" data-method="PUT" data-success-message="Practice settings saved." className={compact ? 'grid gap-4' : 'panel grid gap-7 rounded-lg p-5 sm:p-6'}>
+  return <form data-api-form data-field-errors data-action="/api/settings/organisation-defaults" data-method="PUT" data-success-message="Organisation settings saved." className={compact ? 'grid gap-4' : 'panel grid gap-7 rounded-lg p-5 sm:p-6'}>
     <section aria-labelledby="practice-details-heading">
-      {!compact && <div><h2 id="practice-details-heading" className="text-xl font-semibold">Practice details</h2><p className="mt-1 text-sm leading-6 text-stone-500">The practice identity used across Architect Pro applications.</p></div>}
-      <label className={`${compact ? '' : 'mt-5'} block`}><span className="label">Practice name</span><input required name="practiceName" defaultValue={defaults?.practiceName ?? organisationName} className="field" disabled={!canManage} /></label>
+      {!compact && <div><h2 id="practice-details-heading" className="text-xl font-semibold">Organisation details</h2><p className="mt-1 text-sm leading-6 text-stone-500">The organisation identity used across Architect Pro applications.</p></div>}
+      <label className={`${compact ? '' : 'mt-5'} block`}><span className="label">Organisation name</span><input required name="practiceName" defaultValue={defaults?.practiceName ?? organisationName} className="field" disabled={!canManage} /></label>
     </section>
     <section aria-labelledby="application-contact-heading" className={compact ? '' : 'border-t border-stone-200 pt-7'}>
       {!compact && <div><h2 id="application-contact-heading" className="text-xl font-semibold">Default application contact</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-stone-500">Used as the default contact when preparing new applications. Project or application-specific details can still override these values.</p></div>}

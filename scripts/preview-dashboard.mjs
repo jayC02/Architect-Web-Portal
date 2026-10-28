@@ -48,7 +48,7 @@ const summary = {
     { id: 'attention-4', type: 'Automation ready', projectName: projectNames[0], reason: 'Planning application prepared', href: '/projects/preview-1/planning', tone: 'ready' },
   ],
 };
-const auth = { user: { name: 'Jayveer', email: 'jayveer@example.com' }, organisation: { name: 'Your architecture practice' }, membership: { role: 'OWNER' } };
+const auth = { user: { name: 'Jayveer', email: 'jayveer@example.com' }, organisation: { name: 'Your organisation' }, membership: { role: 'OWNER' } };
 const source = await fs.readFile(path.join(root, 'src/pages/dashboard.astro'), 'utf8');
 const previewSource = source
   .replace(/import \{ requirePageAuth \} from [^;]+;/, '')

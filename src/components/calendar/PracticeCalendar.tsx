@@ -155,7 +155,7 @@ export default function PracticeCalendar({ compact = false, showIntegrationContr
         </div>
       )}
 
-      <section className="panel overflow-hidden rounded-lg" aria-label="Practice calendar">
+      <section className="panel overflow-hidden rounded-lg" aria-label="Calendar">
       {showIntegrationControls && !loading && !linked && (
         <div className="flex flex-col gap-4 border-b border-stone-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="flex items-start gap-3">

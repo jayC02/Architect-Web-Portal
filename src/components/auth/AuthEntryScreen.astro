@@ -34,7 +34,7 @@ const { message = null, authError = null, returnTo = '/dashboard' } = Astro.prop
         >
           <div class="mb-6">
             <h2 id="sign-in-heading" class="text-2xl font-semibold text-ink">Sign in to Architect Pro</h2>
-            <p class="mt-2 text-sm text-stone-500">Access your practice workspace.</p>
+            <p class="mt-2 text-sm text-stone-500">Access your workspace.</p>
           </div>
 
           {message && <p class="mb-5 border-l-2 border-moss pl-3 text-sm leading-6 text-stone-600" role="status">{message}</p>}
@@ -69,7 +69,7 @@ const { message = null, authError = null, returnTo = '/dashboard' } = Astro.prop
           <p id="sign-in-status" data-form-status class="mt-4 text-center text-sm text-stone-500" role="status" aria-live="polite"></p>
 
           <p class="mt-5 border-t border-stone-200 pt-5 text-center text-sm text-stone-500">
-            New practice? <a class="rounded-sm font-semibold text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/register">Create a workspace</a>
+            New here? <a class="rounded-sm font-semibold text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/register">Create a workspace</a>
           </p>
         </form>
         <PublicFooter />

@@ -5,7 +5,7 @@ const normalizeOrigin = (value: string) => value.replace(/\/$/, '');
 export const siteConfig = {
   name: 'Architect Pro',
   domain: 'architect-portal.local',
-  defaultDescription: 'A secure practice hub for architectural projects, documents, statutory applications, and deadlines.',
+  defaultDescription: 'A secure workspace for architectural projects, documents, statutory applications, and deadlines.',
   siteUrl: normalizeOrigin(import.meta.env?.PUBLIC_SITE_URL || process.env.PUBLIC_SITE_URL || DEFAULT_SITE_URL),
 };
 

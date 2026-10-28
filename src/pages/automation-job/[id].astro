@@ -190,7 +190,7 @@ const suggestedClientName = currentApplicant
             <div>
               <h2 class="text-xl font-semibold">Information prepared from your documents</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-                We analysed {draft.analysedDocumentCount} document{draft.analysedDocumentCount === 1 ? '' : 's'} and combined the results with your existing project, client, site and practice information.
+                We analysed {draft.analysedDocumentCount} document{draft.analysedDocumentCount === 1 ? '' : 's'} and combined the results with your existing project, client, site and organisation information.
               </p>
             </div>
             <div class:list={['flex items-center gap-2 text-sm font-semibold', blockers ? 'text-amber-800' : 'text-emerald-800']}>
@@ -238,10 +238,10 @@ const suggestedClientName = currentApplicant
         </section>
 
         {/* <section class="panel rounded-lg p-6">
-          <h2 class="text-lg font-semibold">Agent and practice</h2>
+          <h2 class="text-lg font-semibold">Agent and organisation</h2>
           <p class="mt-1 text-sm text-stone-600">These details are reused as your organisation defaults for future applications.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
-            <label class="block md:col-span-2"><span class="label">Practice name</span><input class="field" name="practiceName" value={suggestion('agent.practiceName', defaults?.practiceName ?? auth.organisation.name)} /></label>
+            <label class="block md:col-span-2"><span class="label">Organisation name</span><input class="field" name="practiceName" value={suggestion('agent.practiceName', defaults?.practiceName ?? auth.organisation.name)} /></label>
             <label class="block"><span class="label">First name</span><input class="field" name="agentFirstName" value={suggestion('agent.firstName', defaults?.agentFirstName)} /></label>
             <label class="block"><span class="label">Last name</span><input class="field" name="agentLastName" value={suggestion('agent.lastName', defaults?.agentLastName)} /></label>
             <label class="block"><span class="label">Email</span><input class="field" name="agentEmail" type="email" value={suggestion('agent.email', defaults?.agentEmail)} /></label>

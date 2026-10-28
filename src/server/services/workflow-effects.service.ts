@@ -137,7 +137,7 @@ const ensureInternalDocumentReviewDeadline: EffectHandler = async (effect, { dat
     projectId: project.id,
     sourceKey: workflowSourceKeys.documentReview(project.id),
     title: 'Review project documents',
-    description: 'Internal practice target for checking the project documents and next application details.',
+    description: 'Internal target for checking the project documents and next application details.',
     targetKey: WorkflowTargetKey.PROJECT_DOCUMENT_REVIEW,
     occurredAt: effect.lifecycleEvent.occurredAt,
   });

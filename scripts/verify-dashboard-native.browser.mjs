@@ -171,8 +171,8 @@ try {
   check('Initial load failure offers recovery', await page.getByRole('button', { name: 'Try again', exact: true }).isVisible());
   fail = false; delay = true;
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Loading your practice overview' }).waitFor();
-  check('Loading state is visible during retry', await page.getByRole('status').filter({ hasText: 'Loading your practice overview' }).isVisible());
+  await page.getByRole('status').filter({ hasText: 'Loading your overview' }).waitFor();
+  check('Loading state is visible during retry', await page.getByRole('status').filter({ hasText: 'Loading your overview' }).isVisible());
   await ready(); delay = false;
   delay = true;
   await page.getByRole('combobox', { name: 'Deadline date range' }).selectOption('7');
