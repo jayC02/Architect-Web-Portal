@@ -20,6 +20,14 @@ export type AutomationFailureMetadata = {
   recoveryAction: FailureRecoveryAction;
   recoveryFields: string[];
   retrySafe: boolean;
+  documentFailure: {
+    filename: string | null;
+    operation: string | null;
+    reasonCode: string | null;
+    reason: string | null;
+    portalMessage: string | null;
+    uploadedCount: number | null;
+  } | null;
 };
 
 const objectValue = (value: unknown): Record<string, unknown> =>
@@ -96,6 +104,7 @@ export const readAutomationFailureMetadata = (
   const safeRetryPoint = text(result.safeRetryPoint);
   const retrySafe = stoppedAtLogin || (status === 'FAILED_RETRYABLE'
     && (result.retrySafe === true || (result.outcome === 'failed_retryable' && Boolean(safeRetryPoint))));
+  const documentFailure = objectValue(result.documentFailure);
   return {
     category,
     headline: stoppedAtLogin ? 'Sign-in did not complete' : text(result.errorHeadline) ?? categoryDefaults?.headline ?? null,
@@ -108,5 +117,14 @@ export const readAutomationFailureMetadata = (
       ? result.recoveryFields.filter((value): value is string => typeof value === 'string')
       : [],
     retrySafe,
+    documentFailure: Object.keys(documentFailure).length ? {
+      filename: text(documentFailure.filename),
+      operation: text(documentFailure.operation),
+      reasonCode: text(documentFailure.reasonCode),
+      reason: text(documentFailure.reason),
+      portalMessage: text(documentFailure.portalMessage),
+      uploadedCount: typeof documentFailure.uploadedCount === 'number' && Number.isInteger(documentFailure.uploadedCount) && documentFailure.uploadedCount >= 0
+        ? documentFailure.uploadedCount : null,
+    } : null,
   };
 };

@@ -56,6 +56,9 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
   });
   if (!job) throw new HttpError(409, 'This automation job cannot be opened or resumed.');
+  if ((job.dataSnapshot as { metadata?: { portalDraftKey?: unknown } })?.metadata?.portalDraftKey) {
+    throw new HttpError(409, 'Use Run application with an updated Architect Pro Agent for this reset run.');
+  }
   if (job.status !== AutomationJobStatus.READY && job.claimedByUserId !== user.id) {
     throw new HttpError(409, 'This automation job is already open for another user.');
   }

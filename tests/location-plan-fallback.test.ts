@@ -87,6 +87,15 @@ documents = [makeDocument('site', DocumentType.SITE_PLAN), makeDocument('explici
 const explicit = await buildAutomationJobSnapshot({ organisationId: 'org', organisationName: 'Test', projectId: project.id, type: AutomationJobType.HOUSEHOLDER_PLANNING, createdBy: { id: 'user', name: 'Tester', email: 'tester@example.test' } }, database);
 assert.deepEqual(explicit.dataSnapshot.documents.filter(doc => doc.required).map(doc => doc.id), ['explicit']);
 
+// Reset identity must survive actual snapshot construction and later refreshes,
+// while address/document reads still come from the current canonical records.
+const resetKey = '0f5ce479-33d2-4929-aa5b-561d4a0fb923';
+(planning.preparationData as Record<string, unknown>).portalDraftKey = resetKey;
+const resetSnapshot = await buildAutomationJobSnapshot({ organisationId: 'org', organisationName: 'Test', projectId: project.id, type: AutomationJobType.HOUSEHOLDER_PLANNING, createdBy: { id: 'user', name: 'Tester', email: 'tester@example.test' } }, database);
+assert.equal(resetSnapshot.dataSnapshot.metadata.portalDraftKey, resetKey);
+assert.notEqual(resetSnapshot.snapshotHash, explicit.snapshotHash, 'draft identity participates in snapshot integrity');
+delete (planning.preparationData as Record<string, unknown>).portalDraftKey;
+
 // Preparation must agree with snapshot/readiness for already saved projects.
 const originalJobRead = prisma.automationJob.findFirst;
 const originalDocumentRead = prisma.projectDocument.findMany;

@@ -38,7 +38,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     await assertExecutionAvailable(tx, agent.organisationId);
     const job = await tx.automationJob.findFirst({
       where: { id, organisationId: agent.organisationId, status: AutomationJobStatus.READY, executionAuthorisedAt: { not: null } },
-      select: { id: true, organisationId: true, projectId: true, type: true, payloadVersion: true, createdById: true },
+      select: { id: true, organisationId: true, projectId: true, type: true, payloadVersion: true, createdById: true, dataSnapshot: true },
     });
     if (!job) throw new HttpError(409, 'This automation job is no longer available.');
     if (!agentSupportsJob(agent, job)) throw new HttpError(409, 'This Agent is not compatible with the prepared application.');

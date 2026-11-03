@@ -172,6 +172,7 @@ export const automationJobSnapshotV2Schema = z.object({
     sourceUpdatedAt: z.string().datetime(),
     presetVersion: z.number().int().positive(),
     integrity: z.string().regex(/^sha256:[a-f0-9]{64}$/).nullable(),
+      portalDraftKey: z.string().uuid().optional(),
   }),
   organisation: z.object({
     id: z.string().min(1),

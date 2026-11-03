@@ -24,6 +24,15 @@ const baseJob = {
   createdAt: '2026-10-22T10:00:00Z', updatedAt: '2026-10-22T10:00:00Z',
 };
 const records = {
+  upload: { ...baseJob, status: 'FAILED_FINAL', progressStage: 'documents', lastCheckpoint: 'documents',
+    error: "Could not upload 'ground-floor.pdf': The portal rejected the document title.",
+    resultData: { errorCode: 'DOCUMENT_UPLOAD_FAILED', stageDescription: 'Saving supporting document', recoveryAction: 'review_documents', retrySafe: false,
+      nextAction: 'Open Supporting Documents in the existing ePlanning draft. Compare this file with the attached document; replace an older revision manually.',
+      documentFailure: { filename: 'ground-floor.pdf', operation: 'Saving supporting document', reasonCode: 'DUPLICATE_DOCUMENT',
+        reason: 'The portal rejected the document title.', portalMessage: 'This title already exists. <script>window.injected=true</script>', uploadedCount: 2 } } },
+  'legacy-upload': { ...baseJob, status: 'FAILED_FINAL', progressStage: 'documents', lastCheckpoint: 'documents',
+    error: 'The portal did not confirm a supporting document upload, so Architect Pro stopped before continuing.',
+    resultData: { errorCode: 'DOCUMENT_UPLOAD_FAILED', recoveryAction: 'review_documents', retrySafe: false, nextAction: 'Review the existing eBuilding Standards draft.' } },
   failed: { ...baseJob, status: 'FAILED_RETRYABLE', lastCheckpoint: 'address_selection',
     error: 'Architect Pro could not safely resolve the property address returned by the portal.',
     resultData: { errorCode: 'ADDRESS_RESOLUTION_FAILED', stageDescription: 'Selecting the property address', recoveryAction: 'review_address' } },
@@ -43,7 +52,7 @@ const mirror = Astro.url.searchParams.has('mirror');
 const long = Astro.url.searchParams.has('long');
 const job = records[mode] ?? null;
 if (job?.executionAuthorisedAt) job.executionAuthorisedAt = new Date(job.executionAuthorisedAt);
-const context = { client: null, site: { id: 'fixture-site', addressLine1: 'Blackhill Drive', buildingNumber: '147', townCity: 'Glasgow', postcode: 'G23 5NN' }, applicationId: 'fixture-application', documentsHref: '#documents', portalHref: null, typeOfWorkKeys: [], typeOfWorkOptions: [], agentDefaults: null, organisationName: 'Fixture Practice', canManageAgentDefaults: false };
+const context = { client: null, site: { id: 'fixture-site', addressLine1: 'Blackhill Drive', buildingNumber: '147', townCity: 'Glasgow', postcode: 'G23 5NN' }, applicationId: 'fixture-application', documentsHref: '#documents', portalHref: mode.includes('upload') ? 'https://www.edevelopment.scot/' : null, typeOfWorkKeys: [], typeOfWorkOptions: [], agentDefaults: null, organisationName: 'Fixture Practice', canManageAgentDefaults: false };
 const common = { address: long ? 'LongUnbrokenAddress'.repeat(30) : '147, Blackhill Drive, Glasgow, G23 5NN', clientName: long ? 'LongUnbrokenClient'.repeat(25) : 'Prestige Properties Highland Ltd.', applicationType: 'Householder', status: 'Drafting', documentCount: 6, reference: 'Not assigned', projectId: 'layout-project', applicationStatus: mode === 'submitted' ? 'SUBMITTED' : 'DRAFTING', connectedAgent: true, recoveryContext: context };
 ---
 <!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Application card layout fixture</title><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
@@ -84,7 +93,7 @@ else {
   const open = async (query = '') => {
     await page.goto(base + query);
     await page.getByRole('heading', { name: 'Planning', exact: true }).waitFor();
-    await page.locator('astro-island[ssr]').first().waitFor({ state: 'detached' });
+    await page.waitForFunction(() => !document.querySelector('astro-island[ssr]'));
   };
   try {
     for (const mirror of [false, true]) {
@@ -107,7 +116,7 @@ else {
       await page.getByRole('button', { name: 'Complete Building Warrant details', exact: true }).click();
       await page.getByRole('alert').filter({ hasText: 'unbroken-diagnostic-token' }).waitFor();
       check(`${width}px: long names and request errors cannot widen cards or the page`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && [...document.querySelectorAll('#planning, #building-warrant')].every(card => card.scrollWidth <= card.clientWidth + 1)));
-      check(`${width}px: primary buttons remain inside their own card`, await page.evaluate(() => [...document.querySelectorAll('#planning .btn, #building-warrant .btn')].every(button => { const card = button.closest('#planning, #building-warrant').getBoundingClientRect(), rect = button.getBoundingClientRect(); return rect.left >= card.left && rect.right <= card.right; })));
+      check(`${width}px: primary buttons remain inside their own card`, await page.evaluate(() => [...document.querySelectorAll('#planning .btn, #building-warrant .btn')].filter(button => button.getClientRects().length > 0).every(button => { const card = button.closest('#planning, #building-warrant').getBoundingClientRect(), rect = button.getBoundingClientRect(); return rect.left >= card.left && rect.right <= card.right; })));
       if (width === 390) await page.screenshot({ path: path.join(output, 'mobile-long-error.png'), fullPage: true });
     }
     let unchangedCard;
@@ -119,6 +128,7 @@ else {
       const current = (await geometry())['building-warrant'];
       unchangedCard ??= current;
       check(`${state}: neighbour dimensions, fields and footer remain unchanged`, JSON.stringify(current) === JSON.stringify(unchangedCard));
+      check(`${state}: each application has its own Reset button`, await page.getByRole('button', { name: 'Reset Planning', exact: true }).isVisible() && await page.getByRole('button', { name: 'Reset Building Warrant', exact: true }).isVisible());
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -126,6 +136,61 @@ else {
     await page.getByText('Technical details', { exact: true }).focus();
     await page.keyboard.press('Enter');
     check('Technical details remain keyboard operable', await page.locator('#planning details').evaluate(details => details.open));
+    for (const state of ['upload', 'legacy-upload']) {
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await open(`?state=${state}`);
+        const card = page.locator('#planning');
+        check(`${state}/${width}: recovery instructions visible`, await card.getByText('How to continue:', { exact: true }).isVisible());
+        check(`${state}/${width}: existing planning draft can be reviewed`, await card.getByRole('link', { name: 'View Householder', exact: true }).isVisible());
+        check(`${state}/${width}: uncertain document uploads cannot restart automatically`, await card.getByRole('button', { name: 'Retry application', exact: true }).count() === 0);
+        if (state === 'upload') {
+          check(`${width}: failed filename and actual rejection visible`, await card.getByText('ground-floor.pdf', { exact: false }).count() > 0 && await card.getByText('This title already exists.', { exact: false }).isVisible());
+          check(`${width}: portal rejection is rendered as text`, await page.evaluate(() => window.injected === undefined));
+        } else {
+          check(`${width}: historical records disclose missing evidence`, await card.getByText('The exact cause cannot be determined', { exact: false }).isVisible());
+          check(`${width}: historical planning error has correct portal advice`, !(await card.innerText()).includes('eBuilding Standards'));
+        }
+        check(`${state}/${width}: error content fits viewport`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+        await page.screenshot({ path: path.join(output, `${state}-${width}.png`), fullPage: true });
+      }
+    }
+    for (const [label, expectedType] of [['Planning', 'HOUSEHOLDER_PLANNING'], ['Building Warrant', 'BUILDING_WARRANT']]) {
+      await open('?state=upload');
+      const trigger = page.getByRole('button', { name: `Reset ${label}`, exact: true });
+      await trigger.focus(); await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog', { name: `Reset ${label}?`, exact: true });
+      await dialog.waitFor();
+      check(`${label}: reset dialog opens by keyboard`, await dialog.isVisible());
+      await page.keyboard.press('Escape');
+      check(`${label}: Escape restores focus to reset button`, await trigger.evaluate(button => document.activeElement === button));
+      await trigger.click();
+      const requests = [];
+      await page.route('**/api/automation-jobs/reset', async route => {
+        requests.push(route.request().postDataJSON());
+        await new Promise(resolve => setTimeout(resolve, 80));
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Reset temporarily unavailable. Try again.' }) });
+      });
+      const confirm = dialog.getByRole('button', { name: `Reset ${label} run`, exact: true });
+      await confirm.evaluate(button => { if (button instanceof HTMLButtonElement) { button.click(); button.click(); } });
+      await dialog.getByRole('alert').waitFor();
+      check(`${label}: duplicate clicks send one reset`, requests.length === 1);
+      check(`${label}: request targets only this application`, requests[0].type === expectedType && requests[0].applicationId === `fixture-${label === 'Planning' ? 'planning' : 'warrant'}`);
+      const requestId = requests[0].requestId;
+      await confirm.click();
+      await page.waitForFunction(() => ![...document.querySelectorAll('dialog button')].some(button => button.textContent.includes('Resetting')));
+      check(`${label}: retry after an uncertain response keeps its request identity`, requests.length === 2 && requests[1].requestId === requestId);
+      await page.screenshot({ path: path.join(output, `reset-${expectedType}-390.png`), fullPage: true });
+      await page.unroute('**/api/automation-jobs/reset');
+      await page.route('**/api/automation-jobs/reset', async route => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, jobId: 'new-reset' }) });
+      });
+      const navigation = page.waitForEvent('load');
+      await confirm.click();
+      await navigation;
+      check(`${label}: a confirmed reset refreshes the application cards`, await page.getByRole('heading', { name: 'Planning', exact: true }).isVisible());
+      await page.unroute('**/api/automation-jobs/reset');
+    }
     check('No browser runtime errors', errors.length === 0);
     console.log(JSON.stringify({ checks: checks.length, passed: checks, browserErrors: errors }, null, 2));
   } finally { await browser.close(); await server.stop(); }

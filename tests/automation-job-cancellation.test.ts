@@ -180,4 +180,14 @@ const result = (eventType: string, status: string) => callback({ params: { id: j
 assert.equal((await result('started', 'IN_PROGRESS')).status, 409, 'cancel wins against delayed browser startup');
 assert.equal((await result('result', 'COMPLETED')).status, 200, 'late results drain without reviving cancelled work');
 assert.equal(route.state().job.status, 'CANCELLED');
+// A completed attempt stays immutable in history after Reset. Its late result
+// must also drain without restoring the old application's review/action state.
+route.state().job.status = 'COMPLETED';
+route.tx.$queryRaw = async (query: any) => {
+  assert.ok(query.sql.includes("superseded_by_reset"), 'callback checks reset supersession inside the execution lock');
+  assert.ok(query.values.filter((value: any) => value === 'org').length >= 2, 'both duplicate and reset branches are organisation scoped');
+  return [{ id: 'reset-marker' }];
+};
+assert.equal((await result('result', 'COMPLETED')).status, 200);
+assert.equal(route.state().job.status, 'COMPLETED');
 console.log('Cancellation: retained applications, safe release, stale-command isolation, rollback, concurrent requests and late callback fencing passed.');

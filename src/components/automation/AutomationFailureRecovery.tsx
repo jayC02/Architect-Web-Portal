@@ -87,6 +87,9 @@ export default function AutomationFailureRecovery({
   };
 
   const directRetry = metadata.recoveryAction === 'retry' && metadata.retrySafe;
+  const nextAction = metadata.category === 'DOCUMENT_UPLOAD_FAILED' && !metadata.documentFailure
+    ? `Open Supporting Documents in the existing ${isWarrant ? 'eBuilding Standards' : 'ePlanning'} draft. Compare the attached files with your project documents, then add missing files or replace incorrect revisions. Check the existing list before uploading again.`
+    : metadata.nextAction;
   const canOpenEditor = Boolean(desiredEditor && (
     (desiredEditor === 'address' || desiredEditor === 'site') ? context.site
       : desiredEditor === 'applicant' ? context.client
@@ -105,13 +108,14 @@ export default function AutomationFailureRecovery({
       {metadata.recoveryAction === 'update_login' && <a className="btn btn-secondary" href="architectpro://settings/login">Update Agent login</a>}
       {metadata.recoveryAction === 'update_login' && metadata.retrySafe && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>{retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{retrying ? 'Queuing restart…' : 'Restart after updating login'}</button>}
       {metadata.recoveryAction === 'review_documents' && <a className="btn btn-primary" href={context.documentsHref}>Review documents</a>}
-      {(metadata.recoveryAction === 'review_portal' || metadata.recoveryAction === 'close') && <a className="btn btn-primary gap-2" href={context.portalHref ?? detailsHref} target={context.portalHref ? '_blank' : undefined} rel={context.portalHref ? 'noreferrer' : undefined}>
+      {(metadata.recoveryAction === 'review_portal' || metadata.recoveryAction === 'close' || (metadata.recoveryAction === 'review_documents' && context.portalHref)) && <a className="btn btn-primary gap-2" href={context.portalHref ?? detailsHref} target={context.portalHref ? '_blank' : undefined} rel={context.portalHref ? 'noreferrer' : undefined}>
         {context.portalHref && <ExternalLink size={16} />}
         {context.portalHref ? (isWarrant ? 'View Warrant' : 'View Householder') : 'Review current portal state'}
       </a>}
       {metadata.retrySafe && !directRetry && !canOpenEditor && metadata.recoveryAction !== 'update_login' && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}><Play size={16} />Retry application</button>}
       <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View run details</a>
     </div>
+    {nextAction && <p className="mt-3 max-w-2xl break-words text-sm text-stone-700"><span className="font-semibold">How to continue:</span> {nextAction}</p>}
     {metadata.recoveryAction === 'update_login' && <p className="mt-3 max-w-2xl text-sm text-stone-600">Change the saved eDevelopment email and password in Architect Pro Agent on the computer that runs this application. Once saved, use Restart after updating login. If you are viewing this page on another device, update the login on the Agent computer first.</p>}
     {desiredEditor === 'agent' && !context.canManageAgentDefaults && <p className="mt-3 text-sm font-medium text-amber-900">An organisation owner or administrator must update the saved Agent details.</p>}
 

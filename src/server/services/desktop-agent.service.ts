@@ -26,11 +26,13 @@ export const parseAgentCapabilities = (value: unknown) => agentCapabilitiesSchem
 
 export const agentSupportsJob = (
   agent: Pick<AgentRegistration, 'capabilities'>,
-  job: { type: AutomationJobType; payloadVersion: number },
+  job: { type: AutomationJobType; payloadVersion: number; dataSnapshot?: unknown },
 ) => {
   const parsed = parseAgentCapabilities(agent.capabilities);
   if (!parsed.success) return false;
   const capabilities: AgentCapabilities = parsed.data;
+  const snapshot = job.dataSnapshot && typeof job.dataSnapshot === 'object' ? job.dataSnapshot as { metadata?: { portalDraftKey?: unknown } } : null;
+  if (snapshot?.metadata?.portalDraftKey && !capabilities.resetContractVersions?.includes(1)) return false;
   return capabilities.workflows.includes(job.type as never)
     && capabilities.snapshotVersions.includes(job.payloadVersion)
     && capabilities.callbackContractVersions.includes(DESKTOP_CALLBACK_CONTRACT_VERSION)

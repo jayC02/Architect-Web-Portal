@@ -102,6 +102,9 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         AND "organisationId" = ${access.organisationId}
         AND "automationJobId" = ${id}
         AND "eventType" = ${body.eventType}
+        OR ("organisationId" = ${access.organisationId}
+          AND "automationJobId" = ${id}
+          AND "eventType" = 'superseded_by_reset')
       LIMIT 1
     `);
     if (body.eventType === 'started') {

@@ -11,7 +11,7 @@ import { readAutomationFailureMetadata } from '../src/lib/automation/failure-rec
 // boundary. This tests orchestration, not PostgreSQL's locking implementation.
 const file = 'src/server/services/automation-job-restart.service.ts';
 const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-function harness(options: { active?: boolean; stale?: boolean; preflight?: boolean; insertFails?: boolean; eventFails?: boolean; revoked?: boolean; category?: string } = {}) {
+function harness(options: { active?: boolean; stale?: boolean; preflight?: boolean; insertFails?: boolean; eventFails?: boolean; revoked?: boolean; category?: string; superseded?: boolean } = {}) {
   const original = { id: 'old', organisationId: 'org_a', projectId: 'project_a', type: 'HOUSEHOLDER_PLANNING', claimedDeviceId: 'token_a', status: 'FAILED_RETRYABLE', resultData: { retrySafe: true, failureCategory: options.category ?? 'ADDRESS_RESOLUTION_FAILED' }, dataSnapshot: { site: { id: 'site_a', updatedAt: '2026-09-01T10:00:00.000Z', postcode: 'G41 5BZ' } } };
   let state: any = { old: structuredClone(original), postcode: 'G41 5BZ', siteVersion: options.stale ? 'newer' : original.dataSnapshot.site.updatedAt, jobs: [], journal: [], event: null, deadline: 'OPEN' };
   let tail = Promise.resolve();
@@ -37,7 +37,9 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
         const existing = state.journal.find((entry: any) => entry.idempotencyKey === where.idempotencyKey);
         if (existing) return existing;
         state.journal.push(structuredClone(create)); return create;
-      }, findUnique: async () => state.event, create: async ({ data }: any) => { if (options.eventFails) throw new Error('event failed'); state.event = structuredClone(data); } },
+      }, findUnique: async ({ where }: any) => options.superseded && where.idempotencyKey.startsWith('reset-supersedes:')
+        ? { eventType: 'superseded_by_reset' } : state.event,
+      create: async ({ data }: any) => { if (options.eventFails) throw new Error('event failed'); state.event = structuredClone(data); } },
     deadline: { updateMany: async () => { state.deadline = 'CANCELLED'; } },
     $executeRaw: async () => {},
   };
@@ -72,7 +74,7 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
   const input = { organisation: { id: 'org_a', name: 'Practice' }, actor: { id: 'user_a', name: 'Architect', email: 'test@example.com' }, oldJobId: 'old', desktopAccess: { id: 'token_a', organisationId: 'org_a' }, correctedPostcode: 'G41 5AA' };
   return { state: () => state, original, input, run: (overrides = {}) => exports.restartFailedAutomationJob({ ...input, ...overrides }) };
 }
-for (const options of [{ active: true }, { stale: true }, { preflight: true }, { insertFails: true }, { eventFails: true }, { revoked: true }, { category: 'DOCUMENT_UPLOAD_FAILED' }]) {
+for (const options of [{ active: true }, { stale: true }, { preflight: true }, { insertFails: true }, { eventFails: true }, { revoked: true }, { category: 'DOCUMENT_UPLOAD_FAILED' }, { superseded: true }]) {
   const test = harness(options);
   const before = structuredClone(test.state());
   await assert.rejects(test.run());

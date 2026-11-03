@@ -17,7 +17,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       id: true, type: true, payloadVersion: true, status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true, progressPercent: true,
       etaSeconds: true, progressMessage: true, progressUpdatedAt: true, agentHeartbeatAt: true,
       resultSummary: true, error: true,
-      resultData: true, lastCheckpoint: true,
+      resultData: true, lastCheckpoint: true, dataSnapshot: true,
     },
   });
   if (!job) throw new HttpError(404, 'Automation job not found.');
@@ -25,5 +25,6 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const agents = job.status === 'READY'
     ? await prisma.agentRegistration.findMany({ where: healthyAgentWhere(organisation.id), select: { capabilities: true } })
     : [];
-  return jsonResponse(200, { job: { ...job, stale }, compatibleAgentOnline: agents.some((agent) => agentSupportsJob(agent, job)) });
+  const { dataSnapshot: _snapshot, ...projection } = job;
+  return jsonResponse(200, { job: { ...projection, stale }, compatibleAgentOnline: agents.some((agent) => agentSupportsJob(agent, job)) });
 }, context);

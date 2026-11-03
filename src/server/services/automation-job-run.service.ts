@@ -28,6 +28,7 @@ export const authoriseAutomationJobRun = async (input: {
       projectId: true,
       type: true,
       payloadVersion: true,
+      dataSnapshot: true,
     },
   });
   if (!job) throw new HttpError(409, 'This application is not ready to run.');

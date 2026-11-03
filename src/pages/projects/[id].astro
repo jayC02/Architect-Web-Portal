@@ -255,10 +255,12 @@ const healthyAgents = await prisma.agentRegistration.findMany({
 const planningAgentConnected = healthyAgents.some((agent) => agentSupportsJob(agent, {
   type: planningDesktop.job?.type ?? AutomationJobType.HOUSEHOLDER_PLANNING,
   payloadVersion: planningDesktop.job?.payloadVersion ?? 2,
+  dataSnapshot: planningDesktop.job?.dataSnapshot,
 }));
 const warrantAgentConnected = healthyAgents.some((agent) => agentSupportsJob(agent, {
   type: AutomationJobType.BUILDING_WARRANT,
   payloadVersion: warrantDesktop.job?.payloadVersion ?? 2,
+  dataSnapshot: warrantDesktop.job?.dataSnapshot,
 }));
 const readyAutomationJobCount = [planningDesktop.job, warrantDesktop.job]
   .filter((job) => job?.status === 'READY').length;

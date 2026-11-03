@@ -19,7 +19,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
       status: AutomationJobStatus.READY,
       executionAuthorisedAt: { not: null },
     },
-    select: { id: true, type: true, payloadVersion: true, createdAt: true },
+    select: { id: true, type: true, payloadVersion: true, createdAt: true, dataSnapshot: true },
     orderBy: [{ executionAuthorisedAt: 'asc' }, { createdAt: 'asc' }],
     take: 20,
   });

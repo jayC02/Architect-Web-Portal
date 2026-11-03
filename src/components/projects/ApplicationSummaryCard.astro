@@ -2,6 +2,7 @@
 import { AutomationJobType } from '@prisma/client';
 import { Building2 } from 'lucide-react';
 import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
+import AutomationRunResetButton from '@/components/automation/AutomationRunResetButton';
 import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import type { DesktopAutomationJob } from '@/server/services/desktop-automation-status.service';
 
@@ -100,5 +101,6 @@ const {
       connectedAgent={connectedAgent}
       recoveryContext={recoveryContext}
     />
+    {applicationId && <AutomationRunResetButton client:load applicationId={applicationId} type={applicationKind === 'PLANNING' ? 'HOUSEHOLDER_PLANNING' : 'BUILDING_WARRANT'} currentJobId={desktopJob?.id ?? null} />}
   </footer>
 </section>

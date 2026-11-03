@@ -12,6 +12,7 @@ export const agentCapabilitiesSchema = z.object({
   snapshotVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),
   callbackContractVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),
   progressContractVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),
+  resetContractVersions: z.array(z.number().int().min(1).max(20)).max(10).optional(),
 }).strict();
 
 export const legacyAgentEnrollmentExchangeSchema = z.object({

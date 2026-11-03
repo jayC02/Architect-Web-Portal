@@ -435,6 +435,8 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       sourceUpdatedAt: sourceUpdatedAt.toISOString(),
       presetVersion: warrant?.presetVersion ?? 1,
       integrity: null,
+      ...(nullableString((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey)
+        ? { portalDraftKey: String((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey) } : {}),
     },
     organisation: {
       id: input.organisationId,

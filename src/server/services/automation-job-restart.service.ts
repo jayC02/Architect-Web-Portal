@@ -32,6 +32,7 @@ const retryJobSelect = {
   status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true,
   progressPercent: true, etaSeconds: true, progressMessage: true, resultSummary: true,
   error: true, agentHeartbeatAt: true, resultData: true, lastCheckpoint: true,
+  dataSnapshot: true,
 } satisfies Prisma.AutomationJobSelect;
 
 // Shared by web retries and Desktop corrections. No canonical writes or snapshot
@@ -57,6 +58,12 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     },
   });
   if (!oldJob) throw new HttpError(404, 'Automation job not found.');
+  const reset = await transaction.automationJobEvent.findUnique({ where: {
+    idempotencyKey: `reset-supersedes:${input.organisation.id}:${oldJob.id}`,
+  } });
+  if (reset?.eventType === 'superseded_by_reset') {
+    throw new HttpError(409, 'This attempt was replaced by Reset. Open the project and use its current application run.');
+  }
   const idempotencyKey = `automation-restart:${input.organisation.id}:${oldJob.id}`;
   const prior = await transaction.automationJobEvent.findUnique({ where: { idempotencyKey } });
   if (prior) {

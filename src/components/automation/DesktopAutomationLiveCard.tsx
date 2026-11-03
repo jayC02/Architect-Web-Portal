@@ -331,7 +331,10 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       </div>
       <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-700">{job.error || job.resultSummary || 'Architect Pro stopped before taking any further portal action.'}</p>
       <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {failure.stageDescription || stageLabel(failure.stage)}</p>
+      {failure.documentFailure?.filename && <p className="mt-2 break-words text-sm text-stone-700"><span className="font-semibold">Document:</span> {failure.documentFailure.filename}</p>}
+      {failure.documentFailure?.portalMessage && <p className="mt-2 break-words text-sm text-stone-700"><span className="font-semibold">Portal message:</span> {failure.documentFailure.portalMessage}</p>}
       {failure.explanation && <p className="mt-2 text-sm font-medium text-stone-700">{failure.explanation}</p>}
+      {failure.category === 'DOCUMENT_UPLOAD_FAILED' && !failure.documentFailure && <p className="mt-2 text-sm text-stone-700">This Agent did not save the failed filename or original portal message. The exact cause cannot be determined from this run record. Review Supporting Documents in the existing {isWarrant ? 'eBuilding Standards' : 'ePlanning'} draft before uploading again.</p>}
       <AutomationFailureRecovery metadata={failure} context={recoveryContext} applicationType={applicationType} retrying={working === 'retry'} onRetry={retry} detailsHref={currentDetailsHref} />
       <a className="btn btn-secondary mt-3 gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
