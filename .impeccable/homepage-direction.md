@@ -9,7 +9,7 @@ THESIS: Let a prospective user prepare an example application before signing in.
 
 OWN-WORLD: Extend the dashboard's cool mist, steel-blue, white and indigo identity into a public introduction. Manrope gives public headings a more deliberate voice; the working demo retains compact, familiar UI. Neutral, exact architectural plan geometry belongs to the example-document viewer.
 
-STORY: Understand the offer, choose planning or building warrant, inspect and select sample drawings, see the prepared details, and complete an example review. Then create a workspace or sign in. Further content explains linked projects, documents, deadlines and professional oversight.
+STORY: Understand the offer, choose planning or building warrant, watch all sample drawings arrive, click Prepare example to see AI fill the details, then click Submit example to watch automatic completion and reveal the illustrative 1-minute versus 25-minute comparison. Then create a workspace or sign in. Further content explains linked projects, documents, deadlines and professional oversight.
 
 FIRST VIEWPORT: A quiet logo/navigation row, a large left-aligned two-line offer with concise supporting copy, then a wide interactive application workbench. The step rail, document list, drawing preview and primary preparation action are visible together at desktop size. On phones the same controls stack without horizontal scrolling.
 
@@ -19,4 +19,4 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Truth and boundaries
 
-All demo information is explicitly illustrative. Demo interactions stay in the browser; no files are uploaded, no AI service is called, and no application is submitted. No invented prices, quantified savings or customer endorsements. Existing authentication, private routes and account recovery remain intact. Returning signed-in visitors still reach their dashboard. The existing dashboard design record remains authoritative for the working product; homepage additions are documented separately.
+All demo information is explicitly illustrative. Demo interactions stay in the browser; no files are uploaded, no AI service is called, and no application is submitted. No invented prices, savings or customer endorsements. The user supplied the illustrative 1-minute versus 25-minute comparison for this demo; label it as illustrative and do not present it as measured elapsed time. Existing authentication, private routes and account recovery remain intact. Returning signed-in visitors still reach their dashboard. The existing dashboard design record remains authoritative for the working product; homepage additions are documented separately.

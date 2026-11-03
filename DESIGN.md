@@ -135,7 +135,7 @@ The working-product roles apply to the redesigned `/dashboard` and elements insi
 
 Cool steel-blue navigation, white work surfaces and compact system typography give the practice a clear working environment. Brand expression comes from the shared project-stage palette and precise alignment, while navigation, search, filters and date controls remain familiar.
 
-The public homepage extends that palette with self-hosted Manrope and a wider, more open composition. Its interactive application workbench is the proof: visitors inspect illustrative drawings, prepare an example and review it before signing in. The embedded workbench keeps familiar system UI typography.
+The public homepage extends that palette with self-hosted Manrope and a wider, more open composition. Its interactive application workbench is the proof: drawings arrive, AI fills the details after Prepare example, and Submit example completes a submission simulation and reveals the supplied time comparison. The embedded workbench keeps familiar system UI typography.
 
 **Key Characteristics:**
 
@@ -227,7 +227,7 @@ Initial loading uses calm skeletons. A failed initial request offers retry; a fa
 
 ### Public homepage and application demonstration
 
-Public primary actions use the `public-button-primary` role and deepen to the existing primary hover colour. The workbench uses `public-demo`: a flat white surface, explicit example label, standard buttons and checkboxes, a native textarea, and numbered steps because the content is a real sequence. The document viewer uses exact orthographic SVG geometry to represent illustrative plans, not atmospheric architectural artwork. Empty required selections and blank proposal text block progress. Editing proposal text or document selections invalidates completed review confirmations. Keep the persistent disclosure that no file is uploaded and no application is submitted. Behaviour and source ownership are recorded in `docs/homepage-design.md`.
+Public primary actions use the `public-button-primary` role and deepen to the existing primary hover colour. The workbench uses `public-demo`: a flat white surface, explicit simulation label, standard buttons and numbered steps because the content is a real sequence. The document viewer uses exact orthographic SVG geometry to represent illustrative plans. Drawing rows enter in order; AI fills read-only fields with a brief typing treatment and restrained status icons; the second click runs a finite submission sequence. Completion reveals a tonal comparison panel with 44px tabular time figures, 18px units, primary indigo for Architect Pro and muted ink for manual preparation. These figures are the user's illustrative values, not a live stopwatch. Reduced motion resolves each automated stage immediately while preserving both user actions. Keep the persistent disclosure that no real upload or submission occurs. Behaviour and source ownership are recorded in `docs/homepage-design.md`.
 
 ## Do's and Don'ts
 

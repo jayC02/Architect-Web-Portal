@@ -18,7 +18,7 @@ Provide an organisation-scoped workspace for running architecture projects and p
 
 The existing Astro application uses React islands, Prisma and authenticated organisation membership. Its dashboard reads `/api/dashboard/summary`, with 7, 14 and 30 day deadline ranges. The desktop agent queue and practice calendar are existing features.
 
-The public homepage introduces the product before sign-in. The user confirmed that its interactive demonstration should emphasise preparing planning and building warrant applications. The demonstration uses sample drawings, prepared fields and a review checklist; it runs locally in the browser without uploads or submissions. Existing sign-in and registration routes remain the account entry points.
+The public homepage introduces the product before sign-in. Its interactive demonstration shows sample drawings arriving, AI filling application details after Prepare example, and an automatic submission simulation after Submit example. The final screen uses the user's illustrative 1-minute versus 25-minute comparison. The demonstration runs locally in the browser without real uploads, AI calls or submissions. Existing sign-in and registration routes remain the account entry points.
 
 ## Capabilities and Constraints
 

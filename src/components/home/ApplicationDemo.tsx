@@ -1,5 +1,5 @@
-import { useId, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Building2, Check, CheckCheck, ChevronRight, FileCheck2, FileText, FolderOpen, House, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Building2, Check, CheckCheck, ChevronRight, Clock3, FileCheck2, FileText, FolderOpen, House, LoaderCircle, RotateCcw, Send, ShieldCheck, Sparkles } from 'lucide-react';
 
 type ApplicationKind = 'planning' | 'warrant';
 type ExampleDocument = { id: string; name: string; type: string; size: string };
@@ -9,13 +9,27 @@ const exampleDocuments: ExampleDocument[] = [
   { id: 'proposed', name: 'Proposed floor plan.pdf', type: 'Proposed drawing', size: '1.6 MB' },
   { id: 'specification', name: 'Construction specification.pdf', type: 'Specification', size: '680 KB' },
 ];
-const steps = ['Your drawings', 'Prepared details', 'Your review'];
+type Phase = 'drawings' | 'preparing' | 'prepared' | 'submitting' | 'complete';
+const steps = ['Your drawings', 'AI preparation', 'Submission'];
 const originalProposal = 'Single-storey rear extension to the existing dwelling.';
-const reviewChecks = [
-  'Check the site and applicant details',
-  'Review the drawings and document types',
-  'Confirm declarations and any application fees',
-];
+const preparationTasks = ['Reading the drawings', 'Finding the site and applicant', 'Filling the application details', 'Organising supporting documents'];
+const submissionTasks = ['Opening the example portal', 'Entering the application details', 'Attaching all supporting documents', 'Completing the example submission'];
+
+function TypedValue({ value, reducedMotion }: { value: string; reducedMotion: boolean }) {
+  const [length, setLength] = useState(reducedMotion ? value.length : 0);
+  useEffect(() => {
+    if (reducedMotion) { setLength(value.length); return; }
+    setLength(0);
+    const start = performance.now();
+    const timer = window.setInterval(() => {
+      const next = Math.min(value.length, Math.ceil((performance.now() - start) / 11));
+      setLength(next);
+      if (next === value.length) window.clearInterval(timer);
+    }, 22);
+    return () => window.clearInterval(timer);
+  }, [value, reducedMotion]);
+  return <><span className="demo-sr-only">{value}</span><span aria-hidden="true" className={length < value.length ? 'demo-typing' : undefined}>{value.slice(0, length)}</span></>;
+}
 
 function DrawingPreview({ document }: { document: ExampleDocument }) {
   const proposed = document.id === 'proposed';
@@ -50,52 +64,94 @@ function DrawingPreview({ document }: { document: ExampleDocument }) {
 
 export default function ApplicationDemo() {
   const [kind, setKind] = useState<ApplicationKind>('planning');
-  const [step, setStep] = useState(0);
-  const [furthestStep, setFurthestStep] = useState(0);
-  const [selected, setSelected] = useState(['location', 'existing', 'proposed']);
+  const [phase, setPhase] = useState<Phase>('drawings');
+  const [received, setReceived] = useState(0);
+  const [preparation, setPreparation] = useState(0);
+  const [submission, setSubmission] = useState(0);
+  const [run, setRun] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [previewId, setPreviewId] = useState('proposed');
-  const [proposal, setProposal] = useState(originalProposal);
-  const [reviewed, setReviewed] = useState<boolean[]>([false, false, false]);
-  const [finished, setFinished] = useState(false);
+  const section = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const fieldId = useId();
+  const interacted = useRef(false);
   const documents = kind === 'planning' ? exampleDocuments.slice(0, 3) : exampleDocuments;
   const previewDocument = documents.find(document => document.id === previewId) ?? documents[0];
-  const selectedDocuments = documents.filter(document => selected.includes(document.id));
-  const ready = selected.includes('location') && selected.includes('proposed');
-  const checksComplete = reviewed.every(Boolean);
+  const step = phase === 'drawings' ? 0 : phase === 'preparing' || phase === 'prepared' ? 1 : 2;
+  const busy = phase === 'preparing' || phase === 'submitting';
+  const allReceived = received === documents.length;
+  const applicationName = kind === 'planning' ? 'Planning permission' : 'Building warrant';
+  const preparedFields = [
+    { label: 'Site address', value: '24 Willow Road, Glasgow', source: 'From the example location plan' },
+    { label: 'Applicant', value: 'Alex Morgan', source: 'From the example drawing title block' },
+    { label: 'Application type', value: kind === 'planning' ? 'Householder planning permission' : 'Building warrant for an extension' },
+    { label: 'Proposal description', value: originalProposal, source: 'From the example proposed drawing' },
+  ];
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(preference.matches);
+    update();
+    preference.addEventListener('change', update);
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect(); }
+    }, { threshold: 0.15 });
+    if (section.current) observer.observe(section.current);
+    return () => { preference.removeEventListener('change', update); observer.disconnect(); };
+  }, []);
+
+  // Each run owns its timers. Restarting, changing type or unmounting cancels the old sequence.
+  useEffect(() => {
+    if (!visible) return;
+    const timers: number[] = [];
+    const later = (callback: () => void, delay: number) => timers.push(window.setTimeout(callback, reducedMotion ? 0 : delay));
+    if (phase === 'drawings') {
+      for (let index = 1; index <= documents.length; index++) later(() => setReceived(index), 300 + index * 380);
+    } else if (phase === 'preparing') {
+      for (let index = 1; index <= preparedFields.length; index++) later(() => setPreparation(index), 650 + index * 850);
+      later(() => setPhase('prepared'), 4800);
+    } else if (phase === 'submitting') {
+      for (let index = 1; index <= submissionTasks.length; index++) later(() => setSubmission(index), index * 750);
+      later(() => setPhase('complete'), 3400);
+    }
+    return () => timers.forEach(window.clearTimeout);
+  }, [phase, kind, run, visible, reducedMotion]);
+
+  useEffect(() => {
+    if (interacted.current) heading.current?.focus({ preventScroll: true });
+  }, [phase]);
 
   const changeKind = (next: ApplicationKind) => {
-    setKind(next); setStep(0); setFurthestStep(0); setFinished(false);
-    setSelected((next === 'planning' ? exampleDocuments.slice(0, 3) : exampleDocuments).map(document => document.id));
-    setPreviewId('proposed'); setProposal(originalProposal); setReviewed([false, false, false]);
+    interacted.current = true;
+    setKind(next); setPhase('drawings'); setReceived(0); setPreparation(0); setSubmission(0);
+    setRun(value => value + 1); setPreviewId('proposed');
   };
-  const moveTo = (next: number) => {
-    setStep(next); setFurthestStep(value => Math.max(value, next));
-    requestAnimationFrame(() => heading.current?.focus({ preventScroll: true }));
+  const startPreparation = () => {
+    if (phase !== 'drawings' || !allReceived) return;
+    interacted.current = true; setPhase('preparing');
   };
-  const toggleDocument = (id: string) => {
-    setSelected(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]);
-    setFurthestStep(0); setFinished(false); setReviewed([false, false, false]);
+  const startSubmission = () => {
+    if (phase === 'prepared') setPhase('submitting');
   };
-  const updateProposal = (value: string) => {
-    setProposal(value); setFinished(false); setReviewed([false, false, false]);
-  };
+  const status = phase === 'drawings' ? (allReceived ? 'All drawings added' : `Adding drawings: ${received} of ${documents.length}`)
+    : phase === 'preparing' ? preparationTasks[Math.min(preparation, preparationTasks.length - 1)]
+    : phase === 'prepared' ? 'Application prepared. Ready to submit the example.'
+    : phase === 'submitting' ? submissionTasks[Math.min(submission, submissionTasks.length - 1)] : 'Example submission complete';
 
-  return <section id="product-demo" className="application-demo" aria-label="Interactive application preparation demonstration">
+  return <section ref={section} id="product-demo" className="application-demo" aria-label="Interactive application preparation demonstration" data-phase={phase}>
     <div className="demo-window-bar"><span className="demo-window-title"><FolderOpen size={16} aria-hidden="true" />Willow Road extension</span><span className="demo-example-badge">Interactive example</span><button type="button" className="demo-restart" onClick={() => changeKind(kind)} aria-label="Restart the demonstration"><RotateCcw size={14} aria-hidden="true" /><span>Start again</span></button></div>
     <div className="demo-application-types" role="group" aria-label="Choose an example application type">
-      <button type="button" aria-pressed={kind === 'planning'} onClick={() => changeKind('planning')}><House size={17} aria-hidden="true" />Planning permission</button>
-      <button type="button" aria-pressed={kind === 'warrant'} onClick={() => changeKind('warrant')}><Building2 size={17} aria-hidden="true" />Building warrant</button>
+      <button type="button" aria-pressed={kind === 'planning'} onClick={() => { if (kind !== 'planning') changeKind('planning'); }}><House size={17} aria-hidden="true" />Planning permission</button>
+      <button type="button" aria-pressed={kind === 'warrant'} onClick={() => { if (kind !== 'warrant') changeKind('warrant'); }}><Building2 size={17} aria-hidden="true" />Building warrant</button>
     </div>
     <div className="demo-workspace">
-      <nav className="demo-stepper" aria-label="Example application steps"><ol>{steps.map((label, index) => <li key={label}><button type="button" aria-current={step === index ? 'step' : undefined} disabled={index > furthestStep || (index === 2 && !proposal.trim())} onClick={() => moveTo(index)}><span className="demo-step-number">{index < step || finished ? <Check size={14} aria-hidden="true" /> : index + 1}</span><span>{label}</span><ChevronRight size={14} className="demo-step-chevron" aria-hidden="true" /></button></li>)}</ol><div className="demo-stepper-note"><ShieldCheck size={18} aria-hidden="true" /><p>Prepared with AI.<br />Reviewed by you.</p></div></nav>
-      <div className="demo-content" key={`${kind}-${step}`}>
-        {step === 0 && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>Start with your drawings.</h3><p>Try the example files. Select a drawing to take a closer look.</p></div><div className="demo-documents-layout"><div className="demo-document-list">{documents.map(document => <div className="demo-document-row" key={document.id}><label className="demo-document-checkbox"><input type="checkbox" checked={selected.includes(document.id)} onChange={() => toggleDocument(document.id)} aria-label={`Include ${document.name}`} /></label><button type="button" className="demo-document-select" onClick={() => setPreviewId(document.id)} aria-pressed={previewId === document.id}><FileText size={19} strokeWidth={1.5} aria-hidden="true" /><span><strong>{document.name}</strong><span>{document.type}<span aria-hidden="true"> / </span>{document.size}</span></span><ChevronRight size={14} aria-hidden="true" /></button></div>)}<p className="demo-document-count">{selectedDocuments.length} example documents selected</p><details className="demo-mobile-drawing"><summary>Preview selected drawing</summary><DrawingPreview document={previewDocument} /></details></div><div className="demo-desktop-drawing"><DrawingPreview document={previewDocument} /></div></div><div className="demo-action-row"><span className="demo-selection-note">{ready ? 'Ready to see what happens next?' : 'Include the location and proposed plans to continue.'}</span><button type="button" className="home-button-primary" disabled={!ready} onClick={() => moveTo(1)}><Sparkles size={15} aria-hidden="true" />Prepare example<ArrowRight size={15} aria-hidden="true" /></button></div></>}
-        {step === 1 && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>The details, brought together.</h3><p>See how your documents inform the application. You can edit the example proposal.</p></div><div className="demo-prepared-layout"><dl className="demo-prepared-fields"><div><dt>Site address</dt><dd>24 Willow Road, Glasgow</dd><span><FileText size={11} aria-hidden="true" />From the example location plan</span></div><div><dt>Application type</dt><dd>{kind === 'planning' ? 'Householder planning permission' : 'Building warrant for an extension'}</dd></div><div className="demo-proposal-field"><label htmlFor={fieldId}>Proposal description</label><textarea id={fieldId} value={proposal} maxLength={300} onChange={event => updateProposal(event.target.value)} rows={2} /><span><FileText size={11} aria-hidden="true" />Based on the example proposed drawing</span></div></dl><div className="demo-prepared-documents"><span className="demo-prepared-label"><FileCheck2 size={16} aria-hidden="true" />Documents organised</span>{selectedDocuments.map(document => <div key={document.id}><Check size={13} aria-hidden="true" /><span>{document.type}</span></div>)}<p>{kind === 'planning' ? 'Ownership, declarations and application fees remain for you to confirm.' : 'Technical details, declarations and application fees remain for you to confirm.'}</p></div></div><div className="demo-action-row"><button type="button" className="demo-back" onClick={() => moveTo(0)}><ArrowLeft size={14} aria-hidden="true" />Back to drawings</button><button type="button" className="home-button-primary" disabled={!proposal.trim()} onClick={() => moveTo(2)}>Review example<ArrowRight size={15} aria-hidden="true" /></button></div></>}
-        {step === 2 && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>{finished ? 'Preparation done. Control kept.' : 'Your expertise has the final say.'}</h3><p>{finished ? 'That is the idea: a prepared application, with the important decisions still yours.' : 'The example is prepared. Confirm the review items to finish the demonstration.'}</p></div><div className="demo-review-layout"><div className="demo-review-summary"><span className="demo-review-kind">{kind === 'planning' ? 'Planning permission' : 'Building warrant'}</span><h4>Willow Road extension</h4><p>{proposal}</p><span className="demo-review-document-count"><FileCheck2 size={14} aria-hidden="true" />{selectedDocuments.length} supporting documents</span><span className="demo-review-status"><CheckCheck size={14} aria-hidden="true" />{finished ? 'Example review complete' : 'Prepared for review'}</span></div><fieldset className="demo-checklist" disabled={finished}><legend>Example review checklist</legend>{reviewChecks.map((label, index) => <label key={label}><input type="checkbox" checked={reviewed[index]} onChange={event => setReviewed(values => values.map((value, position) => position === index ? event.target.checked : value))} /><span>{label}</span></label>)}</fieldset></div><div className="demo-action-row"><button type="button" className="demo-back" onClick={() => moveTo(1)}><ArrowLeft size={14} aria-hidden="true" />Back to details</button>{finished ? <a href="/register" className="home-button-primary">Create your workspace<ArrowRight size={15} aria-hidden="true" /></a> : <button type="button" className="home-button-primary" disabled={!checksComplete} onClick={() => setFinished(true)}>Finish example review<Check size={15} aria-hidden="true" /></button>}</div></>}
+      <nav className="demo-stepper" aria-label="Example application steps"><ol>{steps.map((label, index) => <li className="demo-step-item" key={label} aria-current={step === index ? 'step' : undefined} data-complete={index < step || phase === 'complete'}><span className="demo-step-number">{index < step || phase === 'complete' ? <Check size={14} aria-hidden="true" /> : index + 1}</span><span>{label}</span><ChevronRight size={14} className="demo-step-chevron" aria-hidden="true" /></li>)}</ol><div className="demo-stepper-note"><Sparkles size={18} aria-hidden="true" /><p>Your drawings in.<br />The paperwork, done.</p></div></nav>
+      <div className="demo-content" key={`${kind}-${step}`} aria-busy={busy}>
+        {phase === 'drawings' && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>{allReceived ? 'Your drawings. All in one place.' : 'First, bring in the drawings.'}</h3><p>Watch the example files arrive, then let AI take it from here.</p></div><div className="demo-documents-layout"><div className="demo-document-list">{documents.map((document, index) => <div className="demo-document-row demo-incoming-document" data-received={index < received} key={document.id}><button type="button" className="demo-document-select" disabled={index >= received} onClick={() => setPreviewId(document.id)} aria-pressed={previewId === document.id}><FileText size={19} strokeWidth={1.5} aria-hidden="true" /><span><strong>{document.name}</strong><span>{document.type}<span aria-hidden="true"> / </span>{document.size}</span></span></button><span className="demo-file-state">{index < received ? <><Check size={14} aria-hidden="true" /><span className="demo-sr-only">Added</span></> : <><span className="demo-file-wait" aria-hidden="true" /><span className="demo-sr-only">Waiting</span></>}</span></div>)}<p className="demo-document-count">{received} of {documents.length} example documents added</p><details className="demo-mobile-drawing"><summary>Preview selected drawing</summary><DrawingPreview document={previewDocument} /></details></div><div className="demo-desktop-drawing"><DrawingPreview document={previewDocument} /></div></div><div className="demo-action-row"><span className="demo-selection-note">{allReceived ? 'All drawings added. Ready when you are.' : 'Adding the example drawing set…'}</span><button type="button" className="home-button-primary" disabled={!allReceived} onClick={startPreparation}><Sparkles size={15} aria-hidden="true" />Prepare example<ArrowRight size={15} aria-hidden="true" /></button></div></>}
+        {step === 1 && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>{phase === 'preparing' ? 'AI is doing the paperwork.' : 'The details are in. You’re ready.'}</h3><p>{phase === 'preparing' ? 'Reading your drawings and filling in the application, field by field.' : 'Site, applicant, proposal and drawings, brought together automatically.'}</p></div><div className="demo-prepared-layout"><dl className="demo-prepared-fields">{preparedFields.map((field, index) => <div key={field.label} className="demo-auto-field" data-filled={preparation > index}><dt>{field.label}{preparation > index && <Check size={12} aria-label="Filled" />}</dt><dd>{preparation > index ? <TypedValue value={field.value} reducedMotion={reducedMotion || phase === 'prepared'} /> : <span className="demo-field-placeholder">Waiting for AI</span>}</dd>{preparation > index && field.source && <span><FileText size={11} aria-hidden="true" />{field.source}</span>}</div>)}</dl><div className="demo-ai-activity"><div className="demo-ai-label">{phase === 'preparing' ? <Sparkles size={17} className="demo-ai-spark" aria-hidden="true" /> : <CheckCheck size={17} aria-hidden="true" />}<strong>{phase === 'preparing' ? 'Architect Pro is working' : 'Application prepared'}</strong></div><ol className="demo-task-list">{preparationTasks.map((task, index) => <li key={task} data-state={phase === 'prepared' || preparation > index ? 'done' : preparation === index ? 'active' : 'waiting'}>{phase === 'prepared' || preparation > index ? <Check size={14} aria-hidden="true" /> : preparation === index ? <LoaderCircle size={14} className="demo-spinner" aria-hidden="true" /> : <span className="demo-task-dot" aria-hidden="true" />}<span>{task}</span></li>)}</ol><div className="demo-ai-document-note"><FileCheck2 size={15} aria-hidden="true" /><span>{documents.length} supporting documents{phase === 'prepared' ? ' organised and attached' : ' linked to this application'}</span></div></div></div><div className="demo-action-row"><span className="demo-selection-note">{phase === 'prepared' ? 'One more click. Watch the example submit.' : 'No copying. No re-entering the same details.'}</span><button type="button" className="home-button-primary" disabled={phase !== 'prepared'} onClick={startSubmission}>{phase === 'preparing' ? <><LoaderCircle size={15} className="demo-spinner" aria-hidden="true" />Preparing example…</> : <><Send size={14} aria-hidden="true" />Submit example<ArrowRight size={15} aria-hidden="true" /></>}</button></div></>}
+        {step === 2 && <><div className="demo-content-heading"><h3 ref={heading} tabIndex={-1}>{phase === 'complete' ? 'Application submitted. Time back.' : 'One click. The rest happens for you.'}</h3><p>{phase === 'complete' ? `${applicationName}, from drawings to a completed example submission.` : `Watch Architect Pro complete the ${applicationName.toLowerCase()} submission in this example.`}</p></div><div className="demo-submission-layout"><div className="demo-submission-receipt"><span className="demo-review-kind">{applicationName}</span><h4>Willow Road extension</h4><p>24 Willow Road, Glasgow</p><span className="demo-review-document-count"><FileCheck2 size={14} aria-hidden="true" />{documents.length} supporting documents</span><div className="demo-submission-seal" data-complete={phase === 'complete'}>{phase === 'complete' ? <CheckCheck size={20} aria-hidden="true" /> : <LoaderCircle size={20} className="demo-spinner" aria-hidden="true" />}<span><strong>{phase === 'complete' ? 'Example submission complete' : 'Submitting your example'}</strong><span>{phase === 'complete' ? 'Application details and drawings sent together.' : 'Details, documents and submission handled for you.'}</span></span></div></div>{phase === 'submitting' ? <div className="demo-submission-progress"><strong>Completing the submission</strong><ol className="demo-task-list">{submissionTasks.map((task, index) => <li key={task} data-state={submission > index ? 'done' : submission === index ? 'active' : 'waiting'}>{submission > index ? <Check size={14} aria-hidden="true" /> : submission === index ? <LoaderCircle size={14} className="demo-spinner" aria-hidden="true" /> : <span className="demo-task-dot" aria-hidden="true" />}<span>{task}</span></li>)}</ol></div> : <div className="demo-time-result"><div className="demo-time-heading"><Clock3 size={16} aria-hidden="true" /><strong>Less admin. More architecture.</strong></div><div className="demo-time-comparison"><div><span>With Architect Pro</span><strong>1 <span>min</span></strong><span>per application</span></div><div><span>Manually</span><strong>25 <span>min</span></strong><span>per application</span></div></div><p className="demo-time-saving">24 minutes back for the work you do best.</p><p className="demo-time-footnote">Illustrative time comparison. Actual times vary.</p></div>}</div><div className="demo-action-row"><span className="demo-selection-note">{phase === 'complete' ? 'Your next application could start here.' : 'The example is completing automatically…'}</span>{phase === 'complete' ? <a href="/register" className="home-button-primary">Create your workspace<ArrowRight size={15} aria-hidden="true" /></a> : <button type="button" className="home-button-primary" disabled><LoaderCircle size={15} className="demo-spinner" aria-hidden="true" />Submitting example…</button>}</div></>}
       </div>
     </div>
-    <div className="demo-disclosure"><ShieldCheck size={13} aria-hidden="true" /><span>Sample project and documents. Nothing is uploaded or submitted.</span><span className="demo-progress-status" role="status" aria-live="polite">{finished ? 'Example review complete' : `Step ${step + 1} of 3`}</span></div>
+    <div className="demo-disclosure"><ShieldCheck size={13} aria-hidden="true" /><span>Interactive simulation. No real uploads or submissions.</span><span className="demo-progress-status" role="status" aria-live="polite" aria-atomic="true">{status}</span></div>
   </section>;
 }
