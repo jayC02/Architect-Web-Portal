@@ -1,3 +1,4 @@
+import { persistProjectScreeningChange } from '@/server/services/project-screener.service';
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
@@ -40,15 +41,16 @@ export const PATCH: APIRoute = (context) =>
     if (!id) throw new HttpError(400, 'Project id is required.');
     const body = await parseBody(context.request, projectSchema);
     const links = await resolveProjectLinks(organisation.id, body.clientId, body.siteId);
-    const result = await prisma.project.updateMany({
-      where: { id, organisationId: organisation.id },
-      data: {
+    const projectData = {
         ...body,
+        ...(body.typeOfWorkKeys ? { projectType: body.typeOfWorkKeys[0] } : {}),
         clientId: links.clientId,
         siteId: links.siteId,
         ...(links.derivedSite ?? {}),
-      },
-    });
+    };
+    const result = body.buildingUse !== undefined || body.typeOfWorkKeys !== undefined
+      ? await persistProjectScreeningChange(prisma, { organisationId: organisation.id, projectId: id, data: projectData })
+      : await prisma.project.updateMany({ where: { id, organisationId: organisation.id }, data: projectData });
     if (!result.count) throw new HttpError(404, 'Project not found.');
     return jsonResponse(200, { ok: true });
   });

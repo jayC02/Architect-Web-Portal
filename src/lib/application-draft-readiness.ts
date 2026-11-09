@@ -39,6 +39,13 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   if (review.projectMode === 'existing') addMissing(issues, 'project', 'existingProjectId', 'Existing project', review.existingProjectId, 'Choose the existing project.');
   else addMissing(issues, 'project', 'project.name', 'Project name', review.project.name, 'Confirm a project name.');
 
+  if (review.projectMode !== 'existing' || route === 'BUILDING_WARRANT') {
+    addMissing(issues, 'project', 'project.buildingUse', 'Building use', review.project.buildingUse, review.projectMode === 'existing' ? 'Complete the selected project’s building-use screening.' : 'Choose Residential or Commercial for the project.');
+    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) {
+      issues.push({ key: 'application.typeOfWorkKeys', section: 'project', label: 'Type of work', message: review.projectMode === 'existing' ? 'Complete the selected project’s work-type screening.' : 'Select at least one project type of work.' });
+    }
+  }
+
   if (review.projectMode !== 'existing') {
     addMissing(issues, 'site', 'site.buildingNumber', 'Site building number', review.site.buildingNumber, 'Enter the site building number.');
     if (review.siteMode === 'existing') addMissing(issues, 'site', 'existingSiteId', 'Existing site', review.existingSiteId, 'Choose the matching site.');
@@ -73,14 +80,6 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   }
   addMissing(issues, 'application', 'application.description', 'Description of work', review.application.description?.trim(), 'Enter a description of the proposed work.');
   if (route === 'BUILDING_WARRANT') {
-    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) {
-      issues.push({
-        key: 'application.typeOfWorkKeys',
-        section: 'application',
-        label: 'Type of work',
-        message: 'Choose at least one Building Warrant type of work.',
-      });
-    }
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
     addMissing(issues, 'application', 'application.proposedUse', 'Proposed use', review.application.proposedUse, 'Confirm the proposed use.');
     addMissing(issues, 'application', 'application.estimatedValue', 'Estimated value', review.application.estimatedValue, 'Enter the estimated value of work.');

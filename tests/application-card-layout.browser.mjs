@@ -38,6 +38,8 @@ const records = {
     resultData: { errorCode: 'ADDRESS_RESOLUTION_FAILED', stageDescription: 'Selecting the property address', recoveryAction: 'review_address' } },
   ready: baseJob,
   active: { ...baseJob, status: 'IN_PROGRESS', progressStage: 'documents', progressPercent: 42, progressMessage: 'Uploading supporting documents' },
+  paused: { ...baseJob, status: 'AWAITING_PORTAL_REVIEW', progressStage: 'applicant_details', progressPercent: 87,
+    resultSummary: 'Confirm the applicant title in the Agent.', resultData: { outcome: 'paused_for_manual_input' } },
   review: { ...baseJob, status: 'COMPLETED' },
   submitted: { ...baseJob, status: 'COMPLETED' },
 };
@@ -119,6 +121,11 @@ else {
       check(`${width}px: primary buttons remain inside their own card`, await page.evaluate(() => [...document.querySelectorAll('#planning .btn, #building-warrant .btn')].filter(button => button.getClientRects().length > 0).every(button => { const card = button.closest('#planning, #building-warrant').getBoundingClientRect(), rect = button.getBoundingClientRect(); return rect.left >= card.left && rect.right <= card.right; })));
       if (width === 390) await page.screenshot({ path: path.join(output, 'mobile-long-error.png'), fullPage: true });
     }
+    await open('?state=paused');
+    check('a manual-input pause is never labelled Prepared', await page.getByText('Needs your input', { exact: true }).count() === 1
+      && await page.getByText('Prepared — needs your review', { exact: true }).count() === 0);
+    check('a paused callback shows zero progress and the actual request', await page.getByText('0%', { exact: true }).count() === 1
+      && await page.getByText('Confirm the applicant title in the Agent.', { exact: true }).isVisible());
     let unchangedCard;
     const headings = { empty: 'Needs your attention', ready: 'Application prepared', active: 'Uploading supporting documents', review: 'Prepared — needs your review', submitted: 'Submitted — waiting for council' };
     for (const state of ['empty', 'ready', 'active', 'review', 'submitted']) {

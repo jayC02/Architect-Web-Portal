@@ -1,6 +1,7 @@
 import { normaliseUkAddress } from '@/lib/addresses/uk-address';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
+import { applyProjectScreenerToDraftReview } from '@/lib/projects/draft-screener';
 import { lookupSiteAddress } from '@/server/services/site-address-lookup.service';
 import { createHash } from 'node:crypto';
 import {
@@ -642,6 +643,7 @@ const buildInitialReview = (
       name: suggestionString(prepared.project, 'name'),
       internalReference: suggestionString(prepared.project, 'internalReference'),
       typeOfWorkKey: typeOfWork,
+      buildingUse: null,
       summary: suggestionString(prepared.project, 'summary'),
     },
     siteMode: strongSite ? 'existing' : 'create',
@@ -702,6 +704,11 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     addMissing(issues, 'project', 'project.name', 'Project name', review.project.name, 'Confirm a project name.');
   }
 
+  if (review.projectMode !== 'existing' || review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT) {
+    addMissing(issues, 'project', 'project.buildingUse', 'Building use', review.project.buildingUse, review.projectMode === 'existing' ? 'Complete the selected project’s building-use screening.' : 'Choose Residential or Commercial for the project.');
+    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) issues.push({ key: 'application.typeOfWorkKeys', section: 'project', label: 'Type of work', message: review.projectMode === 'existing' ? 'Complete the selected project’s work-type screening.' : 'Select at least one project type of work.' });
+  }
+
   if (review.projectMode !== 'existing') {
     addMissing(issues, 'site', 'site.buildingNumber', 'Site building number', review.site.buildingNumber, 'Enter the site building number.');
     if (review.siteMode === 'existing') {
@@ -758,14 +765,6 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
   );
 
   if (review.selectedApplicationType === ApplicationDraftType.BUILDING_WARRANT) {
-    if (!review.application.typeOfWorkKeys.length && !review.project.typeOfWorkKey) {
-      issues.push({
-        key: 'application.typeOfWorkKeys',
-        section: 'application',
-        label: 'Type of work',
-        message: 'Choose at least one Building Warrant type of work.',
-      });
-    }
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
     addMissing(issues, 'application', 'application.proposedUse', 'Proposed use', review.application.proposedUse, 'Confirm the proposed use.');
     addMissing(issues, 'application', 'application.estimatedValue', 'Estimated value', review.application.estimatedValue, 'Enter the estimated value of work.');
@@ -1237,6 +1236,11 @@ export const saveApplicationDraftReview = async (
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
   review = normaliseDraftAddresses(review);
+  if (review.projectMode === 'existing' && review.existingProjectId) {
+    const project = await prisma.project.findFirst({ where: { id: review.existingProjectId, organisationId } });
+    if (!project) throw new HttpError(404, 'The selected project is not available.');
+    review = applyProjectScreenerToDraftReview(review, project);
+  }
   const documentIds = new Set(draft.documents.map((document) => document.id));
   if (
     review.documents.length !== draft.documents.length

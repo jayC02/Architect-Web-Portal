@@ -1,3 +1,5 @@
+import { projectScreenerFields, projectScreenerOptionalFields } from '@/lib/projects/screener';
+import { warrantBranchFormFields } from '@/lib/building-warrant-branches';
 import {
   CompletionCertificateStatus,
   DeadlinePriority,
@@ -15,6 +17,8 @@ import {
   WarrantType,
 } from '@prisma/client';
 import { z } from 'zod';
+import { ownerFormFields } from '@/lib/building-warrant-owner';
+import { fixedWarrantAnswerFields, warrantFollowUpFormFields } from '@/lib/building-warrant-follow-ups';
 import {
   TYPE_OF_WORK_KEYS,
   TYPE_OF_WORK_OPTIONS,
@@ -71,6 +75,7 @@ export const siteSchema = z.object({
 });
 
 export const projectSchema = z.object({
+  ...projectScreenerOptionalFields,
   name: z.string().trim().min(1).max(160),
   internalReference: optionalText(80),
   projectType: optionalText(120),
@@ -86,6 +91,7 @@ export const projectSchema = z.object({
 export const projectCreateSchema = projectSchema
   .omit({ stage: true, status: true, siteAddress: true, projectType: true })
   .extend({
+    ...projectScreenerFields,
     name: optionalText(160),
     projectType: z.preprocess(
       (value) => {
@@ -101,6 +107,7 @@ export const projectCreateSchema = projectSchema
   })
   .transform((project) => ({
     ...project,
+    projectType: project.typeOfWorkKeys[0],
     stage: ProjectStage.LEAD,
     status: ProjectStatus.ACTIVE,
     siteAddress: undefined,
@@ -131,12 +138,11 @@ const optionalNonNegativeMoney = z.preprocess(
 
 export const buildingWarrantPreparationSchema = z.object({
   applicantIsOwner: yesNoAnswer.default(true),
-  workStartedBeforeApplication: z.boolean().optional(),
   disabledPersonsFacilitiesOnly: z.boolean().optional(),
   certifierOfDesignCertificateAvailable: z.boolean().optional(),
+  designCertifierSelected: z.boolean().optional(),
+  declarationAuthorised: z.boolean().default(false),
   certifierOfConstructionCertificateAvailable: z.boolean().optional(),
-  applicationIsStaged: yesNoAnswer,
-  intendedLifeFiveYearsOrLess: yesNoAnswer,
   fireAndRescueServiceEnforcingAuthority: yesNoAnswer.default(true),
   listedBuildingOrConservationArea: yesNoAnswer,
   otherHistoricalImportance: yesNoAnswer,
@@ -144,7 +150,7 @@ export const buildingWarrantPreparationSchema = z.object({
   dangerousBuildingNotice: yesNoAnswer,
   approvedCertifierOfConstruction: yesNoAnswer,
   coveredBySTAS: yesNoAnswer,
-  restrictPublicInspection: yesNoAnswer,
+  ...fixedWarrantAnswerFields,
 });
 
 export const BUILDING_WARRANT_CONFIRMATION_DEFAULTS = Object.freeze(
@@ -209,19 +215,16 @@ export const planningPreparationDetailsSchema = z.object({
 }).and(householderPreparationUpdateSchema);
 
 export const buildingWarrantPreparationUpdateSchema = z.object({
+  applicantIsOwner: formBoolean,
   description: optionalText(4000),
   estimatedValue: optionalNonNegativeMoney,
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
   typeOfWorkKeys: typeOfWorkKeysSchema,
   selectedCertifierPresetId: optionalText(120),
-  workStartedBeforeApplication: formBoolean.optional(),
   disabledPersonsFacilitiesOnly: formBoolean.optional(),
   certifierOfDesignCertificateAvailable: formBoolean.optional(),
-  certifierOfConstructionCertificateAvailable: formBoolean.optional(),
-  applicantIsOwner: formBoolean,
-  applicationIsStaged: formBoolean,
-  intendedLifeFiveYearsOrLess: formBoolean,
+  certifierOfConstructionCertificateAvailable: z.preprocess(value => value === '' ? undefined : value, formBoolean.optional()),
   fireAndRescueServiceEnforcingAuthority: formBoolean,
   listedBuildingOrConservationArea: formBoolean,
   otherHistoricalImportance: formBoolean,
@@ -229,10 +232,14 @@ export const buildingWarrantPreparationUpdateSchema = z.object({
   dangerousBuildingNotice: formBoolean,
   approvedCertifierOfConstruction: formBoolean,
   coveredBySTAS: formBoolean,
-  restrictPublicInspection: formBoolean,
+  ...warrantFollowUpFormFields,
+  ...warrantBranchFormFields,
+  ...ownerFormFields,
+  ...fixedWarrantAnswerFields,
 });
 
 export const buildingWarrantCertifierDetailsSchema = z.object({
+  applicantIsOwner: formCheckboxBoolean,
   jobId: optionalText(120),
   warrantReference: optionalText(120),
   warrantType: z.nativeEnum(WarrantType).optional(),
@@ -247,23 +254,19 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   typeOfWorkKeys: typeOfWorkKeysSchema,
   description: z.string().trim().min(1, 'Enter a description of the Building Warrant work.').max(4000),
   estimatedValue: z.coerce.number().positive('Enter an estimated value greater than zero.'),
-  currentUse: z.string().trim().min(1, 'Enter the current use of the building.').max(160),
-  proposedUse: z.string().trim().min(1, 'Enter the proposed use of the building.').max(160),
+  currentUse: optionalText(160),
+  proposedUse: optionalText(160),
   selectedCertifierPresetId: optionalText(120),
-  workStartedBeforeApplication: formBoolean.optional(),
   disabledPersonsFacilitiesOnly: formBoolean.optional(),
   certifierOfDesignCertificateAvailable: formBoolean.optional(),
-  certifierOfConstructionCertificateAvailable: formBoolean.optional(),
+  certifierOfConstructionCertificateAvailable: z.preprocess(value => value === '' ? undefined : value, formBoolean.optional()),
   schemeType: optionalText(120),
-  registrationAPart1: certifierRegistrationPart1Schema,
-  registrationAPart2: z.string().trim().min(1, 'Enter Registration number A Part 2.').max(80),
-  certifierName: z.string().trim().min(1, 'Enter the name of the certifier.').max(160),
-  registrationBPart1: certifierRegistrationPart1Schema,
-  registrationBPart2: z.string().trim().min(1, 'Enter Registration number B Part 2.').max(80),
-  approvedBody: z.string().trim().min(1, 'Enter the name of the approved body.').max(160),
-  applicantIsOwner: formCheckboxBoolean,
-  applicationIsStaged: formCheckboxBoolean,
-  intendedLifeFiveYearsOrLess: formCheckboxBoolean,
+  registrationAPart1: z.preprocess(value => value === '' ? undefined : value, certifierRegistrationPart1Schema.optional()),
+  registrationAPart2: optionalText(80),
+  certifierName: optionalText(160),
+  registrationBPart1: z.preprocess(value => value === '' ? undefined : value, certifierRegistrationPart1Schema.optional()),
+  registrationBPart2: optionalText(80),
+  approvedBody: optionalText(160),
   fireAndRescueServiceEnforcingAuthority: formCheckboxBoolean,
   listedBuildingOrConservationArea: formCheckboxBoolean,
   otherHistoricalImportance: formCheckboxBoolean,
@@ -271,7 +274,17 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   dangerousBuildingNotice: formCheckboxBoolean,
   approvedCertifierOfConstruction: formCheckboxBoolean,
   coveredBySTAS: formCheckboxBoolean,
-  restrictPublicInspection: formCheckboxBoolean,
+  ...warrantFollowUpFormFields,
+  ...warrantBranchFormFields,
+  ...ownerFormFields,
+  ...fixedWarrantAnswerFields,
+}).superRefine((value, context) => {
+  if (value.designCertifierSelected !== true) return;
+  for (const [field, label] of [
+    ['registrationAPart1', 'Registration number A Part 1'], ['registrationAPart2', 'Registration number A Part 2'],
+    ['certifierName', 'the name of the certifier'], ['registrationBPart1', 'Registration number B Part 1'],
+    ['registrationBPart2', 'Registration number B Part 2'], ['approvedBody', 'the name of the approved body'],
+  ] as const) if (!value[field]?.trim()) context.addIssue({ code: 'custom', path: [field], message: `Enter ${label}.` });
 });
 
 export const organisationDefaultsSchema = z.object({

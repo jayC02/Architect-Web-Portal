@@ -1,0 +1,70 @@
+---
+import { CONVERSION_DESCRIPTIONS, constructionCertificateSchema } from '@/lib/building-warrant-branches';
+import PreparationQuestion from '@/components/forms/PreparationQuestion.astro';
+interface Props {
+  part: 'services' | 'conversion' | 'demolition' | 'listing' | 'stas' | 'construction' | 'declaration';
+  workTypes: string[];
+  listed: boolean;
+  stas: boolean;
+  construction: boolean;
+  constructionAvailable?: boolean;
+  authorised: boolean;
+  preparation: Record<string, unknown>;
+}
+const { part, workTypes, listed, stas, construction, constructionAvailable, authorised, preparation } = Astro.props;
+const selectedConversions = Array.isArray(preparation.conversionDescriptions) ? preparation.conversionDescriptions : [];
+const certificate = constructionCertificateSchema.parse(preparation.constructionCertificate ?? {});
+const textFields = [
+  ['constructionCertifierName', 'Name of construction certifier', certificate.certifierName, 160],
+  ['constructionRegistrationNumber', 'Certifier registration number', certificate.registrationNumber, 80],
+  ['constructionApprovedBody', 'Name of approved body', certificate.approvedBody, 160],
+  ['constructionApprovedBodyRegistrationNumber', 'Approved-body registration number', certificate.approvedBodyRegistrationNumber, 80],
+] as const;
+---
+{part === 'services' && <PreparationQuestion name="includesServices" label="The proposed work includes provision of services, such as drainage, heating or electrical installations." checked={preparation.includesServices === true} />}
+{part === 'conversion' && workTypes.includes('conversion_change_of_use') && <fieldset class="prep-question min-w-0" data-conversion-descriptions data-prep-field-label="Conversion descriptions"><legend class="prep-question-text float-left w-full">Which conversion descriptions apply?</legend><p class="clear-both text-sm text-stone-500">Select at least one.</p><div class="mt-3 space-y-2">{CONVERSION_DESCRIPTIONS.map(([key, label]) => <label class="flex cursor-pointer items-start gap-3 text-sm"><input type="checkbox" name="conversionDescriptions" value={key} checked={selectedConversions.includes(key)} class="prep-check" /><span>{label}</span></label>)}</div></fieldset>}
+{part === 'demolition' && workTypes.includes('demolition') && <div class="prep-question"><label class="prep-select-row"><span class="prep-question-text">Demolition period in weeks</span><input required name="demolitionWeeks" type="number" min="1" max="99" step="1" value={typeof preparation.demolitionWeeks === 'number' ? preparation.demolitionWeeks : ''} class="field" /></label></div>}
+{part === 'listing' && <div class="prep-followup" data-listing-details hidden={!listed}><label class="block"><span class="prep-field-question">Listing category or conservation-area details</span><textarea name="listingCategory" maxlength="750" rows="4" required={listed} class="field">{typeof preparation.listingCategory === 'string' ? preparation.listingCategory : ''}</textarea></label></div>}
+{part === 'stas' && <div class="prep-followup" data-stas-reference hidden={!stas}><label class="block"><span class="prep-field-question">STAS approval reference</span><input name="stasReference" maxlength="20" required={stas} value={typeof preparation.stasReference === 'string' ? preparation.stasReference : ''} class="field" /></label></div>}
+{part === 'construction' && <div>
+  <h3 class="prep-subheading">Construction certifier</h3>
+  <div class="prep-questions">
+    <div class="prep-question">
+      <label class="prep-select-row"><span class="prep-question-text">Will an approved certifier of construction be used?</span><select name="approvedCertifierOfConstruction" class="field"><option value="false" selected={!construction}>No</option><option value="true" selected={construction}>Yes</option></select></label>
+      <div class="prep-followup grid gap-4 sm:grid-cols-2" data-construction-certificate hidden={!construction}>
+        <label class="block"><span class="label">Certification scheme</span><select name="constructionSchemeType" required={construction} class="field"><option value="">Choose a scheme</option><option value="1" selected={certificate.schemeType === '1'}>Drainage, Heating and Plumbing</option><option value="2" selected={certificate.schemeType === '2'}>Electrical Installations to BS 7671</option></select></label>
+        {textFields.map(([name, label, value, max]) => <label class="block"><span class="label">{label}</span><input name={name} value={value ?? ''} maxlength={max} required={construction} class="field" /></label>)}
+        <label class="block sm:col-span-2"><span class="prep-field-question">Will the construction certificate be provided?</span><select name="certifierOfConstructionCertificateAvailable" required={construction} class="field"><option value="">Choose Yes or No</option><option value="true" selected={constructionAvailable === true}>Yes</option><option value="false" selected={constructionAvailable === false}>No</option></select></label>
+        <label class="block sm:col-span-2"><span class="prep-field-question">Known work-type details for the scheme</span><textarea name="constructionWorkTypeDetails" maxlength="750" rows="3" class="field">{certificate.workTypeDetails ?? ''}</textarea></label>
+      </div>
+    </div>
+  </div>
+</div>}
+{part === 'declaration' && <PreparationQuestion name="declarationAuthorised" label="I have reviewed the application information and authorise the Agent to complete the portal declaration and prepare the application for my final review. I will review and submit it myself." checked={authorised} requiredTick="Authorisation to complete the declaration" />}
+<script>
+  const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
+  if (form) {
+    const answer = (name: string) => {
+      const field = form.elements.namedItem(name);
+      return field instanceof HTMLInputElement ? field.checked : field instanceof HTMLSelectElement ? field.value === 'true' : false;
+    };
+    const group = (selector: string, visible: boolean) => {
+      const element = form.querySelector<HTMLElement>(selector);
+      if (!element) return;
+      element.hidden = !visible;
+      element.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input,select,textarea').forEach(field => {
+        field.required = visible && field.name !== 'constructionWorkTypeDetails';
+      });
+    };
+    const update = () => {
+      group('[data-listing-details]', answer('listedBuildingOrConservationArea'));
+      group('[data-stas-reference]', answer('coveredBySTAS'));
+      group('[data-construction-certificate]', answer('approvedCertifierOfConstruction'));
+      const conversions = Array.from(form.querySelectorAll<HTMLInputElement>('[name="conversionDescriptions"]'));
+      const chosen = conversions.some(field => field.checked);
+      conversions.forEach((field, index) => { field.required = index === 0 && !chosen; });
+    };
+    form.addEventListener('change', update);
+    update();
+  }
+</script>

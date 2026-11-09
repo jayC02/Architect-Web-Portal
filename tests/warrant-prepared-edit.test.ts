@@ -1,3 +1,7 @@
+import * as warrantBranches from '../src/lib/building-warrant-branches';
+import * as projectScreener from '../src/lib/projects/screener';
+import * as warrantFollowUps from '../src/lib/building-warrant-follow-ups';
+import * as warrantOwner from '../src/lib/building-warrant-owner';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -34,6 +38,9 @@ function harness(options: { race?: boolean; identity?: string; status?: Automati
     $transaction: async (fn: (tx: any) => unknown) => fn(db),
   };
   const modules: Record<string, unknown> = {
+    '@/lib/building-warrant-branches': warrantBranches, '@/lib/projects/screener': projectScreener,
+    '@/lib/building-warrant-follow-ups': warrantFollowUps,
+    '@/lib/building-warrant-owner': warrantOwner,
     '@prisma/client': { AutomationJobStatus, AutomationJobType }, '@/lib/db/prisma': { prisma: db },
     '@/lib/server/origin-guard': { assertAllowedOrigin: () => {} },
     '@/lib/server/rate-limit': { assertRateLimit: () => {}, rateLimitPolicies: { mutation: {} } },
@@ -59,11 +66,12 @@ function harness(options: { race?: boolean; identity?: string; status?: Automati
   vm.runInNewContext(compiled, { exports, Date, require: (name: string) => {
     assert.ok(name in modules, `Unexpected dependency ${name}`); return modules[name];
   } });
-  const save = (jobId: string | undefined = 'job') => exports.POST({ params: { id: 'warrant' }, request: new Request('https://example.test', {
+  const save = (jobId: string | undefined = 'job', overrides: Record<string, unknown> = {}) => exports.POST({ params: { id: 'warrant' }, request: new Request('https://example.test', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       jobId: jobId === 'none' ? undefined : jobId, description: 'Corrected extension', estimatedValue: 10000, currentUse: 'Dwelling', proposedUse: 'Dwelling',
       typeOfWorkKeys: ['domestic_alteration_extension'], registrationAPart1: 'SER1', registrationAPart2: '123', certifierName: 'Test certifier',
       registrationBPart1: 'SER1', registrationBPart2: '456', approvedBody: 'Test body',
+      ...overrides,
     }),
   }) });
   return { state, save };
@@ -95,3 +103,11 @@ const completed = harness({ status: AutomationJobStatus.COMPLETED });
 assert.equal((await completed.save('none')).status, 200, 'application details can be edited after completion without rewriting the historic run');
 assert.equal(completed.state.canonical.length, 1); assert.equal(completed.state.builds, 0);
 console.log('Prepared Building Warrant edit, identity and Agent-claim race tests passed.');
+
+const noDesign = harness();
+assert.equal((await noDesign.save('none', { includesServices: true, designCertifierSelected: false, registrationAPart1: '', registrationAPart2: '', certifierName: '', registrationBPart1: '', registrationBPart2: '', approvedBody: '' })).status, 200, 'a warrant without a design certifier saves without registration fields');
+assert.equal(noDesign.state.canonical[0].data.selectedCertifierPresetId, null);
+assert.equal(noDesign.state.canonical[0].data.preparationData.includesServices, true);
+assert.equal(noDesign.state.canonical[0].data.preparationData.certifier, null);
+assert.equal(noDesign.state.canonical[0].data.preparationData.certifierOfDesignCertificateAvailable, false);
+console.log('Optional design-certifier save and copied snapshot inputs passed.');

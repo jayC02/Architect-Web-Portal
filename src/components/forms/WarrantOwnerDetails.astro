@@ -1,0 +1,49 @@
+---
+import { OWNER_FIELDS, type WarrantOwnerDetails } from '@/lib/building-warrant-owner';
+interface Props { applicantIsOwner: boolean; ownerIsClient?: boolean; details?: WarrantOwnerDetails; clientName?: string; }
+const { applicantIsOwner, ownerIsClient, details = {}, clientName = 'the saved project client' } = Astro.props;
+const requiredKeys = new Set(['title', 'firstName', 'lastName', 'telephone', 'email', 'addressLine1', 'townCity', 'country', 'postcode']);
+---
+<fieldset class="prep-followup" data-owner-details hidden={applicantIsOwner}>
+  <legend class="sr-only">Property owner</legend>
+  <label class="block"><span class="prep-field-question">Is the owner the saved client, {clientName}?</span><select name="ownerIsClient" class="field" required={!applicantIsOwner}>
+    <option value="">Choose Yes or No</option><option value="true" selected={ownerIsClient === true}>Yes — use the saved client details</option><option value="false" selected={ownerIsClient === false}>No — enter a different owner</option>
+  </select></label>
+  <p class="mt-2 text-sm text-stone-500" data-owner-client hidden={ownerIsClient !== true}>The client's saved name, contact details and address will be used. Complete any missing details in the client record before running.</p>
+  <div class="mt-4 grid gap-4 sm:grid-cols-2" data-owner-manual hidden={ownerIsClient !== false}>
+    {OWNER_FIELDS.map(([key, label, max]) => (
+      <label class="block" data-owner-other-title={key === 'otherTitle' || undefined} hidden={key === 'otherTitle' && details.title !== 'Other'}><span class="label">{label}{requiredKeys.has(key) ? ' *' : ''}</span>
+        {key === 'title' ? <select class="field" name="ownerTitle" data-owner-required required={!applicantIsOwner && ownerIsClient === false}><option value="">Choose a title</option>{['Mr', 'Mrs', 'Miss', 'Ms', 'Other'].map(title => <option value={title} selected={details.title === title}>{title}</option>)}</select>
+          : <input class="field" name={`owner${key[0].toUpperCase()}${key.slice(1)}`} type={key === 'email' ? 'email' : 'text'} maxlength={max} value={details[key] ?? (key === 'country' ? 'United Kingdom' : '')} data-owner-required={requiredKeys.has(key) || undefined} required={!applicantIsOwner && ownerIsClient === false && requiredKeys.has(key)} />}
+      </label>
+    ))}
+    <p class="text-sm text-stone-500 sm:col-span-2">Provide a building name, building number, or both.</p>
+  </div>
+</fieldset>
+<script>
+  const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
+  if (form) {
+    const updateOwner = () => {
+      const applicant = form.elements.namedItem('applicantIsOwner');
+      const isOwner = applicant instanceof HTMLInputElement ? applicant.checked : applicant instanceof HTMLSelectElement ? applicant.value === 'true' : true;
+      const choice = form.querySelector<HTMLSelectElement>('[name="ownerIsClient"]');
+      const section = form.querySelector<HTMLElement>('[data-owner-details]');
+      const manual = form.querySelector<HTMLElement>('[data-owner-manual]');
+      const client = form.querySelector<HTMLElement>('[data-owner-client]');
+      const manualVisible = !isOwner && choice?.value === 'false';
+      if (section) section.hidden = isOwner;
+      if (choice) choice.required = !isOwner;
+      if (manual) manual.hidden = !manualVisible;
+      manual?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach(field => { field.disabled = !manualVisible; });
+      if (client) client.hidden = isOwner || choice?.value !== 'true';
+      form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-owner-required]').forEach(field => { field.required = manualVisible; });
+      const other = form.querySelector<HTMLInputElement>('[name="ownerOtherTitle"]');
+      const title = form.querySelector<HTMLSelectElement>('[name="ownerTitle"]');
+      if (other) other.required = manualVisible && title?.value === 'Other';
+      const otherRow = form.querySelector<HTMLElement>('[data-owner-other-title]');
+      if (otherRow) otherRow.hidden = title?.value !== 'Other';
+    };
+    form.addEventListener('change', updateOwner);
+    updateOwner();
+  }
+</script>

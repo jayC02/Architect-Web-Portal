@@ -32,18 +32,9 @@ const savedDraft = applicationPreparationDraftSchema.safeParse(job.preparationDr
 const draft = snapshot
   ? savedDraft.success ? savedDraft.data : canEdit ? await buildApplicationPreparationDraft(job.id, auth.organisation.id) : null
   : null;
-const [defaults, documents, certifierPresets] = await Promise.all([
+const [defaults, documents] = await Promise.all([
   prisma.organisationDefaults.findUnique({ where: { organisationId: auth.organisation.id } }),
-  prisma.projectDocument.findMany({
-    where: { organisationId: auth.organisation.id, projectId: job.projectId },
-    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
-  }),
-  job.type === AutomationJobType.BUILDING_WARRANT
-    ? prisma.organisationCertifierPreset.findMany({
-        where: { organisationId: auth.organisation.id },
-        orderBy: [{ isDefault: 'desc' }, { displayName: 'asc' }],
-      })
-    : Promise.resolve([]),
+  prisma.projectDocument.findMany({ where: { organisationId: auth.organisation.id, projectId: job.projectId }, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }] }),
 ]);
 
 const appLabel = job.type === AutomationJobType.BUILDING_WARRANT
@@ -104,11 +95,7 @@ const buildingWarrantConfirmations = preparation ? [
     label: 'Is the work subject to a Scottish Ministers relaxation direction?',
     value: preparation.scottishMinistersRelaxationDirection,
   },
-  {
-    name: 'dangerousBuildingNotice',
-    label: 'Is the building subject to a dangerous building notice?',
-    value: preparation.dangerousBuildingNotice,
-  },
+  { name: 'dangerousBuildingNotice', label: 'Is the building subject to a dangerous building notice?', value: preparation.dangerousBuildingNotice },
   {
     name: 'approvedCertifierOfConstruction',
     label: 'Will an approved certifier of construction be used?',
@@ -261,28 +248,10 @@ const suggestedClientName = currentApplicant
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <label class="block md:col-span-2"><span class="label">Description of work</span><textarea class="field" name="description" rows="4" required>{suggestion('application.descriptionOfWork', snapshot.buildingWarrant?.description ?? snapshot.planning?.description)}</textarea>{fieldNote('application.descriptionOfWork') && <a class="mt-1 block text-xs text-emerald-700 hover:underline" href={`/api/documents/${fieldSource('application.descriptionOfWork')?.documentId}`} target="_blank" rel="noopener">{fieldNote('application.descriptionOfWork')}</a>}</label>
             {snapshot.buildingWarrant && <>
-              <fieldset class="md:col-span-2">
-                <legend class="label">Type of work</legend>
-                <p class="mt-1 text-sm text-stone-500">Select every type that applies to this warrant.</p>
-                <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                  {TYPE_OF_WORK_DEFINITIONS.map((item) => (
-                    <label class="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        name="typeOfWorkKeys"
-                        value={item.key}
-                        checked={(snapshot.buildingWarrant?.typeOfWorkKeys ?? [snapshot.buildingWarrant?.presetKey]).includes(item.key)}
-                        class="h-4 w-4 accent-[#526a4a]"
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <div class="md:col-span-2"><p class="label">Project screening</p><p class="text-sm">{snapshot.project.buildingUse === 'commercial' ? 'Commercial' : snapshot.project.buildingUse === 'residential' ? 'Residential' : 'Building use not confirmed'} — {(snapshot.buildingWarrant.typeOfWorkKeys ?? [snapshot.buildingWarrant.presetKey]).map(key => TYPE_OF_WORK_DEFINITIONS.find(type => type.key === key)?.label).join(', ')}</p><a class="text-sm font-semibold underline" href={`/projects/${job.projectId}/screener`}>Edit project screening</a>{(snapshot.buildingWarrant.typeOfWorkKeys ?? [snapshot.buildingWarrant.presetKey]).map(key => <input type="hidden" name="typeOfWorkKeys" value={key} />)}</div>
               <label class="block"><span class="label">Estimated value</span><input class="field" name="estimatedValue" type="number" min="0" step="0.01" value={suggestion('application.estimatedValue', snapshot.buildingWarrant.estimatedValue)} /></label>
               <label class="block"><span class="label">Current use</span><input class="field" name="currentUse" value={suggestion('application.currentUse', snapshot.buildingWarrant.currentUse)} /></label>
               <label class="block"><span class="label">Proposed use</span><input class="field" name="proposedUse" value={suggestion('application.proposedUse', snapshot.buildingWarrant.proposedUse)} /></label>
-              <label class="block md:col-span-2"><span class="label">Approved certifier of design</span><select class="field" name="selectedCertifierPresetId"><option value="">No design certificate selected</option>{certifierPresets.map((preset) => <option value={preset.id} selected={preset.id === snapshot.buildingWarrant?.certifier?.presetId}>{preset.displayName}</option>)}</select></label>
             </>}
           </div>
         </section>
@@ -329,15 +298,9 @@ const suggestedClientName = currentApplicant
           </p>
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             {snapshot.buildingWarrant ? <>
-              {buildingWarrantConfirmations.map((question) => (
-                <label class="block">
-                  <span class="label">{question.label}</span>
-                  <select class="field" name={question.name}>
-                    <option value="true" selected={question.value}>Yes</option>
-                    <option value="false" selected={!question.value}>No</option>
-                  </select>
-                </label>
-              ))}
+              <div class="md:col-span-2"><a class="font-semibold underline" href={`/building-warrant/${snapshot.buildingWarrant.recordId}/preparation?job=${job.id}`}>Edit warrant answers and certificates</a><p class="mt-2 text-sm text-stone-600">Work started: No. Application staged: No. Intended life five years or less: No. Public inspection restricted: No.</p></div>
+              {buildingWarrantConfirmations.map(question => <div class="text-sm"><span>{question.label}</span><strong class="ml-2">{question.value ? 'Yes' : 'No'}</strong></div>)}
+              <p class="text-sm md:col-span-2">Certifier of design: {snapshot.buildingWarrant.certifier?.certifierName ?? 'None'}. Declaration authorised: {preparation?.declarationAuthorised ? 'Yes' : 'No'}.</p>
               <input type="hidden" name="soleOwner" value="false" /><input type="hidden" name="agriculturalHolding" value="false" />
             </> : <>
               <label class="block"><span class="label">Is the applicant the sole owner of all land?</span><select class="field" name="soleOwner"><option value="true" selected={planning?.soleOwner === true}>Yes</option><option value="false" selected={planning?.soleOwner === false}>No</option></select></label>

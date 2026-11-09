@@ -20,7 +20,8 @@ import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-catego
 import { hasLocationPlanDocument } from '@/lib/location-plan';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
-import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
+import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS, typeOfWorkLabels } from '@/lib/projects/type-of-work';
+import { readProjectScreener } from '@/lib/projects/screener';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import {
   desktopAutomationJobSelect,
@@ -37,6 +38,7 @@ const project = await prisma.project.findFirst({
   include: { client: true, site: true },
 });
 if (!project) return Astro.redirect('/projects');
+const projectScreener = readProjectScreener(project);
 const canViewFinance = ['OWNER', 'ADMIN'].includes(auth.membership.role);
 
 const [
@@ -317,7 +319,7 @@ const agentDefaultsRecord = organisationDefaults ? {
 const warrantPreparation = latestWarrant?.preparationData && typeof latestWarrant.preparationData === 'object' && !Array.isArray(latestWarrant.preparationData)
   ? latestWarrant.preparationData as Record<string, unknown>
   : {};
-const warrantTypeOfWorkKeys = latestWarrant
+const warrantTypeOfWorkKeys = projectScreener.typeOfWorkKeys.length ? projectScreener.typeOfWorkKeys : latestWarrant
   ? normaliseTypeOfWorkKeys(warrantPreparation.typeOfWorkKeys, latestWarrant.presetKey ?? project.projectType)
   : [];
 const sharedRecoveryContext = {
@@ -358,6 +360,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         <h1 class="break-words text-3xl font-semibold leading-tight text-ink sm:text-4xl">{project.name}</h1>
         <p data-project-site-summary data-project-site-id={project.siteId ?? ''} class="mt-2 text-base leading-6 text-stone-500">{siteSummary}</p>
         {project.internalReference && <p class="mt-1 text-xs font-semibold text-stone-400">Reference {project.internalReference}</p>}
+        <p class="mt-2 text-sm text-stone-600">{projectScreener.buildingUse === 'residential' ? 'Residential' : projectScreener.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed'}{projectScreener.typeOfWorkKeys.length ? ` · ${typeOfWorkLabels(projectScreener.typeOfWorkKeys).join(', ')}` : ''}. <a class="font-semibold underline" href={`/projects/${project.id}/screener`}>{projectScreener.complete ? 'Edit project screening' : 'Complete project screening'}</a></p>
       </div>
       <button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button>
     </div>
@@ -515,7 +518,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-4">
           <label class="block"><span class="label">Project name</span><input required name="name" value={project.name} class="field" /></label>
           <label class="block"><span class="label">Internal reference</span><input name="internalReference" value={project.internalReference ?? ''} class="field" /></label>
-          <label class="block"><span class="label">Project type</span><input name="projectType" value={project.projectType ?? ''} class="field" /></label>
+          <p class="text-sm text-stone-600">Building use and work types are set in <a class="font-semibold underline" href={`/projects/${project.id}/screener`}>Project screening</a>.</p>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block"><span class="label">Stage</span><select name="stage" class="field">{Object.values(ProjectStage).map((value) => <option value={value} selected={value === project.stage}>{humanizeEnum(value)}</option>)}</select></label>
             <label class="block"><span class="label">Status</span><select name="status" class="field">{Object.values(ProjectStatus).map((value) => <option value={value} selected={value === project.status}>{humanizeEnum(value)}</option>)}</select></label>

@@ -1,0 +1,20 @@
+---
+// Section checklist for the side panel. src/lib/preparation-progress.ts fills in each status.
+interface Props { sections: ReadonlyArray<{ id: string; title: string }>; }
+const { sections } = Astro.props;
+---
+<nav class="mt-5 border-t border-stone-200 pt-5" aria-labelledby="prep-sections-heading">
+  <h2 id="prep-sections-heading" class="text-lg font-semibold text-ink">Sections</h2>
+  <p class="mt-1 text-sm text-stone-500" data-prep-progress aria-live="polite"></p>
+  <ol class="mt-3 space-y-1 text-sm">
+    {sections.map((section, index) => (
+      <li data-prep-nav={section.id}>
+        <a href={`#${section.id}`} class="flex items-center gap-2 rounded-md py-1 font-medium text-ink hover:text-moss focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">
+          <span class="prep-section-number !h-6 !w-6 !text-xs" aria-hidden="true">{index + 1}</span>
+          <span class="min-w-0">{section.title}</span>
+          <span class="prep-section-status !pt-0" data-prep-nav-status></span>
+        </a>
+      </li>
+    ))}
+  </ol>
+</nav>

@@ -1,0 +1,31 @@
+---
+interface Props {
+  id: string;
+  number: number;
+  title: string;
+  description?: string;
+  hidden?: boolean;
+  serverMissing?: number;
+}
+const { id, number, title, description, hidden = false, serverMissing = 0 } = Astro.props;
+---
+<section
+  id={id}
+  class="prep-section mt-7 first-of-type:mt-0 first-of-type:border-t-0 first-of-type:pt-0"
+  aria-labelledby={`${id}-heading`}
+  data-prep-section={id}
+  data-prep-number={number}
+  data-prep-title={title}
+  data-prep-server-missing={serverMissing > 0 ? serverMissing : undefined}
+  hidden={hidden}
+>
+  <div class="prep-section-head">
+    <span class="prep-section-number" aria-hidden="true">{number}</span>
+    <div class="min-w-0">
+      <h2 id={`${id}-heading`} class="text-xl font-semibold leading-7 text-ink">{title}</h2>
+      {description && <p class="mt-1 text-sm text-stone-500">{description}</p>}
+    </div>
+    <span class="prep-section-status" data-prep-section-status></span>
+  </div>
+  <slot />
+</section>

@@ -14,6 +14,7 @@ import {
   WarrantStatus,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { applyProjectScreenerToDraftReview } from '@/lib/projects/draft-screener';
 import {
   applicationDraftReviewSchema,
   type ApplicationDraftReview,
@@ -194,6 +195,7 @@ const resolvePermanentRecords = async (
       projectCreated: false,
       projectName: selected.project.name,
       projectCreatedAt: selected.project.createdAt,
+      existingProject: selected.project,
     };
   }
 
@@ -244,6 +246,8 @@ const resolvePermanentRecords = async (
       name: review.project.name!,
       internalReference: review.project.internalReference,
       projectType: selectedTypeOfWorkKeys(review)[0] ?? review.project.typeOfWorkKey,
+      typeOfWorkKeys: selectedTypeOfWorkKeys(review),
+      buildingUse: review.project.buildingUse,
       stage: projectStageFor(review.selectedApplicationType),
       localAuthority: review.site.localAuthority,
       siteAddress: [
@@ -288,11 +292,7 @@ export const commitApplicationDraft = async (
   user: CommitUser,
   submittedReview: unknown,
 ) => {
-  const review = applicationDraftReviewSchema.parse(submittedReview);
-  const issues = evaluateApplicationDraftReadiness(review);
-  if (issues.length) {
-    throw new HttpError(409, 'Review the remaining application details before creating it.', { issues });
-  }
+  let review = applicationDraftReviewSchema.parse(submittedReview);
 
   const initialDraft = await getApplicationDraftForOrganisation(draftId, organisation.id);
   if (initialDraft.status === ApplicationDraftStatus.CANCELLED) {
@@ -310,6 +310,16 @@ export const commitApplicationDraft = async (
       automationJobId: initialDraft.resultingAutomationJobId!,
     };
   }
+  if (review.projectMode === 'existing' && review.existingProjectId) {
+    const project = await prisma.project.findFirst({ where: { id: review.existingProjectId, organisationId: organisation.id } });
+    if (!project) throw new HttpError(404, 'The selected project is not available.');
+    review = applyProjectScreenerToDraftReview(review, project);
+  }
+  const issues = evaluateApplicationDraftReadiness(review);
+  if (issues.length) {
+    throw new HttpError(409, 'Review the remaining application details before creating it.', { issues });
+  }
+
   ensureReviewedDocumentsMatch(initialDraft.documents.map((document) => document.id), review);
 
   const jobType = applicationTypeToJobType(review.selectedApplicationType);
@@ -375,6 +385,11 @@ export const commitApplicationDraft = async (
     }
 
     const records = await resolvePermanentRecords(tx, organisation.id, review);
+    if ('existingProject' in records && records.existingProject) {
+      review = applyProjectScreenerToDraftReview(review, records.existingProject);
+      const screeningIssues = evaluateApplicationDraftReadiness(review).filter(issue => issue.key === 'project.buildingUse' || issue.key === 'application.typeOfWorkKeys');
+      if (screeningIssues.length) throw new HttpError(409, 'Complete the selected project screening before creating this application.', { issues: screeningIssues });
+    }
     const lifecycleEvent = records.projectCreated
       ? await emitProjectCreatedLifecycleEvent(tx, {
           organisationId: organisation.id,

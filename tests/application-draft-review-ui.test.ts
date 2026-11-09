@@ -15,7 +15,7 @@ const review = applicationDraftReviewSchema.parse({
   selectedApplicationType: ApplicationDraftType.HOUSEHOLDER_PLANNING,
   projectMode: 'create',
   existingProjectId: null,
-  project: { name: 'Example project', internalReference: null, typeOfWorkKey: null, summary: null },
+  project: { name: 'Example project', internalReference: null, typeOfWorkKey: 'domestic_alteration_extension', buildingUse: 'residential', summary: null },
   siteMode: 'create',
   existingSiteId: null,
   site: {
@@ -60,7 +60,7 @@ assert.match(draftValidation, /clientAddressSameAsSite: z\.boolean\(\)\.default\
 assert.match(draftService, /soleOwner: true/, 'Planning and Householder sole-owner default is Yes');
 assert.match(draftService, /agriculturalHolding: false/, 'Planning and Householder agricultural-holding default is No');
 assert.doesNotMatch(reviewUi, />Application route</, 'application route is not shown inside Project creation');
-assert.match(reviewUi, /Select every type that applies to this warrant/, 'type of work is presented as a multi-select warrant detail');
+assert.match(reviewUi, /Select every type that applies to this project/, 'type of work is presented as a shared project screener');
 assert.match(reviewUi, /type="checkbox"[\s\S]*toggleTypeOfWork/, 'each warrant type can be selected independently');
 
 assert.match(reviewUi, /const acceptDocument/, 'review-required documents have a one-click accept handler');

@@ -20,7 +20,6 @@ const hashKey = (value: string) => crypto.createHash('sha256').update(value).dig
 const firstHeaderValue = (value: string | null) => value?.split(',')[0]?.trim() || null;
 
 const getClientIp = (context: APIContext) =>
-  firstHeaderValue(context.request.headers.get('cf-connecting-ip')) ??
   firstHeaderValue(context.request.headers.get('x-forwarded-for')) ??
   firstHeaderValue(context.request.headers.get('x-real-ip')) ??
   context.clientAddress ??

@@ -1,3 +1,7 @@
+import { readProjectScreener } from '@/lib/projects/screener';
+import { warrantBranchesFromForm, warrantBranchFormFields } from '@/lib/building-warrant-branches';
+import { ownerFromForm, ownerFormFields } from '@/lib/building-warrant-owner';
+import { sustainabilityFromForm, warrantFollowUpFormFields } from '@/lib/building-warrant-follow-ups';
 export const prerender = false;
 
 import { WarrantStatus, type Prisma } from '@prisma/client';
@@ -49,9 +53,11 @@ export const PATCH: APIRoute = (context) =>
     } = body;
     const application = await prisma.buildingWarrantApplication.findFirst({
       where: { id, organisationId: organisation.id },
-      select: { id: true, preparationData: true },
+      select: { id: true, preparationData: true, project: { select: { buildingUse: true, typeOfWorkKeys: true, projectType: true } } },
     });
     if (!application) throw new HttpError(404, 'Building warrant application not found.');
+    const projectScreen = readProjectScreener(application.project ?? {});
+    const effectiveWorkTypes = projectScreen.typeOfWorkKeys.length ? projectScreen.typeOfWorkKeys : body.typeOfWorkKeys;
     const existingPreparation = application.preparationData
       && typeof application.preparationData === 'object'
       && !Array.isArray(application.preparationData)
@@ -63,7 +69,7 @@ export const PATCH: APIRoute = (context) =>
       ? existingPreparation.certifier as Prisma.JsonObject
       : {};
     const savedAnswers = Object.fromEntries(
-      Object.entries(unusualAnswers).filter(([, value]) => value !== undefined),
+      Object.entries(unusualAnswers).filter(([key, value]) => !(key in warrantBranchFormFields) && !(key in warrantFollowUpFormFields) && !(key in ownerFormFields) && value !== undefined),
     );
     await prisma.buildingWarrantApplication.update({
       where: { id: application.id },
@@ -72,12 +78,25 @@ export const PATCH: APIRoute = (context) =>
         estimatedValue,
         currentUse,
         proposedUse,
-        presetKey: typeOfWorkKeys[0],
+        presetKey: effectiveWorkTypes[0],
         selectedCertifierPresetId: selectedCertifierPresetId ?? null,
         preparationData: {
           ...existingPreparation,
-          typeOfWorkKeys,
+          typeOfWorkKeys: effectiveWorkTypes,
           ...savedAnswers,
+          ...(body.designCertifierSelected === false ? { certifier: null, certifierOfDesignCertificateAvailable: false } : {}),
+          ...(!body.approvedCertifierOfConstruction ? { certifierOfConstructionCertificateAvailable: false } : {}),
+          ...warrantBranchesFromForm(body),
+          declarationAuthorised: body.declarationAuthorised,
+          ...(body.designCertifierSelected !== undefined ? { designCertifierSelected: body.designCertifierSelected } : {}),
+          ownerIsClient: body.ownerIsClient ?? null,
+          ownerDetails: body.ownerIsClient === false ? ownerFromForm(body) : existingPreparation.ownerDetails ?? {},
+          fireAuthorityName: body.fireAuthorityName ?? null,
+          historicalBuildingDetails: body.historicalBuildingDetails ?? null,
+          dangerousBuildingReferences: body.dangerousBuildingReferences ?? null,
+          relaxationReference: body.relaxationReferences[0] || body.relaxationReference || null,
+          relaxationDate: body.relaxationDates[0] || body.relaxationDate || null,
+          sustainability: sustainabilityFromForm(body),
           ...(preset ? {
             certifier: {
               ...existingCertifier,

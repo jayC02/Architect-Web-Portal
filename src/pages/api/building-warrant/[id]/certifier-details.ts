@@ -1,3 +1,7 @@
+import { readProjectScreener } from '@/lib/projects/screener';
+import { warrantBranchesFromForm } from '@/lib/building-warrant-branches';
+import { ownerFromForm } from '@/lib/building-warrant-owner';
+import { sustainabilityFromForm } from '@/lib/building-warrant-follow-ups';
 export const prerender = false;
 
 import { AutomationJobStatus, AutomationJobType, type Prisma } from '@prisma/client';
@@ -42,9 +46,11 @@ export const POST: APIRoute = (context) =>
 
     const application = await prisma.buildingWarrantApplication.findFirst({
       where: { id, organisationId: organisation.id },
-      select: { id: true, projectId: true, preparationData: true },
+      select: { id: true, projectId: true, preparationData: true, project: { select: { buildingUse: true, typeOfWorkKeys: true, projectType: true } } },
     });
     if (!application) throw new HttpError(404, 'Building warrant application not found.');
+    const projectScreen = readProjectScreener(application.project ?? {});
+    const effectiveWorkTypes = projectScreen.typeOfWorkKeys.length ? projectScreen.typeOfWorkKeys : body.typeOfWorkKeys;
 
     const job = body.jobId ? await prisma.automationJob.findFirst({
       where: {
@@ -68,15 +74,17 @@ export const POST: APIRoute = (context) =>
       if (!selectedPreset) throw new HttpError(400, 'The selected certifier is not available to this organisation.');
     }
 
-    const preset = await findOrCreateCertifierProfile(prisma, organisation.id, {
+    const designSelected = body.designCertifierSelected ?? Boolean(body.selectedCertifierPresetId || body.registrationAPart1 || body.registrationBPart1);
+    const completeRegistration = Boolean(body.registrationAPart1 && body.registrationAPart2 && body.certifierName && body.registrationBPart1 && body.registrationBPart2 && body.approvedBody);
+    const preset = designSelected && completeRegistration ? await findOrCreateCertifierProfile(prisma, organisation.id, {
       schemeType: body.schemeType,
-      registrationAPart1: body.registrationAPart1,
-      registrationAPart2: body.registrationAPart2,
-      certifierName: body.certifierName,
-      registrationBPart1: body.registrationBPart1,
-      registrationBPart2: body.registrationBPart2,
-      approvedBody: body.approvedBody,
-    });
+      registrationAPart1: body.registrationAPart1!,
+      registrationAPart2: body.registrationAPart2!,
+      certifierName: body.certifierName!,
+      registrationBPart1: body.registrationBPart1!,
+      registrationBPart2: body.registrationBPart2!,
+      approvedBody: body.approvedBody!,
+    }) : null;
 
     const preparationData = jsonObject(application.preparationData);
     await updateBuildingWarrantWithLifecycle({
@@ -94,15 +102,26 @@ export const POST: APIRoute = (context) =>
         status: body.status,
         portalUrl: body.portalUrl,
         notes: body.notes,
-        presetKey: body.typeOfWorkKeys[0],
+        presetKey: effectiveWorkTypes[0],
         description: body.description,
         estimatedValue: body.estimatedValue,
         currentUse: body.currentUse,
         proposedUse: body.proposedUse,
-        selectedCertifierPresetId: preset.id,
+        selectedCertifierPresetId: designSelected ? preset?.id ?? selectedPreset?.id ?? null : null,
         preparationData: {
           ...preparationData,
-          typeOfWorkKeys: body.typeOfWorkKeys,
+          typeOfWorkKeys: effectiveWorkTypes,
+          ...warrantBranchesFromForm(body),
+          designCertifierSelected: designSelected,
+          declarationAuthorised: body.declarationAuthorised,
+          ownerIsClient: body.ownerIsClient ?? null,
+          ownerDetails: body.ownerIsClient === false ? ownerFromForm(body) : jsonObject(preparationData.ownerDetails),
+          fireAuthorityName: body.fireAuthorityName ?? null,
+          historicalBuildingDetails: body.historicalBuildingDetails ?? null,
+          dangerousBuildingReferences: body.dangerousBuildingReferences ?? null,
+          relaxationReference: body.relaxationReferences[0] || body.relaxationReference || null,
+          relaxationDate: body.relaxationDates[0] || body.relaxationDate || null,
+          sustainability: sustainabilityFromForm(body),
           ...(body.workStartedBeforeApplication !== undefined
             ? { workStartedBeforeApplication: body.workStartedBeforeApplication }
             : {}),
@@ -110,11 +129,13 @@ export const POST: APIRoute = (context) =>
             ? { disabledPersonsFacilitiesOnly: body.disabledPersonsFacilitiesOnly }
             : {}),
           ...(body.certifierOfDesignCertificateAvailable !== undefined
-            ? { certifierOfDesignCertificateAvailable: body.certifierOfDesignCertificateAvailable }
+            ? { certifierOfDesignCertificateAvailable: designSelected && body.certifierOfDesignCertificateAvailable }
             : {}),
           ...(body.certifierOfConstructionCertificateAvailable !== undefined
-            ? { certifierOfConstructionCertificateAvailable: body.certifierOfConstructionCertificateAvailable }
+            ? { certifierOfConstructionCertificateAvailable: body.approvedCertifierOfConstruction && body.certifierOfConstructionCertificateAvailable }
             : {}),
+          ...(!designSelected ? { certifierOfDesignCertificateAvailable: false } : {}),
+          ...(!body.approvedCertifierOfConstruction ? { certifierOfConstructionCertificateAvailable: false } : {}),
           applicantIsOwner: body.applicantIsOwner,
           applicationIsStaged: body.applicationIsStaged,
           intendedLifeFiveYearsOrLess: body.intendedLifeFiveYearsOrLess,
@@ -126,10 +147,10 @@ export const POST: APIRoute = (context) =>
           approvedCertifierOfConstruction: body.approvedCertifierOfConstruction,
           coveredBySTAS: body.coveredBySTAS,
           restrictPublicInspection: body.restrictPublicInspection,
-          certifier: {
+          certifier: designSelected ? {
             ...jsonObject(preparationData.certifier),
-            presetId: preset.id,
-            displayName: preset.displayName,
+            presetId: preset?.id ?? selectedPreset?.id ?? null,
+            displayName: preset?.displayName ?? selectedPreset?.displayName ?? null,
             schemeType: body.schemeType ?? null,
             registrationAPart1: body.registrationAPart1,
             registrationAPart2: body.registrationAPart2,
@@ -137,7 +158,7 @@ export const POST: APIRoute = (context) =>
             registrationBPart1: body.registrationBPart1,
             registrationBPart2: body.registrationBPart2,
             approvedBody: body.approvedBody,
-          },
+          } : null,
         } as Prisma.InputJsonValue,
       },
     });

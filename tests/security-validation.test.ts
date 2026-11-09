@@ -59,7 +59,7 @@ if (!invalidPhone.success) {
   );
 }
 
-const minimalProject = projectCreateSchema.parse({ name: 'Minimal project' });
+const minimalProject = projectCreateSchema.parse({ name: 'Minimal project', buildingUse: 'residential', typeOfWorkKeys: ['domestic_alteration_extension'] });
 assert.equal(minimalProject.stage, 'LEAD', 'new projects default to lead stage server-side');
 assert.equal(minimalProject.status, 'ACTIVE', 'new projects default to active status server-side');
 assert.equal(minimalProject.siteAddress, undefined, 'new projects do not require a manual site address');
@@ -68,7 +68,7 @@ assert.equal(minimalProject.siteId, undefined, 'new projects can be created with
 
 for (const projectType of TYPE_OF_WORK_OPTIONS) {
   assert.equal(
-    projectCreateSchema.parse({ name: 'Typed project', projectType }).projectType,
+    projectCreateSchema.parse({ name: 'Typed project', projectType, buildingUse: 'residential', typeOfWorkKeys: [typeOfWorkKey(projectType)] }).projectType,
     typeOfWorkKey(projectType),
     `type of work is accepted and normalised to a stable key: ${projectType}`,
   );

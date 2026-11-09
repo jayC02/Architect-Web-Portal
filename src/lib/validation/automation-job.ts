@@ -1,3 +1,4 @@
+import { warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import {
   AutomationJobSourceType,
   AutomationJobStatus,
@@ -10,6 +11,8 @@ import {
   WarrantType,
 } from '@prisma/client';
 import { z } from 'zod';
+import { ownerDetailsSchema } from '@/lib/building-warrant-owner';
+import { warrantSustainabilitySchema } from '@/lib/building-warrant-follow-ups';
 import { optionalText } from '@/lib/validation/common';
 
 const optionalId = optionalText(120);
@@ -193,6 +196,8 @@ export const automationJobSnapshotV2Schema = z.object({
     name: z.string().min(1),
     internalReference: nullableText,
     typeOfWorkKey: typeOfWorkKeySchema,
+    buildingUse: z.enum(['residential', 'commercial']).nullable().optional(),
+    typeOfWorkKeys: z.array(typeOfWorkKeySchema).max(4).optional(),
     typeOfWorkLabel: z.string().min(1),
     notes: nullableText,
     stage: z.string().min(1),
@@ -254,11 +259,22 @@ export const automationJobSnapshotV2Schema = z.object({
     proposedUse: nullableText,
     status: z.nativeEnum(WarrantStatus).nullable(),
     warrantReference: nullableText,
+    ...warrantBranchSnapshotFields,
+    ownerIsClient: z.boolean().nullable().optional(),
+    owner: ownerDetailsSchema.extend({ source: z.enum(['CLIENT', 'MANUAL']) }).nullable().optional(),
+    fireAuthorityName: z.string().trim().max(20).nullable().optional(),
+    sustainability: warrantSustainabilitySchema.optional(),
+    historicalBuildingDetails: z.string().trim().max(750).nullable().optional(),
+    dangerousBuildingReferences: z.string().trim().max(750).nullable().optional(),
+    relaxationReference: z.string().trim().max(750).nullable().optional(),
+    relaxationDate: z.string().date().nullable().optional(),
     unusualAnswers: z.object({
       applicantIsOwner: z.boolean(),
       workStartedBeforeApplication: z.boolean().optional(),
       disabledPersonsFacilitiesOnly: z.boolean().optional(),
       certifierOfDesignCertificateAvailable: z.boolean().optional(),
+      designCertifierSelected: z.boolean().optional(),
+      declarationAuthorised: z.boolean().optional(),
       certifierOfConstructionCertificateAvailable: z.boolean().optional(),
       applicationIsStaged: z.boolean(),
       intendedLifeFiveYearsOrLess: z.boolean(),

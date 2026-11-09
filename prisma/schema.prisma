@@ -702,6 +702,8 @@ model Project {
   name              String
   internalReference String?
   projectType       String?
+  buildingUse       String?
+  typeOfWorkKeys    String[]      @default([])
   stage             ProjectStage  @default(LEAD)
   localAuthority    String?
   siteAddress       String?

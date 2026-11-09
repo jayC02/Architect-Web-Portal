@@ -1,7 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
-import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
+import ProjectScreener from '@/components/forms/ProjectScreener.astro';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { UK_PHONE_HTML_PATTERN } from '@/lib/validation/client-contact';
 
@@ -28,13 +28,7 @@ const [clients, sites] = await Promise.all([
       <span class="label">Internal reference</span>
       <input name="internalReference" class="field" />
     </label>
-    <label class="block">
-      <span class="label">Type of work</span>
-      <select name="projectType" class="field">
-        <option value="">Select type of work</option>
-        {TYPE_OF_WORK_DEFINITIONS.map((type) => <option value={type.key}>{type.label}</option>)}
-      </select>
-    </label>
+    <ProjectScreener />
     <label class="block">
       <span class="label">Client</span>
       <select name="clientId" class="field" data-client-select>

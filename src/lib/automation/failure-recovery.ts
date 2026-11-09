@@ -57,6 +57,7 @@ const actionForCategory = (category: string | null): FailureRecoveryAction => ({
   AGENT_DATA_INVALID: 'review_agent',
   SITE_DATA_INVALID: 'review_site',
   TYPE_OF_WORK_REQUIRED: 'review_type_of_work',
+  CERTIFICATE_VALIDATION_FAILED: 'retry',
   DOCUMENT_UPLOAD_FAILED: 'review_documents',
   DOCUMENT_REQUIRED: 'review_documents',
 }[category ?? ''] as FailureRecoveryAction | undefined) ?? 'review_portal';
@@ -68,6 +69,7 @@ const categoryPresentation: Record<string, { headline: string; stage: string; ex
   AGENT_DATA_INVALID: { headline: 'Agent information required', stage: 'agent_details', explanation: 'Correct the organisation or agent information before starting another attempt.' },
   SITE_DATA_INVALID: { headline: 'Site information required', stage: 'address_selection', explanation: 'Correct the saved site information before starting another attempt.' },
   TYPE_OF_WORK_REQUIRED: { headline: 'Type of work required', stage: 'main_details', explanation: 'Select at least one type of work before running the application.' },
+  CERTIFICATE_VALIDATION_FAILED: { headline: 'Certifier details need correction', stage: 'main_details', explanation: 'The portal did not accept the design-certifier details. Correct them in the warrant application before retrying.' },
   DOCUMENT_UPLOAD_FAILED: { headline: 'Supporting documents need review', stage: 'documents', explanation: 'Review the project documents before starting another attempt.' },
 };
 

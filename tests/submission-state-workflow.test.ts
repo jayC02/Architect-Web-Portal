@@ -183,7 +183,7 @@ const planningJob = {
   dataSnapshot: { project: { id: 'project_a' }, planningApplication: { id: 'planning_a' } },
 };
 assert.deepEqual(await reconcilePreparedApplicationReview(projectionDatabase, {
-  organisationId: 'org_a', job: planningJob as any, occurredAt,
+  organisationId: 'org_a', job: planningJob as any, occurredAt, resultOutcome: 'completed_to_final_review',
 }), { outcome: 'opened', applicationId: 'planning_a' });
 assert.equal(projectionState.actions.length, 1);
 assert.equal(projectionState.actions[0].dedupeKey, 'planning:planning_a:final-review');
@@ -191,13 +191,13 @@ assert.equal(projectionState.actions[0].dueAt, null, 'prepared review remains un
 assert.match(projectionState.actions[0].title, /prepared — review and submit/);
 
 await reconcilePreparedApplicationReview(projectionDatabase, {
-  organisationId: 'org_a', job: planningJob as any, occurredAt,
+  organisationId: 'org_a', job: planningJob as any, occurredAt, resultOutcome: 'completed_to_final_review',
 });
 assert.equal(projectionState.actions.length, 1, 'callback replay reuses the organisation-scoped dedupe key');
 
 projectionState.planning.status = PlanningStatus.SUBMITTED;
 await reconcilePreparedApplicationReview(projectionDatabase, {
-  organisationId: 'org_a', job: planningJob as any, occurredAt,
+  organisationId: 'org_a', job: planningJob as any, occurredAt, resultOutcome: 'completed_to_final_review',
 });
 assert.equal(projectionState.actions[0].status, ActionItemStatus.RESOLVED);
 
@@ -207,11 +207,20 @@ const warrantJob = {
   dataSnapshot: { project: { id: 'project_a' }, buildingWarrantApplication: { id: 'warrant_a' } },
 };
 await reconcilePreparedApplicationReview(projectionDatabase, {
-  organisationId: 'org_a', job: warrantJob as any, occurredAt,
+  organisationId: 'org_a', job: warrantJob as any, occurredAt, resultOutcome: 'awaiting_user_portal_review',
 });
 const warrantAction = projectionState.actions.find((action) => action.dedupeKey === 'warrant:warrant_a:final-review');
 assert.equal(warrantAction.dueAt, null);
 assert.match(warrantAction.title, /pay, review and submit/);
+
+await reconcilePreparedApplicationReview(projectionDatabase, {
+  organisationId: 'org_a', job: warrantJob as any, occurredAt, resultOutcome: 'paused_for_manual_input',
+});
+assert.equal(warrantAction.status, ActionItemStatus.RESOLVED, 'a pause resolves any stale prepared-review action');
+await reconcilePreparedApplicationReview(projectionDatabase, {
+  organisationId: 'org_a', job: warrantJob as any, occurredAt,
+});
+assert.equal(warrantAction.status, ActionItemStatus.RESOLVED, 'status alone cannot create a prepared-review action');
 
 const ambiguous = await reconcilePreparedApplicationReview(projectionDatabase, {
   organisationId: 'org_a',

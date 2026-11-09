@@ -12,7 +12,7 @@ const source = (path: string) => readFileSync(new URL(`../${path}`, import.meta.
 
 const client = clientSchema.parse({ name: 'Test Client', buildingNumber: '147' });
 assert.equal(client.buildingNumber, '147', 'client editing accepts and preserves Building Number');
-assert.match(source('src/components/live/LiveDataPanel.tsx'), /name="buildingNumber"[\s\S]*client\?\.buildingNumber/, 'the existing client form loads and saves Building Number');
+assert.match(source('src/components/live/DirectoryEditor.tsx'), /export function ClientForm[\s\S]*name="buildingNumber"[^>]*client\?\.buildingNumber/, 'the existing client form loads and saves Building Number');
 assert.match(source('src/pages/api/clients/index.ts'), /companyName: true,\s+buildingNumber: true,/, 'the Clients API returns the saved Building Number when reopening the editor');
 assert.ok(existsSync(new URL('../prisma/migrations/20260807120000_client_building_number/migration.sql', import.meta.url)), 'the intended nullable Client field has a migration');
 
@@ -34,11 +34,13 @@ const planningManage = source('src/pages/planning/[id]/preparation.astro');
 const warrantManage = source('src/pages/building-warrant/[id]/preparation.astro');
 const planningCreate = source('src/pages/projects/[id].astro');
 const warrantCreate = source('src/pages/projects/[id].astro');
+// Record-tracking fields were deliberately removed from the focused preparation pages
+// (commits 2da3f52 and 17fe78a). The handlers below still accept them when supplied.
 for (const field of ['applicationReference', 'submissionDate', 'validDate', 'decisionTargetDate', 'decisionDate', 'status', 'portalUrl', 'notes']) {
-  assert.match(planningManage, new RegExp(`name="${field}"`), `Planning Manage exposes ${field}`);
+  assert.doesNotMatch(planningManage, new RegExp(`name="${field}"`), `Planning preparation stays focused without ${field}`);
 }
 for (const field of ['warrantReference', 'warrantType', 'submissionDate', 'firstResponseTargetDate', 'grantedDate', 'expiryDate', 'completionCertificateStatus', 'status', 'portalUrl', 'notes']) {
-  assert.match(warrantManage, new RegExp(`name="${field}"`), `Building Warrant Manage exposes ${field}`);
+  assert.doesNotMatch(warrantManage, new RegExp(`name="${field}"`), `Building Warrant preparation stays focused without ${field}`);
 }
 assert.doesNotMatch(planningCreate, /name="applicationReference"/, 'the initial Planning creation form remains simple');
 assert.doesNotMatch(warrantCreate, /name="warrantReference"/, 'the initial Building Warrant creation form remains simple');

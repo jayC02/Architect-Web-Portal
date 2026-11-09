@@ -2,6 +2,7 @@ import ClientApplicantReview from './ClientApplicantReview';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { applicationFileSha256, retryTransientUpload, runUploadQueue, UploadRequestError } from '@/lib/application-upload-queue';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
+import { applyProjectScreenerToDraftReview } from '@/lib/projects/draft-screener';
 import type { SiteLookupResult } from '@/server/services/site-address-lookup.service';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -487,6 +488,8 @@ export default function ApplicationDraftReview({
   );
   const [working, setWorking] = useState<'save' | 'commit' | 'analyse' | 'cancel' | 'files' | ''>('');
   const [notice, setNotice] = useState('');
+  const [projectScreeningVersion, setProjectScreeningVersion] = useState(0);
+  const [projectLookupPending, setProjectLookupPending] = useState(resolvedInitialReview?.projectMode === 'existing');
   const [clientLookupPending, setClientLookupPending] = useState(Boolean(resolvedInitialReview?.projectMode === 'create' && (resolvedInitialReview.existingClientId || resolvedInitialReview.client.displayName)));
   const [clientReviewVisible, setClientReviewVisible] = useState(false);
   const [error, setError] = useState('');
@@ -545,6 +548,21 @@ export default function ApplicationDraftReview({
   useEffect(() => () => {
     if (autosaveTimer.current !== null) window.clearTimeout(autosaveTimer.current);
   }, []);
+
+  useEffect(() => {
+    const projectId = review?.projectMode === 'existing' ? review.existingProjectId : null;
+    if (!projectId) { setProjectLookupPending(false); return; }
+    const controller = new AbortController();
+    setProjectLookupPending(true);
+    void apiJson<{ project: { name: string; buildingUse: string | null; typeOfWorkKeys: string[]; projectType: string | null } }>(`/api/projects/${projectId}`, { signal: controller.signal })
+      .then(({ project }) => {
+        if (controller.signal.aborted || reviewRef.current?.existingProjectId !== projectId) return;
+        applyReview(current => applyProjectScreenerToDraftReview(current, project), true);
+      })
+      .catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Could not load project screening.'); })
+      .finally(() => { if (!controller.signal.aborted) setProjectLookupPending(false); });
+    return () => controller.abort();
+  }, [review?.projectMode, review?.existingProjectId, projectScreeningVersion]);
 
   const persistCurrentReview = async (): Promise<boolean> => {
     const current = reviewRef.current;
@@ -852,7 +870,7 @@ export default function ApplicationDraftReview({
   const locationPlanConflict = locationPlanCount > 1;
 
   const commit = async () => {
-    if (reviewRef.current?.projectMode === 'create' && clientLookupPending) return;
+    if (projectLookupPending || (reviewRef.current?.projectMode === 'create' && clientLookupPending)) return;
     setWorking('commit');
     setError('');
     setNotice('');
@@ -1111,6 +1129,8 @@ export default function ApplicationDraftReview({
                     ...current,
                     projectMode: value === 'create' ? 'create' : 'existing',
                     existingProjectId: value === 'create' ? null : value,
+                    project: { ...current.project, buildingUse: null, typeOfWorkKey: null },
+                    application: { ...current.application, typeOfWorkKeys: [], presetKey: null },
                   }), true);
                 }}
                 className={`field ${issueFor('existingProjectId') ? 'border-red-300 ring-2 ring-red-100' : ''}`}
@@ -1139,6 +1159,9 @@ export default function ApplicationDraftReview({
                   value={review.project.internalReference}
                   onChange={(value) => updateProject('internalReference', value)}
                 />
+                <label className="block lg:col-span-2"><span className="label">Building use</span><select value={review.project.buildingUse ?? ''} onChange={event => updateProject('buildingUse', event.target.value)} className={`field ${issueFor('project.buildingUse') ? 'border-red-300 ring-2 ring-red-100' : ''}`}>
+                  <option value="">Choose building use</option><option value="residential">Residential (domestic)</option><option value="commercial">Commercial (non-domestic)</option>
+                </select>{issueFor('project.buildingUse') ? <span className="mt-1 block text-xs text-red-700">{issueFor('project.buildingUse')}</span> : null}</label>
               </>
             ) : null}
 
@@ -1155,11 +1178,11 @@ export default function ApplicationDraftReview({
               <Evidence draftId={draft.id} prepared={draft.prepared} section="application" field="description" />
             </label>
 
-            {building ? (
+            {review.projectMode === 'create' ? (
               <>
                 <fieldset className={`lg:col-span-2 ${issueFor('application.typeOfWorkKeys') ? 'rounded-md border border-red-300 p-3 ring-2 ring-red-100' : ''}`}>
                   <legend className="label">Type of work</legend>
-                  <p className="mt-1 text-sm text-stone-500">Select every type that applies to this warrant.</p>
+                  <p className="mt-1 text-sm text-stone-500">Select every type that applies to this project.</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {typeOfWorkOptions.map((option) => (
                       <label key={option.value} className="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-medium text-ink">
@@ -1175,6 +1198,17 @@ export default function ApplicationDraftReview({
                   </div>
                   {issueFor('application.typeOfWorkKeys') ? <span className="mt-2 block text-xs text-red-700">{issueFor('application.typeOfWorkKeys')}</span> : null}
                 </fieldset>
+              </>
+            ) : (
+              <div className="text-sm text-stone-600 lg:col-span-2">
+                <p>{projectLookupPending ? 'Loading project screening...' : `${review.project.buildingUse === 'residential' ? 'Residential' : review.project.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed'}: ${review.application.typeOfWorkKeys.map(key => typeOfWorkOptions.find(option => option.value === key)?.label ?? key).join(', ') || 'work types not confirmed'}`}</p>
+                {review.existingProjectId ? <a className="font-semibold underline" href={`/projects/${review.existingProjectId}/screener`} target="_blank" rel="noreferrer">Edit the selected project's screening</a> : null}
+                <button type="button" className="ml-3 font-semibold underline" onClick={() => setProjectScreeningVersion(value => value + 1)} disabled={projectLookupPending}>Refresh project screening</button>
+                {issueFor('project.buildingUse') ? <p className="mt-1 text-xs text-red-700">{issueFor('project.buildingUse')}</p> : null}
+              </div>
+            )}
+            {building ? (
+              <>
                 <Field
                   label="Current use"
                   value={review.application.currentUse}
@@ -1563,7 +1597,7 @@ export default function ApplicationDraftReview({
             <p className={`self-center text-sm ${saveState === 'failed' ? 'text-red-700' : 'text-stone-500'}`} role="status" aria-live="polite">
               {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'failed' ? 'Could not save changes' : ''}
             </p>
-            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || incompleteUploads || (review.projectMode === 'create' && clientLookupPending)}>
+            <button type="button" className="btn btn-primary gap-2" onClick={() => void commit()} disabled={Boolean(working) || incompleteUploads || projectLookupPending || (review.projectMode === 'create' && clientLookupPending)}>
               {working === 'commit' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
               {working === 'commit' ? 'Creating project...' : 'Create Project'}
             </button>

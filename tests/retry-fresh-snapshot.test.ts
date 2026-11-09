@@ -28,6 +28,7 @@ let planningConfirmation = false;
 let warrantConfirmation = false;
 let typeOfWorkKeys = ['domestic_alteration_extension'];
 let documentId = 'document-a';
+let warrantEdits: Record<string, unknown> = {};
 
 const changedAt = () => new Date(`2026-08-${String(version).padStart(2, '0')}T10:00:00.000Z`);
 const projectRecord = () => ({
@@ -36,6 +37,8 @@ const projectRecord = () => ({
   name: 'Current data project',
   internalReference: 'AP-CURRENT',
   projectType: typeOfWorkKeys[0],
+  buildingUse: 'residential',
+  typeOfWorkKeys,
   notes: null,
   stage: mode === 'warrant' ? ProjectStage.BUILDING_WARRANT : ProjectStage.PLANNING,
   status: ProjectStatus.ACTIVE,
@@ -119,6 +122,21 @@ const warrantRecord = () => ({
   preparationData: {
     typeOfWorkKeys,
     dangerousBuildingNotice: warrantConfirmation,
+    applicantIsOwner: false,
+    ownerIsClient: true,
+    workStartedBeforeApplication: true,
+    disabledPersonsFacilitiesOnly: false,
+    declarationAuthorised: true,
+    fireAndRescueServiceEnforcingAuthority: false,
+    fireAuthorityName: 'Local authority',
+    otherHistoricalImportance: true,
+    historicalBuildingDetails: 'Historical association',
+    dangerousBuildingReferences: 'DBN-1',
+    scottishMinistersRelaxationDirection: true,
+    relaxationReference: 'RD-1',
+    relaxationDate: '2026-11-01',
+    sustainability: { higherLevels: false },
+    ...warrantEdits,
   },
   selectedCertifierPreset: null,
   updatedAt: changedAt(),
@@ -221,12 +239,40 @@ try {
     buildingWarrantApplicationId: warrantId,
   });
 
+  const copiedWarrant = newWarrantJob.snapshot.dataSnapshot.buildingWarrant!;
+  assert.equal(copiedWarrant.unusualAnswers.workStartedBeforeApplication, false, 'new snapshot normalises the fee input');
+  assert.equal(copiedWarrant.feeCalculation?.calculationStatus, 'CALCULATED');
+  assert.equal(copiedWarrant.ownerIsClient, true);
+  assert.equal(copiedWarrant.owner?.source, 'CLIENT');
+  assert.equal(copiedWarrant.owner?.firstName, clientName.split(' ')[0]);
+  assert.equal(copiedWarrant.owner?.buildingNumber, '10');
+  assert.equal(copiedWarrant.fireAuthorityName, 'Local authority');
+  assert.equal(copiedWarrant.historicalBuildingDetails, 'Historical association');
+  assert.equal(copiedWarrant.dangerousBuildingReferences, 'DBN-1');
+  assert.equal(copiedWarrant.relaxationReference, 'RD-1');
+  assert.equal(copiedWarrant.relaxationDate, '2026-11-01');
+  assert.deepEqual(copiedWarrant.sustainability, { higherLevels: false });
+  assert.equal(newWarrantJob.snapshot.preflight.status, 'READY', 'fully supplied new-building follow-ups pass preflight');
   assert.notEqual(newWarrantJob.jobId, oldWarrantJob.jobId, 'Building Warrant retry also gets a new identity');
   assert.deepEqual(oldWarrantJob.snapshot.dataSnapshot.buildingWarrant?.typeOfWorkKeys, ['domestic_alteration_extension']);
   assert.equal(oldWarrantJob.snapshot.dataSnapshot.buildingWarrant?.unusualAnswers.dangerousBuildingNotice, false);
   assert.deepEqual(newWarrantJob.snapshot.dataSnapshot.buildingWarrant?.typeOfWorkKeys, ['new_build'], 'Job B reads current Type of Work');
   assert.equal(newWarrantJob.snapshot.dataSnapshot.buildingWarrant?.unusualAnswers.dangerousBuildingNotice, true, 'Job B reads current Warrant confirmations');
   assert.equal(newWarrantJob.snapshot.dataSnapshot.buildingWarrant?.recordId, warrantId, 'safe Warrant portal identity is preserved separately');
+  warrantEdits = { includesServices: true, designCertifierSelected: true, certifierOfDesignCertificateAvailable: true,
+    designCertificateWithApplication: true, designCertificateFollowingApplication: false,
+    certifier: { registrationAPart1: 'SER1', registrationAPart2: 'CORRECTED-A', certifierName: 'Test Certifier', registrationBPart1: 'SER1', registrationBPart2: 'CORRECTED-B', approvedBody: 'Test Approved Body' } };
+  const correctedCertificate = await buildFreshAutomationJob({ organisationId, organisationName: 'Current Organisation', projectId,
+    type: AutomationJobType.BUILDING_WARRANT, createdBy, buildingWarrantApplicationId: warrantId });
+  assert.equal(correctedCertificate.snapshot.preflight.status, 'READY');
+  assert.equal(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.includesServices, true);
+  assert.equal(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.certifier?.registrationAPart2, 'CORRECTED-A');
+  warrantEdits = { ...warrantEdits, certifier: { ...(warrantEdits.certifier as Record<string, unknown>), registrationAPart2: 'UPDATED-A' } };
+  const updatedCertificate = await buildFreshAutomationJob({ organisationId, organisationName: 'Current Organisation', projectId,
+    type: AutomationJobType.BUILDING_WARRANT, createdBy, buildingWarrantApplicationId: warrantId });
+  assert.equal(updatedCertificate.snapshot.dataSnapshot.buildingWarrant?.certifier?.registrationAPart2, 'UPDATED-A', 'retry copies corrected canonical certification details');
+  assert.equal(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.certifier?.registrationAPart2, 'CORRECTED-A', 'the prior run retains its frozen certificate');
+
 } finally {
   (prisma.project as any).findFirst = delegates.projectFindFirst;
   (prisma.organisationDefaults as any).findUnique = delegates.defaultsFindUnique;

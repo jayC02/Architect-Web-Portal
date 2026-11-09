@@ -35,6 +35,7 @@ const oauthCookies = new Map<string, string>();
 const oauthContext = {
   cookies: {
     set: (name: string, value: string) => oauthCookies.set(name, value),
+    delete: (name: string) => oauthCookies.delete(name),
   },
 } as unknown as APIContext;
 const authorizationUrl = new URL(createGoogleAuthorizationUrl(oauthContext));

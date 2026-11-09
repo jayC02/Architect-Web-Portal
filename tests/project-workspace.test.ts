@@ -45,6 +45,7 @@ assert.deepEqual(warrantDateFieldsForStatus(WarrantStatus.GRANTED), ['submission
 
 const projectsPage = fs.readFileSync('src/pages/projects/index.astro', 'utf8');
 const newProjectPage = fs.readFileSync('src/pages/projects/new.astro', 'utf8');
+const projectScreenerComponent = fs.readFileSync('src/components/forms/ProjectScreener.astro', 'utf8');
 const projectsApi = fs.readFileSync('src/pages/api/projects/index.ts', 'utf8');
 const projectDetailPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
@@ -130,10 +131,10 @@ assert.match(projectsPage, /Ref \{project\.internalReference\}/, 'project refere
 assert.match(projectsPage, /documentReviewCount > 0 \? `\$\{project\.documentReviewCount\} need review` : 'All reviewed'/, 'document review count is rendered as plain text');
 assert.match(projectsPage, /readyAutomationJobCount > 0 \? `\$\{project\.readyAutomationJobCount\} ready` : 'None ready'/, 'automation ready count is rendered as plain text');
 assert.match(projectDetailPage, /automationJobs/, 'project workspace loads automation jobs');
-assert.match(newProjectPage, /<span class="label">Type of work<\/span>/, 'new project flow uses the clearer type of work label');
-assert.match(newProjectPage, /TYPE_OF_WORK_DEFINITIONS\.map/, 'new project flow renders the controlled type of work options');
-assert.match(newProjectPage, /<option value=\{type\.key\}>\{type\.label\}<\/option>/, 'new projects submit stable type-of-work keys');
-assert.match(newProjectPage, /<option value="">Select type of work<\/option>/, 'type of work has a neutral placeholder');
+assert.match(newProjectPage, /<ProjectScreener/, 'new project flow includes the shared screening controls');
+assert.match(projectScreenerComponent, /TYPE_OF_WORK_DEFINITIONS\.map/, 'new project flow renders the controlled type of work options');
+assert.match(projectScreenerComponent, /name="typeOfWorkKeys" value=\{type\.key\}/, 'new projects submit stable type-of-work keys');
+assert.match(projectScreenerComponent, /<option value="">Choose building use<\/option>/, 'building use requires an explicit choice');
 assert.doesNotMatch(newProjectPage, /name="stage"/, 'new project flow does not ask for stage');
 assert.doesNotMatch(newProjectPage, /name="status"/, 'new project flow does not ask for status');
 assert.doesNotMatch(newProjectPage, /name="siteAddress"/, 'new project flow does not ask for a manual site address');

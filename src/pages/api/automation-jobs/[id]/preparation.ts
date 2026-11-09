@@ -1,3 +1,5 @@
+import { ownerFormFields } from '@/lib/building-warrant-owner';
+import { fixedWarrantAnswerFields, warrantFollowUpFormFields } from '@/lib/building-warrant-follow-ups';
 import {
   AutomationJobStatus,
   AutomationJobType,
@@ -82,14 +84,18 @@ export const preparationFormSchema = (jobType: AutomationJobType) => z.object({
   currentUse: optionalText(160),
   proposedUse: optionalText(160),
   selectedCertifierPresetId: optionalText(120),
+  ...fixedWarrantAnswerFields,
+  ...ownerFormFields,
   applicantIsOwner: formBoolean,
   applicationIsStaged: formBoolean,
   intendedLifeFiveYearsOrLess: formBoolean,
   fireAndRescueServiceEnforcingAuthority: formBoolean,
+  ...warrantFollowUpFormFields,
   listedBuildingOrConservationArea: formBoolean,
   otherHistoricalImportance: formBoolean,
   scottishMinistersRelaxationDirection: formBoolean,
   dangerousBuildingNotice: formBoolean,
+
   approvedCertifierOfConstruction: formBoolean,
   coveredBySTAS: formBoolean,
   restrictPublicInspection: formBoolean,
@@ -135,6 +141,8 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
   const raw = {
     ...Object.fromEntries(form.entries()),
     typeOfWorkKeys: form.getAll('typeOfWorkKeys').map(String),
+    sustainabilityDomesticLevels: form.has('sustainabilityDomesticLevels') ? form.getAll('sustainabilityDomesticLevels').map(String) : undefined,
+    sustainabilityNonDomesticLevels: form.has('sustainabilityNonDomesticLevels') ? form.getAll('sustainabilityNonDomesticLevels').map(String) : undefined,
   };
   const parsed = preparationFormSchema(job.type).safeParse(raw);
   if (!parsed.success) {
@@ -237,26 +245,11 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       where: { id: recordId, organisationId: organisation.id, projectId: job.projectId },
       data: {
         description: value.description,
-        presetKey: value.typeOfWorkKeys[0],
+        presetKey: (oldSnapshot.data.buildingWarrant?.typeOfWorkKeys ?? [oldSnapshot.data.buildingWarrant!.presetKey])[0],
         estimatedValue: value.estimatedValue,
         currentUse: value.currentUse,
         proposedUse: value.proposedUse,
-        selectedCertifierPresetId: value.selectedCertifierPresetId,
-        preparationData: {
-          ...previous,
-          typeOfWorkKeys: value.typeOfWorkKeys,
-          applicantIsOwner: value.applicantIsOwner,
-          applicationIsStaged: value.applicationIsStaged,
-          intendedLifeFiveYearsOrLess: value.intendedLifeFiveYearsOrLess,
-          fireAndRescueServiceEnforcingAuthority: value.fireAndRescueServiceEnforcingAuthority,
-          listedBuildingOrConservationArea: value.listedBuildingOrConservationArea,
-          otherHistoricalImportance: value.otherHistoricalImportance,
-          scottishMinistersRelaxationDirection: value.scottishMinistersRelaxationDirection,
-          dangerousBuildingNotice: value.dangerousBuildingNotice,
-          approvedCertifierOfConstruction: value.approvedCertifierOfConstruction,
-          coveredBySTAS: value.coveredBySTAS,
-          restrictPublicInspection: value.restrictPublicInspection,
-        },
+        preparationData: previous as Prisma.InputJsonValue,
         reviewedAt: new Date(),
       },
     });

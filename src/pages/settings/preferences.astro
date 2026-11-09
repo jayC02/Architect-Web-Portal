@@ -5,6 +5,7 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
+const googleMessage = ({ connected: 'Google sign-in is connected to your account.', account_mismatch: 'Choose the Google account with the same email as your signed-in Architect Pro account.', already_connected: 'That Google account is already connected to another account.' } as Record<string, string>)[Astro.url.searchParams.get('google') ?? ''];
 ---
 <AppShell title="Preferences" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-7 max-w-3xl">
@@ -24,5 +25,14 @@ if (!auth) return Astro.redirect('/login');
       <BellRing size={18} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
       <p>There are no additional reminder preferences to configure at the moment.</p>
     </div>
+  </section>
+  <section class="panel mt-5 max-w-3xl rounded-lg p-5 sm:p-6" aria-labelledby="google-sign-in-heading">
+    <h2 id="google-sign-in-heading" class="text-lg font-semibold text-ink">Google sign-in</h2>
+    <p class="mt-1 text-sm leading-6 text-stone-600">Connect the Google account with the same email as your Architect Pro account.</p>
+    {googleMessage && <p role="status" class="mt-3 text-sm text-stone-700">{googleMessage}</p>}
+    <form data-api-form data-action="/api/auth/google/connect" data-method="POST" class="mt-4">
+      <button class="btn btn-secondary">Connect Google sign-in</button>
+      <span data-form-status class="ml-3 text-sm text-stone-500" />
+    </form>
   </section>
 </AppShell>

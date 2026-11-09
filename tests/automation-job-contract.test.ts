@@ -208,6 +208,7 @@ assert.throws(() => buildingWarrantCertifierDetailsSchema.parse({
 }), /Invalid enum value/);
 assert.throws(() => buildingWarrantCertifierDetailsSchema.parse({
   ...completeWarrantDetails,
+  designCertifierSelected: true,
   registrationAPart2: '',
 }), /Registration number A Part 2/);
 assert.throws(() => certifierPresetSchema.parse({
@@ -259,12 +260,12 @@ const automationPreflightSource = readFileSync(
 );
 for (const key of warrantConfirmationKeys) {
   assert.match(preparationPageSource, new RegExp(`name: '${key}'`));
-  assert.match(preparationRouteSource, new RegExp(`${key}: value\\.${key}`));
-  assert.match(certifierPreparationPageSource, new RegExp(`'${key}'`), `the focused page renders ${key}`);
+  assert.doesNotMatch(preparationRouteSource, new RegExp(`${key}: value\\.${key}`), 'read-only review cannot overwrite canonical warrant answers');
+  if (!['applicationIsStaged', 'intendedLifeFiveYearsOrLess', 'restrictPublicInspection', 'approvedCertifierOfConstruction'].includes(key)) assert.match(certifierPreparationPageSource, new RegExp(`'${key}'`), `the focused page renders ${key}`);
   assert.match(certifierDetailsRouteSource, new RegExp(`${key}: body\\.${key}`), `the focused route saves ${key}`);
 }
-assert.match(certifierPreparationPageSource, /name="typeOfWorkKeys"/, 'the focused page renders independent type-of-work checkboxes');
-assert.match(certifierDetailsRouteSource, /typeOfWorkKeys: body\.typeOfWorkKeys/, 'the focused route stores all selected work types');
+assert.match(certifierPreparationPageSource, /name="typeOfWorkKeys"/, 'the focused page carries the project work selections');
+assert.match(certifierDetailsRouteSource, /typeOfWorkKeys: effectiveWorkTypes/, 'the focused route stores all selected work types');
 assert.match(certifierDetailsRouteSource, /organisationId: organisation\.id/, 'certifier updates are organisation scoped');
 assert.match(certifierDetailsRouteSource, /automationJobApplicationId\(job\) !== application\.id/, 'certifier updates verify the exact job and application pairing');
 assert.match(certifierDetailsRouteSource, /\.\.\.preparationData,[\s\S]*certifier:/, 'certifier values merge into existing application preparation data');

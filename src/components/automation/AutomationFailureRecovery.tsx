@@ -100,6 +100,7 @@ export default function AutomationFailureRecovery({
 
   return <>
     <div className="mt-4 flex flex-wrap items-center gap-3">
+      {isWarrant && metadata.category === 'CERTIFICATE_VALIDATION_FAILED' && context.applicationId && <a className="btn btn-primary" href={`/building-warrant/${encodeURIComponent(context.applicationId)}/preparation`}>Correct certifier details</a>}
       {directRetry && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>
         {retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
         {retrying ? 'Queuing retry…' : 'Retry application'}

@@ -1,3 +1,4 @@
+import * as draftScreener from '../src/lib/projects/draft-screener';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -39,6 +40,7 @@ function harness(commit=false){
   $transaction:async(fn:any)=>fn(db),
  };
  const modules:any={
+  '@/lib/projects/draft-screener':draftScreener,
   'node:crypto':{randomUUID},'@prisma/client':enums,'@/lib/db/prisma':{prisma:db},
   '@/lib/location-plan':{resolveLocationPlans},
   '@/lib/utils/http':{HttpError},'@/lib/application-upload-limits':{APPLICATION_UPLOAD_LIMITS},

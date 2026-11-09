@@ -46,7 +46,11 @@
     "stage": "BUILDING_WARRANT",
     "status": "ACTIVE",
     "localAuthority": "Glasgow City Council",
-    "updatedAt": "2026-07-26T12:00:00.000Z"
+    "updatedAt": "2026-07-26T12:00:00.000Z",
+    "buildingUse": "residential",
+    "typeOfWorkKeys": [
+      "domestic_alteration_extension"
+    ]
   },
   "site": {
     "id": "site_fixture",
@@ -110,7 +114,8 @@
       "dangerousBuildingNotice": false,
       "approvedCertifierOfConstruction": false,
       "coveredBySTAS": false,
-      "restrictPublicInspection": false
+      "restrictPublicInspection": false,
+      "declarationAuthorised": true
     },
     "certifier": null,
     "feeCalculation": {
@@ -126,7 +131,9 @@
       "adjustments": [],
       "totalFeeMinorUnits": 86500,
       "specialRule": null,
-      "explanation": ["Calculated fee: £865.00."]
+      "explanation": [
+        "Calculated fee: \u00a3865.00."
+      ]
     },
     "updatedAt": "2026-07-26T12:00:00.000Z"
   },
@@ -146,7 +153,10 @@
       "confidence": 1,
       "reviewState": "APPROVED",
       "required": true,
-      "relevance": ["PLANNING", "BUILDING_WARRANT"],
+      "relevance": [
+        "PLANNING",
+        "BUILDING_WARRANT"
+      ],
       "downloadRef": {
         "documentId": "document_fixture"
       },

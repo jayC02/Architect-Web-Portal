@@ -1,3 +1,8 @@
+import { permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
+import { readProjectScreener } from '@/lib/projects/screener';
+import { z } from 'zod';
+import { resolveWarrantOwner } from '@/lib/building-warrant-owner';
+import { warrantSustainabilitySchema } from '@/lib/building-warrant-follow-ups';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import {
@@ -280,6 +285,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const warrantPreparation = jsonObject(warrant?.preparationData);
   const planningPreparation = jsonObject(planning?.preparationData);
   const warrantAnswers = buildingWarrantPreparationSchema.parse(warrantPreparation);
+  const projectScreener = readProjectScreener(project);
   const planningAnswers = householderPreparationSchema.parse(planningPreparation);
   const applicantOverride = parsePersonOverride(
     input.type === AutomationJobType.BUILDING_WARRANT
@@ -292,13 +298,16 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       : planningPreparation.agentOverride,
   );
   const typeOfWorkKeys = normaliseTypeOfWorkKeys(
-    warrantPreparation.typeOfWorkKeys,
+    projectScreener.typeOfWorkKeys.length ? projectScreener.typeOfWorkKeys : warrantPreparation.typeOfWorkKeys,
     warrant?.presetKey ?? project.projectType ?? 'domestic_alteration_extension',
   );
   const presetKey = typeOfWorkKeys[0];
   const presetLabel = typeOfWorkLabel(presetKey);
-  const selectedCertifier = warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
-  const savedCertifier = jsonObject(warrantPreparation.certifier);
+  if (projectScreener.buildingUse === 'residential' && !permitsSTAS(projectScreener.buildingUse, typeOfWorkKeys)) warrantAnswers.coveredBySTAS = false;
+  if (warrantAnswers.designCertifierSelected === false) warrantAnswers.certifierOfDesignCertificateAvailable = false;
+  if (!warrantAnswers.approvedCertifierOfConstruction) warrantAnswers.certifierOfConstructionCertificateAvailable = false;
+  const selectedCertifier = warrantAnswers.designCertifierSelected === false ? null : warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
+  const savedCertifier = warrantAnswers.designCertifierSelected === false ? {} : jsonObject(warrantPreparation.certifier);
   // A snapshot gets a copied value even when the application has only selected a profile.
   // Subsequent profile edits cannot change an already-built desktop handoff.
   const savedRegistrationAPart1 = nullableString(savedCertifier.registrationAPart1) ?? selectedCertifier?.registrationAPart1 ?? null;
@@ -474,6 +483,8 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       internalReference: project.internalReference,
       typeOfWorkKey: typeOfWorkKey(project.projectType),
       typeOfWorkLabel: typeOfWorkLabel(project.projectType),
+      buildingUse: projectScreener.buildingUse,
+      typeOfWorkKeys: projectScreener.typeOfWorkKeys,
       notes: project.notes,
       stage: project.stage,
       status: project.status,
@@ -513,6 +524,15 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       status: warrant?.status ?? null,
       warrantReference: warrant?.warrantReference ?? null,
       unusualAnswers: warrantAnswers,
+      ...z.object(warrantBranchSnapshotFields).parse(warrantPreparation),
+      ownerIsClient: typeof warrantPreparation.ownerIsClient === 'boolean' ? warrantPreparation.ownerIsClient : null,
+      owner: warrantAnswers.applicantIsOwner ? null : resolveWarrantOwner(warrantPreparation, project.client),
+      fireAuthorityName: nullableString(warrantPreparation.fireAuthorityName),
+      historicalBuildingDetails: nullableString(warrantPreparation.historicalBuildingDetails),
+      dangerousBuildingReferences: nullableString(warrantPreparation.dangerousBuildingReferences),
+      relaxationReference: nullableString(warrantPreparation.relaxationReference),
+      relaxationDate: nullableString(warrantPreparation.relaxationDate),
+      sustainability: warrantSustainabilitySchema.parse(warrantPreparation.sustainability ?? {}),
       certifier: savedRegistrationAPart1 && savedRegistrationBPart1 ? {
         presetId: savedCertifierValue('presetId', selectedCertifier?.id),
         displayName: savedCertifierValue('displayName', selectedCertifier?.displayName),

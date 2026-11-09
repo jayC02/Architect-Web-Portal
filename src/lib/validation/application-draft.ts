@@ -2,6 +2,7 @@ import { ApplicationDraftType, DocumentStatus, DocumentType } from '@prisma/clie
 import { z } from 'zod';
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { TYPE_OF_WORK_KEYS, type TypeOfWorkKey } from '@/lib/projects/type-of-work';
+import { buildingUseSchema } from '@/lib/projects/screener';
 
 const optionalText = (maximum: number) =>
   z.preprocess(
@@ -130,6 +131,7 @@ export const applicationDraftReviewSchema = z.object({
     name: nullableText(160),
     internalReference: nullableText(80),
     typeOfWorkKey: z.enum(TYPE_OF_WORK_KEYS as [TypeOfWorkKey, ...TypeOfWorkKey[]]).nullable(),
+    buildingUse: buildingUseSchema.nullable().optional(),
     summary: nullableText(4000),
   }).strict(),
   siteMode: z.enum(['create', 'existing']).default('create'),

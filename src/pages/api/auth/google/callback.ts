@@ -6,7 +6,7 @@ import {
   oauthSignupExpiresAt,
   setPendingGoogleSignupCookie,
 } from '@/lib/auth/oauth';
-import { createSession } from '@/lib/auth/session';
+import { createSession, getSessionUser } from '@/lib/auth/session';
 import { createOpaqueToken, hashOpaqueToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
@@ -24,7 +24,7 @@ export const GET: APIRoute = async (context) => {
     const state = context.url.searchParams.get('state');
     if (!code || !state) return loginError(context);
 
-    const { codeVerifier, returnTo } = consumeGoogleOAuthCookies(context, state);
+    const { codeVerifier, returnTo, connectUserId } = consumeGoogleOAuthCookies(context, state);
     const profile = await exchangeGoogleCode(code, codeVerifier);
 
     const linkedProvider = await prisma.authProvider.findUnique({
@@ -37,6 +37,19 @@ export const GET: APIRoute = async (context) => {
       select: { userId: true },
     });
 
+    if (connectUserId) {
+      const currentUser = await getSessionUser(context);
+      if (!currentUser || currentUser.id !== connectUserId || currentUser.email.toLowerCase() !== profile.email.toLowerCase()) {
+        return context.redirect('/settings/preferences?google=account_mismatch');
+      }
+      if (linkedProvider && linkedProvider.userId !== currentUser.id) return context.redirect('/settings/preferences?google=already_connected');
+      if (!linkedProvider) await prisma.authProvider.create({ data: {
+        userId: currentUser.id, provider: 'GOOGLE', providerAccountId: profile.accountId,
+        email: profile.email, displayName: profile.displayName, avatarUrl: profile.avatarUrl,
+      } });
+      return context.redirect('/settings/preferences?google=connected');
+    }
+
     if (linkedProvider) {
       await createSession(linkedProvider.userId, context);
       return context.redirect(returnTo);
@@ -44,10 +57,11 @@ export const GET: APIRoute = async (context) => {
 
     const existingUser = await prisma.user.findUnique({
       where: { email: profile.email },
-      select: { id: true },
+      select: { id: true, passwordHash: true },
     });
 
     if (existingUser) {
+      if (existingUser.passwordHash) return context.redirect('/login?authError=google_password_required');
       await prisma.authProvider.upsert({
         where: {
           provider_providerAccountId: {

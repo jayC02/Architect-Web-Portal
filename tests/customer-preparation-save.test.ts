@@ -1,3 +1,7 @@
+import * as warrantBranches from '../src/lib/building-warrant-branches';
+import * as projectScreener from '../src/lib/projects/screener';
+import * as warrantFollowUps from '../src/lib/building-warrant-follow-ups';
+import * as warrantOwner from '../src/lib/building-warrant-owner';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -23,13 +27,15 @@ async function save(type: string, work: string[] = [], raced = false) {
     project: { updateMany: async ({ data }: any) => { writes.project = data; } },
     organisationDefaults: { upsert: async () => {} },
     planningApplication: { findFirst: async () => ({ preparationData: {} }), updateMany: async ({ data }: any) => { writes.planning = data; } },
-    buildingWarrantApplication: { findFirst: async () => ({ preparationData: {} }), updateMany: async ({ data }: any) => { writes.warrant = data; } },
+    buildingWarrantApplication: { findFirst: async () => ({ preparationData: { typeOfWorkKeys: [TYPE_OF_WORK_KEYS[0]], listedBuildingOrConservationArea: true, listingCategory: 'Category B' } }), updateMany: async ({ data }: any) => { writes.warrant = data; } },
     $transaction: async (fn: any) => fn(tx),
   };
   const modules: any = {
+    '@/lib/building-warrant-branches': warrantBranches, '@/lib/projects/screener': projectScreener,
+    '@/lib/building-warrant-follow-ups': warrantFollowUps, '@/lib/building-warrant-owner': warrantOwner,
     '@prisma/client': enums, zod: { z }, '@/lib/db/prisma': { prisma: tx }, '@/lib/projects/type-of-work': { TYPE_OF_WORK_KEYS },
     '@/lib/server/origin-guard': { assertAllowedOrigin: () => {} }, '@/lib/server/rate-limit': { assertRateLimit: () => {}, rateLimitPolicies: { mutation: {} } },
-    '@/lib/validation/automation-job': { automationJobSnapshotV2Schema: { safeParse: () => ({ success: true, data: { planning: { recordId: 'planning' }, buildingWarrant: { recordId: 'warrant' }, documents: [] } }) } },
+    '@/lib/validation/automation-job': { automationJobSnapshotV2Schema: { safeParse: () => ({ success: true, data: { planning: { recordId: 'planning' }, buildingWarrant: { recordId: 'warrant', presetKey: TYPE_OF_WORK_KEYS[0], typeOfWorkKeys: [TYPE_OF_WORK_KEYS[0]] }, documents: [] } }) } },
     '@/lib/validation/domain': { planningApplicationFeeSchema, clientSchema: z.any(), siteSchema: z.any(), organisationDefaultsSchema: z.any() },
     '@/lib/utils/handlers': { withErrorHandling }, '@/lib/utils/http': { HttpError, jsonResponse },
     '@/server/permissions/authz': { requireOrganisation: async () => ({ organisation: { id: 'org', name: 'Practice' }, user: { id: 'user', name: 'Architect', email: 'test@example.test' } }) },
@@ -63,6 +69,10 @@ for (const values of [[], ['invented']]) {
 const warrant = await save('BUILDING_WARRANT', [TYPE_OF_WORK_KEYS[0]]);
 assert.equal(warrant.response.status, 200);
 assert.deepEqual(Array.from(warrant.writes.warrant.preparationData.typeOfWorkKeys), [TYPE_OF_WORK_KEYS[0]]);
+const changedReview = await save('BUILDING_WARRANT', ['demolition']);
+assert.deepEqual(Array.from(changedReview.writes.warrant.preparationData.typeOfWorkKeys), [TYPE_OF_WORK_KEYS[0]], 'read-only review cannot override project work types');
+assert.equal(changedReview.writes.warrant.preparationData.listedBuildingOrConservationArea, true);
+assert.equal(changedReview.writes.warrant.preparationData.listingCategory, 'Category B');
 const race = await save('HOUSEHOLDER_PLANNING', [], true);
 assert.equal(race.response.status, 409); assert.equal(race.writes.job, undefined); assert.equal(race.writes.event, undefined);
 for (const state of ['CLAIMED', 'IN_PROGRESS', 'COMPLETED', 'FAILED_RETRYABLE', 'FAILED_FINAL', 'CANCELLED', 'NEEDS_REVIEW', 'AWAITING_PORTAL_REVIEW']) assert.equal(editablePreparationStatuses.has(state), false);

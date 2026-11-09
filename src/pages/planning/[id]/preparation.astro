@@ -1,6 +1,8 @@
 ---
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
+import PreparationOverview from '@/components/forms/PreparationOverview.astro';
+import PreparationSection from '@/components/forms/PreparationSection.astro';
 import { resolveApplicationDescription } from '@/server/services/application-description.service';
 import { prisma } from '@/lib/db/prisma';
 import { resolveSoleOwner } from '@/lib/planning-preparation-defaults';
@@ -55,37 +57,88 @@ const clientName = application.project.client?.name ?? 'Client not recorded';
 const documentCount = await prisma.projectDocument.count({
   where: { organisationId: auth.organisation.id, projectId: application.projectId },
 });
+const vehicleAccess = boolValue('newOrAlteredVehicleAccess');
+const sections = [
+  { id: 'work', title: 'The work' },
+  { id: 'site', title: 'Site and ownership questions' },
+  { id: 'fee', title: 'Fee' },
+];
 ---
 <AppShell title="Planning application details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
     <a href={`/projects/${application.projectId}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
     <h1 class="mt-2 text-3xl font-semibold text-ink">Planning application details</h1>
-    <p class="mt-1 text-sm text-stone-500">Complete the Planning-specific details for this existing desktop job.</p>
+    <p class="mt-1 text-sm text-stone-500">Work through each section in order, then save to start this desktop job.</p>
   </div>
 
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-    <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" data-pending-message="Saving and starting automation..." class="panel rounded-lg p-5">
+    <form data-api-form data-action={`/api/planning/${application.id}/complete-details`} data-method="POST" data-pending-message="Saving and starting automation..." class="panel prep-form rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
-      <section aria-labelledby="planning-questions-heading">
-      <h2 id="planning-questions-heading" class="text-xl font-semibold">Planning questions</h2>
-      <label class="mt-5 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
-      <label class="mt-4 block"><span class="label">Planning application fee (£)</span><input required type="number" min="0" max="9999999.99" step="0.01" name="applicationFee" value={numberValue('applicationFee')} class="field" /><span class="mt-1 block text-xs text-stone-500">Enter the fee to leave ready in the government portal. Enter 0 only when no fee is payable.</span></label>
-      <div class="mt-4 grid gap-4 sm:grid-cols-2">
-        <label class="block"><span class="label">Discussed with Planning Authority</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label>
-        <label class="block"><span class="label">Trees on or adjacent to site</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label>
-        <label class="block"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!boolValue('newOrAlteredVehicleAccess')}>No</option><option value="true" selected={boolValue('newOrAlteredVehicleAccess')}>Yes</option></select></label>
-        <label class="block"><span class="label">Applicant is sole owner</span><select name="soleOwner" class="field"><option value="false" selected={!soleOwner}>No</option><option value="true" selected={soleOwner}>Yes</option></select></label>
-        <label class="block"><span class="label">Agricultural holding</span><select name="agriculturalHolding" class="field"><option value="false" selected={!boolValue('agriculturalHolding')}>No</option><option value="true" selected={boolValue('agriculturalHolding')}>Yes</option></select></label>
-        <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} class="field" /></label>
-        <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} class="field" /></label>
+      <div id="prep-top" class="scroll-mt-44 lg:scroll-mt-6">
+        <div class="prep-summary" tabindex="-1" data-prep-summary hidden>
+          <p class="font-semibold text-ink" data-prep-summary-title>Still needed</p>
+          <ul class="mt-1 space-y-1 text-sm text-stone-700" data-prep-summary-list></ul>
+        </div>
       </div>
-      </section>
-      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and run application</button><span data-form-status class="text-sm text-stone-500" /></div>
+
+      <PreparationSection id="work" number={1} title="The work">
+        <label class="mt-4 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
+      </PreparationSection>
+
+      <PreparationSection id="site" number={2} title="Site and ownership questions">
+        <div class="prep-questions">
+          <div class="prep-question"><label class="prep-select-row"><span class="prep-question-text">Has this been discussed with the Planning Authority?</span><select name="discussedWithPlanningAuthority" class="field"><option value="false" selected={!boolValue('discussedWithPlanningAuthority')}>No</option><option value="true" selected={boolValue('discussedWithPlanningAuthority')}>Yes</option></select></label></div>
+          <div class="prep-question"><label class="prep-select-row"><span class="prep-question-text">Are there trees on or adjacent to the site?</span><select name="treesOnOrAdjacentToSite" class="field"><option value="false" selected={!boolValue('treesOnOrAdjacentToSite')}>No</option><option value="true" selected={boolValue('treesOnOrAdjacentToSite')}>Yes</option></select></label></div>
+          <div class="prep-question" data-prep-question="newOrAlteredVehicleAccess">
+            <label class="prep-select-row"><span class="prep-question-text">Is there a new or altered vehicle access?</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!vehicleAccess}>No</option><option value="true" selected={vehicleAccess}>Yes</option></select></label>
+            <fieldset class="prep-followup grid gap-4 sm:grid-cols-2" data-planning-parking disabled={!vehicleAccess} hidden={!vehicleAccess}>
+              <legend class="sr-only">Parking spaces</legend>
+              <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} required={vehicleAccess} class="field" /></label>
+              <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} required={vehicleAccess} class="field" /></label>
+            </fieldset>
+          </div>
+          <div class="prep-question"><label class="prep-select-row"><span class="prep-question-text">Is the applicant the sole owner?</span><select name="soleOwner" class="field"><option value="false" selected={!soleOwner}>No</option><option value="true" selected={soleOwner}>Yes</option></select></label></div>
+          <div class="prep-question"><label class="prep-select-row"><span class="prep-question-text">Is the site part of an agricultural holding?</span><select name="agriculturalHolding" class="field"><option value="false" selected={!boolValue('agriculturalHolding')}>No</option><option value="true" selected={boolValue('agriculturalHolding')}>Yes</option></select></label></div>
+        </div>
+      </PreparationSection>
+
+      <PreparationSection id="fee" number={3} title="Fee">
+        <div class="prep-questions">
+          <div class="prep-question">
+            <label class="prep-select-row"><span class="prep-question-text">Planning application fee (£)</span><input required type="number" min="0" max="9999999.99" step="0.01" name="applicationFee" value={numberValue('applicationFee')} class="field" /></label>
+            <p class="mt-1 text-sm text-stone-500">Enter the fee to leave ready in the government portal. Enter 0 only when no fee is payable.</p>
+          </div>
+        </div>
+      </PreparationSection>
+
+      <div class="prep-save-bar">
+        <button class="btn btn-primary">Save and run application</button>
+        <a href="#prep-top" class="text-sm font-semibold text-amber-800 underline" data-prep-save-hint hidden></a>
+        <span data-form-status class="text-sm text-stone-500" />
+      </div>
     </form>
 
-    <aside class="panel rounded-lg p-5" aria-label="Planning application summary">
+    <aside class="panel rounded-lg p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto" aria-label="Planning application summary">
       <h2 class="text-lg font-semibold">Application summary</h2>
-      <dl class="mt-4 space-y-3 text-sm"><div><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div><dt class="text-stone-500">Application</dt><dd>Planning</dd></div><div><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
+      <dl class="mt-4 space-y-2 text-sm"><div class="prep-summary-row"><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Application</dt><dd>Planning</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
+      <PreparationOverview sections={sections} />
     </aside>
   </div>
+  <script>
+    import { initPreparationProgress } from '@/lib/preparation-progress';
+
+    const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
+    const access = form?.querySelector<HTMLSelectElement>('[name="newOrAlteredVehicleAccess"]');
+    const parking = form?.querySelector<HTMLFieldSetElement>('[data-planning-parking]');
+    const updateParking = () => {
+      if (!access || !parking) return;
+      const needed = access.value === 'true';
+      parking.hidden = !needed;
+      parking.disabled = !needed;
+      parking.querySelectorAll('input').forEach(field => { field.required = needed; });
+    };
+    access?.addEventListener('change', updateParking);
+    updateParking();
+    initPreparationProgress();
+  </script>
 </AppShell>

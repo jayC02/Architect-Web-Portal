@@ -47,8 +47,8 @@ try {
   assert.equal(householderPreparationUpdateSchema.parse({ description: longDescription,
     discussedWithPlanningAuthority: false, treesOnOrAdjacentToSite: false, newOrAlteredVehicleAccess: false,
     soleOwner: true, agriculturalHolding: false }).description, longDescription);
-  assert.equal(buildingWarrantCertifierDetailsSchema.shape.description.parse(longDescription), longDescription);
-  assert.throws(() => buildingWarrantCertifierDetailsSchema.shape.description.parse('A'.repeat(4001)));
+  assert.equal(buildingWarrantCertifierDetailsSchema.innerType().shape.description.parse(longDescription), longDescription);
+  assert.throws(() => buildingWarrantCertifierDetailsSchema.innerType().shape.description.parse('A'.repeat(4001)));
   console.log('Application description reuse, edit precedence and length validation passed.');
 } finally {
   delegates.forEach((delegate, index) => Object.assign(delegate, { findFirst: originals[index] }));

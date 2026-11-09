@@ -35,6 +35,7 @@ const completeBuildingReview = applicationDraftReviewSchema.parse({
   existingProjectId: null,
   project: {
     name: '105 Ralston Avenue',
+    buildingUse: 'residential',
     internalReference: '24-101',
     typeOfWorkKey: 'domestic_alteration_extension',
     summary: 'Domestic extension and internal alterations.',
@@ -138,7 +139,7 @@ const householderReview = applicationDraftReviewSchema.parse({
   selectedApplicationType: ApplicationDraftType.HOUSEHOLDER_PLANNING,
   project: {
     ...completeBuildingReview.project,
-    typeOfWorkKey: null,
+    typeOfWorkKey: 'domestic_alteration_extension',
   },
   application: {
     ...completeBuildingReview.application,

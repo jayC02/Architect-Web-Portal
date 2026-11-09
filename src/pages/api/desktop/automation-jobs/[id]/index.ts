@@ -159,6 +159,11 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         status: body.status,
         resultSummary: body.resultSummary ?? undefined,
         resultData: body.result ? ({ ...body.result, occurredAt: body.occurredAt } as Prisma.InputJsonValue) : undefined,
+        ...(body.result?.outcome === 'paused_for_manual_input' ? {
+          progressStageState: 'user_action_required',
+          progressPercent: 0,
+          progressMessage: body.resultSummary || 'The Agent needs your input before it can continue.',
+        } : {}),
         lastCheckpoint: body.lastCheckpoint ?? undefined,
         error: (
           body.status === AutomationJobStatus.FAILED_RETRYABLE
@@ -186,6 +191,7 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
         organisationId: access.organisationId,
         job: { ...job, status: body.status },
         occurredAt: new Date(body.occurredAt),
+        resultOutcome: body.result?.outcome,
       });
       if (projection.outcome === 'identity-unavailable' || projection.outcome === 'application-unavailable') {
         console.warn('Desktop result could not project prepared application review state.', {

@@ -87,8 +87,11 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   }));
   const [visualNow, setVisualNow] = useState(() => Date.now());
 
-  const awaitingFee = job.status === 'AWAITING_PORTAL_REVIEW'
-    || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required');
+  const resultOutcome = job.resultData && typeof job.resultData === 'object'
+    ? (job.resultData as { outcome?: string }).outcome : undefined;
+  const pausedForInput = resultOutcome === 'paused_for_manual_input';
+  const awaitingFee = (resultOutcome === 'awaiting_user_portal_review' || resultOutcome === 'completed_to_final_review')
+    && (job.status === 'AWAITING_PORTAL_REVIEW' || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required'));
   const addressAction = job.progressStage === 'address_selection' && job.progressStageState === 'user_action_required';
   const active = runningStatuses.has(job.status);
   const queued = job.status === 'READY' && Boolean(job.executionAuthorisedAt);
@@ -219,7 +222,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     }
   };
 
-  const progress = Math.max(0, Math.min(100, job.progressPercent ?? 0));
+  const progress = pausedForInput ? 0 : Math.max(0, Math.min(100, job.progressPercent ?? 0));
   const visualRemaining = visualCountdownActive && visualClock.startAt !== null
     ? Math.max(0, visualCountdownDurationSeconds - Math.floor((visualNow - visualClock.startAt) / 1_000))
     : null;
@@ -277,7 +280,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     </section>
   );
 
-  if (job.status === 'COMPLETED') return (
+  if (job.status === 'COMPLETED' && !pausedForInput) return (
     <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
       <div className="flex gap-3">
         <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
@@ -301,6 +304,15 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       {submissionDialog}
+    </section>
+  );
+
+  if (pausedForInput) return (
+    <section className="p-4 sm:px-5" aria-live="polite">
+      <h3 className="font-semibold text-ink">Needs your input</h3>
+      <p className="mt-1 text-sm text-stone-600">{job.resultSummary || job.progressMessage || 'The Agent paused safely. Confirm the requested information before continuing.'}</p>
+      <p className="mt-2 text-sm text-stone-600">0%</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3"><a className="btn btn-secondary" href={manageHref}>Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
     </section>
   );
 

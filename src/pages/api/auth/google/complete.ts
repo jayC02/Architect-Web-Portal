@@ -51,9 +51,13 @@ export const POST: APIRoute = (context) =>
 
       const existingUser = await tx.user.findUnique({
         where: { email: pending.email },
-        select: { id: true },
+        select: { id: true, passwordHash: true },
       });
       if (existingUser) {
+        if (existingUser.passwordHash) {
+          clearPendingGoogleSignupCookie(context);
+          throw new HttpError(409, 'This email already has a password account. Sign in with your password, then connect Google from Settings > Preferences.');
+        }
         await tx.authProvider.create({
           data: {
             userId: existingUser.id,

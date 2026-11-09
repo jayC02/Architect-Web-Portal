@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/xero-sync",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/workflow-effects",
+      "schedule": "0 7 * * *"
     }
   ],
   "headers": [

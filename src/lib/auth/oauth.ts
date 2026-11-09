@@ -6,6 +6,7 @@ import { safeReturnTo } from '@/lib/auth/return-to';
 const GOOGLE_STATE_COOKIE = 'architect_google_oauth_state';
 const GOOGLE_PKCE_COOKIE = 'architect_google_oauth_pkce';
 const GOOGLE_RETURN_TO_COOKIE = 'architect_google_oauth_return_to';
+const GOOGLE_CONNECT_COOKIE = 'architect_google_oauth_connect';
 export const GOOGLE_SIGNUP_COOKIE = 'architect_google_signup';
 const GOOGLE_SIGNUP_RETURN_TO_COOKIE = 'architect_google_signup_return_to';
 const OAUTH_TTL_MS = 10 * 60 * 1000;
@@ -81,7 +82,7 @@ const secureCookie = () => ({
   maxAge: Math.floor(OAUTH_TTL_MS / 1000),
 });
 
-export const createGoogleAuthorizationUrl = (context: APIContext, returnTo?: string | null) => {
+export const createGoogleAuthorizationUrl = (context: APIContext, returnTo?: string | null, connectUserId?: string) => {
   const config = getGoogleAuthConfig();
   const nonce = createOpaqueToken(24);
   const codeVerifier = createOpaqueToken(64);
@@ -91,6 +92,8 @@ export const createGoogleAuthorizationUrl = (context: APIContext, returnTo?: str
   context.cookies.set(GOOGLE_STATE_COOKIE, nonce, secureCookie());
   context.cookies.set(GOOGLE_PKCE_COOKIE, codeVerifier, secureCookie());
   context.cookies.set(GOOGLE_RETURN_TO_COOKIE, safeReturnTo(returnTo), secureCookie());
+  if (connectUserId) context.cookies.set(GOOGLE_CONNECT_COOKIE, JSON.stringify({ userId: connectUserId, nonce }), secureCookie());
+  else context.cookies.delete(GOOGLE_CONNECT_COOKIE, { path: '/' });
 
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', config.clientId);
@@ -108,15 +111,23 @@ export const consumeGoogleOAuthCookies = (context: APIContext, state: string) =>
   const nonce = context.cookies.get(GOOGLE_STATE_COOKIE)?.value;
   const codeVerifier = context.cookies.get(GOOGLE_PKCE_COOKIE)?.value;
   const returnTo = safeReturnTo(context.cookies.get(GOOGLE_RETURN_TO_COOKIE)?.value);
+  const connection = context.cookies.get(GOOGLE_CONNECT_COOKIE)?.value;
   context.cookies.delete(GOOGLE_STATE_COOKIE, { path: '/' });
   context.cookies.delete(GOOGLE_PKCE_COOKIE, { path: '/' });
   context.cookies.delete(GOOGLE_RETURN_TO_COOKIE, { path: '/' });
+  context.cookies.delete(GOOGLE_CONNECT_COOKIE, { path: '/' });
 
   const { stateSecret } = getGoogleAuthConfig();
   if (!nonce || !codeVerifier || !verifySignedOAuthState(state, nonce, stateSecret)) {
     throw new Error('Google sign-in request could not be verified.');
   }
-  return { codeVerifier, returnTo };
+  let connectUserId: string | undefined;
+  if (connection) {
+    const value = JSON.parse(connection) as { userId?: unknown; nonce?: unknown };
+    if (value.nonce !== nonce || typeof value.userId !== 'string' || !value.userId) throw new Error('Google connection request could not be verified.');
+    connectUserId = value.userId;
+  }
+  return { codeVerifier, returnTo, connectUserId };
 };
 
 export const setPendingGoogleSignupCookie = (context: APIContext, token: string, returnTo = '/dashboard') => {

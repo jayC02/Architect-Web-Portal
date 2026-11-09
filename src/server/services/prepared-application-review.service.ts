@@ -50,6 +50,7 @@ export const reconcilePreparedApplicationReview = async (
     organisationId: string;
     job: PreparedReviewJob;
     occurredAt: Date;
+    resultOutcome?: string | null;
   },
 ): Promise<PreparedReviewProjectionResult> => {
   let identity;
@@ -88,7 +89,9 @@ export const reconcilePreparedApplicationReview = async (
   const applicationIsDraft = isWarrant
     ? draftWarrantStatuses.has(application.status as WarrantStatus)
     : draftPlanningStatuses.has(application.status as PlanningStatus);
-  const shouldOpen = applicationIsDraft && preparedStatuses.has(input.job.status);
+  const reachedFinalReview = input.resultOutcome === 'awaiting_user_portal_review'
+    || input.resultOutcome === 'completed_to_final_review';
+  const shouldOpen = applicationIsDraft && preparedStatuses.has(input.job.status) && reachedFinalReview;
 
   if (!shouldOpen) {
     await database.actionItem.updateMany({

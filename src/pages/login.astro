@@ -17,7 +17,9 @@ const message =
     ? 'Your password has been updated. Sign in with your new password.'
     : null;
 const authError = Astro.url.searchParams.has('authError')
-  ? 'Google sign-in could not be completed. Please try again.'
+  ? Astro.url.searchParams.get('authError') === 'google_password_required'
+    ? 'This email already has a password account. Sign in with your password, then connect Google from Settings > Preferences.'
+    : 'Google sign-in could not be completed. Please try again.'
   : null;
 ---
 <BaseLayout title="Sign in | Architect Pro" noindex>

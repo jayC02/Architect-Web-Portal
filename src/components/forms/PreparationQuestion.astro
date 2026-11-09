@@ -1,0 +1,17 @@
+---
+// One tick-box question. Anything in the slot is its follow-up and renders directly underneath.
+interface Props {
+  name: string;
+  label: string;
+  checked?: boolean;
+  requiredTick?: string;
+}
+const { name, label, checked = false, requiredTick } = Astro.props;
+---
+<div class="prep-question" data-prep-question={name}>
+  <label class="prep-question-control">
+    <input type="checkbox" name={name} checked={checked} class="prep-check" data-prep-required-tick={requiredTick} />
+    <span class="prep-question-text">{label}</span>
+  </label>
+  <slot />
+</div>

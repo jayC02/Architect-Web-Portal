@@ -54,7 +54,7 @@ assert.notEqual(
   'materially different certifier details remain separate profiles',
 );
 assert.match(certifierRoute, /findOrCreateCertifierProfile\(prisma, organisation\.id/, 'saving valid application details creates or reuses a certifier profile');
-assert.match(certifierRoute, /selectedCertifierPresetId: preset\.id/, 'the reusable profile remains associated with the Building Warrant application');
+assert.match(certifierRoute, /selectedCertifierPresetId: designSelected \? preset\?\.id \?\? selectedPreset\?\.id \?\? null : null/, 'a chosen design certifier keeps its reusable profile on the Building Warrant application, and choosing none clears it');
 for (const field of ['schemeType', 'registrationAPart1', 'registrationAPart2', 'certifierName', 'registrationBPart1', 'registrationBPart2', 'approvedBody']) {
   assert.match(certifierPage, new RegExp(`data-${field.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`), `saved profiles expose ${field} to the existing selector`);
 }

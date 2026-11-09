@@ -12,6 +12,8 @@ import {
 } from '../src/server/services/application-draft.service';
 
 const expectedDefaults = {
+  workStartedBeforeApplication: false,
+  declarationAuthorised: false,
   applicantIsOwner: true,
   applicationIsStaged: false,
   intendedLifeFiveYearsOrLess: false,
@@ -42,12 +44,12 @@ assert.equal(merged.intendedLifeFiveYearsOrLess, false, 'whitespace cannot erase
 assert.equal(merged.fireAndRescueServiceEnforcingAuthority, true);
 
 assert.equal(
-  buildingWarrantCertifierDetailsSchema.shape.description.parse('Roof'),
+  buildingWarrantCertifierDetailsSchema.innerType().shape.description.parse('Roof'),
   'Roof',
   'a short non-empty Description of Work is accepted',
 );
 assert.throws(
-  () => buildingWarrantCertifierDetailsSchema.shape.description.parse('   '),
+  () => buildingWarrantCertifierDetailsSchema.innerType().shape.description.parse('   '),
   'Description of Work remains required',
 );
 
@@ -57,6 +59,7 @@ const review = applicationDraftReviewSchema.parse({
   existingProjectId: null,
   project: {
     name: '1 Short Street, Glasgow, G1 1AA',
+    buildingUse: 'residential',
     internalReference: null,
     typeOfWorkKey: 'domestic_alteration_extension',
     summary: null,

@@ -15,7 +15,7 @@ export function automationRunState(status: string, result: unknown, progressStag
     return outcome === 'awaiting_user_portal_review' || outcome === 'completed_to_final_review'
       ? 'PREPARED' : 'NEEDS_ATTENTION';
   }
-  if (status === 'COMPLETED') return 'PREPARED';
+  if (status === 'COMPLETED') return outcome === 'paused_for_manual_input' ? 'NEEDS_ATTENTION' : 'PREPARED';
   return null;
 }
 
