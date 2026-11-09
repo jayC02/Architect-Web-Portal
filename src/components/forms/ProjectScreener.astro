@@ -1,12 +1,12 @@
 ---
 import { TYPE_OF_WORK_DEFINITIONS } from '@/lib/projects/type-of-work';
 import type { BuildingUse } from '@/lib/projects/screener';
-interface Props { buildingUse?: BuildingUse | null; typeOfWorkKeys?: readonly string[]; }
-const { buildingUse, typeOfWorkKeys = [] } = Astro.props;
+interface Props { buildingUse?: BuildingUse | null; typeOfWorkKeys?: readonly string[]; embedded?: boolean; }
+const { buildingUse, typeOfWorkKeys = [], embedded = false } = Astro.props;
 ---
 <fieldset class="lg:col-span-2">
-  <legend class="label">Project screening</legend>
-  <p class="mt-1 text-sm text-stone-500">These answers are shared by the project's warrant applications.</p>
+  <legend class:list={['label', embedded && 'sr-only']}>Project screening</legend>
+  {!embedded && <p class="mt-1 text-sm text-stone-500">These answers are shared by the project's warrant applications.</p>}
   <label class="mt-3 block"><span class="label">Building use</span><select required name="buildingUse" class="field">
     <option value="">Choose building use</option>
     <option value="residential" selected={buildingUse === 'residential'}>Residential (domestic)</option>
@@ -17,7 +17,7 @@ const { buildingUse, typeOfWorkKeys = [] } = Astro.props;
     <div class="mt-3 grid gap-2 sm:grid-cols-2">
       {TYPE_OF_WORK_DEFINITIONS.map(type => <label class="flex min-h-11 items-center gap-3 rounded-md border border-stone-200 px-3 py-2 text-sm font-medium text-ink">
         <input type="checkbox" name="typeOfWorkKeys" value={type.key} checked={typeOfWorkKeys.includes(type.key)} class="h-4 w-4 accent-[#526a4a]" />
-        <span>{type.key === 'domestic_alteration_extension' ? 'Extension / alteration' : type.label}</span>
+        <span>{type.label}</span>
       </label>)}
     </div>
   </fieldset>

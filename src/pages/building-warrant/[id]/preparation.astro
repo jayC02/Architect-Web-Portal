@@ -8,6 +8,7 @@ import WarrantOwnerDetails from '@/components/forms/WarrantOwnerDetails.astro';
 import { ownerDetailsSchema } from '@/lib/building-warrant-owner';
 import WarrantFollowUps from '@/components/forms/WarrantFollowUps.astro';
 import PreparationOverview from '@/components/forms/PreparationOverview.astro';
+import ProjectScreener from '@/components/forms/ProjectScreener.astro';
 import PreparationQuestion from '@/components/forms/PreparationQuestion.astro';
 import PreparationSection from '@/components/forms/PreparationSection.astro';
 import { warrantSectionForRequirement, type WarrantSectionId } from '@/lib/preparation-sections';
@@ -135,6 +136,7 @@ const clientName = application.project.client?.name ?? 'Client not recorded';
 const documentCount = await prisma.projectDocument.count({ where: { organisationId: auth.organisation.id, projectId: application.projectId } });
 const questionLabel = (name: (typeof warrantQuestions)[number][0]) => warrantQuestions.find(([key]) => key === name)![1];
 const newBuilding = selectedTypeOfWorkKeys.includes('new_build');
+const screeningSummary = `${projectScreen.buildingUse === 'residential' ? 'Residential' : 'Commercial'} — ${projectScreen.typeOfWorkKeys.map(key => TYPE_OF_WORK_DEFINITIONS.find(type => type.key === key)?.label).join(', ')}`;
 const sections: ReadonlyArray<{ id: WarrantSectionId; title: string; description?: string }> = [
   { id: 'details', title: 'Warrant details', description: 'These details must be complete before the job can open in desktop.' },
   { id: 'questions', title: 'Additional warrant questions', description: 'Tick each statement that applies. Unticked statements are saved as No.' },
@@ -186,6 +188,22 @@ const branchProps = {
   </div>
 
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div class="min-w-0 space-y-6">
+    <section id="screening" class="panel scroll-mt-44 rounded-lg p-5 lg:scroll-mt-6" aria-labelledby="screening-heading">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="screening-heading" class="text-xl font-semibold">Project screening</h2>
+          {projectScreen.complete
+            ? <p class="mt-1 text-sm text-ink">{screeningSummary}</p>
+            : <p class="mt-1 text-sm text-stone-500">Choose the building use and every type of work. These answers decide which questions this application needs, and are shared by the project's warrant applications.</p>}
+        </div>
+        {projectScreen.complete && <button type="button" class="btn btn-secondary shrink-0" data-screening-toggle aria-expanded="false" aria-controls="prep-screening">Change</button>}
+      </div>
+      <form id="prep-screening" class="mt-4 grid gap-5" data-screening-action={`/api/projects/${application.projectId}/screener`} hidden={projectScreen.complete}>
+        <ProjectScreener buildingUse={projectScreen.buildingUse} typeOfWorkKeys={projectScreen.typeOfWorkKeys} embedded />
+        <div class="flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save project screening</button><span data-screening-status class="text-sm text-stone-500" aria-live="polite"></span></div>
+      </form>
+    </section>
     <form data-api-form data-action={`/api/building-warrant/${application.id}/certifier-details`} data-method="POST" class="panel prep-form rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
       {incompleteSave && remainingRequirements.length > 0 && (
@@ -205,7 +223,8 @@ const branchProps = {
       </div>
 
       <PreparationSection {...sectionProps('details')}>
-        <div class="mt-5"><p class="label">Project screening</p><p class="mt-1 text-sm">{projectScreen.buildingUse === 'residential' ? 'Residential' : projectScreen.buildingUse === 'commercial' ? 'Commercial' : 'Building use not yet confirmed'} — {selectedTypeOfWorkKeys.map(key => TYPE_OF_WORK_DEFINITIONS.find(type => type.key === key)?.label).join(', ')}</p><a href={`/projects/${application.projectId}/screener`} class="text-sm font-semibold underline" data-prep-static-missing={projectScreen.buildingUse ? undefined : 'Project screening'}>Edit project screening</a>{selectedTypeOfWorkKeys.map(key => <input type="hidden" name="typeOfWorkKeys" value={key} />)}</div>
+        {!projectScreen.complete && <p class="mt-5 text-sm text-amber-900"><a href="#screening" class="font-semibold underline" data-prep-static-missing="Project screening">Complete the project screening above</a> so this page shows the questions this application needs.</p>}
+        {selectedTypeOfWorkKeys.map(key => <input type="hidden" name="typeOfWorkKeys" value={key} />)}
         <label class="mt-5 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
         <div class="mt-4 grid gap-4 sm:grid-cols-3">
           <label class="block"><span class="label">Estimated value of work</span><input required type="number" min="0.01" step="0.01" name="estimatedValue" value={application.estimatedValue ? String(application.estimatedValue) : ''} class="field" /></label>
@@ -251,7 +270,7 @@ const branchProps = {
 
       <PreparationSection {...sectionProps('certificates')}>
         <a slot="action" href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Manage saved certifiers</a>
-        <label class="mt-5 block"><span class="prep-field-question">Will a certifier of design be used?</span><select name="designCertifierSelected" class="field"><option value="false" selected={!designSelected}>No</option><option value="true" selected={designSelected}>Yes</option></select></label>
+        <label class="mt-5 block"><span class="prep-field-question">Use a certifier of design?</span><select name="designCertifierSelected" class="field"><option value="false" selected={!designSelected}>No certifier of design</option><option value="true" selected={designSelected}>Yes — choose a profile or enter details</option></select></label>
         <fieldset class="prep-followup mt-4" data-design-certificate-fields disabled={!designSelected} hidden={!designSelected}>
           <legend class="sr-only">Certifier of design details</legend>
           <label class="block">
@@ -303,6 +322,7 @@ const branchProps = {
 
       <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
+    </div>
 
     <aside class="panel rounded-lg p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto" aria-label="Building Warrant application summary">
       <h2 class="text-lg font-semibold">Application summary</h2>
@@ -456,5 +476,50 @@ const branchProps = {
     form?.addEventListener('change', updateFee);
     updateFee();
     initPreparationProgress();
+
+    // Project screening saves through its own route, then reloads so the page shows the right questions.
+    const screening = document.querySelector<HTMLFormElement>('#prep-screening');
+    const screeningToggle = document.querySelector<HTMLButtonElement>('[data-screening-toggle]');
+    const screeningStatus = document.querySelector<HTMLElement>('[data-screening-status]');
+    let unsavedAnswers = false;
+    form?.addEventListener('input', () => { unsavedAnswers = true; });
+    form?.addEventListener('change', () => { unsavedAnswers = true; });
+    screeningToggle?.addEventListener('click', () => {
+      if (!screening) return;
+      screening.hidden = !screening.hidden;
+      screeningToggle.setAttribute('aria-expanded', String(!screening.hidden));
+      screeningToggle.textContent = screening.hidden ? 'Change' : 'Cancel';
+    });
+    screening?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!screening.reportValidity()) return;
+      const data = new FormData(screening);
+      const typeOfWorkKeys = data.getAll('typeOfWorkKeys');
+      const showStatus = (text: string, error = false) => {
+        if (!screeningStatus) return;
+        screeningStatus.textContent = text;
+        screeningStatus.classList.toggle('text-red-700', error);
+        screeningStatus.classList.toggle('text-stone-500', !error);
+      };
+      if (!typeOfWorkKeys.length) { showStatus('Select at least one type of work.', true); return; }
+      if (unsavedAnswers && !window.confirm('Saving the screening reloads this page. Answers below that you have not saved will be lost. Continue?')) return;
+      const button = screening.querySelector<HTMLButtonElement>('button:not([type="button"])');
+      if (button) button.disabled = true;
+      showStatus('Saving...');
+      try {
+        const response = await fetch(screening.dataset.screeningAction ?? '', {
+          method: 'PATCH',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({ buildingUse: data.get('buildingUse'), typeOfWorkKeys }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) { showStatus(payload.error || 'The screening could not be saved.', true); return; }
+        window.location.reload();
+      } catch {
+        showStatus('Network error. Please try again.', true);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
   </script>
 </AppShell>

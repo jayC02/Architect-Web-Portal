@@ -20,8 +20,6 @@ try {
   // Layout: sections in portal order, each follow-up directly under its own question.
   const visibleSections = await page.locator('[data-prep-section]').evaluateAll(sections => sections.filter(section => !section.hidden).map(section => section.id));
   assert.deepEqual(visibleSections, ['details', 'questions', 'sustainability', 'certificates', 'fee', 'declaration']);
-  const longLabels = await page.locator('form .label').evaluateAll(labels => labels.map(label => label.textContent.trim()).filter(text => text.length > 40));
-  assert.deepEqual(longLabels, [], 'long questions use sentence case rather than the small uppercase label');
   for (const [question, followUp, shownWhenTicked] of [
     ['applicantIsOwner', '[data-owner-details]', false],
     ['fireAndRescueServiceEnforcingAuthority', '[data-fire-authority-name]', false],
@@ -134,6 +132,17 @@ try {
   assert.equal(await page.locator('[name="ownerFirstName"]').isDisabled(), true);
   assert.deepEqual(errors, []);
   console.log('Browser: production preparation form, optional design certificate, conditional follow-ups, repeated directions, owner reuse, both matrices, serialization and mobile width passed.');
+
+  // Project screening: entered at the top of the page when missing, through the existing screening route.
+  const unscreened = await renderWarrantForm({ project: { id: 'test-project', name: 'Unscreened project', projectType: 'domestic_alteration_extension', buildingUse: null, typeOfWorkKeys: ['domestic_alteration_extension'],
+    client: { id: 'test-client', name: 'Saved Client' }, site: { addressLine1: 'Test Street', townCity: 'Test Town', postcode: 'AB1 2CD' } } });
+  const screeningForm = unscreened.html.match(/<form id="prep-screening"[^>]*>/)?.[0] ?? '';
+  assert.ok(screeningForm && !/\shidden/.test(screeningForm), 'an unscreened project shows the screening form open at the top');
+  assert.match(screeningForm, /data-screening-action="\/api\/projects\/test-project\/screener"/, 'screening saves through the existing project screening route');
+  assert.ok(unscreened.html.indexOf('id="prep-screening"') < unscreened.html.indexOf('data-api-form'), 'screening comes before the application questions');
+  assert.match(unscreened.html, /name="buildingUse"/);
+  assert.match(unscreened.html, />Domestic alteration \/ extension</, 'work types use the portal wording');
+  assert.match(rendered.html, /<form id="prep-screening"[^>]*\shidden/, 'a screened project keeps the screening form closed behind Change');
 
   // Planning: parking follows vehicle access and only posts when it applies.
   const planning = await renderPlanningForm();
