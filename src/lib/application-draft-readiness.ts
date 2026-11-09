@@ -22,15 +22,6 @@ const addMissing = (
   if (missing(value)) issues.push({ key, section, label, message });
 };
 
-const buildingConfirmationKeys = [
-  ['applicantIsOwner', 'Applicant ownership'], ['applicationIsStaged', 'Staged application'],
-  ['intendedLifeFiveYearsOrLess', 'Intended building life'], ['fireAndRescueServiceEnforcingAuthority', 'Fire and Rescue enforcing authority'],
-  ['listedBuildingOrConservationArea', 'Listed building or conservation area'], ['otherHistoricalImportance', 'Other historical importance'],
-  ['scottishMinistersRelaxationDirection', 'Scottish Ministers relaxation direction'], ['dangerousBuildingNotice', 'Dangerous building notice'],
-  ['approvedCertifierOfConstruction', 'Approved certifier of construction'], ['coveredBySTAS', 'Scottish Type Approval Scheme'],
-  ['restrictPublicInspection', 'Public inspection restriction'],
-] as const;
-
 export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraftReview): ClientReadinessIssue[] => {
   const issues: ClientReadinessIssue[] = [];
   const route = String(review.selectedApplicationType);
@@ -83,7 +74,6 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
     addMissing(issues, 'application', 'application.proposedUse', 'Proposed use', review.application.proposedUse, 'Confirm the proposed use.');
     addMissing(issues, 'application', 'application.estimatedValue', 'Estimated value', review.application.estimatedValue, 'Enter the estimated value of work.');
-    for (const [key, label] of buildingConfirmationKeys) if (typeof review.confirmations[key] !== 'boolean') issues.push({ key: `confirmations.${key}`, section: 'confirmations', label, message: 'Confirm Yes or No.', legal: true });
   }
   if (planning) {
     const fee = review.confirmations.applicationFee;

@@ -130,9 +130,7 @@ const oneUnconfirmedBuildingAnswer = {
   },
 };
 const buildingIssues = evaluateApplicationDraftReadiness(oneUnconfirmedBuildingAnswer);
-assert.equal(buildingIssues.length, 1);
-assert.equal(buildingIssues[0]?.key, 'confirmations.applicantIsOwner');
-assert.equal(buildingIssues[0]?.legal, true, 'AI cannot silently confirm a legal answer');
+assert.deepEqual(buildingIssues, [], 'Building Warrant answers are confirmed on the warrant details page, not in the draft review');
 
 const householderReview = applicationDraftReviewSchema.parse({
   ...completeBuildingReview,
@@ -314,3 +312,42 @@ assert.doesNotMatch(reviewUi, /confidence\s*%|Math\.round\([^)]*confidence/i, 'r
 assert.doesNotMatch(reviewUi, /storageKey|raw JSON|prompt output/i, 'review UI does not expose storage or model internals');
 
 console.log('application draft tests passed');
+
+// Building Warrant answers in the New application review: usual answers pre-selected, follow-ups carried through.
+{
+  const { buildingWarrantDraftAnswers, WARRANT_TICK_DEFAULTS } = await import('../src/lib/building-warrant-draft-answers');
+  const { BUILDING_WARRANT_CONFIRMATION_DEFAULTS } = await import('../src/lib/validation/domain');
+  for (const [key, value] of Object.entries(BUILDING_WARRANT_CONFIRMATION_DEFAULTS)) {
+    if (key in WARRANT_TICK_DEFAULTS) assert.equal(WARRANT_TICK_DEFAULTS[key as keyof typeof WARRANT_TICK_DEFAULTS], value, `review default for ${key} matches the warrant page`);
+  }
+  const residential = { buildingUse: 'residential', typeOfWorkKeys: ['domestic_alteration_extension'] };
+  const untouched = buildingWarrantDraftAnswers({}, residential);
+  assert.equal(untouched.applicantIsOwner, true);
+  assert.equal(untouched.fireAndRescueServiceEnforcingAuthority, true);
+  for (const key of ['listedBuildingOrConservationArea', 'otherHistoricalImportance', 'scottishMinistersRelaxationDirection', 'dangerousBuildingNotice', 'coveredBySTAS', 'approvedCertifierOfConstruction', 'disabledPersonsFacilitiesOnly', 'workStartedBeforeApplication', 'applicationIsStaged', 'intendedLifeFiveYearsOrLess', 'restrictPublicInspection'] as const) {
+    assert.equal(untouched[key], false, `${key} starts as No`);
+  }
+  const fixedStayNo = buildingWarrantDraftAnswers({ applicationIsStaged: true, restrictPublicInspection: true, intendedLifeFiveYearsOrLess: true, workStartedBeforeApplication: true }, residential);
+  assert.equal(fixedStayNo.applicationIsStaged || fixedStayNo.restrictPublicInspection || fixedStayNo.intendedLifeFiveYearsOrLess || fixedStayNo.workStartedBeforeApplication, false, 'answers with no Yes script stay No');
+  assert.equal(buildingWarrantDraftAnswers({ coveredBySTAS: true, stasReference: 'ST-1' }, residential).coveredBySTAS, false, 'STAS stays No when screening does not allow it');
+  const answered = buildingWarrantDraftAnswers({
+    applicantIsOwner: false, ownerIsClient: false, ownerTitle: 'Mr', ownerFirstName: 'Iain', ownerLastName: 'Reid',
+    fireAndRescueServiceEnforcingAuthority: false, fireAuthorityName: 'Tayside Fire',
+    listedBuildingOrConservationArea: true, listingCategory: 'Category B',
+    scottishMinistersRelaxationDirection: true, relaxationReference: 'RD-1', relaxationDate: '2026-11-01',
+    coveredBySTAS: true, stasReference: 'ST-9',
+    approvedCertifierOfConstruction: true, constructionSchemeType: '1', constructionCertifierName: 'A Certifier', certifierOfConstructionCertificateAvailable: true,
+    certifierOfDesignCertificateAvailable: true, designCertificateTiming: 'following_application',
+  }, { buildingUse: 'commercial', typeOfWorkKeys: ['new_build'] });
+  assert.equal(answered.fireAuthorityName, 'Tayside Fire');
+  assert.equal(answered.listingCategory, 'Category B');
+  assert.deepEqual(answered.relaxationDirections, [{ reference: 'RD-1', date: '2026-11-01' }]);
+  assert.equal(answered.stasReference, 'ST-9');
+  assert.equal(answered.ownerIsClient, false);
+  assert.deepEqual(answered.ownerDetails, { title: 'Mr', firstName: 'Iain', lastName: 'Reid', country: 'United Kingdom' });
+  assert.equal(answered.constructionCertificate?.schemeType, '1');
+  assert.equal(answered.certifierOfConstructionCertificateAvailable, true);
+  assert.equal(answered.designCertificateFollowingApplication, true);
+  assert.equal(buildingWarrantDraftAnswers({ listingCategory: 'Stale text' }, residential).listingCategory, null, 'follow-up text is dropped when its question is No');
+  console.log('Building Warrant review answers: defaults, fixed answers and follow-ups passed.');
+}

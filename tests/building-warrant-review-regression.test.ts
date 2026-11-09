@@ -154,11 +154,11 @@ assert.ok(
   'valid preset confirmations do not show Choose and confirm errors',
 );
 assert.ok(
-  evaluateClientApplicationDraftReadiness({
+  !evaluateClientApplicationDraftReadiness({
     ...review,
     confirmations: { ...review.confirmations, coveredBySTAS: null },
-  }).some((issue) => issue.key === 'confirmations.coveredBySTAS'),
-  'a genuinely missing confirmation still requires review',
+  }).some((issue) => issue.section === 'confirmations'),
+  'Building Warrant answers start from defaults and are confirmed on the warrant details page',
 );
 
 const reviewUi = fs.readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
@@ -180,8 +180,7 @@ assert.match(confirmationSection, /Application declarations prepared/);
 
 const commitService = fs.readFileSync('src/server/services/application-draft-commit.service.ts', 'utf8');
 const snapshotService = fs.readFileSync('src/server/services/automation-jobs.service.ts', 'utf8');
-assert.match(commitService, /applicantIsOwner: review\.confirmations\.applicantIsOwner/);
-assert.match(commitService, /restrictPublicInspection: review\.confirmations\.restrictPublicInspection/);
+assert.match(commitService, /\.\.\.buildingWarrantDraftAnswers\(review\.confirmations/, 'review answers, defaults and follow-ups go through the shared warrant mapping');
 assert.match(commitService, /preparationData: buildingWarrantAnswers\(review\)/);
 assert.match(snapshotService, /unusualAnswers: warrantAnswers/);
 

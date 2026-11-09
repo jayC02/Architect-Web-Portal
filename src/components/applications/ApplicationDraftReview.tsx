@@ -1,4 +1,6 @@
 import ClientApplicantReview from './ClientApplicantReview';
+import { WarrantCertificateQuestions, WarrantConfirmationQuestions } from './WarrantDraftQuestions';
+import { permitsSTAS } from '@/lib/building-warrant-branches';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { applicationFileSha256, retryTransientUpload, runUploadQueue, UploadRequestError } from '@/lib/application-upload-queue';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
@@ -43,24 +45,6 @@ type ApiErrorPayload = {
   error?: string;
   details?: unknown;
 };
-
-const buildingConfirmationQuestions = [
-  ['applicantIsOwner', 'Is the applicant the legal owner?'],
-  ['workStartedBeforeApplication', 'Did work start before the original application?'],
-  ['disabledPersonsFacilitiesOnly', 'Is all work solely for disabled-person facilities?'],
-  ['certifierOfDesignCertificateAvailable', 'Will the appropriate Certifier of Design certificate be provided?'],
-  ['certifierOfConstructionCertificateAvailable', 'Will the appropriate Certifier of Construction certificate be provided?'],
-  ['applicationIsStaged', 'Is the application staged?'],
-  ['intendedLifeFiveYearsOrLess', 'Is the intended life of the building five years or less?'],
-  ['fireAndRescueServiceEnforcingAuthority', 'Is Fire and Rescue Service the enforcing authority?'],
-  ['listedBuildingOrConservationArea', 'Is the building listed or within a conservation area?'],
-  ['otherHistoricalImportance', 'Does the building have other historical importance?'],
-  ['scottishMinistersRelaxationDirection', 'Is the work subject to a Scottish Ministers relaxation direction?'],
-  ['dangerousBuildingNotice', 'Is the building subject to a dangerous building notice?'],
-  ['approvedCertifierOfConstruction', 'Will an approved certifier of construction be used?'],
-  ['coveredBySTAS', 'Are the proposals covered by STAS?'],
-  ['restrictPublicInspection', 'Should any proposal information be restricted from public inspection?'],
-] as const;
 
 const planningConfirmationQuestions = [
   ['discussedWithPlanningAuthority', 'Has the proposal been discussed with the planning authority?'],
@@ -1093,7 +1077,7 @@ export default function ApplicationDraftReview({
             <AlertCircle size={19} className="mt-0.5 shrink-0 text-amber-700" />
             <div>
               <h2 className="font-semibold text-ink">Details requiring attention</h2>
-              <p className="mt-1 text-sm text-stone-600">Open the highlighted sections below. Legal confirmations must be answered by you.</p>
+              <p className="mt-1 text-sm text-stone-600">Open the highlighted sections below.{planning ? ' Legal confirmations must be answered by you.' : ''}</p>
               <ul className="mt-3 grid gap-x-6 gap-y-1 text-sm text-stone-700 sm:grid-cols-2">
                 {issues.slice(0, 8).map((issue) => (
                   <li key={issue.key} className="flex gap-2">
@@ -1242,6 +1226,7 @@ export default function ApplicationDraftReview({
                     {certifierPresets.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
+                <WarrantCertificateQuestions confirmations={review.confirmations} update={updateConfirmation} />
               </>
             ) : null}
 
@@ -1503,7 +1488,23 @@ export default function ApplicationDraftReview({
           ) : null}
         </Section>
 
-        {building || planning ? (
+        {building ? (
+          <Section
+            title="Confirmations"
+            summary="Usual answers selected"
+            issueCount={0}
+          >
+            <p className="mb-2 text-sm text-stone-500">The usual answers are already selected. Change any that differ for this project.</p>
+            <WarrantConfirmationQuestions
+              confirmations={review.confirmations}
+              update={updateConfirmation}
+              showSTAS={permitsSTAS(review.project.buildingUse, review.application.typeOfWorkKeys)}
+              clientName={review.client.displayName ?? 'the saved client'}
+            />
+          </Section>
+        ) : null}
+
+        {planning ? (
           <Section
             title="Confirmations"
             summary={issuesBySection.get('confirmations')
@@ -1513,18 +1514,6 @@ export default function ApplicationDraftReview({
           >
             <p className="mb-4 text-sm text-stone-500">Review the prepared application declarations and change any answer that differs for this project.</p>
             <div className="grid gap-4 lg:grid-cols-2">
-              {building
-                ? buildingConfirmationQuestions.map(([key, label]) => (
-                    <BooleanQuestion
-                      key={key}
-                      label={label}
-                      value={review.confirmations[key]}
-                      onChange={(value) => updateConfirmation(key, value)}
-                      issue={issueFor(`confirmations.${key}`)}
-                      legal
-                    />
-                  ))
-                : null}
               {planning
                 ? planningConfirmationQuestions.map(([key, label]) => (
                     <BooleanQuestion

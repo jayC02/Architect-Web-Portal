@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import * as enums from '@prisma/client';
 import * as schemas from '../src/lib/validation/application-draft';
 import * as draftScreener from '../src/lib/projects/draft-screener';
+import * as draftAnswers from '../src/lib/building-warrant-draft-answers';
 import { BUILDING_WARRANT_CONFIRMATION_DEFAULTS } from '../src/lib/validation/domain';
 import { APPLICATION_UPLOAD_LIMITS } from '../src/lib/application-upload-limits';
 import { normaliseDraftAddresses } from '../src/lib/addresses/draft-address';
@@ -48,6 +49,7 @@ function harness(kind: 'save' | 'commit', existingProject?: Record<string, unkno
   const modules: Record<string, any> = {
     'node:crypto': { randomUUID }, '@prisma/client': enums, '@/lib/db/prisma': { prisma: db },
     '@/lib/projects/draft-screener': draftScreener,
+    '@/lib/building-warrant-draft-answers': draftAnswers,
     '@/lib/validation/application-draft': schemas, '@/lib/validation/domain': { BUILDING_WARRANT_CONFIRMATION_DEFAULTS },
     '@/lib/utils/http': { HttpError }, '@/lib/application-upload-limits': { APPLICATION_UPLOAD_LIMITS },
     '@/lib/addresses/draft-address': { normaliseDraftAddresses }, '@/lib/addresses/uk-address': { normaliseUkAddress }, '@/lib/location-plan': { resolveLocationPlans },

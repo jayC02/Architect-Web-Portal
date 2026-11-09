@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { applyProjectScreenerToDraftReview } from '@/lib/projects/draft-screener';
+import { buildingWarrantDraftAnswers } from '@/lib/building-warrant-draft-answers';
 import {
   applicationDraftReviewSchema,
   type ApplicationDraftReview,
@@ -132,19 +133,14 @@ const selectedTypeOfWorkKeys = (review: ApplicationDraftReview) =>
     ? review.application.typeOfWorkKeys
     : review.project.typeOfWorkKey ? [review.project.typeOfWorkKey] : [];
 
+// Warrant answers from the review: unset ticks start from the usual answers, fixed answers stay No,
+// and any follow-up details carry through to the Building Warrant details page.
 const buildingWarrantAnswers = (review: ApplicationDraftReview) => ({
   typeOfWorkKeys: selectedTypeOfWorkKeys(review),
-  applicantIsOwner: review.confirmations.applicantIsOwner as boolean,
-  applicationIsStaged: review.confirmations.applicationIsStaged as boolean,
-  intendedLifeFiveYearsOrLess: review.confirmations.intendedLifeFiveYearsOrLess as boolean,
-  fireAndRescueServiceEnforcingAuthority: review.confirmations.fireAndRescueServiceEnforcingAuthority as boolean,
-  listedBuildingOrConservationArea: review.confirmations.listedBuildingOrConservationArea as boolean,
-  otherHistoricalImportance: review.confirmations.otherHistoricalImportance as boolean,
-  scottishMinistersRelaxationDirection: review.confirmations.scottishMinistersRelaxationDirection as boolean,
-  dangerousBuildingNotice: review.confirmations.dangerousBuildingNotice as boolean,
-  approvedCertifierOfConstruction: review.confirmations.approvedCertifierOfConstruction as boolean,
-  coveredBySTAS: review.confirmations.coveredBySTAS as boolean,
-  restrictPublicInspection: review.confirmations.restrictPublicInspection as boolean,
+  ...buildingWarrantDraftAnswers(review.confirmations, {
+    buildingUse: review.project.buildingUse,
+    typeOfWorkKeys: selectedTypeOfWorkKeys(review),
+  }),
   applicantOverride: review.applicantDifferentFromClient
     ? personSnapshotOverride(review.applicant)
     : null,

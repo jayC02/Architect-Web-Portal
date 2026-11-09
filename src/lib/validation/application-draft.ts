@@ -170,7 +170,8 @@ export const applicationDraftReviewSchema = z.object({
   }).strict(),
   confirmations: z.record(
     z.string().max(120),
-    z.union([z.boolean(), z.string().max(500), z.number(), z.null()]),
+    // 750 fits the longest warrant follow-up (listing, historical and dangerous-notice details).
+    z.union([z.boolean(), z.string().max(750), z.number(), z.null()]),
   ),
   documents: z.array(draftDocumentReviewSchema).max(APPLICATION_UPLOAD_LIMITS.maxFiles),
 }).strict();

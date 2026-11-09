@@ -1,3 +1,4 @@
+import * as draftAnswers from '../src/lib/building-warrant-draft-answers';
 import * as draftScreener from '../src/lib/projects/draft-screener';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -41,6 +42,7 @@ function harness(commit=false){
  };
  const modules:any={
   '@/lib/projects/draft-screener':draftScreener,
+  '@/lib/building-warrant-draft-answers':draftAnswers,
   'node:crypto':{randomUUID},'@prisma/client':enums,'@/lib/db/prisma':{prisma:db},
   '@/lib/location-plan':{resolveLocationPlans},
   '@/lib/utils/http':{HttpError},'@/lib/application-upload-limits':{APPLICATION_UPLOAD_LIMITS},
