@@ -136,13 +136,12 @@ const documentCount = await prisma.projectDocument.count({ where: { organisation
 const questionLabel = (name: (typeof warrantQuestions)[number][0]) => warrantQuestions.find(([key]) => key === name)![1];
 const newBuilding = selectedTypeOfWorkKeys.includes('new_build');
 const sections: ReadonlyArray<{ id: WarrantSectionId; title: string; description?: string }> = [
-  { id: 'work', title: 'The work', description: 'These details must be complete before the job can open in desktop.' },
-  { id: 'owner', title: 'Applicant and owner' },
-  { id: 'site', title: 'Building and site questions', description: 'Tick each statement that applies. Unticked statements are saved as No.' },
-  { id: 'sustainability', title: 'Sustainability', description: 'Use the levels specified in the project design. Choose a level for each applicable aspect.' },
-  { id: 'certificates', title: 'Certificates', description: 'Choose a saved profile or enter certifier details. Valid details are saved for future applications.' },
-  { id: 'fee', title: 'Fee', description: 'Architect Pro uses these answers to calculate the application fee. Desktop uses the saved result and does not recalculate it.' },
-  { id: 'review', title: 'Review and authorise' },
+  { id: 'details', title: 'Warrant details', description: 'These details must be complete before the job can open in desktop.' },
+  { id: 'questions', title: 'Additional warrant questions', description: 'Tick each statement that applies. Unticked statements are saved as No.' },
+  { id: 'sustainability', title: 'New-building sustainability', description: 'Use the levels specified in the project design. Choose a level for each applicable aspect.' },
+  { id: 'certificates', title: 'Certificate information', description: 'Choose a saved profile or enter certifier details. Valid details are saved for future applications.' },
+  { id: 'fee', title: 'Fee information', description: 'Architect Pro uses these answers to calculate the application fee. Desktop uses the saved result and does not recalculate it.' },
+  { id: 'declaration', title: 'Declaration' },
 ];
 const visibleSections = sections.filter(section => section.id !== 'sustainability' || newBuilding);
 const sectionProps = (id: WarrantSectionId) => {
@@ -151,7 +150,6 @@ const sectionProps = (id: WarrantSectionId) => {
     id,
     title: section.title,
     description: section.description,
-    number: visibleSections.findIndex(item => item.id === id) + 1,
     hidden: !visibleSections.includes(section),
     serverMissing: incompleteSave ? remainingRequirements.filter(requirement => warrantSectionForRequirement(requirement.field) === id).length : 0,
   };
@@ -184,60 +182,46 @@ const branchProps = {
   <div class="mb-6">
     <a href={`/projects/${application.projectId}`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
     <h1 class="mt-2 text-3xl font-semibold text-ink">Building Warrant application details</h1>
-    <p class="mt-1 text-sm text-stone-500">Work through each section in order, then save. The desktop application uses these answers to prepare the portal application.</p>
+    <p class="mt-1 text-sm text-stone-500">Complete the warrant and certificate information required by the desktop application.</p>
   </div>
 
   <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
     <form data-api-form data-action={`/api/building-warrant/${application.id}/certifier-details`} data-method="POST" class="panel prep-form rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
-      <div id="prep-top" class="scroll-mt-44 lg:scroll-mt-6">
-        {incompleteSave && remainingRequirements.length > 0 && (
-          <div class="mb-5 border-l-4 border-amber-600 bg-amber-50 px-4 py-3" role="alert">
-            <p class="font-semibold text-amber-900">More information is still required</p>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
-              {remainingRequirements.map((requirement) => {
-                const target = warrantSectionForRequirement(requirement.field);
-                return <li>{target && visibleSections.some(section => section.id === target) ? <a href={`#${target}`} class="underline">{requirement.message}</a> : requirement.message}</li>;
-              })}
-            </ul>
-          </div>
-        )}
-        <div class="prep-summary" tabindex="-1" data-prep-summary hidden>
-          <p class="font-semibold text-ink" data-prep-summary-title>Still needed</p>
-          <ul class="mt-1 space-y-1 text-sm text-stone-700" data-prep-summary-list></ul>
+      {incompleteSave && remainingRequirements.length > 0 && (
+        <div class="mb-5 border-l-4 border-amber-600 bg-amber-50 px-4 py-3" role="alert">
+          <p class="font-semibold text-amber-900">More information is still required</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+            {remainingRequirements.map((requirement) => {
+              const target = warrantSectionForRequirement(requirement.field);
+              return <li>{target && visibleSections.some(section => section.id === target) ? <a href={`#${target}`} class="underline">{requirement.message}</a> : requirement.message}</li>;
+            })}
+          </ul>
         </div>
+      )}
+      <div class="mb-5 scroll-mt-44 border-l-4 border-amber-600 bg-amber-50 px-4 py-3 outline-none lg:scroll-mt-6" tabindex="-1" role="alert" data-prep-summary hidden>
+        <p class="font-semibold text-amber-900">Complete these answers before saving</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900" data-prep-summary-list></ul>
       </div>
 
-      <PreparationSection {...sectionProps('work')}>
-        <div class="mt-4 rounded-md bg-stone-50 px-3 py-3">
-          <p class="label">Project screening</p>
-          <p class="text-sm text-ink">{projectScreen.buildingUse === 'residential' ? 'Residential' : projectScreen.buildingUse === 'commercial' ? 'Commercial' : 'Building use not yet confirmed'} — {selectedTypeOfWorkKeys.map(key => TYPE_OF_WORK_DEFINITIONS.find(type => type.key === key)?.label).join(', ')}</p>
-          <a href={`/projects/${application.projectId}/screener`} class="text-sm font-semibold underline" data-prep-static-missing={projectScreen.buildingUse ? undefined : 'Project screening'}>Edit project screening</a>
-          {selectedTypeOfWorkKeys.map(key => <input type="hidden" name="typeOfWorkKeys" value={key} />)}
-        </div>
+      <PreparationSection {...sectionProps('details')}>
+        <div class="mt-5"><p class="label">Project screening</p><p class="mt-1 text-sm">{projectScreen.buildingUse === 'residential' ? 'Residential' : projectScreen.buildingUse === 'commercial' ? 'Commercial' : 'Building use not yet confirmed'} — {selectedTypeOfWorkKeys.map(key => TYPE_OF_WORK_DEFINITIONS.find(type => type.key === key)?.label).join(', ')}</p><a href={`/projects/${application.projectId}/screener`} class="text-sm font-semibold underline" data-prep-static-missing={projectScreen.buildingUse ? undefined : 'Project screening'}>Edit project screening</a>{selectedTypeOfWorkKeys.map(key => <input type="hidden" name="typeOfWorkKeys" value={key} />)}</div>
         <label class="mt-5 block"><span class="label">Description of work</span><textarea required maxlength="4000" name="description" rows="4" class="field">{description ?? ''}</textarea></label>
         <div class="mt-4 grid gap-4 sm:grid-cols-3">
           <label class="block"><span class="label">Estimated value of work</span><input required type="number" min="0.01" step="0.01" name="estimatedValue" value={application.estimatedValue ? String(application.estimatedValue) : ''} class="field" /></label>
           <label class="block"><span class="label">Current use</span><input required={requiresExistingUse} maxlength="160" name="currentUse" value={application.currentUse ?? ''} class="field" /></label>
           <label class="block"><span class="label">Proposed use</span><input required={requiresExistingUse} maxlength="160" name="proposedUse" value={application.proposedUse ?? ''} class="field" /></label>
         </div>
-        <div class="prep-questions">
-          <WarrantBranchFields part="services" {...branchProps} />
-          <WarrantBranchFields part="conversion" {...branchProps} />
-          <WarrantBranchFields part="demolition" {...branchProps} />
-        </div>
+        <div class="mt-4"><WarrantBranchFields part="services" {...branchProps} /></div>
+        <WarrantBranchFields part="conversion" {...branchProps} />
+        <WarrantBranchFields part="demolition" {...branchProps} />
       </PreparationSection>
 
-      <PreparationSection {...sectionProps('owner')}>
-        <div class="prep-questions">
+      <PreparationSection {...sectionProps('questions')}>
+        <div class="mt-4 border-t border-stone-100">
           <PreparationQuestion name="applicantIsOwner" label={questionLabel('applicantIsOwner')} checked={warrantAnswers.applicantIsOwner}>
             <WarrantOwnerDetails applicantIsOwner={warrantAnswers.applicantIsOwner} ownerIsClient={typeof preparation.ownerIsClient === 'boolean' ? preparation.ownerIsClient : undefined} details={ownerDetailsSchema.parse(preparation.ownerDetails ?? {})} clientName={clientName} />
           </PreparationQuestion>
-        </div>
-      </PreparationSection>
-
-      <PreparationSection {...sectionProps('site')}>
-        <div class="prep-questions">
           <PreparationQuestion name="fireAndRescueServiceEnforcingAuthority" label={questionLabel('fireAndRescueServiceEnforcingAuthority')} checked={warrantAnswers.fireAndRescueServiceEnforcingAuthority}>
             <WarrantFollowUps part="fire" {...followUpProps} />
           </PreparationQuestion>
@@ -266,71 +250,58 @@ const branchProps = {
       </PreparationSection>
 
       <PreparationSection {...sectionProps('certificates')}>
-        <a href="/settings" class="mt-2 inline-block text-sm font-semibold text-stone-600 hover:text-ink">Manage saved certifiers</a>
-        <h3 class="prep-subheading">Design certifier</h3>
-        <div class="prep-questions">
-          <div class="prep-question">
-            <label class="prep-select-row"><span class="prep-question-text">Use a certifier of design?</span><select name="designCertifierSelected" class="field"><option value="false" selected={!designSelected}>No</option><option value="true" selected={designSelected}>Yes</option></select></label>
-            <fieldset class="prep-followup" data-design-certificate-fields disabled={!designSelected} hidden={!designSelected}>
-              <legend class="sr-only">Certifier of design details</legend>
-              <label class="block">
-                <span class="label">Saved certifier profile</span>
-                <select name="selectedCertifierPresetId" class="field">
-                  <option value="">No saved profile</option>
-                  {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id} data-scheme-type={preset.schemeType ?? ''} data-registration-a-part1={preset.registrationAPart1 ?? ''} data-registration-a-part2={preset.registrationAPart2 ?? ''} data-certifier-name={preset.certifierName ?? ''} data-registration-b-part1={preset.registrationBPart1 ?? ''} data-registration-b-part2={preset.registrationBPart2 ?? ''} data-approved-body={preset.approvedBody ?? ''}>{preset.displayName}</option>)}
-                </select>
-              </label>
-              <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                <label class="block"><span class="label">Scheme Type</span><input maxlength="120" name="schemeType" value={schemeType} class="field" /></label>
-                <label class="block"><span class="label">Name of Certifier</span><input required maxlength="160" name="certifierName" value={certifierName} class="field" /></label>
-                <label class="block"><span class="label">Registration number A Part 1</span><select required name="registrationAPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationAPart1}>{code}</option>)}</select></label>
-                <label class="block"><span class="label">Registration number A Part 2</span><input required maxlength="80" name="registrationAPart2" value={registrationAPart2} class="field" /></label>
-                <label class="block"><span class="label">Registration number B Part 1</span><select required name="registrationBPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationBPart1}>{code}</option>)}</select></label>
-                <label class="block"><span class="label">Registration number B Part 2</span><input required maxlength="80" name="registrationBPart2" value={registrationBPart2} class="field" /></label>
-                <label class="block sm:col-span-2"><span class="label">Name of Approved Body</span><input required maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
-              </div>
-              <label class="mt-4 block">
-                <span class="prep-field-question">Will the appropriate Certifier of Design certificate be provided?</span>
-                <select required name="certifierOfDesignCertificateAvailable" class="field">
-                  <option value="">Choose Yes or No</option>
-                  <option value="true" selected={warrantAnswers.certifierOfDesignCertificateAvailable === true}>Yes</option>
-                  <option value="false" selected={warrantAnswers.certifierOfDesignCertificateAvailable === false}>No</option>
-                </select>
-              </label>
-              <label class="prep-followup block" data-design-certificate-timing hidden={warrantAnswers.certifierOfDesignCertificateAvailable !== true}><span class="prep-field-question">When will the design certificate be provided?</span><select name="designCertificateTiming" class="field" required={designSelected && warrantAnswers.certifierOfDesignCertificateAvailable === true}><option value="">Choose when</option><option value="with_application" selected={preparation.designCertificateWithApplication === true}>With this application</option><option value="following_application" selected={preparation.designCertificateFollowingApplication === true}>Following this application</option></select></label>
-            </fieldset>
+        <a slot="action" href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Manage saved certifiers</a>
+        <label class="mt-5 block"><span class="prep-field-question">Will a certifier of design be used?</span><select name="designCertifierSelected" class="field"><option value="false" selected={!designSelected}>No</option><option value="true" selected={designSelected}>Yes</option></select></label>
+        <fieldset class="prep-followup mt-4" data-design-certificate-fields disabled={!designSelected} hidden={!designSelected}>
+          <legend class="sr-only">Certifier of design details</legend>
+          <label class="block">
+            <span class="label">Saved certifier profile</span>
+            <select name="selectedCertifierPresetId" class="field">
+              <option value="">No saved profile</option>
+              {presets.map((preset) => <option value={preset.id} selected={preset.id === selectedPreset?.id} data-scheme-type={preset.schemeType ?? ''} data-registration-a-part1={preset.registrationAPart1 ?? ''} data-registration-a-part2={preset.registrationAPart2 ?? ''} data-certifier-name={preset.certifierName ?? ''} data-registration-b-part1={preset.registrationBPart1 ?? ''} data-registration-b-part2={preset.registrationBPart2 ?? ''} data-approved-body={preset.approvedBody ?? ''}>{preset.displayName}</option>)}
+            </select>
+          </label>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            <label class="block"><span class="label">Scheme Type</span><input maxlength="120" name="schemeType" value={schemeType} class="field" /></label>
+            <label class="block"><span class="label">Registration number A Part 1</span><select required name="registrationAPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationAPart1}>{code}</option>)}</select></label>
+            <label class="block"><span class="label">Registration number A Part 2</span><input required maxlength="80" name="registrationAPart2" value={registrationAPart2} class="field" /></label>
+            <label class="block"><span class="label">Name of Certifier</span><input required maxlength="160" name="certifierName" value={certifierName} class="field" /></label>
+            <label class="block"><span class="label">Registration number B Part 1</span><select required name="registrationBPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationBPart1}>{code}</option>)}</select></label>
+            <label class="block"><span class="label">Registration number B Part 2</span><input required maxlength="80" name="registrationBPart2" value={registrationBPart2} class="field" /></label>
+            <label class="block"><span class="label">Name of Approved Body</span><input required maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
           </div>
-        </div>
+          <label class="mt-4 block">
+            <span class="prep-field-question">Will the appropriate Certifier of Design certificate be provided?</span>
+            <select required name="certifierOfDesignCertificateAvailable" class="field">
+              <option value="">Choose Yes or No</option>
+              <option value="true" selected={warrantAnswers.certifierOfDesignCertificateAvailable === true}>Yes</option>
+              <option value="false" selected={warrantAnswers.certifierOfDesignCertificateAvailable === false}>No</option>
+            </select>
+          </label>
+          <label class="mt-4 block" data-design-certificate-timing hidden={warrantAnswers.certifierOfDesignCertificateAvailable !== true}><span class="prep-field-question">When will the design certificate be provided?</span><select name="designCertificateTiming" class="field" required={designSelected && warrantAnswers.certifierOfDesignCertificateAvailable === true}><option value="">Choose when</option><option value="with_application" selected={preparation.designCertificateWithApplication === true}>With this application</option><option value="following_application" selected={preparation.designCertificateFollowingApplication === true}>Following this application</option></select></label>
+        </fieldset>
         <WarrantBranchFields part="construction" {...branchProps} />
       </PreparationSection>
 
       <PreparationSection {...sectionProps('fee')}>
-        <div class="prep-questions">
-          <div class="prep-question">
-            <label class="prep-select-row">
-              <span class="prep-question-text">Is all work solely for qualifying disabled-person facilities?</span>
-              <select required name="disabledPersonsFacilitiesOnly" class="field">
-                <option value="">Choose Yes or No</option>
-                <option value="true" selected={warrantAnswers.disabledPersonsFacilitiesOnly === true}>Yes</option>
-                <option value="false" selected={warrantAnswers.disabledPersonsFacilitiesOnly === false}>No</option>
-              </select>
-            </label>
-          </div>
-          <p class="prep-question text-[15px] leading-6 text-ink">Work started before application: <strong>No</strong></p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="prep-field-question">Is all work solely for qualifying disabled-person facilities?</span>
+            <select required name="disabledPersonsFacilitiesOnly" class="field">
+              <option value="">Choose Yes or No</option>
+              <option value="true" selected={warrantAnswers.disabledPersonsFacilitiesOnly === true}>Yes</option>
+              <option value="false" selected={warrantAnswers.disabledPersonsFacilitiesOnly === false}>No</option>
+            </select>
+          </label>
+          <p class="text-sm text-stone-600 sm:self-end sm:pb-2">Work started before application: <strong>No</strong></p>
         </div>
       </PreparationSection>
 
-      <PreparationSection {...sectionProps('review')}>
-        <div class="prep-questions">
-          <WarrantBranchFields part="declaration" {...branchProps} />
-        </div>
+      <PreparationSection {...sectionProps('declaration')}>
+        <div class="mt-4"><WarrantBranchFields part="declaration" {...branchProps} /></div>
       </PreparationSection>
 
-      <div class="prep-save-bar">
-        <button class="btn btn-primary">Save and return to project</button>
-        <a href="#prep-top" class="text-sm font-semibold text-amber-800 underline" data-prep-save-hint hidden></a>
-        <span data-form-status class="text-sm text-stone-500" />
-      </div>
+      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
 
     <aside class="panel rounded-lg p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto" aria-label="Building Warrant application summary">

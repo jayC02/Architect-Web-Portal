@@ -1,5 +1,5 @@
 ---
-// One tick-box question. Anything in the slot is its follow-up and renders directly underneath.
+// One tick-box statement. Anything in the slot is its follow-up and opens directly underneath.
 interface Props {
   name: string;
   label: string;
@@ -8,10 +8,10 @@ interface Props {
 }
 const { name, label, checked = false, requiredTick } = Astro.props;
 ---
-<div class="prep-question" data-prep-question={name}>
-  <label class="prep-question-control">
-    <input type="checkbox" name={name} checked={checked} class="prep-check" data-prep-required-tick={requiredTick} />
-    <span class="prep-question-text">{label}</span>
+<div class="border-b border-stone-100" data-prep-question={name}>
+  <label class="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6 text-ink">
+    <input type="checkbox" name={name} checked={checked} class="mt-1 h-4 w-4 shrink-0 accent-[#526a4a]" data-prep-required-tick={requiredTick} />
+    <span data-prep-label>{label}</span>
   </label>
   <slot />
 </div>

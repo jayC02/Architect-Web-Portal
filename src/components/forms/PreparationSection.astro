@@ -1,31 +1,30 @@
 ---
+// A form section in the original preparation-page style. The id and data attributes let the
+// side panel's section list and the save summary find it.
 interface Props {
   id: string;
-  number: number;
   title: string;
   description?: string;
   hidden?: boolean;
   serverMissing?: number;
 }
-const { id, number, title, description, hidden = false, serverMissing = 0 } = Astro.props;
+const { id, title, description, hidden = false, serverMissing = 0 } = Astro.props;
 ---
 <section
   id={id}
-  class="prep-section mt-7 first-of-type:mt-0 first-of-type:border-t-0 first-of-type:pt-0"
+  class="mt-7 scroll-mt-44 border-t border-stone-200 pt-6 first-of-type:mt-0 first-of-type:border-t-0 first-of-type:pt-0 lg:scroll-mt-6"
   aria-labelledby={`${id}-heading`}
   data-prep-section={id}
-  data-prep-number={number}
   data-prep-title={title}
   data-prep-server-missing={serverMissing > 0 ? serverMissing : undefined}
   hidden={hidden}
 >
-  <div class="prep-section-head">
-    <span class="prep-section-number" aria-hidden="true">{number}</span>
-    <div class="min-w-0">
-      <h2 id={`${id}-heading`} class="text-xl font-semibold leading-7 text-ink">{title}</h2>
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <h2 id={`${id}-heading`} class="text-xl font-semibold">{title}</h2>
       {description && <p class="mt-1 text-sm text-stone-500">{description}</p>}
     </div>
-    <span class="prep-section-status" data-prep-section-status></span>
+    <slot name="action" />
   </div>
   <slot />
 </section>

@@ -5,8 +5,8 @@ const { applicantIsOwner, ownerIsClient, details = {}, clientName = 'the saved p
 const requiredKeys = new Set(['title', 'firstName', 'lastName', 'telephone', 'email', 'addressLine1', 'townCity', 'country', 'postcode']);
 ---
 <fieldset class="prep-followup" data-owner-details hidden={applicantIsOwner}>
-  <legend class="sr-only">Property owner</legend>
-  <label class="block"><span class="prep-field-question">Is the owner the saved client, {clientName}?</span><select name="ownerIsClient" class="field" required={!applicantIsOwner}>
+  <legend class="text-sm font-semibold text-ink">Property owner</legend>
+  <label class="mt-2 block"><span class="prep-field-question">Is the owner the saved client, {clientName}?</span><select name="ownerIsClient" class="field" required={!applicantIsOwner}>
     <option value="">Choose Yes or No</option><option value="true" selected={ownerIsClient === true}>Yes — use the saved client details</option><option value="false" selected={ownerIsClient === false}>No — enter a different owner</option>
   </select></label>
   <p class="mt-2 text-sm text-stone-500" data-owner-client hidden={ownerIsClient !== true}>The client's saved name, contact details and address will be used. Complete any missing details in the client record before running.</p>

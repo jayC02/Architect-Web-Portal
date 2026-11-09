@@ -137,12 +137,12 @@ assert.ok(evaluateAutomationPreflight(missingScreenWork).missing.some(issue => i
 
 // Preparation pages: every preflight field used on the warrant page links to the section that answers it.
 for (const [field, section] of [
-  ['documents.locationPlan', null], ['project.buildingUse', 'work'], ['buildingWarrant.description', 'work'], ['buildingWarrant.conversionDescriptions', 'work'],
-  ['buildingWarrant.ownerIsClient', 'owner'], ['buildingWarrant.owner.buildingNumber', 'owner'],
-  ['buildingWarrant.fireAuthorityName', 'site'], ['buildingWarrant.listingCategory', 'site'], ['buildingWarrant.relaxationDirections.0.date', 'site'], ['buildingWarrant.stasReference', 'site'],
+  ['documents.locationPlan', null], ['project.buildingUse', 'details'], ['buildingWarrant.description', 'details'], ['buildingWarrant.conversionDescriptions', 'details'],
+  ['buildingWarrant.ownerIsClient', 'questions'], ['buildingWarrant.owner.buildingNumber', 'questions'],
+  ['buildingWarrant.fireAuthorityName', 'questions'], ['buildingWarrant.listingCategory', 'questions'], ['buildingWarrant.relaxationDirections.0.date', 'questions'], ['buildingWarrant.stasReference', 'questions'],
   ['buildingWarrant.sustainability.higherLevels', 'sustainability'],
   ['buildingWarrant.certifier.approvedBody', 'certificates'], ['buildingWarrant.constructionCertificate.schemeType', 'certificates'], ['buildingWarrant.designCertificateWithApplication', 'certificates'],
-  ['buildingWarrant.feeCalculation', 'fee'], ['buildingWarrant.unusualAnswers.declarationAuthorised', 'review'],
+  ['buildingWarrant.feeCalculation', 'fee'], ['buildingWarrant.unusualAnswers.declarationAuthorised', 'declaration'],
 ] as const) assert.equal(warrantSectionForRequirement(field), section, `${field} links to ${section}`);
 
 // Planning: parking is not posted without vehicle access, and stays required with it.

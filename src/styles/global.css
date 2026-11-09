@@ -71,96 +71,46 @@ textarea {
   @apply inline-flex rounded px-2 py-1 text-xs font-semibold uppercase;
 }
 
-/* Preparation pages: numbered sections, one question per row, follow-ups in the row. */
-.prep-section {
-  @apply scroll-mt-44 border-t border-stone-200 pt-6 lg:scroll-mt-6;
-}
-
-.prep-section-head {
-  @apply flex items-start gap-3;
-}
-
-.prep-section-number {
-  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold tabular-nums text-stone-600 transition-colors;
-}
-
-[data-state="done"] > .prep-section-head > .prep-section-number,
-[data-state="done"] > a > .prep-section-number {
-  @apply bg-moss text-white;
-}
-
-.prep-section-status {
-  @apply ml-auto shrink-0 pt-1 text-xs font-semibold;
-}
-
-[data-state="done"] > .prep-section-head > .prep-section-status,
-[data-state="done"] > a > .prep-section-status {
-  @apply text-moss;
-}
-
-[data-state="needs"] > .prep-section-head > .prep-section-status,
-[data-state="needs"] > a > .prep-section-status {
-  @apply text-amber-800;
-}
-
-.prep-questions {
-  @apply mt-4 divide-y divide-stone-200 border-t border-stone-200;
-}
-
-.prep-question {
-  @apply py-3;
-}
-
-.prep-question-control {
-  @apply flex min-h-8 cursor-pointer items-start gap-3;
-}
-
-.prep-question-text {
-  @apply text-[15px] font-medium leading-6 text-ink;
-}
-
-.prep-check {
-  @apply mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[#526a4a];
-}
-
-.prep-select-row {
-  @apply grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-center sm:gap-4;
+/* Preparation pages: a follow-up opens directly under the answer that asks for it. */
+.prep-followup {
+  @apply mb-3 ml-[7px] mt-1 min-w-0 border-l-2 border-stone-300 pl-5;
 }
 
 .prep-field-question {
   @apply mb-1 block text-sm font-medium leading-5 text-ink;
 }
 
-.prep-followup {
-  @apply ml-2 mt-3 min-w-0 border-l-2 border-moss/40 pb-1 pl-3 sm:ml-7 sm:pl-4;
-}
-
-.prep-subheading {
-  @apply mt-5 text-base font-semibold text-ink;
-}
-
-.prep-summary {
-  @apply mb-6 scroll-mt-44 rounded-md border border-stone-200 bg-stone-50 px-4 py-3 outline-none lg:scroll-mt-6;
-}
-
-.prep-summary[data-attempted="true"] {
-  @apply border-amber-600 bg-amber-50;
-}
-
-.prep-summary-row {
-  @apply grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2;
-}
-
-.prep-save-bar {
-  @apply sticky bottom-0 z-10 -mx-5 -mb-5 mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-b-lg border-t border-stone-200 bg-white/95 px-5 py-3 backdrop-blur;
-}
-
 .prep-form :is(input, select, textarea) {
-  @apply scroll-mb-24 scroll-mt-44 lg:scroll-mt-6;
+  @apply scroll-mt-44 lg:scroll-mt-6;
 }
 
 .prep-form :is(input, select, textarea)[aria-invalid="true"] {
   @apply border-amber-600 ring-2 ring-amber-600/25;
+}
+
+/* Side panel: application summary rows and the section checklist. */
+.prep-summary-row {
+  @apply grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2;
+}
+
+.prep-section-number {
+  @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold tabular-nums text-stone-600 transition-colors;
+}
+
+.prep-section-status {
+  @apply ml-auto shrink-0 text-xs font-semibold;
+}
+
+[data-state="done"] > a > .prep-section-number {
+  @apply bg-moss text-white;
+}
+
+[data-state="done"] > a > .prep-section-status {
+  @apply text-moss;
+}
+
+[data-state="needs"] > a > .prep-section-status {
+  @apply text-amber-800;
 }
 
 .table-head {

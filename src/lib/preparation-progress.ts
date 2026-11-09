@@ -1,14 +1,18 @@
 // Display-only progress for the preparation pages. It reads the validity the page's own
 // scripts already maintain and never changes a field's value, name or required state.
+// The side panel shows each section as Done or Needs info; the summary at the top of the
+// form only appears after a save the browser blocked.
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 type Gap = { label: string; target: HTMLElement; blocksSave: boolean };
 
 const isMissing = (control: Control) => control.willValidate && !control.validity.valid;
+const isControl = (element: Element): element is Control =>
+  element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement;
 
 const controlLabel = (control: Control) => {
   const group = control.closest<HTMLElement>('[data-prep-field-label]');
   if (group?.dataset.prepFieldLabel) return group.dataset.prepFieldLabel;
-  const text = control.labels?.[0]?.querySelector('.label, .prep-field-question, .prep-question-text')?.textContent ?? '';
+  const text = control.labels?.[0]?.querySelector('.label, .prep-field-question, [data-prep-label]')?.textContent ?? '';
   return text.replace(/\s*\*\s*$/, '').trim() || 'An answer';
 };
 
@@ -23,9 +27,7 @@ export function initPreparationProgress() {
   if (!form) return;
   const sections = Array.from(form.querySelectorAll<HTMLElement>('[data-prep-section]')).filter(section => !section.hidden);
   const summary = form.querySelector<HTMLElement>('[data-prep-summary]');
-  const summaryTitle = summary?.querySelector<HTMLElement>('[data-prep-summary-title]');
   const summaryList = summary?.querySelector<HTMLElement>('[data-prep-summary-list]');
-  const saveHint = form.querySelector<HTMLAnchorElement>('[data-prep-save-hint]');
   const progress = document.querySelector<HTMLElement>('[data-prep-progress]');
   const linkTargets = new WeakMap<Element, HTMLElement>();
   let attempted = false;
@@ -46,28 +48,21 @@ export function initPreparationProgress() {
     return gaps;
   };
 
-  const setStatus = (element: Element | null | undefined, needsInfo: boolean) => {
-    if (element) element.textContent = needsInfo ? 'Needs info' : 'Done';
-  };
-
-  const renderSummary = (rows: Array<{ section: HTMLElement; gaps: Gap[] }>, blocked: boolean) => {
+  const renderSummary = (rows: Array<{ section: HTMLElement; gaps: Gap[] }>) => {
     if (!summary || !summaryList) return;
-    const signature = JSON.stringify([blocked, rows.map(({ section, gaps }) => [section.id, gaps.map(gap => gap.label)])]);
-    rows.forEach(({ section, gaps }) => { linkTargets.set(section, gaps[0].target); });
+    const blocking = rows.map(row => ({ section: row.section, gaps: row.gaps.filter(gap => gap.blocksSave) })).filter(row => row.gaps.length > 0);
+    blocking.forEach(({ section, gaps }) => { linkTargets.set(section, gaps[0].target); });
+    const signature = JSON.stringify([attempted, blocking.map(({ section, gaps }) => [section.id, gaps.map(gap => gap.label)])]);
     if (signature === lastSummary) return;
     lastSummary = signature;
-    summary.hidden = rows.length === 0;
-    summary.dataset.attempted = blocked ? 'true' : 'false';
-    if (blocked) summary.setAttribute('role', 'alert');
-    else summary.removeAttribute('role');
-    if (summaryTitle) summaryTitle.textContent = blocked ? 'Complete these answers before saving' : 'Still needed';
-    summaryList.replaceChildren(...rows.map(({ section, gaps }) => {
+    summary.hidden = !attempted || blocking.length === 0;
+    summaryList.replaceChildren(...blocking.map(({ section, gaps }) => {
       const item = document.createElement('li');
       const link = document.createElement('a');
       link.href = `#${section.id}`;
       link.dataset.prepSummaryLink = section.id;
-      link.className = 'font-semibold text-ink underline';
-      link.textContent = `${section.dataset.prepNumber}. ${section.dataset.prepTitle}`;
+      link.className = 'font-semibold underline';
+      link.textContent = section.dataset.prepTitle ?? section.id;
       item.append(link, `: ${namedList(gaps.map(gap => gap.label))}`);
       return item;
     }));
@@ -83,23 +78,17 @@ export function initPreparationProgress() {
     rows.forEach(({ section, gaps }) => {
       const needsInfo = gaps.length > 0 || section.hasAttribute('data-prep-server-missing');
       if (needsInfo) incomplete += 1;
-      const state = needsInfo ? 'needs' : 'done';
-      section.dataset.state = state;
-      setStatus(section.querySelector('[data-prep-section-status]'), needsInfo);
+      section.dataset.state = needsInfo ? 'needs' : 'done';
       const nav = document.querySelector<HTMLElement>(`[data-prep-nav="${section.id}"]`);
       if (nav) {
-        nav.dataset.state = state;
-        setStatus(nav.querySelector('[data-prep-nav-status]'), needsInfo);
+        nav.dataset.state = section.dataset.state;
+        const status = nav.querySelector('[data-prep-nav-status]');
+        if (status) status.textContent = needsInfo ? 'Needs info' : 'Done';
       }
     });
-    const withGaps = rows.filter(row => row.gaps.length > 0);
-    if (attempted && !withGaps.some(row => row.gaps.some(gap => gap.blocksSave))) attempted = false;
-    renderSummary(withGaps, attempted);
+    if (attempted && !rows.some(row => row.gaps.some(gap => gap.blocksSave))) attempted = false;
+    renderSummary(rows);
     if (progress) progress.textContent = `${sections.length - incomplete} of ${sections.length} sections complete`;
-    if (saveHint) {
-      saveHint.hidden = incomplete === 0;
-      saveHint.textContent = `${incomplete} section${incomplete === 1 ? ' needs' : 's need'} information`;
-    }
   };
 
   const scheduleRefresh = () => { window.setTimeout(refresh, 0); };
@@ -131,7 +120,7 @@ export function initPreparationProgress() {
       submitClick = true;
       window.setTimeout(() => {
         submitClick = false;
-        if (Array.from(form.elements).some(element => (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) && isMissing(element))) showBlockedSave();
+        if (Array.from(form.elements).some(element => isControl(element) && isMissing(element))) showBlockedSave();
       }, 0);
     }
     scheduleRefresh();

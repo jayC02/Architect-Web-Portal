@@ -19,7 +19,7 @@ try {
 
   // Layout: sections in portal order, each follow-up directly under its own question.
   const visibleSections = await page.locator('[data-prep-section]').evaluateAll(sections => sections.filter(section => !section.hidden).map(section => section.id));
-  assert.deepEqual(visibleSections, ['work', 'owner', 'site', 'sustainability', 'certificates', 'fee', 'review']);
+  assert.deepEqual(visibleSections, ['details', 'questions', 'sustainability', 'certificates', 'fee', 'declaration']);
   const longLabels = await page.locator('form .label').evaluateAll(labels => labels.map(label => label.textContent.trim()).filter(text => text.length > 40));
   assert.deepEqual(longLabels, [], 'long questions use sentence case rather than the small uppercase label');
   for (const [question, followUp, shownWhenTicked] of [
@@ -39,27 +39,26 @@ try {
     assert.equal(await panel.isVisible(), false, `${followUp} is hidden until ${question} asks for it`);
     await tick.setChecked(shownWhenTicked);
     assert.equal(await panel.isVisible(), true, `${followUp} appears for ${question}`);
-    const controlBox = await row.locator('.prep-question-control').boundingBox();
+    const controlBox = await row.locator('label').first().boundingBox();
     const panelBox = await panel.boundingBox();
     const gap = panelBox.y - (controlBox.y + controlBox.height);
     assert.ok(gap >= 0 && gap <= 24, `${followUp} is directly under ${question}, gap ${gap}px`);
     await tick.setChecked(!shownWhenTicked);
   }
-  assert.equal(await page.locator('[data-prep-section="review"] [name="declarationAuthorised"]').count(), 1);
+  assert.equal(await page.locator('[data-prep-section="declaration"] [name="declarationAuthorised"]').count(), 1);
   assert.equal(await page.locator('[data-prep-section="certificates"] [name="approvedCertifierOfConstruction"]').count(), 1);
-  assert.equal(await page.locator('.prep-save-bar').evaluate(bar => getComputedStyle(bar).position), 'sticky');
 
   // Missing answers: reported per section, and a blocked save reports through the summary.
-  assert.equal(await page.locator('[data-prep-summary]').isVisible(), true);
-  assert.equal(await page.locator('[data-prep-summary-link="work"]').count(), 1);
-  assert.equal(await page.locator('[data-prep-section="work"]').getAttribute('data-state'), 'needs');
-  assert.equal(await page.locator('[data-prep-section="owner"]').getAttribute('data-state'), 'done');
+  assert.equal(await page.locator('[data-prep-summary]').isVisible(), false, 'no error summary before a save attempt');
+  assert.equal(await page.locator('[data-prep-section="details"]').getAttribute('data-state'), 'needs');
+  assert.equal(await page.locator('[data-prep-section="questions"]').getAttribute('data-state'), 'done');
   await page.locator('form button.btn-primary').click();
   await page.waitForTimeout(50);
-  assert.equal(await page.locator('[data-prep-summary]').getAttribute('role'), 'alert');
+  assert.equal(await page.locator('[data-prep-summary]').isVisible(), true, 'a blocked save shows the summary');
+  assert.equal(await page.locator('[data-prep-summary-link="details"]').count(), 1);
   assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-prep-summary')), true, 'a blocked save moves focus to the summary');
   assert.equal(await page.locator('[name="demolitionWeeks"]').getAttribute('aria-invalid'), 'true');
-  await page.locator('[data-prep-summary-link="work"]').click();
+  await page.locator('[data-prep-summary-link="details"]').click();
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('name')), 'conversionDescriptions', 'a summary link goes to the first missing answer');
   await page.locator('[name="conversionDescriptions"]').first().uncheck();
 
@@ -157,7 +156,7 @@ try {
   await page.locator('[name="proposedParkingSpaces"]').fill('2');
   assert.equal(await page.locator('form').evaluate(form => form.checkValidity()), true);
   await page.waitForTimeout(50);
-  assert.equal(await page.locator('[data-prep-section="site"]').getAttribute('data-state'), 'done');
+  assert.equal(await page.locator('[data-prep-section="questions"]').getAttribute('data-state'), 'done');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await page.setViewportSize({ width: 1280, height: 960 });
