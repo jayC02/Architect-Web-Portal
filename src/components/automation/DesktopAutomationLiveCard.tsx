@@ -97,7 +97,6 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   const queued = job.status === 'READY' && Boolean(job.executionAuthorisedAt);
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
   const isWarrant = applicationType === 'BUILDING_WARRANT';
-  const viewLabel = isWarrant ? 'View Warrant' : 'View Householder';
   const visualCountdownActive = active && !awaitingFee && !addressAction;
 
   useEffect(() => {
@@ -179,9 +178,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     setWorking('reveal'); setError(''); setNotice('');
     try {
       await apiRequest(`/api/automation-jobs/${currentJobId}/reveal-browser`, { method: 'POST' });
-      setNotice(job.status === 'COMPLETED'
-        ? `Sent to your Agent. ${viewLabel} will open on this computer.`
-        : 'Sent to your Agent. The existing fee browser will come to the front.');
+      setNotice(`Sent to your Agent. ${isWarrant ? 'eBuilding Standards' : 'ePlanning'} will open in a visible browser on your Agent’s computer.`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'The application could not be opened.');
     } finally { setWorking(''); }

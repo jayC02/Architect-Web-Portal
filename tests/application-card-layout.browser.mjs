@@ -41,6 +41,7 @@ const records = {
   paused: { ...baseJob, status: 'AWAITING_PORTAL_REVIEW', progressStage: 'applicant_details', progressPercent: 87,
     resultSummary: 'Confirm the applicant title in the Agent.', resultData: { outcome: 'paused_for_manual_input' } },
   review: { ...baseJob, status: 'COMPLETED' },
+  fee: { ...baseJob, status: 'AWAITING_PORTAL_REVIEW', progressStage: 'fee', lastCheckpoint: 'fee', resultData: { outcome: 'awaiting_user_portal_review' } },
   submitted: { ...baseJob, status: 'COMPLETED' },
 };
 const longError = 'The application could not be prepared. ' + 'unbroken-diagnostic-token'.repeat(32);
@@ -98,6 +99,23 @@ else {
     await page.waitForFunction(() => !document.querySelector('astro-island[ssr]'));
   };
   try {
+    for (const state of ['review', 'fee']) {
+      for (const [mirror, cardId, portal] of [[false, 'planning', 'ePlanning'], [true, 'building-warrant', 'eBuilding Standards']]) {
+        const requests = [];
+        await page.route('**/api/automation-jobs/*/reveal-browser', async route => {
+          requests.push({ method: route.request().method(), url: route.request().url() });
+          await route.fulfill({ status: 202, json: { ok: true, queued: true } });
+        });
+        await open(`?state=${state}${mirror ? '&mirror=1' : ''}`);
+        const card = page.locator(`#${cardId}`);
+        await card.getByRole('button', { name: `${state === 'fee' ? 'Continue' : 'Review'} in ${portal}`, exact: true }).click();
+        const notice = `Sent to your Agent. ${portal} will open in a visible browser on your Agent’s computer.`;
+        await card.getByText(notice, { exact: true }).waitFor();
+        check(`${cardId}/${state}: requests the current job's visible portal review`, requests.length === 1 && requests[0].method === 'POST' && new URL(requests[0].url).pathname === `/api/automation-jobs/${mirror ? 'layout-warrant' : baseJob.id}/reveal-browser`);
+        check(`${cardId}/${state}: tells the user portal navigation will be visible`, await card.getByText(notice, { exact: true }).isVisible());
+        await page.unroute('**/api/automation-jobs/*/reveal-browser');
+      }
+    }
     for (const mirror of [false, true]) {
       await page.setViewportSize({ width: 1600, height: 1050 });
       await open(`?state=failed${mirror ? '&mirror=1' : ''}`);
