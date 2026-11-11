@@ -98,6 +98,18 @@ export const completionDatabase = (options: Options = {}) => {
     organisationDefaults: {
       findUnique: async ({ where }: any) => (where.organisationId === 'org' ? state.defaults : null),
     },
+    automationJob: {
+      findMany: async ({ where }: any) => state.jobs.filter((job) => job.organisationId === where.organisationId
+        && job.projectId === where.projectId && job.type === where.type
+        && (!where.status?.in || where.status.in.includes(job.status))),
+      create: async ({ data }: any) => {
+        const job = { claimedAt: null, executionAuthorisedAt: null, updatedAt: data.createdAt, ...data };
+        state.jobs.push(job);
+        return job;
+      },
+    },
+    $executeRaw: async () => 0,
+    $transaction: async (work: (tx: unknown) => unknown) => work(database),
     projectDocument: {
       findMany: async ({ where }: any) => state.documents
         .filter((row) => row.organisationId === where.organisationId && row.projectId === where.projectId),

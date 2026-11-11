@@ -1,15 +1,19 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   AutomationJobSourceType,
+  AutomationJobStatus,
   AutomationJobType,
+  CompletionCertificateStatus,
   WarrantType,
   type Prisma,
+  type PrismaClient,
 } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import {
   COMPLETION_FIXED_ANSWERS,
   completionIssues,
   completionPrefill,
+  completionPreparationSchema,
   mergeCompletionPreparation,
   type CompletionIssue,
   type CompletionParties,
@@ -30,6 +34,9 @@ import {
   snapshotProject,
   snapshotSite,
 } from '@/server/services/automation-jobs.service';
+import { authoriseAutomationJobRun } from '@/server/services/automation-job-run.service';
+import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
+import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
 
 type Database = Prisma.TransactionClient;
 
@@ -278,4 +285,135 @@ export const buildCompletionCertificateSnapshot = async (
     preflight,
     projectId: project.id,
   };
+};
+
+/**
+ * Save completion answers. Writes only the completion fields: the original
+ * warrant application, its answers and its status are never changed here.
+ */
+export const saveCompletionPreparation = async (
+  input: { organisationId: string; warrantId: string; body: unknown; today?: Date },
+  database: Database = prisma,
+) => {
+  const existing = await database.buildingWarrantApplication.findFirst({
+    where: { id: input.warrantId, organisationId: input.organisationId },
+    select: { id: true },
+  });
+  if (!existing) throw new HttpError(404, 'Building warrant application not found.');
+  const parsed = completionPreparationSchema.safeParse(input.body);
+  if (!parsed.success) {
+    throw new HttpError(400, 'Check the completion certificate details.', parsed.error.flatten());
+  }
+  await database.buildingWarrantApplication.update({
+    where: { id: existing.id },
+    data: {
+      completionPreparationData: parsed.data as Prisma.InputJsonValue,
+      completionPreparedAt: new Date(),
+    },
+  });
+  const context = await loadCompletionContext(input, database);
+  return completionPreparationFor(context, input.today);
+};
+
+// A completion job in one of these states is still the current attempt.
+const activeCompletionStatuses = [
+  AutomationJobStatus.READY,
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+  AutomationJobStatus.NEEDS_REVIEW,
+] as const;
+
+type QueueDependencies = {
+  database?: PrismaClient;
+  authorise?: (input: { organisationId: string; jobId: string }) => Promise<{ compatibleAgentOnline: boolean }>;
+};
+
+/**
+ * Queue one Completion Certificate run for the Agent.
+ *
+ * Repeating the request while an attempt is waiting or running returns that
+ * attempt, so a double-click can never create two portal runs.
+ */
+export const queueCompletionCertificateJob = async (
+  input: {
+    organisationId: string;
+    organisationName: string;
+    warrantId: string;
+    user: { id: string; name: string; email: string };
+    today?: Date;
+  },
+  dependencies: QueueDependencies = {},
+): Promise<{ jobId: string; created: boolean; compatibleAgentOnline: boolean | null }> => {
+  const database = dependencies.database ?? prisma;
+  const authorise = dependencies.authorise ?? authoriseAutomationJobRun;
+
+  const queued = await database.$transaction(async (tx) => {
+    // The Agent claims under this same lock, so a claim and a queue cannot interleave.
+    await lockOrganisationExecution(tx, input.organisationId);
+    const warrant = await tx.buildingWarrantApplication.findFirst({
+      where: { id: input.warrantId, organisationId: input.organisationId },
+      select: { id: true, projectId: true, completionCertificateStatus: true },
+    });
+    if (!warrant) throw new HttpError(404, 'Building warrant application not found.');
+
+    const candidates = await tx.automationJob.findMany({
+      where: {
+        organisationId: input.organisationId,
+        projectId: warrant.projectId,
+        type: AutomationJobType.COMPLETION_CERTIFICATE,
+        status: { in: [...activeCompletionStatuses] },
+      },
+      select: { id: true, projectId: true, type: true, dataSnapshot: true, executionAuthorisedAt: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    });
+    const current = candidates.find((job) => automationJobApplicationId(job) === warrant.id);
+    if (current) {
+      return { jobId: current.id, created: false, authorised: Boolean(current.executionAuthorisedAt) };
+    }
+
+    const jobId = randomUUID();
+    const createdAt = new Date();
+    const snapshot = await buildCompletionCertificateSnapshot({
+      jobId,
+      createdAt,
+      organisationId: input.organisationId,
+      organisationName: input.organisationName,
+      warrantId: warrant.id,
+      createdBy: input.user,
+    }, tx, input.today);
+    await tx.automationJob.create({
+      data: {
+        id: jobId,
+        organisationId: input.organisationId,
+        projectId: snapshot.projectId,
+        type: AutomationJobType.COMPLETION_CERTIFICATE,
+        status: AutomationJobStatus.READY,
+        sourceType: snapshot.sourceType,
+        title: snapshot.title,
+        payloadVersion: 2,
+        snapshotHash: snapshot.snapshotHash,
+        sourceUpdatedAt: snapshot.sourceUpdatedAt,
+        preparedAt: createdAt,
+        dataSnapshot: snapshot.dataSnapshot as Prisma.InputJsonValue,
+        documentSnapshot: snapshot.documentSnapshot as Prisma.InputJsonValue,
+        createdById: input.user.id,
+        createdAt,
+      },
+      select: { id: true },
+    });
+    // Drafting only: Main Details completing does not mean submitted or accepted.
+    if (warrant.completionCertificateStatus === CompletionCertificateStatus.NOT_REQUIRED
+      || warrant.completionCertificateStatus === CompletionCertificateStatus.NOT_STARTED) {
+      await tx.buildingWarrantApplication.update({
+        where: { id: warrant.id },
+        data: { completionCertificateStatus: CompletionCertificateStatus.DRAFTING },
+      });
+    }
+    return { jobId, created: true, authorised: false };
+  });
+
+  if (queued.authorised) return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline: null };
+  const { compatibleAgentOnline } = await authorise({ organisationId: input.organisationId, jobId: queued.jobId });
+  return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline };
 };
