@@ -46,8 +46,15 @@ export async function recordApplicationSnapshot(tx: Tx, scope: Scope) {
     where: { id: typeof candidateId === 'string' ? candidateId : '', organisationId: scope.organisationId, projectId: job.projectId },
     select: { id: true, updatedAt: true } as const,
   };
-  const application = identityMatches && !(isV2 ? conflicting.recordId : conflicting.id) && typeof candidateId === 'string'
-    ? (warrant ? await tx.buildingWarrantApplication.findFirst(applicationQuery) : await tx.planningApplication.findFirst(applicationQuery)) : null;
+  // A completion certificate is linked to the warrant it completes.
+  const completionWarrantId = job.type === 'COMPLETION_CERTIFICATE'
+    ? objectRecord(snapshot.completionCertificate).sourceWarrantId : null;
+  const application = job.type === 'COMPLETION_CERTIFICATE'
+    ? (identityMatches && typeof completionWarrantId === 'string' && completionWarrantId
+      ? await tx.buildingWarrantApplication.findFirst({ ...applicationQuery, where: { ...applicationQuery.where, id: completionWarrantId } })
+      : null)
+    : identityMatches && !(isV2 ? conflicting.recordId : conflicting.id) && typeof candidateId === 'string'
+      ? (warrant ? await tx.buildingWarrantApplication.findFirst(applicationQuery) : await tx.planningApplication.findFirst(applicationQuery)) : null;
   // Unknown/deleted/ambiguous historical application identities remain unlinked.
   const contentHash = digest([job.payloadVersion, job.dataSnapshot, job.documentSnapshot]);
   return append(tx, scope, 'snapshot', contentHash, {
