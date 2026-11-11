@@ -59,11 +59,14 @@ export function createSite(scene, { mobile }) {
   const groundMat = own(new THREE.MeshBasicMaterial({ color: "#e6edf9" }));
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
-  const shadowMat = own(new THREE.ShadowMaterial({ color: "#1b2a4a", opacity: 0.17 }));
+  const flat = { depthWrite: false, polygonOffset: true };
+  const shadowMat = own(new THREE.ShadowMaterial({ color: "#1b2a4a", opacity: 0.17, ...flat, polygonOffsetFactor: -3, polygonOffsetUnits: -6 }));
   const shadows = new THREE.Mesh(groundGeo, shadowMat);
   shadows.rotation.x = -Math.PI / 2;
-  shadows.position.y = 0.004;
+  shadows.position.y = 0.02;
   shadows.receiveShadow = true;
+  // Draw flat layers in a fixed order so they cannot fight each other or the glass.
+  shadows.renderOrder = -3;
   group.add(ground, shadows);
 
   // Drafting grid: minor + major lines
@@ -80,7 +83,8 @@ export function createSite(scene, { mobile }) {
   const majorMat = own(new THREE.LineBasicMaterial({ color: "#9db4e3", transparent: true, opacity: 0.6, depthWrite: false }));
   const grid = new THREE.LineSegments(gridGeo, gridMat);
   const major = new THREE.LineSegments(majorGeo, majorMat);
-  grid.position.y = major.position.y = 0.01;
+  grid.position.y = major.position.y = 0.006;
+  grid.renderOrder = major.renderOrder = -5;
   group.add(grid, major);
 
   // The red line: the planning-application site boundary.
@@ -93,11 +97,11 @@ export function createSite(scene, { mobile }) {
 
   // Lawn, path and hedges arrive with the finished house.
   const softInk = own(inkMaterial(1.2, 0.55));
-  const lawnMat = lambert("#dcebc9", { transparent: true, opacity: 0 });
+  const lawnMat = lambert("#dcebc9", { transparent: true, opacity: 0, ...flat, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const lawn = new THREE.Mesh(own(new THREE.PlaneGeometry(x1 - x0, z1 - z0)), lawnMat);
   lawn.rotation.x = -Math.PI / 2;
-  lawn.position.set((x0 + x1) / 2, 0.008, (z0 + z1) / 2);
-  lawn.receiveShadow = true;
+  lawn.position.set((x0 + x1) / 2, 0.012, (z0 + z1) / 2);
+  lawn.renderOrder = -4;
   const unit = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
   const pathMat = lambert("#f4f1ea");
   const hedgeMat = lambert("#86b872");
@@ -121,11 +125,11 @@ export function createSite(scene, { mobile }) {
   group.add(lawn);
 
   // Road and pavement
-  const roadMat = lambert("#d9dfea", { transparent: true });
+  const roadMat = lambert("#d9dfea", { transparent: true, ...flat, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   const road = new THREE.Mesh(own(new THREE.PlaneGeometry(170, 5)), roadMat);
   road.rotation.x = -Math.PI / 2;
   road.position.set(0, 0.012, ROAD_Z);
-  road.receiveShadow = true;
+  road.renderOrder = -4;
   const kerbMat = lambert("#ffffff", { transparent: true });
   const kerb = new THREE.Mesh(own(new THREE.BoxGeometry(170, 0.12, 2.2)), kerbMat);
   kerb.position.set(0, 0.06, ROAD_Z - 3.6);

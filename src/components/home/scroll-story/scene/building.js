@@ -268,7 +268,7 @@ export function createBuilding(scene) {
         pane.scale.set(p.len - 0.1, p.h - 0.1, 0.03);
         pane.position.set(p.x, storey.y + p.y, p.z);
         pane.rotation.y = p.rot;
-        pane.renderOrder = 1;
+        pane.renderOrder = 2;
         root.add(pane);
         glazing[s].push(pane);
       });
@@ -358,7 +358,7 @@ export function createBuilding(scene) {
     pane.scale.set(b - a, 1.05, 0.04);
     pane.position.set(axis ? at : (a + b) / 2, H * 2 + 0.68, axis ? (a + b) / 2 : at);
     pane.rotation.y = axis ? Math.PI / 2 : 0;
-    pane.renderOrder = 1;
+    pane.renderOrder = 2;
     pane.add(child(inkEdges(unitBox, ink)));
     root.add(pane);
     rail.push(pane);

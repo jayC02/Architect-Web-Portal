@@ -37,15 +37,17 @@ export function createExperience(host, { mobile, onFrame }) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog("#e6edf9", 42, 150);
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 900);
+  // More depth precision keeps the flat ground layers stable in the distant ending.
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 900);
 
   // Even, shadowless fill from the sky plus one soft sun: enough shading to read the
   // form, never enough to make the white model look grey.
   const hemi = new THREE.HemisphereLight("#ffffff", "#d9dde6", 2.6);
   const sun = new THREE.DirectionalLight("#ffffff", 0.75);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
-  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 });
+  // Cover the whole neighbourhood without losing the house's shadow detail.
+  sun.shadow.mapSize.set(mobile ? 2048 : 4096, mobile ? 2048 : 4096);
+  Object.assign(sun.shadow.camera, { left: -64, right: 64, top: 64, bottom: -64, near: 10, far: 260 });
   sun.shadow.bias = -0.0006;
   sun.shadow.normalBias = 0.05;
   scene.add(hemi, sun, sun.target);
@@ -56,6 +58,7 @@ export function createExperience(host, { mobile, onFrame }) {
   const documents = createDocuments(scene, textures, { mobile });
   const rig = createCameraRig(camera);
 
+  const sunDir = new THREE.Vector3();
   const colors = Object.fromEntries(keys.map((k) => [k, new THREE.Color()]));
   const noon = new THREE.Color("#ffffff"),
     evening = new THREE.Color("#ffe3c2");
@@ -93,7 +96,9 @@ export function createExperience(host, { mobile, onFrame }) {
     // the sun sweeps round through the day, then drops for long evening shadows
     const sweep = mix(-0.7, 2.3, progress);
     const elev = mix(0.95, 0.42, smooth(Math.max(0, progress - 0.78) / 0.22));
-    sun.position.set(Math.cos(sweep) * 30, Math.sin(elev) * 40 + 4, Math.sin(sweep) * 30);
+    // Keep every street block between the light and the ground as the sun moves.
+    sunDir.set(Math.cos(sweep) * 30, Math.sin(elev) * 40 + 4, Math.sin(sweep) * 30).normalize();
+    sun.position.copy(sunDir).multiplyScalar(120);
     sun.color.copy(noon).lerp(evening, pose.dusk);
 
     rig.update(progress, width, height, dt);
