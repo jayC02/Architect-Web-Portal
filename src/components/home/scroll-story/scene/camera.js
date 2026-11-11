@@ -9,8 +9,8 @@ const rail = [
   [0.06, 5, 33, 13, 0, 0, 0.5, 38, -6],
   [0.13, 13, 20, 19, 0, 1, 0, 38, 0],
   // design: low hero angles as the walls rise
-  [0.19, 17, 3.2, 12, 0, 3.4, 0, 36, 4],
-  [0.25, 7, 2.8, 23, 0, 4.4, 0, 36, 0],
+  [0.19, 17, 5, 12, 0, 3.4, 0, 36, 4],
+  [0.25, 7, 4.6, 23, 0, 4.4, 0, 36, 0],
   // the portal: tilted orbit through the storm, face to face with the portal, then up to see the 30-minute ring
   [0.31, -16, 9, 13, 0, 4.8, 0, 36, -3],
   [0.35, -9, 6.5, 11, 0, 6.5, 0, 52, -12],
@@ -59,28 +59,41 @@ export function createCameraRig(camera) {
     eased = new THREE.Vector2();
   return {
     pointer,
+    target,
     update(p, width, height, dt) {
       const aspect = width / height;
-      // On wide screens, acts without a side panel set the model to the right of the copy.
-      const wide = Math.max(0, aspect - 1.25);
-      // the closing headline needs a little more room still
-      const side = (1 - win(p, 0.29, 0.33) + win(p, 0.775, 0.81)) * Math.min(0.13, wide * 0.4) + win(p, 0.945, 0.975) * Math.min(0.09, wide * 0.3);
-      if (side > 0.001) camera.setViewOffset(width, height, -width * side, 0, width, height);
+      const portrait = aspect < 1;
+      let shiftX = 0,
+        shiftY = 0;
+      if (portrait) {
+        // Phones: the copy fills the lower part of the screen, so frame the model in the
+        // space above it. Acts with a status panel at the top keep it a little lower.
+        const panel = win(p, 0.3, 0.33) * (1 - win(p, 0.765, 0.79));
+        shiftY = 0.17 - 0.07 * panel;
+      } else {
+        // On wide screens, acts without a side panel set the model to the right of the copy.
+        const wide = Math.max(0, aspect - 1.25);
+        // the closing headline needs a little more room still
+        shiftX = (1 - win(p, 0.29, 0.33) + win(p, 0.775, 0.81)) * Math.min(0.13, wide * 0.4) + win(p, 0.945, 0.975) * Math.min(0.09, wide * 0.3);
+      }
+      if (shiftX > 0.001 || shiftY > 0.001) camera.setViewOffset(width, height, -width * shiftX, height * shiftY, width, height);
       else if (camera.view) camera.clearViewOffset();
       // a little parallax from the pointer, eased so it never jitters
       eased.lerp(pointer, 1 - Math.exp(-dt * 3));
       target.set(railValue(p, 4), railValue(p, 5), railValue(p, 6));
       offset.set(railValue(p, 1), railValue(p, 2), railValue(p, 3)).sub(target);
-      // portrait screens: pull back so the subject still fits
-      const fit = aspect < 1 ? Math.min(1.9, 1 / aspect) * 0.92 : aspect < 1.3 ? 1.12 : 1;
+      // Narrow screens: pull back so the subject fits the width. Phones split the job between
+      // stepping back and a slightly wider lens, so the camera stays close to its planned path.
+      const fit = portrait ? Math.min(1.9, 0.72 / aspect + 0.3) : aspect < 1.3 ? 1.12 : 1;
       offset.multiplyScalar(fit);
       offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP, eased.x * 0.06);
       camera.position.copy(target).add(offset);
       camera.position.y += eased.y * 0.6;
-      camera.fov = railValue(p, 7) * (aspect < 1 ? 1.08 : 1);
+      camera.fov = railValue(p, 7) * (portrait ? 1.16 : 1);
       camera.updateProjectionMatrix();
       camera.lookAt(target);
-      camera.rotateZ(THREE.MathUtils.degToRad(railValue(p, 8)));
+      // tilted horizons feel like the phone is moving in your hand, so keep them gentle there
+      camera.rotateZ(THREE.MathUtils.degToRad(railValue(p, 8) * (portrait ? 0.35 : 1)));
     },
   };
 }

@@ -102,7 +102,7 @@ export function createExperience(host, { mobile, onFrame }) {
     sun.color.copy(noon).lerp(evening, pose.dusk);
 
     rig.update(progress, width, height, dt);
-    site.update(pose, colors);
+    site.update(pose, colors, camera.position, rig.target, dt);
     building.update(pose, colors, time);
     documents.update(pose, colors, time, dpr);
 

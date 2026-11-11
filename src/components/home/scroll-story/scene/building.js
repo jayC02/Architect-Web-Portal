@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ribbon, ribbonMaterial, arcSegments } from "./lines.js";
 import { inkMaterial, inkLines, inkEdges, mergedBoxes } from "./ink.js";
-import { clamp, mix } from "../story.js";
+import { clamp, mix, smooth } from "../story.js";
 
 // 14 Harbour Lane: a fictional three-storey house. Units are metres.
 const T = 0.3; // wall thickness
@@ -460,9 +460,11 @@ export function createBuilding(scene) {
     plinth.visible = base > 0.001;
     slabs.forEach(({ mesh, y }, i) => {
       const s = pose.slabs[i];
-      mesh.position.y = y + (1 - s) * 7;
+      // grows out from the tops of the walls, rather than dropping in past the camera
+      mesh.position.y = y + (1 - s) * 0.6;
       mesh.visible = s > 0.001;
-      mesh.scale.x = mix(6, A.x1 - A.x0 + 0.3, s);
+      mesh.scale.x = mix(0.4, A.x1 - A.x0 + 0.3, smooth(s));
+      mesh.scale.z = mix(0.4, A.z1 - A.z0 + 0.3, smooth(s));
     });
     roof.position.y = H * 3 + (1 - pose.roof) * 6;
     roof.visible = pose.roof > 0.001;

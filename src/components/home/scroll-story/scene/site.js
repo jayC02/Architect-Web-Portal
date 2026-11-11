@@ -65,7 +65,8 @@ export function createSite(scene, { mobile }) {
   shadows.rotation.x = -Math.PI / 2;
   shadows.position.y = 0.02;
   shadows.receiveShadow = true;
-  // Draw flat layers in a fixed order so they cannot fight each other or the glass.
+  // Flat ground layers are drawn in a fixed order, without writing depth, so they can
+  // never flicker against each other or swap places with the window glass.
   shadows.renderOrder = -3;
   group.add(ground, shadows);
 
@@ -101,7 +102,7 @@ export function createSite(scene, { mobile }) {
   const lawn = new THREE.Mesh(own(new THREE.PlaneGeometry(x1 - x0, z1 - z0)), lawnMat);
   lawn.rotation.x = -Math.PI / 2;
   lawn.position.set((x0 + x1) / 2, 0.012, (z0 + z1) / 2);
-  lawn.renderOrder = -4;
+  lawn.renderOrder = -4; // shadows land on it from the layer above
   const unit = own(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0));
   const pathMat = lambert("#f4f1ea");
   const hedgeMat = lambert("#86b872");
@@ -239,7 +240,62 @@ export function createSite(scene, { mobile }) {
   let lastCity = -1,
     lastTrees = -1;
 
-  function update(pose, colors) {
+  // Clear sight lines. Any block or tree that sits between the camera and what it is
+  // looking at, or right beside the lens, sinks into the ground and rises again once the
+  // camera has passed. Without this, phone framing (which steps the camera back) can put a
+  // neighbouring building in front of the lens.
+  const blockVis = new Float32Array(blocks.length).fill(1),
+    treeVis = new Float32Array(trees.length).fill(1);
+  const dir = new THREE.Vector3();
+  function segmentHitsBox(o, d, min, max) {
+    let t0 = 0,
+      t1 = 1;
+    for (const k of ["x", "y", "z"]) {
+      if (Math.abs(d[k]) < 1e-6) {
+        if (o[k] < min[k] || o[k] > max[k]) return false;
+        continue;
+      }
+      let a = (min[k] - o[k]) / d[k],
+        b = (max[k] - o[k]) / d[k];
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+      if (t0 > t1) return false;
+    }
+    return true;
+  }
+  const bmin = new THREE.Vector3(),
+    bmax = new THREE.Vector3();
+  function clearSightLines(cam, look, dt) {
+    dir.subVectors(look, cam);
+    const k = 1 - Math.exp(-dt * 7);
+    let changed = false;
+    blocks.forEach((b, i) => {
+      const pad = 0.8;
+      bmin.set(b.x - b.w / 2 - pad, 0, b.z - b.d / 2 - pad);
+      bmax.set(b.x + b.w / 2 + pad, b.h + pad, b.z + b.d / 2 + pad);
+      const near = Math.max(bmin.x - cam.x, 0, cam.x - bmax.x) ** 2 + Math.max(bmin.y - cam.y, 0, cam.y - bmax.y) ** 2 + Math.max(bmin.z - cam.z, 0, cam.z - bmax.z) ** 2 < 36;
+      const want = near || segmentHitsBox(cam, dir, bmin, bmax) ? 0 : 1;
+      const v = blockVis[i] + (want - blockVis[i]) * k;
+      if (Math.abs(v - blockVis[i]) > 1e-4) changed = true;
+      blockVis[i] = Math.abs(v - want) < 1e-3 ? want : v;
+    });
+    trees.forEach((t, i) => {
+      const r = 2.2 * t.s + 0.6;
+      bmin.set(t.x - r, 0, t.z - r);
+      bmax.set(t.x + r, 3.8 * t.s + 0.6, t.z + r);
+      const near = Math.hypot(t.x - cam.x, t.z - cam.z) < 4 && cam.y < 6;
+      // the garden and street trees are part of the picture: they only move for the lens itself
+      const want = near || (!t.garden && segmentHitsBox(cam, dir, bmin, bmax)) ? 0 : 1;
+      const v = treeVis[i] + (want - treeVis[i]) * k;
+      if (Math.abs(v - treeVis[i]) > 1e-4) changed = true;
+      treeVis[i] = Math.abs(v - want) < 1e-3 ? want : v;
+    });
+    return changed;
+  }
+
+  function update(pose, colors, cam, look, dt = 0.016) {
+    const sightChanged = cam ? clearSightLines(cam, look, dt) : false;
     sky.material.uniforms.uTop.value.copy(colors.sky);
     sky.material.uniforms.uPaper.value.copy(colors.paper);
     groundMat.color.copy(colors.paper);
@@ -262,12 +318,14 @@ export function createSite(scene, { mobile }) {
 
     cityMat.color.copy(colors.model);
     cityInk.value.copy(colors.ink);
-    if (Math.abs(pose.city - lastCity) > 1e-4) {
+    if (sightChanged || Math.abs(pose.city - lastCity) > 1e-4) {
       lastCity = pose.city;
       blocks.forEach((b, i) => {
         const stagger = clamp(pose.city * 1.25 - b.tone * 0.25);
         dummy.position.set(b.x, 0, b.z);
-        dummy.scale.set(b.w, Math.max(0.05, b.h * stagger), b.d);
+        // a block that has fully stepped aside leaves no footprint either
+        const gone = blockVis[i] < 0.02 ? 0 : 1;
+        dummy.scale.set(b.w * gone, Math.max(0.05, b.h * stagger * blockVis[i]) * gone, b.d * gone);
         dummy.updateMatrix();
         city.setMatrixAt(i, dummy.matrix);
       });
@@ -276,12 +334,12 @@ export function createSite(scene, { mobile }) {
 
     const context = clamp(pose.city * 3.4 - 0.25),
       planted = pose.built;
-    if (Math.abs(context + planted * 10 - lastTrees) > 1e-4) {
+    if (sightChanged || Math.abs(context + planted * 10 - lastTrees) > 1e-4) {
       lastTrees = context + planted * 10;
       trees.forEach((t, i) => {
         const g = t.garden ? clamp(planted * 1.4 - (i % 7) * 0.05) : clamp(context * 1.3 - (i % 5) * 0.06);
         dummy.position.set(t.x, 0, t.z);
-        dummy.scale.setScalar(Math.max(0.001, t.s * g));
+        dummy.scale.setScalar(Math.max(0.001, t.s * g * treeVis[i]));
         dummy.rotation.y = i * 1.7;
         dummy.updateMatrix();
         canopy.setMatrixAt(i, dummy.matrix);

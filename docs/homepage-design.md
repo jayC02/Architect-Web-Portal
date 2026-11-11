@@ -17,6 +17,7 @@ On 11 November 2026 the user selected `D:\Jayveer\Documents\websites\Web Develop
 - Reduced motion and screens narrower than 1000px with less than 700px height start in Simple view. Users can explicitly request 3D. A live preference change to reduced motion also returns to the ordinary page.
 - Three.js loads dynamically for the 3D view, after the self-hosted fonts. Failed loading, unavailable WebGL and lost GPU contexts recover to the ordinary story. A generation guard prevents an old asynchronous load from mounting after a view change.
 - View changes release animation triggers, canvas resources, textures and GPU contexts. The scene pauses while hidden or offscreen. Crossing the phone breakpoint rebuilds the scene while preserving story progress.
+- The mobile update frames the model above the copy, uses a wider lens with gentler tilt on portrait screens, and raises the design shots. Neighbouring blocks and trees ease below the ground when they obstruct the camera; garden trees move only when very close to the lens. Floor slabs grow from the wall tops instead of passing close to the camera. These changes retain the earlier depth precision, fixed ground-layer order and full-street shadow coverage.
 - Chapter controls expose the current step, the simple-view switch exposes its pressed state and keeps keyboard focus through replacement, and chapter changes are announced politely. Copy and navigation remain HTML above the canvas.
 
 ## Visual treatment and provenance
