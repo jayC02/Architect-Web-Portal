@@ -8,6 +8,7 @@ export const agentCapabilitiesSchema = z.object({
   workflows: z.array(z.enum([
     AutomationJobType.HOUSEHOLDER_PLANNING,
     AutomationJobType.BUILDING_WARRANT,
+    AutomationJobType.COMPLETION_CERTIFICATE,
   ])).min(1).max(10),
   snapshotVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),
   callbackContractVersions: z.array(z.number().int().min(1).max(20)).min(1).max(10),

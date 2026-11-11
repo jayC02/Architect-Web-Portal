@@ -1,0 +1,176 @@
+{
+  "contractVersion": "architectpro.automation-job",
+  "snapshotVersion": 2,
+  "metadata": {
+    "jobId": "job_fixture_completion",
+    "organisationId": "org_fixture",
+    "projectId": "project_fixture",
+    "applicationType": "COMPLETION_CERTIFICATE",
+    "sourceType": "WARRANT_RECORD",
+    "createdAt": "2026-07-26T12:00:00.000Z",
+    "createdBy": {
+      "id": "user_fixture",
+      "name": "Fixture User",
+      "email": "fixture@example.com"
+    },
+    "sourceUpdatedAt": "2026-07-26T12:00:00.000Z",
+    "presetVersion": 1,
+    "integrity": null
+  },
+  "organisation": {
+    "id": "org_fixture",
+    "name": "Fixture Practice",
+    "practiceName": "Fixture Practice",
+    "agent": {
+      "firstName": "Alex",
+      "lastName": "Architect",
+      "email": "agent@example.com",
+      "phone": "07000000001",
+      "address": {
+        "addressLine1": "1 Practice Street",
+        "addressLine2": null,
+        "townCity": "Glasgow",
+        "postcode": "G1 1AA",
+        "country": "United Kingdom"
+      },
+      "source": "ORGANISATION_DEFAULTS"
+    }
+  },
+  "project": {
+    "id": "project_fixture",
+    "name": "4 Willow Court",
+    "internalReference": "3567",
+    "typeOfWorkKey": "domestic_alteration_extension",
+    "typeOfWorkLabel": "Domestic alteration / extension",
+    "notes": null,
+    "stage": "BUILDING_WARRANT",
+    "status": "ACTIVE",
+    "localAuthority": "Glasgow City Council",
+    "updatedAt": "2026-07-26T12:00:00.000Z",
+    "buildingUse": "residential",
+    "typeOfWorkKeys": [
+      "domestic_alteration_extension"
+    ]
+  },
+  "site": {
+    "id": "site_fixture",
+    "displayName": "4 Willow Court",
+    "address": {
+      "addressLine1": "4 Willow Court",
+      "addressLine2": null,
+      "townCity": "Glasgow",
+      "postcode": "G2 2BB",
+      "country": "United Kingdom"
+    },
+    "localAuthority": "Glasgow City Council",
+    "source": "SITE",
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "applicant": {
+    "clientId": "client_fixture",
+    "clientType": "INDIVIDUAL",
+    "displayName": "Ms Jamie Client",
+    "title": "Ms",
+    "firstName": "Jamie",
+    "lastName": "Client",
+    "companyName": null,
+    "email": "client@example.com",
+    "phone": "07000000002",
+    "address": {
+      "addressLine1": "4 Willow Court",
+      "addressLine2": null,
+      "townCity": "Glasgow",
+      "postcode": "G2 2BB",
+      "country": "United Kingdom"
+    },
+    "applicantIsOwner": true,
+    "source": "CLIENT",
+    "updatedAt": "2026-07-26T12:00:00.000Z"
+  },
+  "planning": null,
+  "buildingWarrant": null,
+  "documents": [],
+  "preflight": {
+    "status": "READY",
+    "missing": [],
+    "warnings": [],
+    "locationPlanStatus": "NOT_APPLICABLE",
+    "reviewedAt": null
+  },
+  "completionCertificate": {
+    "sourceWarrantId": "warrant_1",
+    "proposalHint": {
+      "proposalName": "4 Willow Court, Glasgow, G2 2BB"
+    },
+    "workCompletedDate": "2026-10-30",
+    "warrantReference": "26/01234/WARR",
+    "warrantDate": "2026-03-05",
+    "amendmentDates": "01/06/2026\n09/07/2026",
+    "relaxation": {
+      "applies": true,
+      "reference": "RD/1",
+      "date": "2026-02-01"
+    },
+    "constructionCertificates": {
+      "accompany": true,
+      "entries": [
+        {
+          "certificateNumber": "CC-100",
+          "certifierRegistration": {
+            "part1": "SEL1",
+            "part2": "C",
+            "number": "12345"
+          },
+          "certifierSignatureDate": "2026-10-01",
+          "approvedBodyRegistration": {
+            "part1": "SEL1",
+            "part2": "CB",
+            "number": "678"
+          },
+          "approvedBodySignatureDate": "2026-10-02",
+          "documentId": null
+        }
+      ]
+    },
+    "designCertificates": {
+      "accompaniedWarrant": true,
+      "formQRequired": true,
+      "entries": [
+        {
+          "certificateNumber": "FQ-200",
+          "certifierRegistration": {
+            "part1": "SER1",
+            "part2": "D",
+            "number": "12345"
+          },
+          "certifierSignatureDate": "2026-10-01",
+          "approvedBodyRegistration": {
+            "part1": "SER1",
+            "part2": "DB",
+            "number": "678"
+          },
+          "approvedBodySignatureDate": "2026-10-02",
+          "documentId": null
+        }
+      ]
+    },
+    "energyPerformanceCertificate": true,
+    "sustainabilityStatement": false,
+    "fireSafetyDesignSummary": false,
+    "continuingRequirements": {
+      "applies": true,
+      "details": "Maintain the fire door."
+    },
+    "fixedAnswers": {
+      "warrantObtained": true,
+      "dangerousBuildingNotice": false,
+      "actingAs": "AGENT",
+      "useAccountDetails": true,
+      "relevantPersonType": "INDIVIDUAL",
+      "relevantPersonIsOwner": true,
+      "differentBuildingAddress": false,
+      "coversAllWork": true
+    },
+    "updatedAt": "2026-11-11T12:00:00.000Z"
+  }
+}
