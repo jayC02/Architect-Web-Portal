@@ -25,7 +25,11 @@ const optionalId = optionalText(120);
 
 export const automationJobCreateSchema = z.object({
   projectId: z.string().trim().min(1).max(120),
-  type: z.nativeEnum(AutomationJobType),
+  // Completion certificates are queued only from their own preparation page.
+  type: z.nativeEnum(AutomationJobType).refine(
+    (type) => type !== AutomationJobType.COMPLETION_CERTIFICATE,
+    'Prepare a completion certificate from its building warrant.',
+  ),
   sourceType: z.nativeEnum(AutomationJobSourceType).optional(),
   planningApplicationId: optionalId,
   buildingWarrantApplicationId: optionalId,

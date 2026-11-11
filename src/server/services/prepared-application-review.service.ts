@@ -42,6 +42,7 @@ const draftWarrantStatuses = new Set<WarrantStatus>([
 
 export type PreparedReviewProjectionResult =
   | { outcome: 'opened' | 'resolved'; applicationId: string }
+  | { outcome: 'not-applicable'; applicationId: string }
   | { outcome: 'identity-unavailable' | 'application-unavailable'; applicationId?: string };
 
 export const reconcilePreparedApplicationReview = async (
@@ -58,6 +59,12 @@ export const reconcilePreparedApplicationReview = async (
     identity = resolveAutomationJobIdentity(input.job);
   } catch {
     return { outcome: 'identity-unavailable' };
+  }
+
+  // Completion certificates have no pay-review-submit action: Main Details
+  // finishing leaves the warrant and its action items exactly as they were.
+  if (identity.applicationType === AutomationJobType.COMPLETION_CERTIFICATE) {
+    return { outcome: 'not-applicable', applicationId: identity.applicationId };
   }
 
   const isWarrant = identity.applicationType === AutomationJobType.BUILDING_WARRANT;

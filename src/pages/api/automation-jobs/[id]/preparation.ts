@@ -131,6 +131,9 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     include: { project: { include: { client: true, site: true } } },
   });
   if (!job) throw new HttpError(404, 'Prepared application not found.');
+  if (job.type === AutomationJobType.COMPLETION_CERTIFICATE) {
+    throw new HttpError(409, 'Edit the completion certificate on its preparation page.');
+  }
   if (!editablePreparationStatuses.has(job.status)) {
     throw new HttpError(409, 'This prepared application can no longer be edited.');
   }

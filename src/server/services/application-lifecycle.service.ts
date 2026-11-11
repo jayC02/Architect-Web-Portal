@@ -352,6 +352,9 @@ export const recordAutomationReadinessTransition = async (
   const readinessRevoked = input.nextStatus !== AutomationJobStatus.READY
     && input.previousStatus === AutomationJobStatus.READY;
   if (!becameReady && !readinessRevoked) return null;
+  // A completion certificate has no readiness lifecycle of its own: it must not
+  // create warrant or planning calendar entries, deadlines or finance milestones.
+  if (input.jobType === AutomationJobType.COMPLETION_CERTIFICATE) return null;
 
   if (input.jobType === AutomationJobType.BUILDING_WARRANT) {
     if (!input.buildingWarrantApplicationId) {

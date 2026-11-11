@@ -11,6 +11,7 @@ import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { applicationPreparationDraftSchema } from '@/lib/validation/document-intelligence';
 import { buildApplicationPreparationDraft } from '@/server/services/application-preparation.service';
 import { editablePreparationStatuses } from '@/lib/automation/preparation-editability';
+import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -24,6 +25,14 @@ const job = await prisma.automationJob.findFirst({
   },
 });
 if (!job) return Astro.redirect('/automation-jobs');
+if (job.type === AutomationJobType.COMPLETION_CERTIFICATE) {
+  // This page reviews warrant and planning applications. A completion
+  // certificate is prepared, run and followed on its own page.
+  const sourceWarrantId = automationJobApplicationId(job);
+  return Astro.redirect(sourceWarrantId
+    ? `/building-warrant/${encodeURIComponent(sourceWarrantId)}/completion-certificate/preparation?job=${encodeURIComponent(job.id)}`
+    : `/projects/${job.projectId}#building-warrant`);
+}
 const canEdit = editablePreparationStatuses.has(job.status);
 
 const parsed = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);

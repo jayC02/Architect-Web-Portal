@@ -27,6 +27,6 @@ export const POST: APIRoute = (context) =>
       jobId: queued.jobId,
       created: queued.created,
       compatibleAgentOnline: queued.compatibleAgentOnline,
-      redirectTo: `/automation-job/${queued.jobId}`,
+      redirectTo: `/building-warrant/${encodeURIComponent(id)}/completion-certificate/preparation?job=${encodeURIComponent(queued.jobId)}`,
     });
   }, context);
