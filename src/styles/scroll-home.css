@@ -1,0 +1,459 @@
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/scroll-story/space-grotesk-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/scroll-story/space-grotesk-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/scroll-story/space-grotesk-latin-700-normal.woff2") format("woff2");
+}
+
+/* Registered so the overlay colours glide between acts instead of snapping. */
+@property --fg { syntax: "<color>"; inherits: true; initial-value: #10224f; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: #4e6293; }
+@property --accent { syntax: "<color>"; inherits: true; initial-value: #e23b2e; }
+@property --panel { syntax: "<color>"; inherits: true; initial-value: rgba(255, 255, 255, 0.82); }
+@property --line { syntax: "<color>"; inherits: true; initial-value: rgba(16, 34, 79, 0.16); }
+@property --paper-wash { syntax: "<color>"; inherits: true; initial-value: #e6edf9; }
+
+.scroll-home {
+  --fg: #10224f;
+  --muted: #4e6293;
+  --accent: #cd3428;
+  --panel: rgba(255, 255, 255, 0.82);
+  --line: rgba(16, 34, 79, 0.16);
+  --paper-wash: #e6edf9;
+  --ease: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --gutter: clamp(20px, 4vw, 64px);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: var(--fg);
+  background: #e6edf9;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+  min-height: 100svh;
+  letter-spacing: 0;
+  scrollbar-color: var(--muted) var(--paper-wash);
+  transition:
+    --fg 0.9s var(--ease),
+    --muted 0.9s var(--ease),
+    --accent 0.9s var(--ease),
+    --panel 0.9s var(--ease),
+    --line 0.9s var(--ease),
+    --paper-wash 0.9s var(--ease);
+}
+.scroll-home * { box-sizing: border-box; }
+.scroll-home, .scroll-home { margin: 0; min-width: 320px; }
+.scroll-home { overflow-x: clip; }
+.scroll-home h1, .scroll-home h2, .scroll-home p, .scroll-home ol, .scroll-home ul { margin: 0; padding: 0; }
+.scroll-home ol, .scroll-home ul { list-style: none; }
+.scroll-home button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.scroll-home a { color: inherit; }
+.scroll-home :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.scroll-home ::selection { background: var(--accent); color: #fff; }
+.scroll-home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Header ---------- */
+.scroll-home .top {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px var(--gutter);
+  pointer-events: none;
+}
+.scroll-home .top > * { pointer-events: auto; }
+.scroll-home .brand { display: flex; align-items: center; width: 184px; text-decoration: none; }
+.scroll-home .brand img { display: block; width: 100%; height: auto; }
+.scroll-home .brand svg { width: 28px; height: 28px; }
+.scroll-home .view-switch {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 16px;
+  min-height: 40px;
+  font-size: 14px;
+  transition: background 0.25s, border-color 0.25s;
+}
+.scroll-home .view-switch:hover { background: var(--panel); border-color: var(--fg); }
+
+/* ---------- 3D story ---------- */
+.scroll-home .rail { height: 1150svh; position: relative; }
+.scroll-home .stage { position: sticky; top: 0; height: 100svh; min-height: 520px; overflow: clip; }
+.scroll-home .canvas-host { position: absolute; inset: 0; touch-action: pan-y; }
+.scroll-home .stage::before {
+  /* quiet scrim behind the copy so headlines survive bright frames */
+  content: "";
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+  /* a soft cloud of the paper colour keeps the copy clear of the linework behind it */
+  background: radial-gradient(ellipse 66% 82% at 0% 100%, var(--paper-wash) 30%, transparent 74%);
+  opacity: 0.92;
+}
+.scroll-home .canvas-host canvas { display: block; width: 100%; height: 100%; }
+
+.scroll-home .loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  font-size: 15px;
+  color: #1d3f9e;
+  background: #e6edf9;
+  transition: opacity 0.9s var(--ease), visibility 0.9s;
+}
+.scroll-home .loading-mark svg { width: 44px; height: 44px; animation: breathe 1.6s ease-in-out infinite; }
+.scroll-home .loading.done { opacity: 0; visibility: hidden; }
+@keyframes breathe { 50% { opacity: 0.4; transform: translateY(-3px); } }
+
+.scroll-home .copy {
+  position: absolute;
+  z-index: 5;
+  left: var(--gutter);
+  bottom: 150px;
+  width: min(560px, 44vw);
+  pointer-events: none;
+}
+.scroll-home .copy.in > * { animation: rise 0.8s var(--ease) both; }
+.scroll-home .copy.in > *:nth-child(2) { animation-delay: 0.06s; }
+.scroll-home .copy.in > *:nth-child(3) { animation-delay: 0.12s; }
+.scroll-home .copy.in > *:nth-child(4) { animation-delay: 0.18s; }
+@keyframes rise { from { opacity: 0; transform: translateY(18px); filter: blur(6px); } }
+.scroll-home .copy a, .scroll-home .copy button { pointer-events: auto; }
+
+.scroll-home .act-index {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.scroll-home .act-index span {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.scroll-home .act-index span::after { content: ""; width: 34px; height: 2px; background: currentColor; }
+.scroll-home .copy h2 {
+  font-size: clamp(42px, 5.4vw, 88px);
+  line-height: 0.96;
+  letter-spacing: -0.045em;
+  font-weight: 500;
+  text-wrap: balance;
+}
+.scroll-home .copy .body {
+  margin-top: 22px;
+  font-size: clamp(16px, 1.25vw, 19px);
+  line-height: 1.55;
+  max-width: 42ch;
+  color: var(--fg);
+  opacity: 0.86;
+}
+.scroll-home .stage.final .copy { bottom: 132px; width: min(620px, 50vw); }
+.scroll-home .copy .final-title { font-size: clamp(46px, 5.6vw, 96px); line-height: 0.94; letter-spacing: -0.05em; }
+.scroll-home .final-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.scroll-home .button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: transform 0.25s var(--ease), background 0.25s;
+}
+.scroll-home .button:hover { transform: translateY(-2px); }
+.scroll-home .button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.scroll-home .note { margin-top: 22px; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 62ch; }
+
+/* Status panel beside the scene */
+.scroll-home .hud {
+  position: absolute;
+  z-index: 5;
+  top: 96px;
+  right: var(--gutter);
+  width: 352px;
+  padding: 18px 20px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px -24px rgb(16 34 79 / 0.35);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+  pointer-events: none;
+}
+.scroll-home .hud.show { opacity: 1; transform: none; }
+.scroll-home .hud.show.dim { opacity: 0; }
+.scroll-home .hud-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 10px; }
+.scroll-home .hud li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0.28;
+  transition: opacity 0.4s;
+}
+.scroll-home .hud li.on { opacity: 1; }
+.scroll-home .hud .mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background 0.35s, border-color 0.35s, color 0.35s;
+}
+.scroll-home .hud .mark svg { width: 14px; height: 14px; }
+.scroll-home .hud li.on .mark { background: var(--accent); border-color: var(--accent); color: #fff; }
+.scroll-home .hud .detail { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.scroll-home .hud li.you.on .text { color: var(--accent); font-weight: 500; }
+.scroll-home .hud li.you.on .mark { background: transparent; color: var(--accent); }
+.scroll-home .hud li[data-state="submitted"] .detail { color: #a86a00; }
+.scroll-home .hud li[data-state="validated"] .detail { color: #1b5fb8; }
+.scroll-home .hud li[data-state="approved"] .detail,
+.scroll-home .hud li[data-state="accepted"] .detail { color: var(--accent); font-weight: 700; }
+/* by hand, the "ticks" are chores: crossed boxes that shake */
+.scroll-home .hud[data-act="2"] li.on .mark { animation: shake 0.5s; background: transparent; border-color: var(--accent); color: var(--accent); }
+@keyframes shake { 30% { transform: rotate(-12deg); } 60% { transform: rotate(10deg); } }
+
+/* Stopwatch: the headline number of the whole story */
+.scroll-home .clock { display: flex; align-items: baseline; gap: 12px; padding: 2px 0 12px; }
+.scroll-home .clock .digits {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.scroll-home .clock-label { font-size: 14px; color: var(--muted); }
+.scroll-home .clock.stopped .digits { animation: settle 0.6s var(--ease); }
+@keyframes settle { 40% { transform: scale(1.06); } }
+.scroll-home .compare { display: grid; gap: 8px; padding: 4px 0 14px; }
+.scroll-home .compare p, .scroll-home .simple-compare p {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.scroll-home .compare i, .scroll-home .simple-compare i { height: 8px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
+.scroll-home .compare i::after, .scroll-home .simple-compare i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(var(--w));
+  background: #e5452f;
+  border-radius: inherit;
+}
+.scroll-home .compare .ap i::after, .scroll-home .simple-compare .ap i::after { background: var(--accent); }
+.scroll-home .compare b, .scroll-home .simple-compare b { color: var(--fg); font-weight: 500; }
+
+/* Time back: a countdown from 30 to 3 owns the screen */
+.scroll-home .minutes { display: flex; align-items: flex-end; gap: 22px; margin: 0 0 12px; line-height: 0.86; padding-top: 0.1em; }
+.scroll-home .minutes .now { display: flex; align-items: baseline; gap: 10px; color: var(--accent); }
+.scroll-home .minutes .now b {
+  font-size: clamp(120px, 17vw, 270px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  margin-right: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.scroll-home .minutes .now small { font-size: clamp(28px, 3vw, 46px); font-weight: 500; }
+.scroll-home .minutes .was {
+  font-size: clamp(28px, 3vw, 46px);
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: line-through 3px;
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.5s, transform 0.5s var(--ease);
+  padding-bottom: 0.5em;
+  order: 2;
+}
+.scroll-home .copy.counted .minutes .was { opacity: 1; transform: none; }
+.scroll-home .copy .time-title { font-size: clamp(34px, 3.6vw, 58px); }
+.scroll-home .stage[data-act="5"]:not(.final) .copy { width: min(720px, 60vw); bottom: 140px; }
+
+.scroll-home .scroll-hint {
+  position: absolute;
+  z-index: 5;
+  right: var(--gutter);
+  bottom: 140px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  font-size: 15px;
+  transition: opacity 0.4s;
+}
+.scroll-home .scroll-hint svg { animation: nudge 1.8s var(--ease) infinite; }
+@keyframes nudge { 50% { transform: translateY(5px); } }
+.scroll-home .stage.started .scroll-hint { opacity: 0; pointer-events: none; }
+
+.scroll-home .dock { position: absolute; z-index: 6; inset: auto var(--gutter) 26px; }
+.scroll-home .acts { display: grid; grid-template-columns: repeat(6, 1fr); }
+.scroll-home .acts button {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  font-size: 15px;
+  color: var(--muted);
+  transition: color 0.3s;
+}
+.scroll-home .acts button:hover, .scroll-home .acts button[aria-current] { color: var(--fg); }
+.scroll-home .acts .num { font-size: 12px; font-variant-numeric: tabular-nums; }
+.scroll-home .acts button[aria-current] .num { color: var(--accent); }
+.scroll-home .progress { position: relative; height: 2px; background: var(--line); margin-top: 4px; overflow: hidden; }
+.scroll-home .progress span { position: absolute; inset: 0; background: var(--fg); transform-origin: left; transform: scaleX(0); }
+
+/* ---------- Simple view ---------- */
+.scroll-home[data-view="simple"] { background: #eef2f8; }
+.scroll-home .simple { color: #10224f; }
+.scroll-home .simple main { max-width: 1080px; margin: 0 auto; padding: 120px var(--gutter) 80px; }
+.scroll-home .simple h1 { font-size: clamp(48px, 8vw, 112px); line-height: 0.92; letter-spacing: -0.05em; font-weight: 500; }
+.scroll-home .simple-intro > p { font-size: 19px; line-height: 1.55; max-width: 46ch; margin-top: 24px; color: #4e6293; }
+.scroll-home .simple-message { padding: 12px 16px; border: 1px solid rgba(16, 34, 79, 0.2); border-radius: 12px; }
+.scroll-home .elevation { width: 100%; max-width: 720px; margin: 48px 0 24px; color: #1d3f9e; }
+.scroll-home .simple-acts > li { padding: 48px 0; border-top: 1px solid rgba(16, 34, 79, 0.14); display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px 48px; }
+.scroll-home .simple-acts .act-index { grid-column: 1 / -1; margin: 0; }
+.scroll-home .simple-acts h2 { font-size: clamp(30px, 3.6vw, 48px); line-height: 1; letter-spacing: -0.035em; font-weight: 500; }
+.scroll-home .simple-acts p:not(.act-index) { font-size: 18px; line-height: 1.6; color: #4e6293; }
+.scroll-home .simple-hud { grid-column: 2; display: grid; gap: 6px; font-size: 15px; color: #2a3d70; }
+.scroll-home .simple-hud li::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 10px; }
+.scroll-home .simple-compare { display: grid; gap: 10px; max-width: 520px; margin-top: 28px; }
+.scroll-home .simple-compare p { font-size: 15px; color: #4e6293; grid-template-columns: 110px 1fr auto; }
+.scroll-home .simple-end { padding-top: 56px; border-top: 1px solid rgba(16, 34, 79, 0.14); }
+.scroll-home .simple-end h2 { font-size: clamp(44px, 7vw, 96px); line-height: 0.92; letter-spacing: -0.05em; font-weight: 500; }
+
+/* ---------- Phones & small tablets ---------- */
+@media (max-width: 820px) {
+.scroll-home .top { padding: 16px var(--gutter); }
+  .scroll-home .brand { font-size: 17px; }
+  .scroll-home .copy { width: auto; right: var(--gutter); bottom: 104px; }
+  .scroll-home .copy h2 { font-size: clamp(34px, 9vw, 52px); }
+  .scroll-home .copy .body { font-size: 15.5px; margin-top: 14px; }
+  .scroll-home .act-index { margin-bottom: 12px; font-size: 14px; }
+  .scroll-home .stage.final .copy { width: auto; bottom: 96px; }
+  .scroll-home .copy .final-title { font-size: clamp(46px, 13vw, 76px); }
+  .scroll-home .stage::after {
+    /* a soft floor under the copy so text stays legible over the scene */
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 62%;
+    z-index: 4;
+    pointer-events: none;
+    background: linear-gradient(to top, rgb(255 255 255 / 0.82), rgb(255 255 255 / 0.5) 55%, transparent);
+  }
+  .scroll-home .hud { top: 70px; left: var(--gutter); right: var(--gutter); width: auto; padding: 12px 14px 8px; }
+  .scroll-home .hud li { padding: 6px 0; font-size: 13px; }
+  .scroll-home .hud li:not(.recent) { display: none; }
+  .scroll-home .hud-title { font-size: 14px; margin-bottom: 4px; }
+  .scroll-home .clock .digits { font-size: 44px; }
+  .scroll-home .clock { padding-bottom: 6px; }
+  .scroll-home .compare { padding-bottom: 8px; }
+  .scroll-home .stage[data-act="5"]:not(.final) .copy { width: auto; bottom: 104px; }
+  .scroll-home .minutes .now b { font-size: clamp(96px, 30vw, 150px); }
+  .scroll-home .scroll-hint { right: auto; left: var(--gutter); bottom: 60px; }
+  .scroll-home .stage:not(.started) .copy { bottom: 120px; }
+  .scroll-home .dock { bottom: 14px; }
+  .scroll-home .acts button { flex-direction: column; gap: 2px; font-size: 12px; min-height: 40px; }
+  .scroll-home .acts .num { font-size: 11px; }
+  .scroll-home .simple-acts > li { grid-template-columns: 1fr; }
+  .scroll-home .simple-hud { grid-column: 1; }
+}
+@media (max-width: 420px) {
+  .scroll-home .acts .name { display: none; }
+  .scroll-home .acts .num { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-home .copy.in > *, .scroll-home .loading-mark svg, .scroll-home .scroll-hint svg { animation: none; }
+}
+.scroll-home .simple-compare .ap i::after { background: #2b52d4; }
+.scroll-home .simple-breakdown { font-size: 15px !important; color: #4e6293 !important; margin-top: 12px !important; max-width: 60ch; }
+
+/* Account navigation stays available throughout the film. */
+.scroll-home .account-links { display: flex; align-items: center; gap: 22px; }
+.scroll-home .account-links a { text-decoration: none; }
+.scroll-home .account-links .button { min-height: 44px; padding: 0 18px; font-size: 14px; }
+.scroll-home .sign-in { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; }
+.scroll-home .sign-in:hover, .scroll-home .site-footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.scroll-home .hud { top: 120px; }
+.scroll-home .skip-link { position: fixed; z-index: 30; top: 12px; left: var(--gutter); transform: translateY(-200%); padding: 12px 18px; background: var(--fg); color: white; }
+.scroll-home .skip-link:focus { transform: none; }
+.scroll-home .site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 32px; padding: 32px var(--gutter); background: var(--paper-wash); color: var(--fg); font-size: 14px; }
+.scroll-home .site-footer nav { display: flex; flex-wrap: wrap; gap: 24px; }
+.scroll-home .site-footer a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
+.scroll-home .simple main { padding-top: 150px; }
+.scroll-home .simple .top { background: #eef2f8; }
+.scroll-home .view-switch { min-height: 44px; }
+.scroll-home .story-disclaimer { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.scroll-home .copy h2, .scroll-home .copy .final-title, .scroll-home .simple h1, .scroll-home .simple-end h2 { letter-spacing: -0.04em; }
+
+@media (max-width: 820px) {
+  .scroll-home .top { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
+  .scroll-home .brand { width: 126px; grid-column: 1; grid-row: 1; }
+  .scroll-home .account-links { display: contents; }
+  .scroll-home .view-switch { grid-column: 1; grid-row: 2; justify-self: start; padding: 6px 12px; font-size: 13px; }
+  .scroll-home .sign-in { grid-column: 2; grid-row: 1; justify-self: end; }
+  .scroll-home .account-create { grid-column: 2; grid-row: 2; justify-self: end; }
+  .scroll-home .account-links .button { padding: 0 14px; font-size: 13px; }
+  .scroll-home .hud { top: 142px; }
+  .scroll-home .simple main { padding-top: 166px; }
+  .scroll-home .simple-compare p { grid-template-columns: 94px 1fr auto; gap: 8px; font-size: 14px; }
+  .scroll-home .simple-intro > p { font-size: 17px; }
+  .scroll-home .note { font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-home, .scroll-home * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (min-width: 821px) and (max-height: 780px) {
+  .scroll-home .hud { top: 84px; padding: 14px 18px 8px; }
+  .scroll-home .hud li { padding: 6px 0; font-size: 13.5px; }
+  .scroll-home .clock .digits { font-size: 50px; }
+  .scroll-home .clock { padding-bottom: 8px; }
+  .scroll-home .compare { padding-bottom: 10px; gap: 6px; }
+}

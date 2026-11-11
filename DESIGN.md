@@ -55,15 +55,15 @@ typography:
     lineHeight: 1.2
     letterSpacing: "-0.035em"
   public-headline:
-    fontFamily: 'Manrope, "Segoe UI", sans-serif'
-    fontSize: "clamp(37px, 4.1vw, 56px)"
-    fontWeight: 600
-    lineHeight: 1.15
+    fontFamily: '"Space Grotesk", system-ui, sans-serif'
+    fontSize: "clamp(42px, 5.4vw, 88px)"
+    fontWeight: 500
+    lineHeight: 0.96
     letterSpacing: "-0.04em"
   public-body:
-    fontFamily: 'Manrope, "Segoe UI", sans-serif'
-    fontSize: "14px"
-    lineHeight: 1.6
+    fontFamily: '"Space Grotesk", system-ui, sans-serif'
+    fontSize: "clamp(16px, 1.25vw, 19px)"
+    lineHeight: 1.55
 rounded:
   tag: "4px"
   input: "6px"
@@ -126,6 +126,18 @@ components:
 ---
 
 # Design System: Architect Pro dashboard and public homepage
+
+## Public homepage update — 11 November 2026
+
+The user selected `architectpro-scroll-experiment` as the public website. Its six-act 3D scroll story now replaces the earlier application workbench on `/`. This section and `docs/homepage-design.md` supersede the earlier public-homepage composition recorded below; dashboard roles remain authoritative for the working product.
+
+The homepage is scoped to `.scroll-home`. Self-hosted Space Grotesk at weights 400, 500 and 700 replaces Manrope on this surface. One procedural house carries Site, Design, The portal, Automation, Tracking and Time back through pale blue, warm white, rose, lilac, mint and sand paper worlds. Original building geometry, camera motion, linework and canvas textures come from the selected experiment. Slightly darker overlay accents and secondary text preserve the colour families while improving contrast. The existing Architect Pro logo identifies the site.
+
+The sticky stage occupies 100svh over a 1150svh rail. Semantic HTML copy, native chapter buttons, a simple-view switch, sign-in and workspace creation sit above the canvas. Phones use a two-row account header and compact chapter dock. Very short screens and reduced-motion preference begin with an ordinary page. The complete ordinary page is server-rendered before enhancement, with six acts, account links, legal links and an explicit illustrative comparison.
+
+GSAP ScrollTrigger maps scrolling to the original pure pose function. Three.js is loaded only for the 3D view. Rendering pauses when hidden or offscreen; switching views disposes GPU resources. Load failures and lost WebGL contexts recover to the same readable story. Existing authentication and account recovery routes retain their behavior.
+
+The 30-minute versus 3-minute figures and fictional project are from the selected experiment. Label them as illustrative, with actual times varying and decisions belonging to the relevant authorities. No application or customer data is accessed by the story. Font provenance and the SIL licence live in `public/fonts/scroll-story`.
 
 ## Overview
 

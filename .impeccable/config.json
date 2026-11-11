@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "createdAt": "2026-11-11T14:43:56.824Z",
+        "reason": "User selected architectpro-scroll-experiment for the public homepage; preserving its supplied Space Grotesk typeface and visual identity."
+      }
+    ]
+  }
+}

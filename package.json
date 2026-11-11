@@ -47,11 +47,13 @@
     "@prisma/client": "^6.6.0",
     "astro": "^5.17.3",
     "bcryptjs": "^2.4.3",
+    "gsap": "3.15.1",
     "lucide-react": "^0.468.0",
     "pdf-parse": "^1.1.1",
     "postgres": "^3.4.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "three": "0.182.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
