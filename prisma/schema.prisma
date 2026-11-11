@@ -258,6 +258,7 @@ enum AutomationJobType {
   HOUSEHOLDER_PLANNING
   PLANNING_APPLICATION
   BUILDING_WARRANT
+  COMPLETION_CERTIFICATE
 }
 
 enum AutomationJobStatus {
@@ -1306,6 +1307,8 @@ model BuildingWarrantApplication {
   preparationData             Json?
   selectedCertifierPresetId   String?
   preparedAt                  DateTime?
+  completionPreparationData   Json?
+  completionPreparedAt        DateTime?
   reviewedAt                  DateTime?
   createdAt                   DateTime                    @default(now())
   updatedAt                   DateTime                    @updatedAt
