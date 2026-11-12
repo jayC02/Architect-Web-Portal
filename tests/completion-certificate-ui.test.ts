@@ -25,6 +25,7 @@ assert.match(form, /dirty/);
 assert.match(form, /queueInFlight/);
 // The architect sees the fixed answers and what is missing.
 assert.match(form, /Fixed answers/);
+assert.match(form, /notice references', 'N\/A'/, 'the review table matches what the Agent enters');
 assert.match(form, /Missing information/);
 assert.match(form, /Uploaded in a later step/);
 // The Agent reports a finished run as COMPLETED; both finished statuses read as Main Details completed.
