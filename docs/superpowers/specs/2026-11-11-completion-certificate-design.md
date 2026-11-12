@@ -25,7 +25,7 @@ These are not editable in this phase. The preparation page shows them so the arc
 | Portal question | Answer |
 |---|---|
 | Did you obtain a building warrant for this? | Yes |
-| Building regulations compliance / warrant enforcement / defective buildings notice references | Left blank |
+| Building regulations compliance / warrant enforcement / defective buildings notice references | N/A (typed into each box, as on the warrant) |
 | Subject to any Dangerous building notice(s)? | No |
 | Relevant person or agent? | Agent |
 | Use your registered account details? | Yes |

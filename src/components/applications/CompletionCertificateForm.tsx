@@ -37,7 +37,7 @@ type Props = {
 // notes in src/lib/completion-certificate.ts.
 const FIXED_ANSWER_ROWS: Array<[string, string]> = [
   ['Did you obtain a building warrant for this?', 'Yes'],
-  ['Compliance, enforcement and defective buildings notice references', 'Left blank'],
+  ['Compliance, enforcement and defective buildings notice references', 'N/A'],
   ['Is the building subject to any Dangerous building notice(s)?', 'No'],
   ['Are you the relevant person or an agent?', 'Agent'],
   ['Do you want to use your registered account details?', 'Yes'],
