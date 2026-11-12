@@ -1,0 +1,102 @@
+---
+import { AutomationJobType } from '@prisma/client';
+import AppShell from '@/components/layout/AppShell.astro';
+import CompletionCertificateForm from '@/components/applications/CompletionCertificateForm';
+import { prisma } from '@/lib/db/prisma';
+import { formatPortalDate } from '@/lib/completion-certificate';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { HttpError } from '@/lib/utils/http';
+import {
+  completionPreparationFor,
+  loadCompletionContext,
+} from '@/server/services/completion-certificate.service';
+import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login');
+const id = Astro.params.id;
+if (!id) return Astro.redirect('/projects');
+
+let completion;
+try {
+  completion = await loadCompletionContext({ organisationId: auth.organisation.id, warrantId: id });
+} catch (error) {
+  if (error instanceof HttpError && error.status === 404) return Astro.redirect('/projects');
+  throw error;
+}
+const { warrant } = completion;
+const project = warrant.project;
+const { preparation, issues, parties } = completionPreparationFor(completion);
+
+// The most recent completion run for this warrant, if any.
+const completionJobs = await prisma.automationJob.findMany({
+  where: {
+    organisationId: auth.organisation.id,
+    projectId: project.id,
+    type: AutomationJobType.COMPLETION_CERTIFICATE,
+  },
+  select: {
+    id: true, projectId: true, type: true, status: true, dataSnapshot: true,
+    progressMessage: true, progressPercent: true, resultSummary: true, error: true,
+  },
+  orderBy: { createdAt: 'desc' },
+  take: 10,
+});
+const latestJob = completionJobs.find((job) => automationJobApplicationId(job) === warrant.id) ?? null;
+const activeJob = latestJob ? {
+  id: latestJob.id,
+  status: latestJob.status,
+  progressMessage: latestJob.progressMessage,
+  progressPercent: latestJob.progressPercent,
+  resultSummary: latestJob.resultSummary,
+  error: latestJob.error,
+} : null;
+
+const siteAddress = project.site
+  ? [[project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '), project.site.townCity, project.site.postcode].filter(Boolean).join(', ')
+  : project.siteAddress ?? 'No site linked';
+const today = new Date().toISOString().slice(0, 10);
+const completionStatus = warrant.completionCertificateStatus.toLowerCase().replaceAll('_', ' ');
+---
+<AppShell title="Prepare Completion Certificate" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-6">
+    <a href={`/projects/${project.id}#building-warrant`} class="text-sm font-semibold text-stone-600 hover:text-ink">Back to project</a>
+    <h1 class="mt-2 text-3xl font-semibold text-ink">Completion Certificate</h1>
+    <p class="mt-1 max-w-3xl text-sm text-stone-500">
+      Review these answers and send them to the Architect Pro Agent. It completes the Main Details section of the
+      Completion Certificate in eBuilding Standards and stops for your review. Supporting documents, the declaration
+      and submission are not part of this step.
+    </p>
+  </div>
+
+  <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div class="min-w-0">
+      <CompletionCertificateForm
+        client:load
+        warrantId={warrant.id}
+        initial={preparation}
+        initialIssues={issues}
+        parties={parties}
+        documents={completion.documents}
+        clientHref="/clients"
+        settingsHref="/settings/practice"
+        today={today}
+        activeJob={activeJob}
+      />
+    </div>
+
+    <aside class="panel rounded-lg p-5 xl:sticky xl:top-6" aria-label="Building warrant summary">
+      <h2 class="text-lg font-semibold">Building warrant</h2>
+      <dl class="mt-4 space-y-2 text-sm">
+        <div class="prep-summary-row"><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{project.name}</dd></div>
+        <div class="prep-summary-row"><dt class="text-stone-500">Site</dt><dd>{siteAddress}</dd></div>
+        <div class="prep-summary-row"><dt class="text-stone-500">Reference</dt><dd>{warrant.warrantReference ?? 'Not recorded'}</dd></div>
+        <div class="prep-summary-row"><dt class="text-stone-500">Granted</dt><dd>{warrant.grantedDate ? formatPortalDate(warrant.grantedDate.toISOString().slice(0, 10)) : 'Not recorded'}</dd></div>
+        <div class="prep-summary-row"><dt class="text-stone-500">Certificate</dt><dd class="capitalize">{completionStatus}</dd></div>
+      </dl>
+      <p class="mt-5 border-t border-stone-200 pt-4 text-sm text-stone-600">
+        The Agent opens this warrant's proposal in eBuilding Standards and checks its address against the site above before entering anything.
+      </p>
+    </aside>
+  </div>
+</AppShell>

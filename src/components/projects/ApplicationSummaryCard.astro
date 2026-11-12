@@ -26,6 +26,8 @@ interface Props {
   desktopMissingCount?: number;
   connectedAgent?: boolean;
   recoveryContext: FailureRecoveryContext;
+  /** Building Warrant card only: shown once the warrant has been submitted. */
+  completionHref?: string;
 }
 
 const {
@@ -48,6 +50,7 @@ const {
   desktopMissingCount = 0,
   connectedAgent = false,
   recoveryContext,
+  completionHref,
 } = Astro.props;
 ---
 <section id={id} class="flex min-w-0 scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white [overflow-wrap:anywhere]">
@@ -102,5 +105,11 @@ const {
       recoveryContext={recoveryContext}
     />
     {applicationId && <AutomationRunResetButton client:load applicationId={applicationId} type={applicationKind === 'PLANNING' ? 'HOUSEHOLDER_PLANNING' : 'BUILDING_WARRANT'} currentJobId={desktopJob?.id ?? null} />}
+    {completionHref && (
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 px-4 py-3 sm:px-5">
+        <p class="text-sm text-stone-600">Work finished? Prepare the completion certificate for this warrant.</p>
+        <a href={completionHref} class="btn btn-secondary">Prepare Completion Certificate</a>
+      </div>
+    )}
   </footer>
 </section>
