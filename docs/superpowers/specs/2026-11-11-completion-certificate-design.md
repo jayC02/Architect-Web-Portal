@@ -167,7 +167,7 @@ Older Agents never receive completion jobs: `agentSupportsJob` already requires 
 
 ### Result
 
-The existing callback contract is unchanged. A successful run reports `AWAITING_PORTAL_REVIEW` with outcome `awaiting_user_portal_review` and summary "Completion Certificate Main Details completed. Review the form in eBuilding Standards." The existing open-for-review action opens the same form.
+The existing callback contract is unchanged. A successful run reports `COMPLETED` with outcome `completed_to_final_review` (the Agent's existing success mapping) and the summary "Completion Certificate Main Details completed". The completion preparation page shows the run's progress and result; `/automation-job/<id>` redirects a completion job there. The Agent leaves the form open in the browser for review, and its open-for-review command reopens the same form without ever adding one.
 
 ## Agent
 

@@ -27,6 +27,10 @@ assert.match(form, /queueInFlight/);
 assert.match(form, /Fixed answers/);
 assert.match(form, /Missing information/);
 assert.match(form, /Uploaded in a later step/);
+// The Agent reports a finished run as COMPLETED; both finished statuses read as Main Details completed.
+assert.match(form, /COMPLETED: 'Main Details completed/);
+assert.match(form, /AWAITING_PORTAL_REVIEW: 'Main Details completed/);
+assert.match(form, /FINISHED_STATUSES/);
 // The work-completed date is never defaulted.
 assert.doesNotMatch(form, /workCompletedDate:\s*new Date|workCompletedDate\s*\?\?\s*today/);
 

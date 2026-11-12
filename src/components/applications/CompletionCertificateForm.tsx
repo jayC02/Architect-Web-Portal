@@ -48,13 +48,15 @@ const FIXED_ANSWER_ROWS: Array<[string, string]> = [
 ];
 
 const WAITING_STATUSES = new Set(['READY', 'CLAIMED', 'IN_PROGRESS', 'NEEDS_REVIEW']);
+// The Agent reports a finished run as COMPLETED; older flows use AWAITING_PORTAL_REVIEW.
+const FINISHED_STATUSES = new Set(['COMPLETED', 'AWAITING_PORTAL_REVIEW']);
 const JOB_LABELS: Record<string, string> = {
   READY: 'Queued for the Architect Pro Agent',
   CLAIMED: 'Starting',
   IN_PROGRESS: 'Running in eBuilding Standards',
   NEEDS_REVIEW: 'Needs attention in the Agent',
   AWAITING_PORTAL_REVIEW: 'Main Details completed — review it in eBuilding Standards',
-  COMPLETED: 'Completed',
+  COMPLETED: 'Main Details completed — review it in eBuilding Standards',
   CANCELLED: 'Cancelled',
   FAILED_RETRYABLE: 'Stopped before finishing',
   FAILED_FINAL: 'Stopped before finishing',
@@ -306,8 +308,8 @@ export default function CompletionCertificateForm({
           {job.status === 'IN_PROGRESS' && job.progressPercent != null && (
             <progress className="mt-3 h-2 w-full" max={100} value={Math.max(0, Math.min(100, job.progressPercent))} aria-label="Completion certificate progress" />
           )}
-          {!jobWaiting && (job.error || job.resultSummary) && <p className="mt-1 text-sm text-stone-600">{job.error || job.resultSummary}</p>}
-          {job.status === 'AWAITING_PORTAL_REVIEW' && (
+          {!jobWaiting && !FINISHED_STATUSES.has(job.status) && (job.error || job.resultSummary) && <p className="mt-1 text-sm text-stone-600">{job.error || job.resultSummary}</p>}
+          {FINISHED_STATUSES.has(job.status) && (
             <p className="mt-2 text-sm text-stone-600">Supporting documents, the declaration and submission are still to be completed in eBuilding Standards.</p>
           )}
           {jobWaiting && job.status !== 'NEEDS_REVIEW' && <button type="button" className="btn btn-secondary mt-4" onClick={() => void cancel()}>Cancel run</button>}
