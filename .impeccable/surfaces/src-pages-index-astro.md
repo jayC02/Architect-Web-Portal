@@ -18,9 +18,9 @@ OWN-WORLD: Preserve the selected experiment's presentation model, ink linework, 
 
 STORY: Site, Design, The portal, Automation, Tracking, Time back. The fictional house evolves with scroll progress; the selected experiment's illustrative 30-minute versus 3-minute comparison accompanies its application story. Account actions remain available throughout.
 
-FIRST VIEWPORT: Existing brand and account links above a full-viewport blueprint scene, large left-aligned narrative copy, Scroll to begin and a six-part chapter dock. Phone navigation uses two rows. The ordinary page serves reduced motion, short screens and unavailable WebGL.
+FIRST VIEWPORT: Existing brand and account links above a full-viewport blueprint scene, large left-aligned narrative copy, Scroll to begin and a six-part chapter dock. Phones use compact account navigation; landscape phones have a dedicated compact layout. As requested on 12 November, the page always opens in 3D. There is no view switch or automatic reduced-motion/landscape mode change.
 
-FORM: Direct integration of the user's chosen, already implemented scroll story into Astro. No separate hosting or iframe. The complete simple story renders on the server before browser enhancement. No standing build preference is inferred from this task.
+FORM: Direct integration of the user's chosen, already implemented scroll story into Astro. No separate hosting or iframe. The story rail and initial chapter render on the server before graphics load. Reloads restore progress; toolbar changes, rotation and graphics recovery preserve the reader's position. HTML chapters remain scrollable without WebGL, and a no-JavaScript transcript retains all content. No standing build preference is inferred from this task.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 

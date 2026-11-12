@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import { simpleMarkup } from './scroll-story/markup.js';
+import { storyMarkup } from './scroll-story/markup.js';
 import '@/styles/scroll-home.css';
 ---
 <BaseLayout
@@ -11,9 +11,9 @@ import '@/styles/scroll-home.css';
     <meta name="theme-color" content="#e6edf9" />
     <link rel="preload" href="/fonts/scroll-story/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
   </Fragment>
-  <div id="scroll-home" class="scroll-home" data-view="simple">
+  <div id="scroll-home" class="scroll-home" data-view="3d">
     <a href="#home-content" class="skip-link">Skip to content</a>
-    <div id="scroll-home-content" set:html={simpleMarkup('', false)} />
+    <div id="scroll-home-content" set:html={storyMarkup()} />
   </div>
   <script>
     import { mountScrollHome } from './scroll-story/main.js';

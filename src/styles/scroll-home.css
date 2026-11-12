@@ -76,16 +76,6 @@
 .scroll-home .brand { display: flex; align-items: center; width: 184px; text-decoration: none; }
 .scroll-home .brand img { display: block; width: 100%; height: auto; }
 .scroll-home .brand svg { width: 28px; height: 28px; }
-.scroll-home .view-switch {
-  background: none;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 9px 16px;
-  min-height: 40px;
-  font-size: 14px;
-  transition: background 0.25s, border-color 0.25s;
-}
-.scroll-home .view-switch:hover { background: var(--panel); border-color: var(--fg); }
 
 /* ---------- 3D story ---------- */
 .scroll-home .rail { height: 1150svh; position: relative; }
@@ -119,6 +109,8 @@
 }
 .scroll-home .loading-mark svg { width: 44px; height: 44px; animation: breathe 1.6s ease-in-out infinite; }
 .scroll-home .loading.done { opacity: 0; visibility: hidden; }
+.scroll-home .loading.failed { opacity: 0.94; pointer-events: none; text-align: center; padding: 0 var(--gutter); }
+.scroll-home .loading.failed .loading-mark svg { animation: none; }
 @keyframes breathe { 50% { opacity: 0.4; transform: translateY(-3px); } }
 
 .scroll-home .copy {
@@ -262,7 +254,7 @@
 .scroll-home .clock.stopped .digits { animation: settle 0.6s var(--ease); }
 @keyframes settle { 40% { transform: scale(1.06); } }
 .scroll-home .compare { display: grid; gap: 8px; padding: 4px 0 14px; }
-.scroll-home .compare p, .scroll-home .simple-compare p {
+.scroll-home .compare p {
   display: grid;
   grid-template-columns: 88px 1fr auto;
   align-items: center;
@@ -270,8 +262,8 @@
   font-size: 13px;
   color: var(--muted);
 }
-.scroll-home .compare i, .scroll-home .simple-compare i { height: 8px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
-.scroll-home .compare i::after, .scroll-home .simple-compare i::after {
+.scroll-home .compare i { height: 8px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
+.scroll-home .compare i::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -280,8 +272,8 @@
   background: #e5452f;
   border-radius: inherit;
 }
-.scroll-home .compare .ap i::after, .scroll-home .simple-compare .ap i::after { background: var(--accent); }
-.scroll-home .compare b, .scroll-home .simple-compare b { color: var(--fg); font-weight: 500; }
+.scroll-home .compare .ap i::after { background: var(--accent); }
+.scroll-home .compare b { color: var(--fg); font-weight: 500; }
 
 /* Time back: a countdown from 30 to 3 owns the screen */
 .scroll-home .minutes { display: flex; align-items: flex-end; gap: 22px; margin: 0 0 12px; line-height: 0.86; padding-top: 0.1em; }
@@ -348,24 +340,6 @@
 .scroll-home .progress { position: relative; height: 2px; background: var(--line); margin-top: 4px; overflow: hidden; }
 .scroll-home .progress span { position: absolute; inset: 0; background: var(--fg); transform-origin: left; transform: scaleX(0); }
 
-/* ---------- Simple view ---------- */
-.scroll-home[data-view="simple"] { background: #eef2f8; }
-.scroll-home .simple { color: #10224f; }
-.scroll-home .simple main { max-width: 1080px; margin: 0 auto; padding: 120px var(--gutter) 80px; }
-.scroll-home .simple h1 { font-size: clamp(48px, 8vw, 112px); line-height: 0.92; letter-spacing: -0.05em; font-weight: 500; }
-.scroll-home .simple-intro > p { font-size: 19px; line-height: 1.55; max-width: 46ch; margin-top: 24px; color: #4e6293; }
-.scroll-home .simple-message { padding: 12px 16px; border: 1px solid rgba(16, 34, 79, 0.2); border-radius: 12px; }
-.scroll-home .elevation { width: 100%; max-width: 720px; margin: 48px 0 24px; color: #1d3f9e; }
-.scroll-home .simple-acts > li { padding: 48px 0; border-top: 1px solid rgba(16, 34, 79, 0.14); display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px 48px; }
-.scroll-home .simple-acts .act-index { grid-column: 1 / -1; margin: 0; }
-.scroll-home .simple-acts h2 { font-size: clamp(30px, 3.6vw, 48px); line-height: 1; letter-spacing: -0.035em; font-weight: 500; }
-.scroll-home .simple-acts p:not(.act-index) { font-size: 18px; line-height: 1.6; color: #4e6293; }
-.scroll-home .simple-hud { grid-column: 2; display: grid; gap: 6px; font-size: 15px; color: #2a3d70; }
-.scroll-home .simple-hud li::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 10px; }
-.scroll-home .simple-compare { display: grid; gap: 10px; max-width: 520px; margin-top: 28px; }
-.scroll-home .simple-compare p { font-size: 15px; color: #4e6293; grid-template-columns: 110px 1fr auto; }
-.scroll-home .simple-end { padding-top: 56px; border-top: 1px solid rgba(16, 34, 79, 0.14); }
-.scroll-home .simple-end h2 { font-size: clamp(44px, 7vw, 96px); line-height: 0.92; letter-spacing: -0.05em; font-weight: 500; }
 
 /* ---------- Phones & small tablets ---------- */
 @media (max-width: 820px) {
@@ -401,8 +375,6 @@
   .scroll-home .dock { bottom: 14px; }
   .scroll-home .acts button { flex-direction: column; gap: 2px; font-size: 12px; min-height: 40px; }
   .scroll-home .acts .num { font-size: 11px; }
-  .scroll-home .simple-acts > li { grid-template-columns: 1fr; }
-  .scroll-home .simple-hud { grid-column: 1; }
 }
 @media (max-width: 420px) {
   .scroll-home .acts .name { display: none; }
@@ -411,8 +383,6 @@
 @media (prefers-reduced-motion: reduce) {
   .scroll-home .copy.in > *, .scroll-home .loading-mark svg, .scroll-home .scroll-hint svg { animation: none; }
 }
-.scroll-home .simple-compare .ap i::after { background: #2b52d4; }
-.scroll-home .simple-breakdown { font-size: 15px !important; color: #4e6293 !important; margin-top: 12px !important; max-width: 60ch; }
 
 /* Account navigation stays available throughout the film. */
 .scroll-home .account-links { display: flex; align-items: center; gap: 22px; }
@@ -426,24 +396,17 @@
 .scroll-home .site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 32px; padding: 32px var(--gutter); background: var(--paper-wash); color: var(--fg); font-size: 14px; }
 .scroll-home .site-footer nav { display: flex; flex-wrap: wrap; gap: 24px; }
 .scroll-home .site-footer a { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; }
-.scroll-home .simple main { padding-top: 150px; }
-.scroll-home .simple .top { background: #eef2f8; }
-.scroll-home .view-switch { min-height: 44px; }
 .scroll-home .story-disclaimer { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-.scroll-home .copy h2, .scroll-home .copy .final-title, .scroll-home .simple h1, .scroll-home .simple-end h2 { letter-spacing: -0.04em; }
+.scroll-home .copy h2, .scroll-home .copy .final-title { letter-spacing: -0.04em; }
 
 @media (max-width: 820px) {
   .scroll-home .top { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
   .scroll-home .brand { width: 126px; grid-column: 1; grid-row: 1; }
   .scroll-home .account-links { display: contents; }
-  .scroll-home .view-switch { grid-column: 1; grid-row: 2; justify-self: start; padding: 6px 12px; font-size: 13px; }
   .scroll-home .sign-in { grid-column: 2; grid-row: 1; justify-self: end; }
   .scroll-home .account-create { grid-column: 2; grid-row: 2; justify-self: end; }
   .scroll-home .account-links .button { padding: 0 14px; font-size: 13px; }
   .scroll-home .hud { top: 142px; }
-  .scroll-home .simple main { padding-top: 166px; }
-  .scroll-home .simple-compare p { grid-template-columns: 94px 1fr auto; gap: 8px; font-size: 14px; }
-  .scroll-home .simple-intro > p { font-size: 17px; }
   .scroll-home .note { font-size: 12px; }
 }
 
@@ -456,4 +419,108 @@
   .scroll-home .clock .digits { font-size: 50px; }
   .scroll-home .clock { padding-bottom: 8px; }
   .scroll-home .compare { padding-bottom: 10px; gap: 6px; }
+}
+/* ---------- Phones held sideways: a short, wide screen ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .scroll-home .stage { min-height: 0; }
+  .scroll-home .stage::after { display: none; }
+  .scroll-home .top { padding: 10px var(--gutter); }
+  .scroll-home .brand { font-size: 15px; }
+  .scroll-home .brand svg { width: 22px; height: 22px; }
+  .scroll-home .copy { left: var(--gutter); right: auto; bottom: 62px; width: min(44vw, 400px); }
+  .scroll-home .act-index { margin-bottom: 8px; font-size: 12px; }
+  .scroll-home .act-index span::after { width: 22px; }
+  .scroll-home .copy h2 { font-size: clamp(24px, 4vw, 34px); }
+  .scroll-home .copy .body { font-size: 13px; line-height: 1.45; margin-top: 8px; }
+  .scroll-home .hud { top: 50px; left: auto; right: var(--gutter); width: min(42vw, 300px); padding: 10px 14px 6px; }
+  .scroll-home .hud-title { font-size: 13px; margin-bottom: 2px; }
+  .scroll-home .hud li { padding: 4px 0; font-size: 12px; }
+  .scroll-home .hud li:not(.recent) { display: none; }
+  .scroll-home .hud .detail { font-size: 11px; }
+  .scroll-home .clock { padding-bottom: 4px; }
+  .scroll-home .clock .digits { font-size: 34px; }
+  .scroll-home .clock-label { font-size: 12px; }
+  .scroll-home .compare { gap: 4px; padding-bottom: 6px; }
+  .scroll-home .compare p { font-size: 11px; grid-template-columns: 74px 1fr auto; }
+  .scroll-home .scroll-hint { bottom: 58px; }
+  .scroll-home .dock { bottom: 6px; }
+  .scroll-home .acts button { flex-direction: row; min-height: 34px; padding: 4px 0; font-size: 12px; gap: 6px; }
+  .scroll-home .acts .name { display: inline; }
+  .scroll-home .acts .num { font-size: 11px; }
+  .scroll-home .stage[data-act="5"]:not(.final) .copy { bottom: 56px; width: min(48vw, 440px); }
+  .scroll-home .minutes { gap: 12px; margin-bottom: 6px; }
+  .scroll-home .minutes .now b { font-size: 84px; }
+  .scroll-home .minutes .now small, .scroll-home .minutes .was { font-size: 22px; }
+  .scroll-home .copy .time-title { font-size: 24px; }
+  .scroll-home .stage.final .copy { bottom: 54px; width: min(50vw, 460px); }
+  .scroll-home .copy .final-title { font-size: clamp(26px, 4.4vw, 38px); }
+  .scroll-home .final-actions { margin-top: 12px; gap: 8px; }
+  .scroll-home .button { min-height: 40px; padding: 0 16px; font-size: 14px; }
+  .scroll-home .note { font-size: 11px; margin-top: 10px; }
+}
+/* Pull-to-refresh is disabled only while this homepage is present. */
+html:has(#scroll-home), body:has(#scroll-home) { overscroll-behavior-y: none; }
+.scroll-home .story-transcript { max-width: 960px; margin: 0 auto; padding: 140px var(--gutter) 48px; }
+.scroll-home .story-transcript h2 { font-size: clamp(28px, 4vw, 48px); line-height: 1.1; margin-bottom: 18px; }
+.scroll-home .story-transcript p { max-width: 70ch; font-size: 17px; line-height: 1.6; margin-bottom: 24px; }
+.scroll-home .story-transcript section { padding: 32px 0; border-top: 1px solid var(--line); }
+
+/* The account controls remain on one row now that the view switch is removed. */
+@media (max-width: 820px) {
+  .scroll-home .top { display: flex; gap: 12px; }
+  .scroll-home .brand { width: clamp(96px, 29vw, 126px); flex-shrink: 0; }
+  .scroll-home .account-links { display: flex; gap: clamp(8px, 2vw, 16px); }
+  .scroll-home .sign-in { font-size: 13px; }
+  .scroll-home .account-links .button { padding: 0 12px; font-size: 12px; }
+  .scroll-home .hud { top: 96px; }
+}
+@media (max-height: 720px) and (orientation: portrait) {
+  .scroll-home .copy h2 { font-size: clamp(28px, 7.6vw, 40px); }
+  .scroll-home .copy .body { font-size: 14px; line-height: 1.4; margin-top: 10px; }
+  .scroll-home .act-index { font-size: 12px; margin-bottom: 8px; }
+  .scroll-home .hud { padding: 9px 12px 6px; }
+  .scroll-home .hud li { font-size: 12px; padding: 4px 0; }
+  .scroll-home .hud li.recent:has(~ .recent ~ .recent) { display: none; }
+  .scroll-home .hud-title { font-size: 13px; }
+  .scroll-home .clock .digits { font-size: 32px; }
+  .scroll-home .clock-label { font-size: 12px; }
+  .scroll-home .compare { display: none; }
+  .scroll-home .stage.final .copy .final-title { font-size: clamp(32px, 9vw, 44px); }
+  .scroll-home .final-actions { margin-top: 16px; gap: 8px; }
+  .scroll-home .final-actions .button { min-height: 44px; font-size: 13px; padding: 0 14px; }
+  .scroll-home .note { margin-top: 12px; font-size: 11px; }
+  .scroll-home .minutes .now b { font-size: 90px; }
+  .scroll-home .copy .time-title { font-size: 28px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .scroll-home .top { display: flex; padding: 10px var(--gutter); gap: 16px; }
+  .scroll-home .brand { width: 126px; }
+  .scroll-home .account-links { display: flex; gap: 16px; }
+  .scroll-home .hud { top: 74px; }
+  .scroll-home .stage:not(.started) .copy, .scroll-home .copy,
+  .scroll-home .stage[data-act="5"]:not(.final) .copy, .scroll-home .stage.final .copy { bottom: 82px; }
+  .scroll-home .scroll-hint { left: auto; right: var(--gutter); bottom: 86px; }
+  .scroll-home .dock { bottom: 6px; }
+  .scroll-home .story-disclaimer { margin-top: 4px; font-size: 10px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .scroll-home .minutes .now b { font-size: 72px; }
+}
+@media (max-height: 350px) and (orientation: landscape) {
+  .scroll-home .top { padding-top: 8px; padding-bottom: 8px; }
+  .scroll-home .brand { width: 106px; }
+  .scroll-home .account-links .button, .scroll-home .sign-in { min-height: 36px; }
+  .scroll-home .copy .body { font-size: 12px; line-height: 1.3; }
+  .scroll-home .act-index { font-size: 11px; margin-bottom: 6px; }
+  .scroll-home .hud { top: 62px; }
+  .scroll-home .hud li { font-size: 11px; }
+  .scroll-home .stage[data-act="5"]:not(.final) .copy { width: 54vw; }
+  .scroll-home .minutes .now b { font-size: 56px; }
+  .scroll-home .minutes .now small, .scroll-home .minutes .was { font-size: 18px; }
+  .scroll-home .copy .time-title { font-size: 20px; }
+  .scroll-home .stage.final .copy { width: 58vw; }
+  .scroll-home .copy .final-title { font-size: 24px; }
+  .scroll-home .note { font-size: 10px; line-height: 1.3; margin-top: 8px; }
+  .scroll-home .final-actions { margin-top: 8px; }
+  .scroll-home .final-actions .button { min-height: 36px; font-size: 12px; }
 }

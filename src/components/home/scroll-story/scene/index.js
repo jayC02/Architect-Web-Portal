@@ -26,14 +26,22 @@ function colorsAt(p, out) {
  * shadows, no glow. Colours are written straight to the screen (no tone mapping) so the
  * ground matches the paper colour exactly and the scene has no visible horizon.
  */
-export function createExperience(host, { mobile, onFrame }) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", alpha: false });
+export function createExperience(host, { mobile, onFrame, onContextLost }) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: mobile ? "default" : "high-performance", alpha: false });
   const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
   renderer.setPixelRatio(dpr);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.NoToneMapping;
   host.appendChild(renderer.domElement);
+  let contextLost = false;
+  const onLost = (event) => {
+    event.preventDefault();
+    contextLost = true;
+    running = false;
+    onContextLost?.();
+  };
+  renderer.domElement.addEventListener("webglcontextlost", onLost);
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog("#e6edf9", 42, 150);
@@ -52,7 +60,7 @@ export function createExperience(host, { mobile, onFrame }) {
   sun.shadow.normalBias = 0.05;
   scene.add(hemi, sun, sun.target);
 
-  const textures = createTextures();
+  const textures = createTextures({ mobile });
   const site = createSite(scene, { mobile });
   const building = createBuilding(scene, { mobile });
   const documents = createDocuments(scene, textures, { mobile });
@@ -112,7 +120,7 @@ export function createExperience(host, { mobile, onFrame }) {
   raf = requestAnimationFrame(frame);
 
   const onVisibility = () => {
-    running = !document.hidden && inView;
+    running = !document.hidden && inView && !contextLost;
     last = performance.now();
   };
   const visibilityObserver = new IntersectionObserver(([entry]) => {
@@ -136,6 +144,7 @@ export function createExperience(host, { mobile, onFrame }) {
     },
     dispose() {
       cancelAnimationFrame(raf);
+      renderer.domElement.removeEventListener("webglcontextlost", onLost);
       observer.disconnect();
       visibilityObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);

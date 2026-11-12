@@ -7,15 +7,24 @@ const RULE = "#d9dee8";
 const RED = "#e0402f";
 const BLUE = "#2b52d4";
 
+// Phones draw the static sheets at a smaller size. Text stays sharp at the size they appear.
+let SCALE = 1;
 function canvasTexture(w, h, paint) {
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = Math.round(w * SCALE);
+  canvas.height = Math.round(h * SCALE);
   const ctx = canvas.getContext("2d");
+  ctx.scale(SCALE, SCALE);
   paint(ctx, w, h);
   const map = new THREE.CanvasTexture(canvas);
   map.colorSpace = THREE.SRGBColorSpace;
   map.anisotropy = 8;
+  // Once the GPU has its copy, free the canvas: dozens of full-size canvases kept in
+  // memory are what push iOS into reloading the page.
+  map.onUpdate = () => {
+    canvas.width = canvas.height = 1;
+    map.onUpdate = null;
+  };
   return map;
 }
 function txt(ctx, value, x, y, size, color = INK, weight = 500) {
@@ -402,7 +411,8 @@ function paintRecord(ctx, w, h, st) {
   });
 }
 
-export function createTextures() {
+export function createTextures({ mobile = false } = {}) {
+  SCALE = mobile ? 0.6 : 1;
   return {
     docs: docSpecs.map(documentTexture),
     noise: noiseSpecs.map(documentTexture),
