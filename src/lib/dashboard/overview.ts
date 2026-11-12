@@ -59,7 +59,8 @@ export const currentDashboardJobs = <T extends AutomationRecord>(jobs: T[]) => {
   // preparation cannot bypass an unresolved claim, even when its connection is lost.
   const owned = (job: T) => ['CLAIMED', 'IN_PROGRESS'].includes(job.status);
   for (const job of [...jobs].sort((a, b) => Number(owned(b)) - Number(owned(a)) || b.createdAt.getTime() - a.createdAt.getTime())) {
-    const family = job.type === 'BUILDING_WARRANT' ? 'warrant' : 'planning';
+    // A completion certificate shares the warrant record but is a separate run.
+    const family = job.type === 'BUILDING_WARRANT' ? 'warrant' : job.type === 'COMPLETION_CERTIFICATE' ? 'completion' : 'planning';
     const key = `${job.projectId}:${family}:${job.applicationId ?? job.id}`;
     if (!current.has(key)) current.set(key, job);
   }

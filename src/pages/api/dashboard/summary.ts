@@ -131,7 +131,8 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
 
     const latestJobs = currentDashboardJobs(automationJobs.map(job => {
       const applicationId = automationJobApplicationId(job);
-      const applications = job.type === 'BUILDING_WARRANT' ? job.project.warrantApplications : job.project.planningApplications;
+      const applications = job.type === 'BUILDING_WARRANT' || job.type === 'COMPLETION_CERTIFICATE'
+        ? job.project.warrantApplications : job.project.planningApplications;
       return { ...job, applicationId: applications.some(application => application.id === applicationId) ? applicationId : null };
     }));
     const currentJobs = await Promise.all(latestJobs.map(async job => {
@@ -298,7 +299,7 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
         id: `automation-${job.id}`,
         type: job.dashboardState === 'ready' ? 'Automation ready' : job.dashboardState === 'connectionLost' ? 'Agent connection lost' : 'Automation needs attention',
         projectName: job.project.name,
-        reason: `${job.type === 'BUILDING_WARRANT' ? 'Building warrant' : 'Planning'} · ${job.dashboardReason ?? (job.dashboardState === 'connectionLost' ? 'Check the application before resuming' : job.status.toLowerCase().replaceAll('_', ' '))}`,
+        reason: `${job.type === 'BUILDING_WARRANT' ? 'Building warrant' : job.type === 'COMPLETION_CERTIFICATE' ? 'Completion certificate' : 'Planning'} · ${job.dashboardReason ?? (job.dashboardState === 'connectionLost' ? 'Check the application before resuming' : job.status.toLowerCase().replaceAll('_', ' '))}`,
         href: `/automation-jobs?projectId=${job.projectId}`,
         tone: job.dashboardState === 'ready' ? 'ready' : 'warning',
         priority: job.dashboardState === 'ready' ? 5 : 1,

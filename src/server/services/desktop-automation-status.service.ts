@@ -80,10 +80,35 @@ export type AutomationJobIdentity = {
 export const resolveAutomationJobIdentity = (
   job: Pick<DesktopAutomationJob, 'id' | 'projectId' | 'type' | 'dataSnapshot'>,
 ): AutomationJobIdentity => {
+  const snapshot = objectValue(job.dataSnapshot);
+  if (job.type === AutomationJobType.COMPLETION_CERTIFICATE) {
+    // A completion certificate is identified by the warrant it completes. It
+    // carries no warrant or planning record, so it can never be mistaken for
+    // (or replace) that warrant's own application run.
+    const metadata = objectValue(snapshot.metadata);
+    const sourceWarrantId = stringValue(objectValue(snapshot.completionCertificate).sourceWarrantId);
+    if (snapshot.snapshotVersion !== 2
+      || stringValue(metadata.applicationType) !== job.type
+      || stringValue(metadata.jobId) !== job.id
+      || stringValue(metadata.projectId) !== job.projectId) {
+      throw new Error('The completion certificate job identity does not match its snapshot. Prepare it again.');
+    }
+    if (!sourceWarrantId
+      || stringValue(objectValue(snapshot.planning).recordId)
+      || stringValue(objectValue(snapshot.buildingWarrant).recordId)) {
+      throw new Error('This completion certificate job is missing its exact building warrant and cannot be opened safely.');
+    }
+    return {
+      jobId: job.id,
+      projectId: job.projectId,
+      applicationType: job.type,
+      applicationId: sourceWarrantId,
+      snapshotVersion: 2,
+    };
+  }
   if (job.type !== AutomationJobType.BUILDING_WARRANT && !planningTypes.has(job.type)) {
     throw new Error('This desktop job is missing its application type and cannot be opened safely.');
   }
-  const snapshot = objectValue(job.dataSnapshot);
   const isV2 = snapshot.contractVersion === 'architectpro.automation-job' || snapshot.snapshotVersion === 2;
   if (isV2) {
     const metadata = objectValue(snapshot.metadata);

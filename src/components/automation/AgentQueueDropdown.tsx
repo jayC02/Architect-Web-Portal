@@ -163,7 +163,7 @@ export default function AgentQueueDropdown({ floatingEnabled = true }: { floatin
           <span className="min-w-0 text-sm font-semibold text-ink">{job.project.name}</span>
           <span className="shrink-0 text-xs text-stone-600">{job.status === 'READY' ? `Queued / ${position}` : labels[job.status] || 'Queued'}</span>
         </div>
-        <p className="mt-1 text-xs text-stone-600">{job.type === 'BUILDING_WARRANT' ? 'Building warrant' : 'Planning permission'} / {job.title}</p>
+        <p className="mt-1 text-xs text-stone-600">{job.type === 'BUILDING_WARRANT' ? 'Building warrant' : job.type === 'COMPLETION_CERTIFICATE' ? 'Completion certificate' : 'Planning permission'} / {job.title}</p>
         {job.status === 'IN_PROGRESS' && <>
           <p className="mt-2 text-xs text-stone-600">{job.progressMessage || 'Preparing application'}</p>
           <div className="mt-2 flex items-center gap-2">

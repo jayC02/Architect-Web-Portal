@@ -14,12 +14,22 @@ import { z } from 'zod';
 import { ownerDetailsSchema } from '@/lib/building-warrant-owner';
 import { warrantSustainabilitySchema } from '@/lib/building-warrant-follow-ups';
 import { optionalText } from '@/lib/validation/common';
+import {
+  COMPLETION_FIXED_ANSWERS,
+  COMPLETION_TEXT_LIMIT,
+  MAX_CERTIFICATE_ENTRIES,
+  certificateEntrySchema,
+} from '@/lib/completion-certificate';
 
 const optionalId = optionalText(120);
 
 export const automationJobCreateSchema = z.object({
   projectId: z.string().trim().min(1).max(120),
-  type: z.nativeEnum(AutomationJobType),
+  // Completion certificates are queued only from their own preparation page.
+  type: z.nativeEnum(AutomationJobType).refine(
+    (type) => type !== AutomationJobType.COMPLETION_CERTIFICATE,
+    'Prepare a completion certificate from its building warrant.',
+  ),
   sourceType: z.nativeEnum(AutomationJobSourceType).optional(),
   planningApplicationId: optionalId,
   buildingWarrantApplicationId: optionalId,
@@ -156,6 +166,51 @@ const preflightIssueSchema = z.object({
   message: z.string().min(1),
   severity: z.enum(['error', 'warning']),
 });
+
+const fixedLiterals = <T extends Record<string, string | boolean>>(answers: T) =>
+  z.object(Object.fromEntries(
+    Object.entries(answers).map(([key, value]) => [key, z.literal(value)]),
+  ) as { [K in keyof T]: z.ZodLiteral<T[K]> });
+
+const snapshotDate = z.string().date();
+
+/**
+ * Reviewed Completion Certificate answers. Every answer is resolved: the
+ * website never queues a completion job with an unanswered question.
+ */
+export const completionCertificateSnapshotSchema = z.object({
+  sourceWarrantId: z.string().min(1),
+  proposalHint: z.object({ proposalName: nullableText }),
+  workCompletedDate: snapshotDate,
+  warrantReference: z.string().trim().min(1).max(120),
+  warrantDate: snapshotDate,
+  amendmentDates: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
+  relaxation: z.object({
+    applies: z.boolean(),
+    reference: z.string().max(200).nullable(),
+    date: snapshotDate.nullable(),
+  }),
+  constructionCertificates: z.object({
+    accompany: z.boolean(),
+    entries: z.array(certificateEntrySchema('construction')).max(MAX_CERTIFICATE_ENTRIES),
+  }),
+  designCertificates: z.object({
+    accompaniedWarrant: z.boolean(),
+    formQRequired: z.boolean().nullable(),
+    entries: z.array(certificateEntrySchema('design')).max(MAX_CERTIFICATE_ENTRIES),
+  }),
+  energyPerformanceCertificate: z.boolean(),
+  sustainabilityStatement: z.boolean(),
+  fireSafetyDesignSummary: z.boolean(),
+  continuingRequirements: z.object({
+    applies: z.boolean(),
+    details: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
+  }),
+  fixedAnswers: fixedLiterals(COMPLETION_FIXED_ANSWERS),
+  updatedAt: z.string().datetime(),
+});
+
+export type CompletionCertificateSnapshot = z.infer<typeof completionCertificateSnapshotSchema>;
 
 export const automationJobSnapshotV2Schema = z.object({
   contractVersion: z.literal('architectpro.automation-job'),
@@ -329,6 +384,7 @@ export const automationJobSnapshotV2Schema = z.object({
     ]).optional(),
     updatedAt: z.string().datetime().nullable(),
   }).nullable(),
+  completionCertificate: completionCertificateSnapshotSchema.nullable().optional(),
   documents: z.array(z.object({
     id: z.string().min(1),
     originalFilename: z.string().min(1),
@@ -352,7 +408,8 @@ export const automationJobSnapshotV2Schema = z.object({
     status: z.enum(['READY', 'NEEDS_INPUT', 'BLOCKED']),
     missing: z.array(preflightIssueSchema),
     warnings: z.array(preflightIssueSchema),
-    locationPlanStatus: z.enum(['REVIEWED', 'PRESENT_UNREVIEWED', 'MISSING']),
+    // NOT_APPLICABLE is used only by completion certificate jobs, which carry no documents.
+    locationPlanStatus: z.enum(['REVIEWED', 'PRESENT_UNREVIEWED', 'MISSING', 'NOT_APPLICABLE']),
     reviewedAt: z.string().datetime().nullable(),
   }),
 });

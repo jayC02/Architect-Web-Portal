@@ -11,6 +11,7 @@ import {
   DocumentType,
   PlanningStatus,
   WarrantStatus,
+  type OrganisationDefaults,
   type ProjectDocument,
   type Prisma,
 } from '@prisma/client';
@@ -55,7 +56,7 @@ type BuildAutomationJobSnapshotInput = {
 
 const uniqueIds = (ids: string[] | undefined) => Array.from(new Set((ids ?? []).filter(Boolean)));
 const asIso = (value: Date | null | undefined) => value?.toISOString() ?? null;
-const maxDate = (dates: Array<Date | null | undefined>) =>
+export const maxDate = (dates: Array<Date | null | undefined>) =>
   new Date(Math.max(...dates.filter((value): value is Date => Boolean(value)).map((value) => value.getTime())));
 const human = (value: string) => value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const jsonObject = (value: unknown): Record<string, unknown> =>
@@ -134,7 +135,7 @@ const parseAgentOverride = (value: unknown): AgentOverride | null => {
   };
 };
 
-const canonicalJson = (value: unknown): string => {
+export const canonicalJson = (value: unknown): string => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
     return `{${Object.entries(value as Record<string, unknown>)
@@ -215,6 +216,117 @@ const mapDocument = (document: ProjectDocument, locationPlanId?: string) => ({
   relevance: documentRelevance(document.type),
   downloadRef: { documentId: document.id },
   updatedAt: document.updatedAt.toISOString(),
+});
+
+type ProjectWithParties = Prisma.ProjectGetPayload<{ include: { client: true; site: true } }>;
+
+/** Site section of a snapshot. Shared by every job type. */
+export const snapshotSite = (project: ProjectWithParties) => project.site
+    ? {
+        id: project.site.id,
+        displayName: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
+        address: {
+          addressLine1: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
+          addressLine2: project.site.addressLine2,
+          townCity: project.site.townCity,
+          postcode: project.site.postcode,
+          country: 'United Kingdom',
+        },
+        localAuthority: project.site.localAuthority,
+        source: 'SITE' as const,
+        updatedAt: project.site.updatedAt.toISOString(),
+      }
+    : {
+        id: null,
+        displayName: project.siteAddress,
+        address: {
+          addressLine1: project.siteAddress,
+          addressLine2: null,
+          townCity: null,
+          postcode: null,
+          country: 'United Kingdom',
+        },
+        localAuthority: project.localAuthority,
+        source: 'LEGACY_PROJECT' as const,
+        updatedAt: null,
+      };
+
+/** Applicant section built from the project's client record (or its absence). */
+export const snapshotClientApplicant = (client: ProjectWithParties['client'], applicantOwner: boolean | null) => client
+    ? {
+        clientId: client.id,
+        clientType: client.companyName ? 'ORGANISATION' as const : 'INDIVIDUAL' as const,
+        displayName: client.name,
+        title: client.title,
+        firstName: client.firstName,
+        lastName: client.lastName,
+        companyName: client.companyName,
+        email: client.email,
+        phone: client.phone,
+        buildingNumber: client.buildingNumber,
+        address: {
+          addressLine1: client.addressLine1 ?? client.address,
+          addressLine2: client.addressLine2,
+          townCity: client.townCity,
+          postcode: client.postcode,
+          country: client.country ?? 'United Kingdom',
+        },
+        applicantIsOwner: applicantOwner,
+        source: 'CLIENT' as const,
+        updatedAt: client.updatedAt.toISOString(),
+      }
+    : {
+        clientId: null,
+        clientType: null,
+        displayName: null,
+        title: null,
+        firstName: null,
+        lastName: null,
+        companyName: null,
+        email: null,
+        phone: null,
+        buildingNumber: null,
+        address: { addressLine1: null, addressLine2: null, townCity: null, postcode: null, country: null },
+        applicantIsOwner: applicantOwner,
+        source: 'MISSING' as const,
+        updatedAt: null,
+      };
+
+/** Agent details taken from the organisation's saved defaults. */
+export const snapshotOrganisationAgent = (defaults: OrganisationDefaults | null) => ({
+  firstName: defaults?.agentFirstName ?? null,
+  lastName: defaults?.agentLastName ?? null,
+  email: defaults?.agentEmail ?? null,
+  phone: defaults?.agentPhone ?? null,
+  buildingNumber: defaults?.agentBuildingNumber ?? null,
+  address: {
+    addressLine1: defaults?.agentAddressLine1 ?? null,
+    addressLine2: defaults?.agentAddressLine2 ?? null,
+    townCity: defaults?.agentTownCity ?? null,
+    postcode: defaults?.agentPostcode ?? null,
+    country: defaults?.agentCountry ?? 'United Kingdom',
+  },
+  source: 'ORGANISATION_DEFAULTS' as const,
+});
+
+/** Project section of a snapshot. */
+export const snapshotProject = (
+  project: ProjectWithParties,
+  projectScreener: ReturnType<typeof readProjectScreener>,
+  localAuthority: string | null,
+) => ({
+  id: project.id,
+  name: project.name,
+  internalReference: project.internalReference,
+  typeOfWorkKey: typeOfWorkKey(project.projectType),
+  typeOfWorkLabel: typeOfWorkLabel(project.projectType),
+  buildingUse: projectScreener.buildingUse,
+  typeOfWorkKeys: projectScreener.typeOfWorkKeys,
+  notes: project.notes,
+  stage: project.stage,
+  status: project.status,
+  localAuthority,
+  updatedAt: project.updatedAt.toISOString(),
 });
 
 export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapshotInput, database: Prisma.TransactionClient = prisma) => {
@@ -348,35 +460,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
     ...documents.map((document) => document.updatedAt),
   ]);
 
-  const site = project.site
-    ? {
-        id: project.site.id,
-        displayName: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
-        address: {
-          addressLine1: [project.site.buildingNumber, project.site.addressLine1].filter(Boolean).join(' '),
-          addressLine2: project.site.addressLine2,
-          townCity: project.site.townCity,
-          postcode: project.site.postcode,
-          country: 'United Kingdom',
-        },
-        localAuthority: project.site.localAuthority,
-        source: 'SITE' as const,
-        updatedAt: project.site.updatedAt.toISOString(),
-      }
-    : {
-        id: null,
-        displayName: project.siteAddress,
-        address: {
-          addressLine1: project.siteAddress,
-          addressLine2: null,
-          townCity: null,
-          postcode: null,
-          country: 'United Kingdom',
-        },
-        localAuthority: project.localAuthority,
-        source: 'LEGACY_PROJECT' as const,
-        updatedAt: null,
-      };
+  const site = snapshotSite(project);
 
   const applicantOwner = input.type === AutomationJobType.BUILDING_WARRANT
     ? warrantAnswers.applicantIsOwner
@@ -389,45 +473,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         source: 'APPLICATION_DRAFT' as const,
         updatedAt: null,
       }
-    : project.client
-    ? {
-        clientId: project.client.id,
-        clientType: project.client.companyName ? 'ORGANISATION' as const : 'INDIVIDUAL' as const,
-        displayName: project.client.name,
-        title: project.client.title,
-        firstName: project.client.firstName,
-        lastName: project.client.lastName,
-        companyName: project.client.companyName,
-        email: project.client.email,
-        phone: project.client.phone,
-        buildingNumber: project.client.buildingNumber,
-        address: {
-          addressLine1: project.client.addressLine1 ?? project.client.address,
-          addressLine2: project.client.addressLine2,
-          townCity: project.client.townCity,
-          postcode: project.client.postcode,
-          country: project.client.country ?? 'United Kingdom',
-        },
-        applicantIsOwner: applicantOwner,
-        source: 'CLIENT' as const,
-        updatedAt: project.client.updatedAt.toISOString(),
-      }
-    : {
-        clientId: null,
-        clientType: null,
-        displayName: null,
-        title: null,
-        firstName: null,
-        lastName: null,
-        companyName: null,
-        email: null,
-        phone: null,
-        buildingNumber: null,
-        address: { addressLine1: null, addressLine2: null, townCity: null, postcode: null, country: null },
-        applicantIsOwner: applicantOwner,
-        source: 'MISSING' as const,
-        updatedAt: null,
-      };
+    : snapshotClientApplicant(project.client, applicantOwner);
 
   const locationPlanId = resolveLocationPlans(documents, (document) => document.type)[0]?.id;
   const baseSnapshot = {
@@ -461,36 +507,9 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
             address: agentOverride.address,
             source: 'APPLICATION_DRAFT' as const,
           }
-        : {
-            firstName: defaults?.agentFirstName ?? null,
-            lastName: defaults?.agentLastName ?? null,
-            email: defaults?.agentEmail ?? null,
-            phone: defaults?.agentPhone ?? null,
-            buildingNumber: defaults?.agentBuildingNumber ?? null,
-            address: {
-              addressLine1: defaults?.agentAddressLine1 ?? null,
-              addressLine2: defaults?.agentAddressLine2 ?? null,
-              townCity: defaults?.agentTownCity ?? null,
-              postcode: defaults?.agentPostcode ?? null,
-              country: defaults?.agentCountry ?? 'United Kingdom',
-            },
-            source: 'ORGANISATION_DEFAULTS' as const,
-          },
+        : snapshotOrganisationAgent(defaults),
     },
-    project: {
-      id: project.id,
-      name: project.name,
-      internalReference: project.internalReference,
-      typeOfWorkKey: typeOfWorkKey(project.projectType),
-      typeOfWorkLabel: typeOfWorkLabel(project.projectType),
-      buildingUse: projectScreener.buildingUse,
-      typeOfWorkKeys: projectScreener.typeOfWorkKeys,
-      notes: project.notes,
-      stage: project.stage,
-      status: project.status,
-      localAuthority: site.localAuthority,
-      updatedAt: project.updatedAt.toISOString(),
-    },
+    project: snapshotProject(project, projectScreener, site.localAuthority),
     site,
     applicant,
     planning: input.type === AutomationJobType.BUILDING_WARRANT ? null : {
@@ -727,9 +746,9 @@ export const currentAutomationSourceUpdatedAt = async (
           select: { updatedAt: true },
         })
       : Promise.resolve(null),
-    data.buildingWarrant?.recordId
+    (data.buildingWarrant?.recordId ?? data.completionCertificate?.sourceWarrantId)
       ? prisma.buildingWarrantApplication.findFirst({
-          where: { id: data.buildingWarrant.recordId, organisationId, projectId },
+          where: { id: (data.buildingWarrant?.recordId ?? data.completionCertificate?.sourceWarrantId)!, organisationId, projectId },
           select: { updatedAt: true },
         })
       : Promise.resolve(null),

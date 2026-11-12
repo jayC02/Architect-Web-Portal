@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { AutomationJobStatus, type Prisma } from '@prisma/client';
+import { AutomationJobStatus, AutomationJobType, type Prisma } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -56,6 +56,9 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     },
   });
   if (!job) throw new HttpError(409, 'This automation job cannot be opened or resumed.');
+  if (job.type === AutomationJobType.COMPLETION_CERTIFICATE) {
+    throw new HttpError(409, 'Completion certificates run from the Architect Pro Agent queue.');
+  }
   if ((job.dataSnapshot as { metadata?: { portalDraftKey?: unknown } })?.metadata?.portalDraftKey) {
     throw new HttpError(409, 'Use Run application with an updated Architect Pro Agent for this reset run.');
   }

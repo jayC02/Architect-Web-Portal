@@ -62,7 +62,7 @@ export const ensureWaitingForAgentAction = async (
     kind: ActionItemKind.DESKTOP_AUTOMATION,
     title,
     summary: 'Connect a compatible Architect Pro Agent to start this authorised application automatically.',
-    actionUrl: `/projects/${job.projectId}#${job.type === AutomationJobType.BUILDING_WARRANT ? 'building-warrant' : 'planning'}`,
+    actionUrl: `/projects/${job.projectId}#${job.type === AutomationJobType.BUILDING_WARRANT || job.type === AutomationJobType.COMPLETION_CERTIFICATE ? 'building-warrant' : 'planning'}`,
     priority: ActionItemPriority.MEDIUM,
     dedupeKey: waitingAgentActionKey(job.id),
   },

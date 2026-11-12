@@ -39,6 +39,9 @@ export const POST: APIRoute = (context) =>
       },
     });
     if (!job) throw new HttpError(409, 'Only unstarted, incomplete or stale jobs can be prepared again.');
+    if (job.type === 'COMPLETION_CERTIFICATE') {
+      throw new HttpError(409, 'Prepare the completion certificate again from its preparation page.');
+    }
 
     const previous = automationJobSnapshotV2Schema.safeParse(job.dataSnapshot);
     const snapshot = await buildAutomationJobSnapshot({

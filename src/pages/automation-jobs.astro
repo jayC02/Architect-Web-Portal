@@ -74,10 +74,12 @@ if (view === 'active') {
 
 const applicationLabel = (type: AutomationJobType) => type === AutomationJobType.BUILDING_WARRANT
   ? 'Building Warrant'
-  : 'Householder application';
+  : type === AutomationJobType.COMPLETION_CERTIFICATE ? 'Completion Certificate' : 'Householder application';
 const applicationHref = (job: typeof jobs[number]) => job.type === AutomationJobType.BUILDING_WARRANT
   ? `/projects/${job.projectId}/building-warrant`
-  : `/projects/${job.projectId}/planning`;
+  : job.type === AutomationJobType.COMPLETION_CERTIFICATE
+    ? `/automation-job/${job.id}`
+    : `/projects/${job.projectId}/planning`;
 const updatedDate = (job: typeof jobs[number]) =>
   job.completedAt ?? job.claimedAt ?? job.preparedAt ?? job.updatedAt;
 

@@ -225,6 +225,8 @@ const warrantDocumentCount = documentStats
   .reduce((total, group) => total + group._count._all, 0);
 const latestPlanning = planningApplications[0] ?? null;
 const latestWarrant = warrantApplications[0] ?? null;
+// A completion certificate can be prepared once the warrant has gone to the council.
+const completionWarrantStatuses = new Set<string>(['SUBMITTED', 'IN_REVIEW', 'FURTHER_INFORMATION_REQUESTED', 'GRANTED', 'COMPLETED', 'CLOSED']);
 const nextDeadline = deadlines.find((deadline) => deadline.status !== DeadlineStatus.COMPLETED && deadline.status !== DeadlineStatus.CANCELLED) ?? null;
 const desktopContextBase = {
   organisationId: auth.organisation.id,
@@ -452,6 +454,9 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         reference={latestWarrant?.warrantReference ?? 'Not assigned'}
         projectId={project.id}
         applicationKind="BUILDING_WARRANT"
+        completionHref={latestWarrant && completionWarrantStatuses.has(latestWarrant.status)
+          ? `/building-warrant/${latestWarrant.id}/completion-certificate/preparation`
+          : undefined}
         applicationId={latestWarrant?.id}
         applicationStatus={latestWarrant?.status ?? 'NOT_STARTED'}
         desktopJob={warrantDesktop.job}

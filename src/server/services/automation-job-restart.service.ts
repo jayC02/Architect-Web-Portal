@@ -58,6 +58,10 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     },
   });
   if (!oldJob) throw new HttpError(404, 'Automation job not found.');
+  if (oldJob.type === AutomationJobType.COMPLETION_CERTIFICATE) {
+    // This retry rebuilds warrant and planning snapshots only.
+    throw new HttpError(409, 'Run the completion certificate again from its preparation page.');
+  }
   const reset = await transaction.automationJobEvent.findUnique({ where: {
     idempotencyKey: `reset-supersedes:${input.organisation.id}:${oldJob.id}`,
   } });
