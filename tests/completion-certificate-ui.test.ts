@@ -12,7 +12,7 @@ assert.doesNotMatch(form, /'NIC1'|'SEL1'|'SNP1'|'BRE1'/);
 // Both 750-character portal limits are enforced in the browser too.
 assert.match(form, /<textarea[^>]*maxLength=\{COMPLETION_TEXT_LIMIT\}/);
 assert.equal((form.match(/<LimitedText\b/g) ?? []).length, 2, 'amendment dates and continuing requirements share the limited field');
-assert.doesNotMatch(form.replace(/function LimitedText[\s\S]*?\n}\n/, ''), /<textarea/, 'no unlimited textarea');
+assert.doesNotMatch(form.replace(/function LimitedText[\s\S]*?\r?\n}\r?\n/, ''), /<textarea/, 'no unlimited textarea');
 assert.match(form, /MAX_CERTIFICATE_ENTRIES/);
 // Save and queue use the completion endpoints only.
 assert.match(form, /const endpoint = `\/api\/building-warrant\/\$\{encodeURIComponent\(warrantId\)\}\/completion-certificate`/);
