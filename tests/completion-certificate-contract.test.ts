@@ -79,7 +79,10 @@ assert.equal(
   'warrant jobs are unaffected',
 );
 // Earlier completion snapshots without documents stay valid.
-assert.deepEqual(completionCertificateSnapshotSchema.parse(section).documents, []);
+{
+  const { documents: _documents, ...withoutDocuments } = section;
+  assert.deepEqual(completionCertificateSnapshotSchema.parse(withoutDocuments).documents, []);
+}
 
 // Completion jobs are only created by their own endpoint.
 assert.equal(desktopJobCreateSchema.safeParse({ type: 'COMPLETION_CERTIFICATE' }).success, false);

@@ -89,7 +89,77 @@
   },
   "planning": null,
   "buildingWarrant": null,
-  "documents": [],
+  "documents": [
+    {
+      "id": "doc_epc",
+      "originalFilename": "EPC.pdf",
+      "filename": "EPC.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 1200,
+      "categoryKey": "ENERGY",
+      "categoryLabel": "Energy",
+      "drawingTitle": null,
+      "drawingNumber": null,
+      "revision": null,
+      "classificationSource": "AI",
+      "confidence": 0.9,
+      "reviewState": "APPROVED",
+      "required": false,
+      "relevance": [
+        "BUILDING_WARRANT"
+      ],
+      "downloadRef": {
+        "documentId": "doc_epc"
+      },
+      "updatedAt": "2026-11-13T09:00:00.000Z"
+    },
+    {
+      "id": "doc_cc",
+      "originalFilename": "CC-100 signed.pdf",
+      "filename": "CC-100 signed.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 1200,
+      "categoryKey": "CERTIFICATE",
+      "categoryLabel": "Certificate",
+      "drawingTitle": null,
+      "drawingNumber": null,
+      "revision": null,
+      "classificationSource": "AI",
+      "confidence": 0.9,
+      "reviewState": "APPROVED",
+      "required": false,
+      "relevance": [
+        "BUILDING_WARRANT"
+      ],
+      "downloadRef": {
+        "documentId": "doc_cc"
+      },
+      "updatedAt": "2026-11-13T09:00:00.000Z"
+    },
+    {
+      "id": "doc_fq",
+      "originalFilename": "Form Q.pdf",
+      "filename": "Form Q.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 1200,
+      "categoryKey": "CERTIFICATE",
+      "categoryLabel": "Certificate",
+      "drawingTitle": null,
+      "drawingNumber": null,
+      "revision": null,
+      "classificationSource": "AI",
+      "confidence": 0.9,
+      "reviewState": "APPROVED",
+      "required": false,
+      "relevance": [
+        "BUILDING_WARRANT"
+      ],
+      "downloadRef": {
+        "documentId": "doc_fq"
+      },
+      "updatedAt": "2026-11-13T09:00:00.000Z"
+    }
+  ],
   "preflight": {
     "status": "READY",
     "missing": [],
@@ -128,7 +198,7 @@
             "number": "678"
           },
           "approvedBodySignatureDate": "2026-10-02",
-          "documentId": null
+          "documentId": "doc_cc"
         }
       ]
     },
@@ -150,7 +220,7 @@
             "number": "678"
           },
           "approvedBodySignatureDate": "2026-10-02",
-          "documentId": null
+          "documentId": "doc_fq"
         }
       ]
     },
@@ -171,6 +241,26 @@
       "differentBuildingAddress": false,
       "coversAllWork": true
     },
-    "updatedAt": "2026-11-11T12:00:00.000Z"
+    "updatedAt": "2026-11-11T12:00:00.000Z",
+    "documents": [
+      {
+        "documentId": "doc_epc",
+        "role": "ENERGY_PERFORMANCE_CERTIFICATE",
+        "filename": "EPC.pdf",
+        "description": "Energy Performance Certificate"
+      },
+      {
+        "documentId": "doc_cc",
+        "role": "CONSTRUCTION_CERTIFICATE",
+        "filename": "CC-100 signed.pdf",
+        "description": "Certificate of Construction"
+      },
+      {
+        "documentId": "doc_fq",
+        "role": "DESIGN_CERTIFICATE",
+        "filename": "Form Q.pdf",
+        "description": "Notice of Finalisation of Design Details (Form Q)"
+      }
+    ]
   }
 }
