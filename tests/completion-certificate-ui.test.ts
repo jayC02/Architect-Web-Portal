@@ -55,4 +55,13 @@ assert.match(project, /completionHref=/);
 assert.match(project, /completion-certificate\/preparation/);
 assert.match(project, /completionWarrantStatuses/);
 
+
+// The form runs in the browser: the modules it imports must not load the
+// database client at runtime (the production bundle cannot resolve it, and
+// the whole form then stops working). Type-only imports are fine.
+for (const file of ['src/lib/completion-certificate.ts', 'src/lib/completion-documents.ts', 'src/lib/certifier-registration.ts']) {
+  const source = readFileSync(file, 'utf8');
+  assert.doesNotMatch(source, /^import\s+(?!type\b)[^;]*from\s+'@prisma\/client'/m, `${file} must not import @prisma/client at runtime`);
+}
+
 console.log('completion-certificate-ui: ok');

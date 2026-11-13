@@ -1,4 +1,5 @@
-import { DocumentType } from '@prisma/client';
+// Type-only: this module runs in the browser, which cannot load the database client.
+import type { DocumentType } from '@prisma/client';
 import { z } from 'zod';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
 
@@ -8,21 +9,21 @@ import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration
 
 export const COMPLETION_DOCUMENT_ROLES = [
   { key: 'BUILDING_WARRANT', label: 'Building warrant', portalDescription: 'Building Warrant',
-    documentType: DocumentType.CORRESPONDENCE, sentToPortal: false },
+    documentType: 'CORRESPONDENCE' as DocumentType, sentToPortal: false },
   { key: 'ENERGY_PERFORMANCE_CERTIFICATE', label: 'Energy Performance Certificate', portalDescription: 'Energy Performance Certificate',
-    documentType: DocumentType.ENERGY, sentToPortal: true },
+    documentType: 'ENERGY' as DocumentType, sentToPortal: true },
   { key: 'SUSTAINABILITY_STATEMENT', label: 'Statement of Sustainability', portalDescription: 'Statement of Sustainability',
-    documentType: DocumentType.CERTIFICATE, sentToPortal: true },
+    documentType: 'CERTIFICATE' as DocumentType, sentToPortal: true },
   { key: 'FIRE_SAFETY_DESIGN_SUMMARY', label: 'Fire Safety Design Summary', portalDescription: 'Fire Safety Design Summary',
-    documentType: DocumentType.SUPPORTING_DOCUMENT, sentToPortal: true },
+    documentType: 'SUPPORTING_DOCUMENT' as DocumentType, sentToPortal: true },
   { key: 'CONSTRUCTION_CERTIFICATE', label: 'Certificate of Construction', portalDescription: 'Certificate of Construction',
-    documentType: DocumentType.CERTIFICATE, sentToPortal: true },
+    documentType: 'CERTIFICATE' as DocumentType, sentToPortal: true },
   { key: 'DESIGN_CERTIFICATE', label: 'Certificate of Design (Form Q)', portalDescription: 'Notice of Finalisation of Design Details (Form Q)',
-    documentType: DocumentType.CERTIFICATE, sentToPortal: true },
+    documentType: 'CERTIFICATE' as DocumentType, sentToPortal: true },
   { key: 'OTHER', label: 'Other supporting document', portalDescription: 'Supporting Document',
-    documentType: DocumentType.SUPPORTING_DOCUMENT, sentToPortal: true },
+    documentType: 'SUPPORTING_DOCUMENT' as DocumentType, sentToPortal: true },
   { key: 'UNRECOGNISED', label: 'Not recognised', portalDescription: 'Supporting Document',
-    documentType: DocumentType.SUPPORTING_DOCUMENT, sentToPortal: true },
+    documentType: 'SUPPORTING_DOCUMENT' as DocumentType, sentToPortal: true },
 ] as const;
 
 export type CompletionDocumentRoleKey = typeof COMPLETION_DOCUMENT_ROLES[number]['key'];
