@@ -72,4 +72,13 @@ assert.match(form, /Drop files here or click to choose/);
 // An upload problem is shown next to the upload box, not only at the foot of the form.
 assert.match(form, /uploadError && <p role="alert"/);
 
+// Changes save themselves: no Save button, a short pause after the last change,
+// one save at a time, and sending waits for anything not yet saved.
+assert.doesNotMatch(form, />\s*\{saving \? 'Saving…' : 'Save'\}/, 'there is no Save button');
+assert.match(form, /AUTOSAVE_DELAY_MS = \d+/);
+assert.match(form, /saveInFlight/);
+assert.match(form, /await flush\(\)/);
+assert.match(form, /'All changes saved'/);
+assert.match(form, /beforeunload/);
+
 console.log('completion-certificate-ui: ok');

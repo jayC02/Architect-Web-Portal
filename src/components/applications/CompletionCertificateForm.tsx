@@ -51,6 +51,13 @@ const FIXED_ANSWER_ROWS: Array<[string, string]> = [
   ['Does this submission cover all the work under the building warrant?', 'Yes'],
 ];
 
+// Changes save themselves this long after the last edit.
+const AUTOSAVE_DELAY_MS = 800;
+const AUTOSAVE_RETRY_MS = 5000;
+
+type SaveStatus = 'saved' | 'pending' | 'saving' | 'error';
+type SavedState = { preparation: CompletionPreparation; issues: CompletionIssue[] };
+
 const WAITING_STATUSES = new Set(['READY', 'CLAIMED', 'IN_PROGRESS', 'NEEDS_REVIEW']);
 // The Agent reports a finished run as COMPLETED; older flows use AWAITING_PORTAL_REVIEW.
 const FINISHED_STATUSES = new Set(['COMPLETED', 'AWAITING_PORTAL_REVIEW']);
@@ -204,10 +211,17 @@ export default function CompletionCertificateForm({
   const [preparation, setPreparation] = useState(initial);
   const [issues, setIssues] = useState(initialIssues);
   const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [saveError, setSaveError] = useState('');
   const [queueing, setQueueing] = useState(false);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  // The latest answers and which edit they are, so a save that finishes after
+  // further typing never replaces the newer text.
+  const preparationRef = useRef(initial);
+  const issuesRef = useRef(initialIssues);
+  const revisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  const saveInFlight = useRef<Promise<CompletionIssue[] | null> | null>(null);
   const [job, setJob] = useState(activeJob);
   const [uploading, setUploading] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -216,9 +230,24 @@ export default function CompletionCertificateForm({
   const endpoint = `/api/building-warrant/${encodeURIComponent(warrantId)}/completion-certificate`;
 
   const change = (update: Partial<CompletionPreparation>) => {
-    setPreparation((current) => ({ ...current, ...update }));
+    const next = { ...preparationRef.current, ...update };
+    preparationRef.current = next;
+    revisionRef.current += 1;
+    setPreparation(next);
     setDirty(true);
-    setMessage('');
+    setSaveStatus('pending');
+  };
+
+  // Accept what the server now holds, e.g. after an upload.
+  const acceptSaved = (body: SavedState) => {
+    preparationRef.current = body.preparation;
+    issuesRef.current = body.issues;
+    revisionRef.current += 1;
+    savedRevisionRef.current = revisionRef.current;
+    setPreparation(body.preparation);
+    setIssues(body.issues);
+    setDirty(false);
+    setSaveStatus('saved');
   };
 
   // Follow the Agent while a run is waiting or in progress.
@@ -235,41 +264,84 @@ export default function CompletionCertificateForm({
     return () => window.clearInterval(timer);
   }, [jobId, jobWaiting]);
 
-  const save = async () => {
-    setSaving(true);
-    setError('');
+  /** Save the latest answers. One save at a time; returns the issues, or null if it failed. */
+  const saveNow = async (): Promise<CompletionIssue[] | null> => {
+    if (saveInFlight.current) await saveInFlight.current;
+    if (revisionRef.current === savedRevisionRef.current) return issuesRef.current;
+    const revision = revisionRef.current;
+    const run = (async () => {
+      setSaveStatus('saving');
+      try {
+        const response = await fetch(`${endpoint}/preparation`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(preparationRef.current),
+        });
+        if (!response.ok) throw new Error(await readError(response, 'Could not save the completion certificate details.'));
+        const body = await response.json() as SavedState;
+        savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
+        setSaveError('');
+        if (revisionRef.current === revision) {
+          acceptSaved(body);
+        } else {
+          setSaveStatus('pending');  // newer edits save next
+        }
+        return body.issues;
+      } catch (requestError) {
+        setSaveStatus('error');
+        setSaveError(requestError instanceof Error ? requestError.message : 'Could not save the completion certificate details.');
+        window.setTimeout(() => { void saveNow(); }, AUTOSAVE_RETRY_MS);
+        return null;
+      }
+    })();
+    saveInFlight.current = run;
     try {
-      const response = await fetch(`${endpoint}/preparation`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(preparation),
-      });
-      if (!response.ok) throw new Error(await readError(response, 'Could not save the completion certificate details.'));
-      const body = await response.json() as { preparation: CompletionPreparation; issues: CompletionIssue[] };
-      setPreparation(body.preparation);
-      setIssues(body.issues);
-      setDirty(false);
-      setMessage(body.issues.length ? 'Saved. Some details are still missing.' : 'Saved. Ready to send to the Agent.');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Could not save the completion certificate details.');
+      return await run;
     } finally {
-      setSaving(false);
+      if (saveInFlight.current === run) saveInFlight.current = null;
     }
   };
+
+  /** Wait until everything typed so far is saved. */
+  const flush = async (): Promise<CompletionIssue[] | null> => {
+    let latest: CompletionIssue[] | null = issuesRef.current;
+    for (let attempt = 0; attempt < 5 && revisionRef.current !== savedRevisionRef.current; attempt += 1) {
+      latest = await saveNow();
+      if (latest === null) return null;
+    }
+    if (saveInFlight.current) latest = await saveInFlight.current;
+    return latest;
+  };
+
+  // Save shortly after the last change.
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const timer = window.setTimeout(() => { void saveNow(); }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [preparation, dirty]);
+
+  // Warn before leaving with changes not yet saved.
+  useEffect(() => {
+    if (!dirty && saveStatus !== 'saving') return undefined;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, saveStatus]);
 
   // Uploads are saved straight away, so save typed changes first.
   const addDocuments = async (request: (body: RequestInit) => RequestInit[]) => {
     setError('');
     setUploadError('');
-    if (dirty) await save();
+    if (await flush() === null) {
+      setUploadError('Your latest changes could not be saved, so the document was not added. Try again in a moment.');
+      setUploading('');
+      return;
+    }
     for (const init of request({})) {
       try {
         const response = await fetch(`${endpoint}/documents`, { method: 'POST', ...init });
         if (!response.ok) throw new Error(await readError(response, 'Could not add that document.'));
-        const body = await response.json() as { preparation: CompletionPreparation; issues: CompletionIssue[] };
-        setPreparation(body.preparation);
-        setIssues(body.issues);
-        setDirty(false);
+        acceptSaved(await response.json() as SavedState);
       } catch (requestError) {
         setUploadError(requestError instanceof Error ? requestError.message : 'Could not add that document.');
         break;
@@ -303,6 +375,9 @@ export default function CompletionCertificateForm({
     setQueueing(true);
     setError('');
     try {
+      const latest = await flush();
+      if (latest === null) throw new Error('Your latest changes could not be saved yet. Try again in a moment.');
+      if (latest.length) throw new Error('Some details are still missing. See Missing information.');
       const response = await fetch(`${endpoint}/run`, { method: 'POST' });
       if (!response.ok) throw new Error(await readError(response, 'Could not send the completion certificate to the Agent.'));
       const body = await response.json() as { redirectTo: string };
@@ -334,7 +409,10 @@ export default function CompletionCertificateForm({
   const hasWarrant = view.documents.some((document) => document.role === 'BUILDING_WARRANT');
   const client = parties.client;
   const agent = parties.agent;
-  const canQueue = !issues.length && !dirty && !saving && !queueing && !jobWaiting;
+  const canQueue = !issues.length && !queueing && !jobWaiting && saveStatus !== 'error';
+  const saveLabel = saveStatus === 'error'
+    ? `Couldn't save: ${saveError} Retrying…`
+    : saveStatus === 'saved' ? 'All changes saved' : 'Saving…';
 
   return (
     <div className="prep-form">
@@ -563,7 +641,7 @@ export default function CompletionCertificateForm({
         </Section>
 
         <Section title="Missing information">
-          {dirty ? <p className="mt-3 text-sm text-stone-600">Save your changes to check what is still missing.</p>
+          {dirty ? <p className="mt-3 text-sm text-stone-600">Checking your latest changes…</p>
             : issues.length ? (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900">
                 {issues.map((issue) => <li key={issue.field}>{issue.message}</li>)}
@@ -572,13 +650,10 @@ export default function CompletionCertificateForm({
         </Section>
 
         <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-stone-200 pt-5">
-          <button type="button" className="btn btn-secondary" disabled={saving || queueing || !dirty} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
           <button type="button" className="btn btn-primary" disabled={!canQueue || issues.length > 0} onClick={() => void queue()}>
             {queueing ? 'Sending…' : 'Confirm and send to Agent'}
           </button>
-          {message && <span role="status" className="text-sm text-stone-600">{message}</span>}
+          <span role="status" className={`text-sm ${saveStatus === 'error' ? 'font-semibold text-red-700' : 'text-stone-600'}`}>{saveLabel}</span>
           {jobWaiting && <span className="text-sm text-stone-600">A run is already waiting or in progress.</span>}
         </div>
         {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{error}</p>}
