@@ -63,12 +63,24 @@ const capabilities = {
 assert.equal(agentCapabilitiesSchema.safeParse(capabilities).success, true);
 assert.equal(agentCapabilitiesSchema.safeParse({ ...capabilities, workflows: ['SOMETHING_ELSE'] }).success, false);
 const job = { type: 'COMPLETION_CERTIFICATE', payloadVersion: 2, dataSnapshot: fixture };
-assert.equal(agentSupportsJob({ capabilities } as never, job as never), true);
+assert.equal(agentSupportsJob({ capabilities } as never, job as never), false, 'a 4.2.17 Agent cannot finish a completion job');
 assert.equal(
   agentSupportsJob({ capabilities: { ...capabilities, workflows: ['HOUSEHOLDER_PLANNING', 'BUILDING_WARRANT'] } } as never, job as never),
   false,
   'an older Agent is never offered a completion job',
 );
+// Completion jobs now run supporting documents and the declaration: older Agents cannot.
+assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [2] } } as never, job as never), true);
+assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [1] } } as never, job as never), false);
+assert.equal(
+  agentSupportsJob({ capabilities: { ...capabilities, workflows: ['HOUSEHOLDER_PLANNING', 'BUILDING_WARRANT'] } } as never,
+    { type: 'BUILDING_WARRANT', payloadVersion: 2 } as never),
+  true,
+  'warrant jobs are unaffected',
+);
+// Earlier completion snapshots without documents stay valid.
+assert.deepEqual(completionCertificateSnapshotSchema.parse(section).documents, []);
+
 // Completion jobs are only created by their own endpoint.
 assert.equal(desktopJobCreateSchema.safeParse({ type: 'COMPLETION_CERTIFICATE' }).success, false);
 

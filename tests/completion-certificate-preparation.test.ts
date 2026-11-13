@@ -113,6 +113,7 @@ const complete: CompletionPreparation = {
   fireSafetyDesignSummary: false,
   continuingRequirements: { applies: true, details: 'Maintain the fire door.' },
   confirmedAt: null,
+  documents: [],
 };
 const parties: CompletionParties = {
   client: { title: 'Mr', firstName: 'Sam', lastName: 'Client', buildingNumber: '112', addressLine1: 'Ralston Avenue',

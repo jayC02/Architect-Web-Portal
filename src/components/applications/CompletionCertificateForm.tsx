@@ -1,9 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import {
   COMPLETION_TEXT_LIMIT,
-  MAX_CERTIFICATE_ENTRIES,
   REGISTER_PART2,
-  emptyCertificateEntry,
+  applyCompletionDocuments,
   registerPart1Codes,
   type CertificateRegister,
   type CompletionCertificateEntry,
@@ -11,6 +10,11 @@ import {
   type CompletionParties,
   type CompletionPreparation,
 } from '@/lib/completion-certificate';
+import {
+  COMPLETION_DOCUMENT_ROLES,
+  type CompletionDocument,
+  type CompletionDocumentRoleKey,
+} from '@/lib/completion-documents';
 
 export type CompletionJobStatus = {
   id: string;
@@ -55,8 +59,8 @@ const JOB_LABELS: Record<string, string> = {
   CLAIMED: 'Starting',
   IN_PROGRESS: 'Running in eBuilding Standards',
   NEEDS_REVIEW: 'Needs attention in the Agent',
-  AWAITING_PORTAL_REVIEW: 'Main Details completed — review it in eBuilding Standards',
-  COMPLETED: 'Main Details completed — review it in eBuilding Standards',
+  AWAITING_PORTAL_REVIEW: 'Ready to submit — review it in eBuilding Standards',
+  COMPLETED: 'Ready to submit — review it in eBuilding Standards',
   CANCELLED: 'Cancelled',
   FAILED_RETRYABLE: 'Stopped before finishing',
   FAILED_FINAL: 'Stopped before finishing',
@@ -98,12 +102,12 @@ function LimitedText({ label, value, onChange }: { label: string; value: string 
   );
 }
 
-function CertificateEntries({ register, title, entries, onChange, documents, today }: {
+function CertificateEntries({ register, title, entries, onChange, filenames, today }: {
   register: CertificateRegister;
   title: string;
   entries: CompletionCertificateEntry[];
   onChange: (entries: CompletionCertificateEntry[]) => void;
-  documents: Props['documents'];
+  filenames: Record<string, string>;
   today: string;
 }) {
   const codes = registerPart1Codes(register);
@@ -141,7 +145,10 @@ function CertificateEntries({ register, title, entries, onChange, documents, tod
     <div className="prep-followup mt-4">
       {entries.map((entry, index) => (
         <fieldset key={index} className="mb-4 rounded-lg border border-stone-200 bg-white p-4">
-          <legend className="px-1 text-sm font-semibold text-ink">{title} {index + 1}</legend>
+          <legend className="px-1 text-sm font-semibold text-ink">
+            {title} {index + 1}{entry.documentId && filenames[entry.documentId] ? ` — ${filenames[entry.documentId]}` : ''}
+          </legend>
+          <p className="mb-3 text-xs text-stone-500">Read from the uploaded certificate. Check each value.</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block sm:col-span-2">
               <span className="prep-field-question">Certificate number</span>
@@ -157,26 +164,9 @@ function CertificateEntries({ register, title, entries, onChange, documents, tod
               <span className="prep-field-question">Approved body date of signature</span>
               <input type="date" className="field" max={today} value={entry.approvedBodySignatureDate ?? ''} onChange={(event) => update(index, { approvedBodySignatureDate: event.target.value || null })} />
             </label>
-            <label className="block sm:col-span-2">
-              <span className="prep-field-question">Signed certificate (optional)</span>
-              <select className="field" value={entry.documentId ?? ''} onChange={(event) => update(index, { documentId: event.target.value || null })}>
-                <option value="">Not selected</option>
-                {documents.map((document) => <option key={document.id} value={document.id}>{document.name}</option>)}
-              </select>
-              <span className="mt-1 block text-xs text-stone-500">Uploaded in a later step. Choosing it here does not upload it to the portal.</span>
-            </label>
           </div>
-          <button type="button" className="btn btn-secondary mt-4" onClick={() => onChange(entries.filter((_, position) => position !== index))}>
-            Remove {title.toLowerCase()} {index + 1}
-          </button>
         </fieldset>
       ))}
-      <button
-        type="button" className="btn btn-secondary" disabled={entries.length >= MAX_CERTIFICATE_ENTRIES}
-        onClick={() => onChange([...entries, emptyCertificateEntry(register)])}
-      >
-        Add {title.toLowerCase()}
-      </button>
     </div>
   );
 }
@@ -219,6 +209,7 @@ export default function CompletionCertificateForm({
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [job, setJob] = useState(activeJob);
+  const [uploading, setUploading] = useState('');
   const queueInFlight = useRef(false);
   const endpoint = `/api/building-warrant/${encodeURIComponent(warrantId)}/completion-certificate`;
 
@@ -264,6 +255,44 @@ export default function CompletionCertificateForm({
     }
   };
 
+  // Uploads are saved straight away, so save typed changes first.
+  const addDocuments = async (request: (body: RequestInit) => RequestInit[]) => {
+    setError('');
+    if (dirty) await save();
+    for (const init of request({})) {
+      try {
+        const response = await fetch(`${endpoint}/documents`, { method: 'POST', ...init });
+        if (!response.ok) throw new Error(await readError(response, 'Could not add that document.'));
+        const body = await response.json() as { preparation: CompletionPreparation; issues: CompletionIssue[] };
+        setPreparation(body.preparation);
+        setIssues(body.issues);
+        setDirty(false);
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : 'Could not add that document.');
+        break;
+      }
+    }
+    setUploading('');
+  };
+
+  const uploadFiles = (files: FileList | null) => {
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
+    setUploading(list.length === 1 ? `Reading ${list[0].name}…` : `Reading ${list.length} documents…`);
+    void addDocuments(() => list.map((file) => {
+      const form = new FormData();
+      form.append('file', file);
+      return { body: form };
+    }));
+  };
+
+  const attachExisting = (documentId: string, name: string) => {
+    setUploading(`Reading ${name}…`);
+    void addDocuments(() => [{ headers: { 'content-type': 'application/json' }, body: JSON.stringify({ documentId }) }]);
+  };
+
+  const setDocuments = (documents: CompletionDocument[]) => change({ documents });
+
   const queue = async () => {
     // One portal run per confirmation, however many times the button is pressed.
     if (queueInFlight.current) return;
@@ -293,7 +322,13 @@ export default function CompletionCertificateForm({
     setJob({ ...job, status: 'CANCELLED', progressMessage: 'Cancelled' });
   };
 
-  const { relaxation, constructionCertificates, designCertificates, continuingRequirements } = preparation;
+  // What will be sent: answers that follow the uploads, and one entry per uploaded certificate.
+  const view = applyCompletionDocuments(preparation);
+  const { relaxation, constructionCertificates, designCertificates, continuingRequirements } = view;
+  const attached = new Set(view.documents.map((document) => document.documentId));
+  const filenames = Object.fromEntries(view.documents.map((document) => [document.documentId, document.filename]));
+  const projectDocuments = documents.filter((document) => !attached.has(document.id));
+  const hasWarrant = view.documents.some((document) => document.role === 'BUILDING_WARRANT');
   const client = parties.client;
   const agent = parties.agent;
   const canQueue = !issues.length && !dirty && !saving && !queueing && !jobWaiting;
@@ -310,13 +345,88 @@ export default function CompletionCertificateForm({
           )}
           {!jobWaiting && !FINISHED_STATUSES.has(job.status) && (job.error || job.resultSummary) && <p className="mt-1 text-sm text-stone-600">{job.error || job.resultSummary}</p>}
           {FINISHED_STATUSES.has(job.status) && (
-            <p className="mt-2 text-sm text-stone-600">Supporting documents, the declaration and submission are still to be completed in eBuilding Standards.</p>
+            <p className="mt-2 text-sm text-stone-600">Main Details, supporting documents, email notification and the declaration are done. Review it and submit it in eBuilding Standards.</p>
           )}
           {jobWaiting && job.status !== 'NEEDS_REVIEW' && <button type="button" className="btn btn-secondary mt-4" onClick={() => void cancel()}>Cancel run</button>}
         </section>
       )}
 
       <div className="panel rounded-lg p-5">
+        <Section
+          title="Completion documents"
+          description="Upload anything that should go with this completion certificate. Each document is read to work out what it is, and the answers below follow from what you upload."
+        >
+          {!hasWarrant && (
+            <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+              Tip: upload the granted building warrant too. It is only read to fill in the warrant reference and dates, and is not sent to the council.
+            </p>
+          )}
+          <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-stone-300 bg-white px-4 py-6 text-center hover:border-moss">
+            <span className="text-sm font-semibold text-ink">Choose files to upload</span>
+            <span className="mt-1 text-xs text-stone-500">PDF is best. EPC, statement of sustainability, Fire Safety Design Summary, certificates, the building warrant or anything else.</span>
+            <input
+              type="file" multiple className="sr-only" accept="application/pdf,image/jpeg,image/png" disabled={Boolean(uploading)}
+              onChange={(event) => { uploadFiles(event.target.files); event.target.value = ''; }}
+            />
+          </label>
+          {uploading && <p role="status" className="mt-2 text-sm text-stone-600">{uploading}</p>}
+
+          {view.documents.length > 0 && (
+            <ul className="mt-4 divide-y divide-stone-200 rounded-lg border border-stone-200">
+              {view.documents.map((document) => (
+                <li key={document.documentId} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink" title={document.filename}>{document.filename}</span>
+                  <select
+                    className="field w-auto" aria-label={`What ${document.filename} is`} value={document.role}
+                    onChange={(event) => setDocuments(view.documents.map((item) => item.documentId === document.documentId
+                      ? { ...item, role: event.target.value as CompletionDocumentRoleKey, source: 'manual' } : item))}
+                  >
+                    {COMPLETION_DOCUMENT_ROLES.filter((role) => role.key !== 'UNRECOGNISED' || document.role === 'UNRECOGNISED')
+                      .map((role) => <option key={role.key} value={role.key}>{role.key === 'UNRECOGNISED' ? 'Not recognised — choose' : role.label}</option>)}
+                  </select>
+                  <span className="text-xs text-stone-500">
+                    {document.role === 'BUILDING_WARRANT' ? 'Read only, not sent' : document.source === 'manual' ? 'Chosen by you' : 'Recognised automatically'}
+                  </span>
+                  <button
+                    type="button" className="text-sm font-semibold text-stone-600 hover:text-ink"
+                    onClick={() => setDocuments(view.documents.filter((item) => item.documentId !== document.documentId))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {projectDocuments.length > 0 && (
+            <details className="mt-4 text-sm">
+              <summary className="cursor-pointer font-semibold text-moss">Add a document already in this project ({projectDocuments.length})</summary>
+              <ul className="mt-2 space-y-1">
+                {projectDocuments.map((document) => (
+                  <li key={document.id} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-stone-700">{document.name}</span>
+                    <button type="button" className="btn btn-secondary" disabled={Boolean(uploading)} onClick={() => attachExisting(document.id, document.name)}>Add</button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
+          <dl className="mt-4 grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
+            {([
+              ['Energy Performance Certificate', view.energyPerformanceCertificate],
+              ['Statement of Sustainability', view.sustainabilityStatement],
+              ['Fire Safety Design Summary', view.fireSafetyDesignSummary],
+              ['Certificates of construction', constructionCertificates.accompany],
+            ] as Array<[string, boolean | null]>).map(([label, value]) => (
+              <div key={label} className="flex justify-between gap-4">
+                <dt className="text-stone-600">{label}</dt>
+                <dd className="font-semibold text-ink">{value ? 'Yes' : 'No'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+
         <Section title="Completion and warrant details">
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -385,18 +495,14 @@ export default function CompletionCertificateForm({
           )}
         </Section>
 
-        <Section title="Certificates of construction">
-          <YesNo
-            legend="Do any certificates from approved certifiers of construction accompany this submission?" value={constructionCertificates.accompany}
-            onChange={(accompany) => change({ constructionCertificates: { ...constructionCertificates, accompany } })}
-          />
-          {constructionCertificates.accompany && (
+        <Section title="Certificates of construction" description="Yes when a certificate of construction is uploaded above.">
+          {constructionCertificates.accompany ? (
             <CertificateEntries
-              register="construction" title="Certificate of construction" documents={documents} today={today}
+              register="construction" title="Certificate of construction" filenames={filenames} today={today}
               entries={constructionCertificates.entries}
               onChange={(entries) => change({ constructionCertificates: { ...constructionCertificates, entries } })}
             />
-          )}
+          ) : <p className="mt-3 text-sm text-stone-600">No certificate of construction uploaded, so the answer is No.</p>}
         </Section>
 
         <Section title="Certificates of design">
@@ -406,34 +512,19 @@ export default function CompletionCertificateForm({
           />
           {designCertificates.accompaniedWarrant && (
             <div className="prep-followup">
-              <YesNo
-                legend="Do you require to provide the verifier with a Notice of Finalisation of Design Details (Form Q)?" value={designCertificates.formQRequired}
-                onChange={(formQRequired) => change({ designCertificates: { ...designCertificates, formQRequired } })}
-              />
+              <p className="mt-3 text-sm text-stone-600">
+                Notice of Finalisation of Design Details (Form Q): <strong>{designCertificates.formQRequired ? 'Yes' : 'No'}</strong>
+                {designCertificates.formQRequired ? '' : ' — upload a Form Q above if one is required.'}
+              </p>
               {designCertificates.formQRequired && (
                 <CertificateEntries
-                  register="design" title="Form Q certificate" documents={documents} today={today}
+                  register="design" title="Form Q certificate" filenames={filenames} today={today}
                   entries={designCertificates.entries}
                   onChange={(entries) => change({ designCertificates: { ...designCertificates, entries } })}
                 />
               )}
             </div>
           )}
-        </Section>
-
-        <Section title="Accompanying documents" description="Answer for this completion submission. Uploads happen in a later step.">
-          <YesNo
-            legend="Does a copy of an Energy Performance Certificate(s) accompany this submission?" value={preparation.energyPerformanceCertificate}
-            onChange={(energyPerformanceCertificate) => change({ energyPerformanceCertificate })}
-          />
-          <YesNo
-            legend="Has a statement of sustainability been issued for the purpose of regulation 9 and section 7 of Schedule 5 to the Building (Scotland) Regulations 2004?"
-            value={preparation.sustainabilityStatement} onChange={(sustainabilityStatement) => change({ sustainabilityStatement })}
-          />
-          <YesNo
-            legend="Does a Fire Safety Design Summary accompany this submission?" value={preparation.fireSafetyDesignSummary}
-            onChange={(fireSafetyDesignSummary) => change({ fireSafetyDesignSummary })}
-          />
         </Section>
 
         <Section title="Continuing requirements">
@@ -468,7 +559,7 @@ export default function CompletionCertificateForm({
               <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900">
                 {issues.map((issue) => <li key={issue.field}>{issue.message}</li>)}
               </ul>
-            ) : <p className="mt-3 text-sm text-stone-600">Nothing is missing. The Agent will complete Main Details and stop for your review.</p>}
+            ) : <p className="mt-3 text-sm text-stone-600">Nothing is missing. The Agent will complete Main Details, upload the documents, set email notification and complete the declaration, then stop for your review.</p>}
         </Section>
 
         <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-stone-200 pt-5">

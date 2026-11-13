@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { ownerDetailsSchema } from '@/lib/building-warrant-owner';
 import { warrantSustainabilitySchema } from '@/lib/building-warrant-follow-ups';
 import { optionalText } from '@/lib/validation/common';
+import { COMPLETION_DOCUMENT_ROLE_KEYS } from '@/lib/completion-documents';
 import {
   COMPLETION_FIXED_ANSWERS,
   COMPLETION_TEXT_LIMIT,
@@ -207,6 +208,13 @@ export const completionCertificateSnapshotSchema = z.object({
     details: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
   }),
   fixedAnswers: fixedLiterals(COMPLETION_FIXED_ANSWERS),
+  // Documents the Agent uploads in Supporting Documentation, in order.
+  documents: z.array(z.object({
+    documentId: z.string().min(1),
+    role: z.enum(COMPLETION_DOCUMENT_ROLE_KEYS),
+    filename: z.string().max(255),
+    description: z.string().max(200),
+  })).max(40).default([]),
   updatedAt: z.string().datetime(),
 });
 

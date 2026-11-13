@@ -4,6 +4,7 @@ import {
   AutomationJobStatus,
   AutomationJobType,
   CompletionCertificateStatus,
+  DocumentSortSource,
   WarrantType,
   type Prisma,
   type PrismaClient,
@@ -21,6 +22,12 @@ import {
   type CompletionPreparation,
 } from '@/lib/completion-certificate';
 import { readProjectScreener } from '@/lib/projects/screener';
+import { completionDocumentRole, type CompletionDocument } from '@/lib/completion-documents';
+import { readStoredDocumentBytes, saveUploadedDocument } from '@/lib/server/upload-storage';
+import {
+  analyseCompletionDocument,
+  type CompletionDocumentAnalysis,
+} from '@/server/services/completion-document-analysis.service';
 import { HttpError } from '@/lib/utils/http';
 import {
   assertSafeAutomationSnapshot,
@@ -29,6 +36,7 @@ import {
 } from '@/lib/validation/automation-job';
 import {
   canonicalJson,
+  mapDocument,
   maxDate,
   snapshotClientApplicant,
   snapshotOrganisationAgent,
@@ -223,6 +231,15 @@ export const buildCompletionCertificateSnapshot = async (
     project.site?.updatedAt,
     defaults?.updatedAt,
   ]);
+  // Everything uploaded except the warrant itself, which is only read for its details.
+  const toSend = preparation.documents.filter((document) => completionDocumentRole(document.role).sentToPortal);
+  const stored = toSend.length
+    ? await database.projectDocument.findMany({
+        where: { organisationId: input.organisationId, projectId: project.id, id: { in: toSend.map((document) => document.documentId) } },
+      })
+    : [];
+  const storedById = new Map(stored.map((document) => [document.id, document]));
+  const sending = toSend.filter((document) => storedById.has(document.documentId));
   const completionCertificate = completionCertificateSnapshotSchema.parse({
     sourceWarrantId: warrant.id,
     proposalHint: {
@@ -231,8 +248,15 @@ export const buildCompletionCertificateSnapshot = async (
     },
     ...resolvedAnswers(preparation),
     fixedAnswers: COMPLETION_FIXED_ANSWERS,
+    documents: sending.map((document) => ({
+      documentId: document.documentId,
+      role: document.role,
+      filename: document.filename,
+      description: completionDocumentRole(document.role).portalDescription,
+    })),
     updatedAt: warrant.updatedAt.toISOString(),
   });
+  const documents = sending.map((document) => mapDocument(storedById.get(document.documentId)!));
   const preflight = {
     status: 'READY' as const,
     missing: [],
@@ -268,7 +292,7 @@ export const buildCompletionCertificateSnapshot = async (
     planning: null,
     buildingWarrant: null,
     completionCertificate,
-    documents: [],
+    documents,
     preflight,
   };
   const integrity = `sha256:${createHash('sha256').update(canonicalJson(withoutIntegrity)).digest('hex')}`;
@@ -281,7 +305,7 @@ export const buildCompletionCertificateSnapshot = async (
     title: `Completion Certificate - ${project.name}`,
     sourceType: AutomationJobSourceType.WARRANT_RECORD,
     dataSnapshot,
-    documentSnapshot: { schemaVersion: 2 as const, documents: [] as never[] },
+    documentSnapshot: { schemaVersion: 2 as const, documents: dataSnapshot.documents },
     snapshotHash: integrity,
     sourceUpdatedAt,
     preflight,
@@ -306,10 +330,23 @@ export const saveCompletionPreparation = async (
   if (!parsed.success) {
     throw new HttpError(400, 'Check the completion certificate details.', parsed.error.flatten());
   }
+  // Only this project's own documents can be attached to its completion certificate.
+  const project = await database.buildingWarrantApplication.findFirst({
+    where: { id: existing.id, organisationId: input.organisationId },
+    select: { projectId: true },
+  });
+  const requestedIds = parsed.data.documents.map((document) => document.documentId);
+  const owned = requestedIds.length && project
+    ? new Set((await database.projectDocument.findMany({
+        where: { organisationId: input.organisationId, projectId: project.projectId, id: { in: requestedIds } },
+        select: { id: true },
+      })).map((document) => document.id))
+    : new Set<string>();
+  const preparation = { ...parsed.data, documents: parsed.data.documents.filter((document) => owned.has(document.documentId)) };
   await database.buildingWarrantApplication.update({
     where: { id: existing.id },
     data: {
-      completionPreparationData: parsed.data as Prisma.InputJsonValue,
+      completionPreparationData: preparation as Prisma.InputJsonValue,
       completionPreparedAt: new Date(),
     },
   });
@@ -418,4 +455,87 @@ export const queueCompletionCertificateJob = async (
   if (queued.authorised) return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline: null };
   const { compatibleAgentOnline } = await authorise({ organisationId: input.organisationId, jobId: queued.jobId });
   return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline };
+};
+
+type UploadDependencies = {
+  database?: Database;
+  analyse?: (input: { bytes?: Buffer; filename: string; mimeType: string }) => Promise<CompletionDocumentAnalysis>;
+  saveFile?: (file: File) => Promise<{ fileName: string; storageUrl: string; storageKey: string; mimeType: string; sizeBytes: number }>;
+  readBytes?: (storageKey: string | null, storageUrl: string | null) => Promise<Buffer>;
+};
+
+/**
+ * Add one document to a completion certificate: a new upload, or a document
+ * already in the project. It is read to find what it is; an uploaded building
+ * warrant fills any empty warrant fields.
+ */
+export const addCompletionDocument = async (
+  input: { organisationId: string; warrantId: string; userId: string; file?: File; documentId?: string; today?: Date },
+  dependencies: UploadDependencies = {},
+) => {
+  const database = dependencies.database ?? prisma;
+  const analyse = dependencies.analyse ?? ((document) => analyseCompletionDocument(document));
+  const warrant = await database.buildingWarrantApplication.findFirst({
+    where: { id: input.warrantId, organisationId: input.organisationId },
+    select: { id: true, projectId: true },
+  });
+  if (!warrant) throw new HttpError(404, 'Building warrant application not found.');
+  if (!input.file && !input.documentId) throw new HttpError(400, 'Choose a document to add.');
+
+  let document: { id: string; originalName: string; fileName: string; mimeType: string };
+  let analysis: CompletionDocumentAnalysis;
+  if (input.file) {
+    const bytes = Buffer.from(await input.file.arrayBuffer());
+    analysis = await analyse({ bytes, filename: input.file.name, mimeType: input.file.type });
+    const saved = await (dependencies.saveFile ?? ((file: File) => saveUploadedDocument(file, {
+      folder: `organisations/${input.organisationId}/projects/${warrant.projectId}`,
+      label: 'document',
+    })))(input.file);
+    document = await database.projectDocument.create({
+      data: {
+        organisationId: input.organisationId,
+        projectId: warrant.projectId,
+        uploadedById: input.userId,
+        originalName: input.file.name || saved.fileName,
+        ...saved,
+        type: completionDocumentRole(analysis.role).documentType,
+        sortSource: analysis.source === 'ai' ? DocumentSortSource.AI : DocumentSortSource.PDF_TEXT,
+      },
+      select: { id: true, originalName: true, fileName: true, mimeType: true },
+    });
+  } else {
+    const existing = await database.projectDocument.findFirst({
+      where: { id: input.documentId!, organisationId: input.organisationId, projectId: warrant.projectId },
+      select: { id: true, originalName: true, fileName: true, mimeType: true, storageKey: true, storageUrl: true },
+    });
+    if (!existing) throw new HttpError(404, 'Document not found in this project.');
+    const bytes = await (dependencies.readBytes ?? readStoredDocumentBytes)(existing.storageKey, existing.storageUrl)
+      .catch(() => undefined);
+    analysis = await analyse({ bytes, filename: existing.originalName || existing.fileName, mimeType: existing.mimeType });
+    document = existing;
+  }
+
+  const context = await loadCompletionContext(input, database);
+  const { preparation } = completionPreparationFor(context, input.today);
+  const record: CompletionDocument = {
+    documentId: document.id,
+    filename: document.originalName || document.fileName,
+    role: analysis.role,
+    source: analysis.source,
+    details: analysis.details,
+  };
+  const details = analysis.role === 'BUILDING_WARRANT' ? analysis.details : {};
+  const updated = {
+    ...preparation,
+    // Read values only fill what is still empty; the architect's own entries stay.
+    warrantReference: preparation.warrantReference ?? details.warrantReference ?? null,
+    warrantDate: preparation.warrantDate ?? details.warrantDate ?? null,
+    amendmentDates: preparation.amendmentDates ?? details.amendmentDates ?? null,
+    documents: [...preparation.documents.filter((item) => item.documentId !== document.id), record],
+  };
+  const result = await saveCompletionPreparation(
+    { organisationId: input.organisationId, warrantId: input.warrantId, body: updated, today: input.today },
+    database,
+  );
+  return { ...result, document: { id: document.id, filename: record.filename, role: record.role, source: record.source } };
 };

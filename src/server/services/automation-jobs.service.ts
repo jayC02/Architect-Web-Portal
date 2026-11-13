@@ -198,7 +198,7 @@ const documentRelevance = (type: DocumentType) => {
   ];
 };
 
-const mapDocument = (document: ProjectDocument, locationPlanId?: string) => ({
+export const mapDocument = (document: ProjectDocument, locationPlanId?: string) => ({
   id: document.id,
   originalFilename: document.originalName || document.fileName,
   filename: document.originalName || document.fileName,

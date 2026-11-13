@@ -134,6 +134,15 @@ export const completionDatabase = (options: Options = {}) => {
       findMany: async ({ where }: any) => state.documents
         .filter((row) => row.organisationId === where.organisationId && row.projectId === where.projectId
           && (!where.id?.in || where.id.in.includes(row.id))),
+      findFirst: async ({ where }: any) => state.documents.find((row) => row.id === where.id
+        && row.organisationId === where.organisationId && (!where.projectId || row.projectId === where.projectId)) ?? null,
+      create: async ({ data }: any) => {
+        const row = { id: `doc_new_${state.documents.length}`, status: 'APPROVED', revision: null, drawingNumber: null,
+          drawingTitle: null, sortSource: null, sortConfidence: null, createdAt: new Date('2026-11-13T09:00:00.000Z'),
+          updatedAt: new Date('2026-11-13T09:00:00.000Z'), ...data };
+        state.documents.push(row);
+        return row;
+      },
     },
   };
   return { database, state };

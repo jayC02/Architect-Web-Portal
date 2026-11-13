@@ -52,8 +52,8 @@ const input = {
   assert.equal(snapshot.metadata.sourceType, 'WARRANT_RECORD');
   assert.equal(snapshot.buildingWarrant, null);
   assert.equal(snapshot.planning, null);
-  assert.deepEqual(snapshot.documents, []);
-  assert.deepEqual(built.documentSnapshot, { schemaVersion: 2, documents: [] });
+  assert.deepEqual(snapshot.documents.map((item) => item.id), ['doc_epc', 'doc_cc', 'doc_fq']);
+  assert.equal(built.documentSnapshot.schemaVersion, 2);
   assert.equal(built.preflight.status, 'READY');
   assert.equal(snapshot.preflight.locationPlanStatus, 'NOT_APPLICABLE');
   assert.match(built.snapshotHash, /^sha256:[a-f0-9]{64}$/);
@@ -81,6 +81,22 @@ const input = {
   const rebuilt = await buildCompletionCertificateSnapshot(input, database as never, today);
   assert.equal(rebuilt.sourceUpdatedAt.toISOString(), '2026-11-11T08:00:00.000Z');
   assert.notEqual(rebuilt.snapshotHash, built.snapshotHash);
+}
+
+// Uploaded completion documents go with the job; the building warrant is only read.
+{
+  const { database } = completionDatabase({ completionPreparationData: completePreparation });
+  const built = await buildCompletionCertificateSnapshot(input, database as never, today);
+  const sent = built.dataSnapshot.completionCertificate!.documents;
+  assert.deepEqual(sent.map((item) => [item.documentId, item.role, item.description]), [
+    ['doc_epc', 'ENERGY_PERFORMANCE_CERTIFICATE', 'Energy Performance Certificate'],
+    ['doc_cc', 'CONSTRUCTION_CERTIFICATE', 'Certificate of Construction'],
+    ['doc_fq', 'DESIGN_CERTIFICATE', 'Notice of Finalisation of Design Details (Form Q)'],
+  ]);
+  assert.deepEqual(built.dataSnapshot.documents.map((item) => item.id), ['doc_epc', 'doc_cc', 'doc_fq'],
+    'only these documents can be downloaded by the Agent');
+  assert.deepEqual(built.documentSnapshot.documents.map((item) => item.id), ['doc_epc', 'doc_cc', 'doc_fq']);
+  assert.equal(built.dataSnapshot.documents[0].originalFilename, 'EPC.pdf');
 }
 
 // Answers that do not apply are cleared rather than sent.

@@ -13,7 +13,13 @@ assert.doesNotMatch(form, /'NIC1'|'SEL1'|'SNP1'|'BRE1'/);
 assert.match(form, /<textarea[^>]*maxLength=\{COMPLETION_TEXT_LIMIT\}/);
 assert.equal((form.match(/<LimitedText\b/g) ?? []).length, 2, 'amendment dates and continuing requirements share the limited field');
 assert.doesNotMatch(form.replace(/function LimitedText[\s\S]*?\r?\n}\r?\n/, ''), /<textarea/, 'no unlimited textarea');
-assert.match(form, /MAX_CERTIFICATE_ENTRIES/);
+// Uploads: several files at once, existing project documents, and a type chooser for each.
+assert.match(form, /type="file" multiple/);
+assert.match(form, /`\$\{endpoint\}\/documents`/);
+assert.match(form, /Add a document already in this project/);
+assert.match(form, /COMPLETION_DOCUMENT_ROLES/);
+assert.match(form, /applyCompletionDocuments\(preparation\)/, 'answers shown are the ones that will be sent');
+assert.match(form, /upload the granted building warrant/);
 // Save and queue use the completion endpoints only.
 assert.match(form, /const endpoint = `\/api\/building-warrant\/\$\{encodeURIComponent\(warrantId\)\}\/completion-certificate`/);
 assert.match(form, /`\$\{endpoint\}\/preparation`/);
@@ -27,10 +33,10 @@ assert.match(form, /queueInFlight/);
 assert.match(form, /Fixed answers/);
 assert.match(form, /notice references', 'N\/A'/, 'the review table matches what the Agent enters');
 assert.match(form, /Missing information/);
-assert.match(form, /Uploaded in a later step/);
-// The Agent reports a finished run as COMPLETED; both finished statuses read as Main Details completed.
-assert.match(form, /COMPLETED: 'Main Details completed/);
-assert.match(form, /AWAITING_PORTAL_REVIEW: 'Main Details completed/);
+assert.doesNotMatch(form, /Does a copy of an Energy Performance Certificate/, 'EPC is answered by uploading, not by hand');
+// The Agent reports a finished run as COMPLETED; both finished statuses read as ready to submit.
+assert.match(form, /COMPLETED: 'Ready to submit/);
+assert.match(form, /AWAITING_PORTAL_REVIEW: 'Ready to submit/);
 assert.match(form, /FINISHED_STATUSES/);
 // The work-completed date is never defaulted.
 assert.doesNotMatch(form, /workCompletedDate:\s*new Date|workCompletedDate\s*\?\?\s*today/);
