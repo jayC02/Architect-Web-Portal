@@ -64,4 +64,12 @@ for (const file of ['src/lib/completion-certificate.ts', 'src/lib/completion-doc
   assert.doesNotMatch(source, /^import\s+(?!type\b)[^;]*from\s+'@prisma\/client'/m, `${file} must not import @prisma/client at runtime`);
 }
 
+// Files can be dropped onto the upload box as well as chosen by clicking it.
+assert.match(form, /onDragOver=\{\(event\) => \{ event\.preventDefault\(\)/);
+assert.match(form, /onDrop=\{\(event\) => \{ event\.preventDefault\(\);[^}]*uploadFiles\(event\.dataTransfer\.files\)/);
+assert.match(form, /Drop files here or click to choose/);
+
+// An upload problem is shown next to the upload box, not only at the foot of the form.
+assert.match(form, /uploadError && <p role="alert"/);
+
 console.log('completion-certificate-ui: ok');

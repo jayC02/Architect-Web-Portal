@@ -210,6 +210,8 @@ export default function CompletionCertificateForm({
   const [error, setError] = useState('');
   const [job, setJob] = useState(activeJob);
   const [uploading, setUploading] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const queueInFlight = useRef(false);
   const endpoint = `/api/building-warrant/${encodeURIComponent(warrantId)}/completion-certificate`;
 
@@ -258,6 +260,7 @@ export default function CompletionCertificateForm({
   // Uploads are saved straight away, so save typed changes first.
   const addDocuments = async (request: (body: RequestInit) => RequestInit[]) => {
     setError('');
+    setUploadError('');
     if (dirty) await save();
     for (const init of request({})) {
       try {
@@ -268,7 +271,7 @@ export default function CompletionCertificateForm({
         setIssues(body.issues);
         setDirty(false);
       } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : 'Could not add that document.');
+        setUploadError(requestError instanceof Error ? requestError.message : 'Could not add that document.');
         break;
       }
     }
@@ -361,8 +364,13 @@ export default function CompletionCertificateForm({
               Tip: upload the granted building warrant too. It is only read to fill in the warrant reference and dates, and is not sent to the council.
             </p>
           )}
-          <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-stone-300 bg-white px-4 py-6 text-center hover:border-moss">
-            <span className="text-sm font-semibold text-ink">Choose files to upload</span>
+          <label
+            className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 text-center hover:border-moss ${dragging ? 'border-moss bg-moss/5' : 'border-stone-300 bg-white'}`}
+            onDragOver={(event) => { event.preventDefault(); if (!uploading) setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => { event.preventDefault(); setDragging(false); if (!uploading) uploadFiles(event.dataTransfer.files); }}
+          >
+            <span className="text-sm font-semibold text-ink">Drop files here or click to choose</span>
             <span className="mt-1 text-xs text-stone-500">PDF is best. EPC, statement of sustainability, Fire Safety Design Summary, certificates, the building warrant or anything else.</span>
             <input
               type="file" multiple className="sr-only" accept="application/pdf,image/jpeg,image/png" disabled={Boolean(uploading)}
@@ -370,6 +378,7 @@ export default function CompletionCertificateForm({
             />
           </label>
           {uploading && <p role="status" className="mt-2 text-sm text-stone-600">{uploading}</p>}
+          {uploadError && <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{uploadError}</p>}
 
           {view.documents.length > 0 && (
             <ul className="mt-4 divide-y divide-stone-200 rounded-lg border border-stone-200">
