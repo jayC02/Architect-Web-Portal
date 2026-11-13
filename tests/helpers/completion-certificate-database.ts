@@ -6,8 +6,11 @@ const entry = (register: 'construction' | 'design') => ({
   certifierSignatureDate: '2026-10-01',
   approvedBodyRegistration: { part1: register === 'construction' ? 'SEL1' : 'SER1', part2: register === 'construction' ? 'CB' : 'DB', number: '678' },
   approvedBodySignatureDate: '2026-10-02',
-  documentId: null,
+  documentId: register === 'construction' ? 'doc_cc' : 'doc_fq',
 });
+
+const completionDocument = (documentId: string, filename: string, role: string) =>
+  ({ documentId, filename, role, source: 'ai', details: {} });
 
 export const completePreparation = {
   workCompletedDate: '2026-10-30',
@@ -22,7 +25,20 @@ export const completePreparation = {
   fireSafetyDesignSummary: false,
   continuingRequirements: { applies: true, details: 'Maintain the fire door.' },
   confirmedAt: null,
+  documents: [
+    completionDocument('doc_bw', 'Building warrant.pdf', 'BUILDING_WARRANT'),
+    completionDocument('doc_epc', 'EPC.pdf', 'ENERGY_PERFORMANCE_CERTIFICATE'),
+    completionDocument('doc_cc', 'CC-100 signed.pdf', 'CONSTRUCTION_CERTIFICATE'),
+    completionDocument('doc_fq', 'Form Q.pdf', 'DESIGN_CERTIFICATE'),
+  ],
 };
+
+const storedDocument = (id: string, originalName: string, type: string) => ({
+  id, organisationId: 'org', projectId: 'project', originalName, fileName: `${id}.pdf`, mimeType: 'application/pdf',
+  sizeBytes: 1200, type, status: 'APPROVED', revision: null, drawingNumber: null, drawingTitle: null,
+  sortSource: 'completion', sortConfidence: 0.9, createdAt: new Date('2026-11-05T09:00:00.000Z'),
+  updatedAt: new Date('2026-11-05T09:00:00.000Z'),
+});
 
 type Options = {
   completionPreparationData?: unknown;
@@ -74,8 +90,12 @@ export const completionDatabase = (options: Options = {}) => {
       agentCountry: 'United Kingdom', defaultCertifierPreset: null, updatedAt: new Date('2026-10-01T09:00:00.000Z'),
     },
     documents: [
-      { id: 'doc_1', organisationId: 'org', projectId: 'project', originalName: 'Certificate of construction.pdf', fileName: 'cc.pdf' },
-    ],
+      { ...storedDocument('doc_1', 'Certificate of construction.pdf', 'CERTIFICATE') },
+      storedDocument('doc_bw', 'Building warrant.pdf', 'CORRESPONDENCE'),
+      storedDocument('doc_epc', 'EPC.pdf', 'ENERGY'),
+      storedDocument('doc_cc', 'CC-100 signed.pdf', 'CERTIFICATE'),
+      storedDocument('doc_fq', 'Form Q.pdf', 'CERTIFICATE'),
+    ] as any[],
     jobs: [] as any[],
     events: [] as any[],
     actions: [] as any[],
@@ -112,7 +132,8 @@ export const completionDatabase = (options: Options = {}) => {
     $transaction: async (work: (tx: unknown) => unknown) => work(database),
     projectDocument: {
       findMany: async ({ where }: any) => state.documents
-        .filter((row) => row.organisationId === where.organisationId && row.projectId === where.projectId),
+        .filter((row) => row.organisationId === where.organisationId && row.projectId === where.projectId
+          && (!where.id?.in || where.id.in.includes(row.id))),
     },
   };
   return { database, state };

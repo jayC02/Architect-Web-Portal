@@ -27,7 +27,7 @@ const input = {
   assert.ok(issues.some((issue) => issue.field === 'workCompletedDate'));
   assert.equal(parties.client?.firstName, 'Sam');
   assert.equal(parties.agent.firstName, 'Alex');
-  assert.deepEqual(context.documents, [{ id: 'doc_1', name: 'Certificate of construction.pdf' }]);
+  assert.ok(context.documents.some((item) => item.id === 'doc_1' && item.name === 'Certificate of construction.pdf'));
 }
 
 // A warrant in another organisation is not found.
@@ -89,6 +89,8 @@ const input = {
     completionPreparationData: {
       ...completePreparation,
       relaxation: { applies: false, reference: 'stale', date: '2026-02-01' },
+      // No certificate uploaded: the certificate answers are No and their entries are not sent.
+      documents: completePreparation.documents.filter((item) => item.role !== 'CONSTRUCTION_CERTIFICATE'),
       constructionCertificates: { ...completePreparation.constructionCertificates, accompany: false },
       designCertificates: { ...completePreparation.designCertificates, accompaniedWarrant: false },
       continuingRequirements: { applies: false, details: 'stale' },

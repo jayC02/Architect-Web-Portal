@@ -11,6 +11,7 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import {
   COMPLETION_FIXED_ANSWERS,
+  applyCompletionDocuments,
   completionIssues,
   completionPrefill,
   completionPreparationSchema,
@@ -122,7 +123,8 @@ export const completionPreparationFor = (context: CompletionContext, today: Date
       registrationBPart2: certifierValue('registrationBPart2'),
     },
   });
-  const preparation = mergeCompletionPreparation(warrant.completionPreparationData, prefill);
+  // Uploaded documents decide the EPC, sustainability, fire safety and certificate answers.
+  const preparation = applyCompletionDocuments(mergeCompletionPreparation(warrant.completionPreparationData, prefill));
   const client = warrant.project.client;
   const parties: CompletionParties = {
     client: client ? {

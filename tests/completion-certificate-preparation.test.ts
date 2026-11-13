@@ -138,30 +138,39 @@ assert.deepEqual(fields(withPreparation({ relaxation: { applies: null, reference
 assert.deepEqual(fields(withPreparation({ relaxation: { applies: true, reference: null, date: '2026-02-01' } })), ['relaxation.reference']);
 assert.deepEqual(fields(withPreparation({ relaxation: { applies: true, reference: 'RD/1', date: null } })), ['relaxation.date']);
 assert.deepEqual(fields(withPreparation({ relaxation: { applies: false, reference: null, date: null } })), []);
-assert.deepEqual(fields(withPreparation({ constructionCertificates: { accompany: null, entries: [] } })), ['constructionCertificates.accompany']);
-assert.deepEqual(fields(withPreparation({ constructionCertificates: { accompany: true, entries: [] } })), ['constructionCertificates.entries']);
+// Certificates follow the uploads: no certificate document means No, whatever was answered.
+assert.deepEqual(fields(withPreparation({ constructionCertificates: { accompany: null, entries: [] } })), []);
+assert.deepEqual(fields(withPreparation({ constructionCertificates: { accompany: true, entries: [] } })), []);
 assert.deepEqual(fields(withPreparation({ constructionCertificates: { accompany: false, entries: [] } })), []);
+const certificateDocument = (documentId: string) => ({ documentId, filename: `${documentId}.pdf`, role: 'CONSTRUCTION_CERTIFICATE', source: 'manual', details: {} });
+const withCertificates = (...entries: CompletionPreparation['constructionCertificates']['entries']) => withPreparation({
+  documents: entries.map((item) => certificateDocument(item.documentId!)) as never,
+  constructionCertificates: { accompany: true, entries },
+});
 assert.deepEqual(
-  fields(withPreparation({ constructionCertificates: { accompany: true, entries: [{ ...entry('construction'), certifierRegistration: { part1: 'BRE1', part2: 'C', number: '1' } }] } })),
+  fields(withCertificates({ ...entry('construction'), documentId: 'cc1', certifierRegistration: { part1: 'BRE1', part2: 'C', number: '1' } })),
   ['constructionCertificates.entries.0'],
   'a design-scheme code is not accepted in the construction register',
 );
 assert.deepEqual(
-  fields(withPreparation({ constructionCertificates: { accompany: true, entries: [entry('construction'), { ...entry('construction'), certificateNumber: '' }] } })),
+  fields(withCertificates({ ...entry('construction'), documentId: 'cc1' }, { ...entry('construction'), documentId: 'cc2', certificateNumber: '' })),
   ['constructionCertificates.entries.1'],
 );
 assert.deepEqual(
-  fields(withPreparation({ constructionCertificates: { accompany: true, entries: [{ ...entry('construction'), certifierSignatureDate: null }] } })),
+  fields(withCertificates({ ...entry('construction'), documentId: 'cc1', certifierSignatureDate: null })),
   ['constructionCertificates.entries.0'],
 );
+assert.deepEqual(fields(withCertificates({ ...entry('construction'), documentId: 'cc1' })), []);
 assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: null, formQRequired: null, entries: [] } })), ['designCertificates.accompaniedWarrant']);
-assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: true, formQRequired: null, entries: [] } })), ['designCertificates.formQRequired']);
-assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: true, formQRequired: true, entries: [] } })), ['designCertificates.entries']);
+// Form Q follows the uploads too: no Form Q document means No.
+assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: true, formQRequired: null, entries: [] } })), []);
+assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: true, formQRequired: true, entries: [] } })), []);
 assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: true, formQRequired: false, entries: [] } })), []);
 assert.deepEqual(fields(withPreparation({ designCertificates: { accompaniedWarrant: false, formQRequired: null, entries: [] } })), []);
-assert.deepEqual(fields(withPreparation({ energyPerformanceCertificate: null })), ['energyPerformanceCertificate']);
-assert.deepEqual(fields(withPreparation({ sustainabilityStatement: null })), ['sustainabilityStatement']);
-assert.deepEqual(fields(withPreparation({ fireSafetyDesignSummary: null })), ['fireSafetyDesignSummary']);
+// These are answered by uploading the document; with nothing uploaded they are No, not missing.
+assert.deepEqual(fields(withPreparation({ energyPerformanceCertificate: null })), []);
+assert.deepEqual(fields(withPreparation({ sustainabilityStatement: null })), []);
+assert.deepEqual(fields(withPreparation({ fireSafetyDesignSummary: null })), []);
 assert.deepEqual(fields(withPreparation({ continuingRequirements: { applies: null, details: null } })), ['continuingRequirements.applies']);
 assert.deepEqual(fields(withPreparation({ continuingRequirements: { applies: true, details: ' ' } })), ['continuingRequirements.details']);
 assert.deepEqual(fields(withPreparation({ continuingRequirements: { applies: false, details: null } })), []);

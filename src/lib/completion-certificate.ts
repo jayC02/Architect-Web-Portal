@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { CERTIFIER_REGISTRATION_PART1_CODES } from '@/lib/certifier-registration';
+import {
+  MAX_COMPLETION_DOCUMENTS,
+  completionDocumentSchema,
+  type CompletionDocument,
+} from '@/lib/completion-documents';
 
 // Completion Certificate (eBuilding Standards) — Main Details preparation.
 //
@@ -110,6 +115,12 @@ export const completionPreparationSchema = z.object({
     applies: nullableBoolean, details: nullableText(COMPLETION_TEXT_LIMIT),
   })),
   confirmedAt: z.preprocess(blankToNull, z.string().datetime().nullable()),
+  // Uploaded completion documents. They decide the EPC, sustainability, fire
+  // safety and certificate answers: nothing uploaded means No.
+  documents: z.preprocess(
+    (value) => (Array.isArray(value) ? value : []),
+    z.array(completionDocumentSchema).max(MAX_COMPLETION_DOCUMENTS),
+  ),
 });
 
 export type CompletionPreparation = z.infer<typeof completionPreparationSchema>;
@@ -216,6 +227,59 @@ export const mergeCompletionPreparation = (saved: unknown, prefill: CompletionPr
     continuingRequirements: stored.continuingRequirements.applies === null
       ? prefill.continuingRequirements : stored.continuingRequirements,
     confirmedAt: stored.confirmedAt,
+    documents: stored.documents,
+  };
+};
+
+/** One entry per uploaded certificate: kept if already edited, otherwise from what was read off it. */
+const entriesForDocuments = (
+  register: CertificateRegister,
+  documents: CompletionDocument[],
+  existing: CompletionCertificateEntry[],
+): CompletionCertificateEntry[] => documents.map((document) => {
+  const kept = existing.find((entry) => entry.documentId === document.documentId);
+  if (kept) return kept;
+  const read = document.details.certificate;
+  const blankEntry = emptyCertificateEntry(register);
+  return read ? {
+    ...blankEntry,
+    certificateNumber: read.certificateNumber,
+    certifierRegistration: { ...read.certifierRegistration, part2: REGISTER_PART2[register].certifier },
+    certifierSignatureDate: read.certifierSignatureDate,
+    approvedBodyRegistration: { ...read.approvedBodyRegistration, part2: REGISTER_PART2[register].approvedBody },
+    approvedBodySignatureDate: read.approvedBodySignatureDate,
+    documentId: document.documentId,
+  } : { ...blankEntry, documentId: document.documentId };
+});
+
+/**
+ * Make the document-driven answers agree with the uploads. If the architect
+ * has not attached an EPC, statement of sustainability, Fire Safety Design
+ * Summary or certificate, the matching answer is No.
+ */
+export const applyCompletionDocuments = (preparation: CompletionPreparation): CompletionPreparation => {
+  const documents = preparation.documents ?? [];
+  const withRole = (role: CompletionDocument['role']) => documents.filter((document) => document.role === role);
+  const constructionDocuments = withRole('CONSTRUCTION_CERTIFICATE');
+  const designDocuments = withRole('DESIGN_CERTIFICATE');
+  const accompaniedWarrant = preparation.designCertificates.accompaniedWarrant;
+  return {
+    ...preparation,
+    documents,
+    energyPerformanceCertificate: withRole('ENERGY_PERFORMANCE_CERTIFICATE').length > 0,
+    sustainabilityStatement: withRole('SUSTAINABILITY_STATEMENT').length > 0,
+    fireSafetyDesignSummary: withRole('FIRE_SAFETY_DESIGN_SUMMARY').length > 0,
+    constructionCertificates: {
+      accompany: constructionDocuments.length > 0,
+      entries: entriesForDocuments('construction', constructionDocuments, preparation.constructionCertificates.entries),
+    },
+    designCertificates: accompaniedWarrant
+      ? {
+          accompaniedWarrant,
+          formQRequired: designDocuments.length > 0,
+          entries: entriesForDocuments('design', designDocuments, preparation.designCertificates.entries),
+        }
+      : { accompaniedWarrant, formQRequired: null, entries: [] },
   };
 };
 
@@ -241,10 +305,11 @@ const blank = (value: PartyText | undefined) => !value || !value.trim();
 
 /** Everything that must be fixed before the job can be sent to the Agent. */
 export const completionIssues = (
-  preparation: CompletionPreparation,
+  submitted: CompletionPreparation,
   parties: CompletionParties,
   today: Date = new Date(),
 ): CompletionIssue[] => {
+  const preparation = applyCompletionDocuments(submitted);
   const issues: CompletionIssue[] = [];
   const add = (field: string, message: string) => issues.push({ field, message });
   const todayIso = isoDay(today);
@@ -296,14 +361,10 @@ export const completionIssues = (
     if (design.formQRequired) checkEntries('designCertificates', 'design', design.entries, 'Form Q certificate');
   }
 
-  if (preparation.energyPerformanceCertificate === null) {
-    add('energyPerformanceCertificate', 'Answer whether an Energy Performance Certificate accompanies this submission.');
-  }
-  if (preparation.sustainabilityStatement === null) {
-    add('sustainabilityStatement', 'Answer whether a statement of sustainability has been issued.');
-  }
-  if (preparation.fireSafetyDesignSummary === null) {
-    add('fireSafetyDesignSummary', 'Answer whether a Fire Safety Design Summary accompanies this submission.');
+  for (const document of preparation.documents) {
+    if (document.role === 'UNRECOGNISED') {
+      add(`documents.${document.documentId}`, `Choose what ${document.filename} is, or remove it.`);
+    }
   }
   const continuing = preparation.continuingRequirements;
   if (continuing.applies === null) add('continuingRequirements.applies', 'Answer whether the warrant has continuing requirements.');

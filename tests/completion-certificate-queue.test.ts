@@ -56,7 +56,7 @@ const authoriser = (state: { jobs: any[] }, compatibleAgentOnline = true) => {
     { organisationId: 'org', warrantId: 'warrant_1', body: { workCompletedDate: '2026-10-30' }, today }, database as never,
   );
   assert.equal((state.warrant.completionPreparationData as any).workCompletedDate, '2026-10-30');
-  assert.ok(saved.issues.some((issue) => issue.field === 'energyPerformanceCertificate'));
+  assert.ok(saved.issues.some((issue) => issue.field === 'continuingRequirements.applies'));
   assert.ok(!saved.issues.some((issue) => issue.field === 'workCompletedDate'));
 }
 
@@ -135,7 +135,7 @@ const authoriser = (state: { jobs: any[] }, compatibleAgentOnline = true) => {
 
 // Incomplete answers never queue.
 {
-  const { database, state } = completionDatabase({ completionPreparationData: { ...completePreparation, energyPerformanceCertificate: null } });
+  const { database, state } = completionDatabase({ completionPreparationData: { ...completePreparation, workCompletedDate: null } });
   const { authorise, calls } = authoriser(state);
   await assert.rejects(
     () => queueCompletionCertificateJob(queueInput, { database: database as never, authorise }),
