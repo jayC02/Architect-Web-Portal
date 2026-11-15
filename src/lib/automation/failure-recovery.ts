@@ -20,6 +20,8 @@ export type AutomationFailureMetadata = {
   recoveryAction: FailureRecoveryAction;
   recoveryFields: string[];
   retrySafe: boolean;
+  /** The run stopped after its portal proposal was created, so a new run can reopen that proposal and continue. */
+  resumable: boolean;
   documentFailure: {
     filename: string | null;
     operation: string | null;
@@ -36,6 +38,11 @@ const objectValue = (value: unknown): Record<string, unknown> =>
     : {};
 
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
+
+// Agent stages that only run once the portal proposal exists. A failure during
+// proposal creation is not resumable: a reset that stopped because the address
+// name is taken must not quietly continue in the old proposal.
+const RESUMABLE_STAGES = new Set(['main_details', 'ownership', 'documents', 'declaration', 'final_review']);
 
 const knownActions = new Set<FailureRecoveryAction>([
   'retry',
@@ -119,6 +126,8 @@ export const readAutomationFailureMetadata = (
       ? result.recoveryFields.filter((value): value is string => typeof value === 'string')
       : [],
     retrySafe,
+    resumable: ['FAILED', 'FAILED_FINAL', 'FAILED_RETRYABLE'].includes(status)
+      && RESUMABLE_STAGES.has(text(result.currentSection) ?? fallbackStage ?? ''),
     documentFailure: Object.keys(documentFailure).length ? {
       filename: text(documentFailure.filename),
       operation: text(documentFailure.operation),

@@ -31,8 +31,10 @@ export const agentSupportsJob = (
   const parsed = parseAgentCapabilities(agent.capabilities);
   if (!parsed.success) return false;
   const capabilities: AgentCapabilities = parsed.data;
-  const snapshot = job.dataSnapshot && typeof job.dataSnapshot === 'object' ? job.dataSnapshot as { metadata?: { portalDraftKey?: unknown } } : null;
+  const snapshot = job.dataSnapshot && typeof job.dataSnapshot === 'object' ? job.dataSnapshot as { metadata?: { portalDraftKey?: unknown; resumeOfJobId?: unknown } } : null;
   if (snapshot?.metadata?.portalDraftKey && !capabilities.resetContractVersions?.includes(1)) return false;
+  // An older Agent would try to create the proposal again, which the portal refuses.
+  if (snapshot?.metadata?.resumeOfJobId && !capabilities.resumeContractVersions?.includes(1)) return false;
   if (job.type === AutomationJobType.COMPLETION_CERTIFICATE && !capabilities.completionContractVersions?.includes(2)) return false;
   return capabilities.workflows.includes(job.type as never)
     && capabilities.snapshotVersions.includes(job.payloadVersion)

@@ -83,7 +83,9 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     return successor;
   }
   const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage, oldJob);
-  if (!recovery.retrySafe) {
+  // A run that stopped after creating its proposal resumes that proposal, so
+  // it can be restarted even when starting from scratch would not be safe.
+  if (!recovery.retrySafe && !recovery.resumable) {
     throw new HttpError(409, 'This automation attempt is not confirmed safe to retry. Review the issue before continuing.');
   }
 
@@ -139,6 +141,8 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
     buildingWarrantApplicationId: oldJob.type === AutomationJobType.BUILDING_WARRANT
       ? identity.applicationId
       : undefined,
+    // The Agent reopens the proposal the failed run created rather than creating another.
+    resumeOfJobId: recovery.resumable ? oldJob.id : undefined,
   }, transaction);
   const { jobId: newJobId, snapshot } = freshJob;
   if (snapshot.preflight.status !== 'READY') {

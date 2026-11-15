@@ -52,6 +52,8 @@ type BuildAutomationJobSnapshotInput = {
   documentSortBatchId?: string;
   documentIds?: string[];
   notes?: string;
+  /** The failed run whose portal proposal this run reopens instead of creating a new one. */
+  resumeOfJobId?: string;
 };
 
 const uniqueIds = (ids: string[] | undefined) => Array.from(new Set((ids ?? []).filter(Boolean)));
@@ -492,6 +494,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       integrity: null,
       ...(nullableString((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey)
         ? { portalDraftKey: String((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey) } : {}),
+      ...(input.resumeOfJobId ? { resumeOfJobId: input.resumeOfJobId } : {}),
     },
     organisation: {
       id: input.organisationId,

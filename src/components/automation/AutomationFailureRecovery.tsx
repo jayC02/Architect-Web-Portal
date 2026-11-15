@@ -115,6 +115,11 @@ export default function AutomationFailureRecovery({
         {isWarrant ? 'View Warrant' : 'View Householder'}
       </a>}
       {metadata.retrySafe && !directRetry && !canOpenEditor && metadata.recoveryAction !== 'update_login' && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}><Play size={16} />Retry application</button>}
+      {/* The run stopped after creating its proposal: the next run reopens that proposal and carries on. */}
+      {metadata.resumable && !metadata.retrySafe && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>
+        {retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
+        {retrying ? 'Queuing resume…' : 'Resume application'}
+      </button>}
       <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View run details</a>
     </div>
     {nextAction && <p className="mt-3 max-w-2xl break-words text-sm text-stone-700"><span className="font-semibold">How to continue:</span> {nextAction}</p>}

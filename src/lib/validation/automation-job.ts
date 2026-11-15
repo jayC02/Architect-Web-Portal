@@ -239,6 +239,8 @@ export const automationJobSnapshotV2Schema = z.object({
     presetVersion: z.number().int().positive(),
     integrity: z.string().regex(/^sha256:[a-f0-9]{64}$/).nullable(),
       portalDraftKey: z.string().uuid().optional(),
+    // A resume run reopens the proposal this failed run created.
+    resumeOfJobId: z.string().min(1).max(100).optional(),
   }),
   organisation: z.object({
     id: z.string().min(1),

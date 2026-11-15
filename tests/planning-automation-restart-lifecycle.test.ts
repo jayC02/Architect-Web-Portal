@@ -42,8 +42,8 @@ assert.doesNotMatch(
 );
 assert.match(
   restartImplementation,
-  /readAutomationFailureMetadata\(oldJob\.resultData, oldJob\.status, oldJob\.progressStage, oldJob\)[\s\S]*if \(!recovery\.retrySafe\)/,
-  'only a runner-confirmed failure or a verified legacy login-only failure can enter the retry path',
+  /readAutomationFailureMetadata\(oldJob\.resultData, oldJob\.status, oldJob\.progressStage, oldJob\)[\s\S]*if \(!recovery\.retrySafe && !recovery\.resumable\)/,
+  'only a runner-confirmed failure, a verified legacy login-only failure, or a run that can resume its own proposal can enter the retry path',
 );
 assert.doesNotMatch(restartImplementation, /transaction\.automationJob\.update/, 'retry never mutates the failed historical job');
 assert.doesNotMatch(restartImplementation, /oldJob\.completedAt|data: \{ completedAt:/, 'retry does not consume or rewrite Job A');
