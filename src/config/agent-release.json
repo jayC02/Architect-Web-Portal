@@ -1,10 +1,10 @@
 {
-  "version": "4.2.19",
-  "downloadUrl": "/downloads/ArchitectProAgentSetup-4.2.19.exe",
-  "sha256": "1c4335f269103f31fee15cfb465a53a207d2a497c2cf78e7b4517c834fe3bbf4",
-  "sizeBytes": 45898900,
+  "version": "4.2.20",
+  "downloadUrl": "/downloads/ArchitectProAgentSetup-4.2.20.exe",
+  "sha256": "a92f3bc7d254695fb66ac18c8cc023d7794580cb8951bfc6e2158ef0acf03a2a",
+  "sizeBytes": 45896616,
   "minimumSupportedVersion": "4.1.0",
   "status": "AVAILABLE",
   "signed": false,
-  "sourceDownloadUrl": "/downloads/ArchitectProAgentSource-4.2.19.zip"
+  "sourceDownloadUrl": "/downloads/ArchitectProAgentSource-4.2.20.zip"
 }
