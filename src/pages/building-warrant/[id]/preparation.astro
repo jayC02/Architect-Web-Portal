@@ -85,7 +85,7 @@ const requiresExistingUse = selectedTypeOfWorkKeys.some(key => key === 'domestic
 const designSelected = warrantAnswers.designCertifierSelected ?? warrantAnswers.certifierOfDesignCertificateAvailable === true;
 // The portal's two design certificate questions, No / Yes unless the architect changed them.
 const designTiming = designCertificateTiming(preparation);
-const showDesignCertificateDetails = designSelected && warrantAnswers.certifierOfDesignCertificateAvailable === true && designTiming.designCertificateWithApplication;
+const showDesignCertificateDetails = designSelected && designTiming.designCertificateWithApplication;
 const warrantQuestions = [
   ['applicantIsOwner', 'Applicant is the legal owner'],
   ['fireAndRescueServiceEnforcingAuthority', 'Fire and Rescue Service is the enforcing authority'],
@@ -120,7 +120,8 @@ const feeCalculation = calculateBuildingStandardsFee({
   disabledPersonsFacilitiesOnly: warrantAnswers.disabledPersonsFacilitiesOnly ?? null,
   certifierOfDesign: {
     selected: designCertifierSelected,
-    certificateAvailable: warrantAnswers.certifierOfDesignCertificateAvailable ?? null,
+    // Using a certifier of design means the certificate is provided.
+    certificateAvailable: designCertifierSelected,
   },
   certifierOfConstruction: {
     selected: warrantAnswers.approvedCertifierOfConstruction,
@@ -278,7 +279,9 @@ const branchProps = {
         <label class="mt-5 block"><span class="prep-field-question">Use a certifier of design?</span><select name="designCertifierSelected" class="field"><option value="false" selected={!designSelected}>No certifier of design</option><option value="true" selected={designSelected}>Yes — choose a profile or enter details</option></select></label>
         <fieldset class="prep-followup mt-4" data-design-certificate-fields disabled={!designSelected} hidden={!designSelected}>
           <legend class="sr-only">Certifier of design details</legend>
-          <label class="block">
+          <!-- Asked first: it decides which portal register opens and so which details are needed. -->
+          <label class="block" data-design-certificate-timing><span class="prep-field-question">I will be uploading a certificate of design with this application</span><select name="designCertificateWithApplication" class="field"><option value="false" selected={!designTiming.designCertificateWithApplication}>No</option><option value="true" selected={designTiming.designCertificateWithApplication}>Yes</option></select><span class="mt-1 block text-sm text-stone-600">No means you intend to submit it following the submission of this application. The details below are the ones the portal asks for in each case.</span></label>
+          <label class="mt-4 block">
             <span class="label">Saved certifier profile</span>
             <select name="selectedCertifierPresetId" class="field">
               <option value="">No saved profile</option>
@@ -287,28 +290,17 @@ const branchProps = {
           </label>
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
             <label class="block"><span class="label">Scheme Type</span><input maxlength="120" name="schemeType" value={schemeType} class="field" /></label>
+            <label class="block" data-design-certificate-only="with" hidden={!designTiming.designCertificateWithApplication}><span class="label">Design certificate number</span><input name="designCertificateNumber" class="field" maxlength="40" value={savedDesignCertificate.certificateNumber ?? ''} required={showDesignCertificateDetails} /></label>
             <label class="block"><span class="label">Registration number A Part 1</span><select required name="registrationAPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationAPart1}>{code}</option>)}</select></label>
             <label class="block"><span class="label">Registration number A Part 2</span><input required maxlength="80" name="registrationAPart2" value={registrationAPart2} class="field" /></label>
-            <label class="block"><span class="label">Name of Certifier</span><input required maxlength="160" name="certifierName" value={certifierName} class="field" /></label>
+            <label class="block" data-design-certificate-only="following" hidden={designTiming.designCertificateWithApplication}><span class="label">Name of Certifier</span><input required={!designTiming.designCertificateWithApplication} maxlength="160" name="certifierName" value={certifierName} class="field" /></label>
+            <label class="block" data-design-certificate-only="with" hidden={!designTiming.designCertificateWithApplication}><span class="label">Date the certifier signed</span><input type="date" name="designCertifierSignatureDate" class="field" value={savedDesignCertificate.certifierSignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
             <label class="block"><span class="label">Registration number B Part 1</span><select required name="registrationBPart1" class="field"><option value="">Select code</option>{CERTIFIER_REGISTRATION_PART1_CODES.map((code) => <option value={code} selected={code === registrationBPart1}>{code}</option>)}</select></label>
             <label class="block"><span class="label">Registration number B Part 2</span><input required maxlength="80" name="registrationBPart2" value={registrationBPart2} class="field" /></label>
-            <label class="block"><span class="label">Name of Approved Body</span><input required maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
+            <label class="block" data-design-certificate-only="following" hidden={designTiming.designCertificateWithApplication}><span class="label">Name of Approved Body</span><input required={!designTiming.designCertificateWithApplication} maxlength="160" name="approvedBody" value={approvedBody} class="field" /></label>
+            <label class="block" data-design-certificate-only="with" hidden={!designTiming.designCertificateWithApplication}><span class="label">Date the approved body signed</span><input type="date" name="designApprovedBodySignatureDate" class="field" value={savedDesignCertificate.approvedBodySignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
           </div>
-          <label class="mt-4 block">
-            <span class="prep-field-question">Will the appropriate Certifier of Design certificate be provided?</span>
-            <select required name="certifierOfDesignCertificateAvailable" class="field">
-              <option value="">Choose Yes or No</option>
-              <option value="true" selected={warrantAnswers.certifierOfDesignCertificateAvailable === true}>Yes</option>
-              <option value="false" selected={warrantAnswers.certifierOfDesignCertificateAvailable === false}>No</option>
-            </select>
-          </label>
-          <label class="mt-4 block" data-design-certificate-timing hidden={warrantAnswers.certifierOfDesignCertificateAvailable !== true}><span class="prep-field-question">I will be uploading a certificate of design with this application</span><select name="designCertificateWithApplication" class="field"><option value="false" selected={!designTiming.designCertificateWithApplication}>No</option><option value="true" selected={designTiming.designCertificateWithApplication}>Yes</option></select><span class="mt-1 block text-sm text-stone-600">No means the certificate will be submitted following this application.</span></label>
-          <div class="mt-4 grid gap-4 sm:grid-cols-3" data-design-certificate-details hidden={!showDesignCertificateDetails}>
-            <p class="text-sm text-stone-600 sm:col-span-3">The portal asks for these when the certificate is supplied with the application. Upload the signed certificate with the supporting documents.</p>
-            <label class="block"><span class="prep-field-question">Design certificate number</span><input name="designCertificateNumber" class="field" maxlength="40" value={savedDesignCertificate.certificateNumber ?? ''} required={showDesignCertificateDetails} /></label>
-            <label class="block"><span class="prep-field-question">Date the certifier signed</span><input type="date" name="designCertifierSignatureDate" class="field" value={savedDesignCertificate.certifierSignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
-            <label class="block"><span class="prep-field-question">Date the approved body signed</span><input type="date" name="designApprovedBodySignatureDate" class="field" value={savedDesignCertificate.approvedBodySignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
-          </div>
+          <p class="mt-3 text-sm text-stone-600" data-design-certificate-only="with" hidden={!designTiming.designCertificateWithApplication}>Upload the signed certificate with the supporting documents.</p>
         </fieldset>
         <WarrantBranchFields part="construction" {...branchProps} />
       </PreparationSection>
@@ -431,7 +423,7 @@ const branchProps = {
         disabledPersonsFacilitiesOnly: readBoolean('disabledPersonsFacilitiesOnly'),
         certifierOfDesign: {
           selected: hasDesignCertifier,
-          certificateAvailable: readBoolean('certifierOfDesignCertificateAvailable'),
+          certificateAvailable: hasDesignCertifier,
         },
         certifierOfConstruction: {
           selected: constructionField instanceof HTMLSelectElement && constructionField.value === 'true',
@@ -476,15 +468,15 @@ const branchProps = {
       const fields = form?.querySelector<HTMLFieldSetElement>('[data-design-certificate-fields]');
       if (fields) { fields.disabled = !selected; fields.hidden = !selected; }
       const timing = form?.querySelector<HTMLElement>('[data-design-certificate-timing]');
-      const needsTiming = selected && fieldValue('certifierOfDesignCertificateAvailable') === 'true';
+      const needsTiming = selected;
       if (timing) timing.hidden = !needsTiming;
-      // Certificate number and signature dates: only for "With this application".
-      const details = form?.querySelector<HTMLElement>('[data-design-certificate-details]');
-      const needsDetails = needsTiming && fieldValue('designCertificateWithApplication') === 'true';
-      if (details) {
-        details.hidden = !needsDetails;
-        details.querySelectorAll<HTMLInputElement>('input').forEach((input) => { input.required = needsDetails; input.disabled = !needsDetails; });
-      }
+      // Only the details the chosen portal register asks for are shown and required.
+      const withApplication = fieldValue('designCertificateWithApplication') === 'true';
+      form?.querySelectorAll<HTMLElement>('[data-design-certificate-only]').forEach((element) => {
+        const shown = needsTiming && (element.dataset.designCertificateOnly === 'with') === withApplication;
+        element.hidden = !shown;
+        element.querySelectorAll<HTMLInputElement>('input').forEach((input) => { input.required = shown; });
+      });
     };
     form?.addEventListener('change', updateDesignFields);
     updateDesignFields();

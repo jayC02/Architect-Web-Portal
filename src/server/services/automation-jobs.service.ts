@@ -1,4 +1,4 @@
-import { designCertificateTiming, permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
+import { designCertificateProvided, designCertificateTiming, permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import { readProjectScreener } from '@/lib/projects/screener';
 import { z } from 'zod';
 import { resolveWarrantOwner } from '@/lib/building-warrant-owner';
@@ -418,7 +418,8 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
   const presetKey = typeOfWorkKeys[0];
   const presetLabel = typeOfWorkLabel(presetKey);
   if (projectScreener.buildingUse === 'residential' && !permitsSTAS(projectScreener.buildingUse, typeOfWorkKeys)) warrantAnswers.coveredBySTAS = false;
-  if (warrantAnswers.designCertifierSelected === false) warrantAnswers.certifierOfDesignCertificateAvailable = false;
+  // "Use a certifier of design?" decides whether the design certificate is provided.
+  warrantAnswers.certifierOfDesignCertificateAvailable = designCertificateProvided(warrantAnswers);
   if (!warrantAnswers.approvedCertifierOfConstruction) warrantAnswers.certifierOfConstructionCertificateAvailable = false;
   const selectedCertifier = warrantAnswers.designCertifierSelected === false ? null : warrant?.selectedCertifierPreset ?? defaults?.defaultCertifierPreset ?? null;
   const savedCertifier = warrantAnswers.designCertifierSelected === false ? {} : jsonObject(warrantPreparation.certifier);

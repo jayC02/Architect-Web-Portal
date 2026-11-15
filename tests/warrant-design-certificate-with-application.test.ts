@@ -66,9 +66,7 @@ const preparationPage = readFileSync('src/pages/building-warrant/[id]/preparatio
 const draftQuestions = readFileSync('src/components/applications/WarrantDraftQuestions.tsx', 'utf8');
 for (const name of ['designCertificateNumber', 'designCertifierSignatureDate', 'designApprovedBodySignatureDate']) {
   assert.match(preparationPage, new RegExp(`name="${name}"`), `preparation page asks for ${name}`);
-  assert.match(draftQuestions, new RegExp(`name="${name}"`), `draft questions ask for ${name}`);
 }
-assert.match(preparationPage, /data-design-certificate-details/);
 assert.match(preparationPage, /fieldValue\('designCertificateWithApplication'\) === 'true'/, 'shown only while the certificate is uploaded with the application');
 
 // ---- One question: "I will be uploading a certificate of design with this application" ----
@@ -114,12 +112,79 @@ const jobsService = readFileSync('src/server/services/automation-jobs.service.ts
 assert.match(jobsService, /\.\.\.designCertificateTiming\(/, 'every new run applies the default');
 
 const QUESTION = 'I will be uploading a certificate of design with this application';
-for (const [page, source] of [['preparation page', preparationPage], ['draft questions', draftQuestions]] as const) {
-  assert.ok(source.includes(QUESTION), `${page} asks the portal's question`);
-  assert.doesNotMatch(source, /When will the design certificate be provided\?/, `${page} no longer uses its own wording`);
-  assert.doesNotMatch(source, /name="designCertificateFollowingApplication"/, `${page} does not ask the second question`);
-}
+assert.ok(preparationPage.includes(QUESTION), "the preparation page asks the portal's question");
+assert.doesNotMatch(preparationPage, /When will the design certificate be provided\?/, 'no longer its own wording');
+assert.doesNotMatch(preparationPage, /name="designCertificateFollowingApplication"/, 'the second answer follows from the first');
 assert.match(preparationPage, /name="designCertificateWithApplication"/);
-assert.match(draftQuestions, /name="designCertificateWithApplication"/);
+
+// The certificate questions are asked once, in the warrant preparation, not
+// again when the application is first created.
+const review = readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
+assert.ok(readFileSync('src/components/forms/WarrantBranchFields.astro', 'utf8').includes('Will an approved certifier of construction be used?'));
+for (const [name, source] of [['new-application review', review], ['draft questions', draftQuestions]] as const) {
+  assert.ok(!source.includes('Will the appropriate Certifier of Design certificate be provided?'), `${name} does not ask about the design certificate`);
+  assert.ok(!source.includes('Will an approved certifier of construction be used?'), `${name} does not ask about construction certification`);
+  assert.ok(!source.includes('WarrantCertificateQuestions'), `${name} has no certificate questions`);
+}
 
 console.log('warrant design certificate with application tests passed');
+
+// ---- "Use a certifier of design?" decides it ------------------------------------------------
+// Yes with details means the certificate is provided: the Agent answers Yes in the
+// portal and fills the certifier, and the fee discount applies. There is no
+// separate "Will the appropriate Certifier of Design certificate be provided?".
+import { designCertificateProvided } from '../src/lib/building-warrant-branches';
+
+assert.equal(designCertificateProvided({ designCertifierSelected: true, certifierOfDesignCertificateAvailable: false }), true,
+  'choosing a certifier means the certificate is provided');
+assert.equal(designCertificateProvided({ designCertifierSelected: false, certifierOfDesignCertificateAvailable: true }), false);
+assert.equal(designCertificateProvided({ certifierOfDesignCertificateAvailable: true }), true, 'older warrants keep their saved answer');
+assert.equal(designCertificateProvided({}), false);
+
+assert.ok(!preparationPage.includes('Will the appropriate Certifier of Design certificate be provided?'), 'the preparation page does not ask it separately');
+assert.doesNotMatch(preparationPage, /name="certifierOfDesignCertificateAvailable"/);
+assert.match(jobsService, /certifierOfDesignCertificateAvailable = designCertificateProvided\(warrantAnswers\)/, 'every run derives it');
+assert.match(readFileSync('src/pages/api/building-warrant/[id]/preparation.ts', 'utf8'), /certifierOfDesignCertificateAvailable: body\.designCertifierSelected/);
+assert.match(readFileSync('src/pages/api/building-warrant/[id]/certifier-details.ts', 'utf8'), /certifierOfDesignCertificateAvailable: designSelected,/);
+assert.match(readFileSync('src/server/services/application-draft-commit.service.ts', 'utf8'), /selectedCertifierPresetId \? \{ designCertifierSelected: true, certifierOfDesignCertificateAvailable: true \}/,
+  'a certifier chosen when the application is created is used');
+
+console.log('warrant design certificate provided tests passed');
+
+// ---- Ask the timing first, then only what that portal page needs ----------------------------
+// "With this application" Yes (71% page): certificate number, registrations and both
+// signature dates, no names. No (73% page): registrations and both names, no dates.
+const timingAt = preparationPage.indexOf('I will be uploading a certificate of design with this application');
+assert.ok(timingAt > 0 && timingAt < preparationPage.indexOf('name="selectedCertifierPresetId"'), 'the timing question comes before the certifier details');
+const onlyFor = (name: string) => new RegExp(`data-design-certificate-only="(with|following)"[^>]*>(?:(?!</label>)[\\s\\S])*?name="${name}"`).exec(preparationPage)?.[1];
+for (const name of ['designCertificateNumber', 'designCertifierSignatureDate', 'designApprovedBodySignatureDate']) assert.equal(onlyFor(name), 'with', `${name} only for the 71% page`);
+for (const name of ['certifierName', 'approvedBody']) assert.equal(onlyFor(name), 'following', `${name} only for the 73% page`);
+for (const name of ['registrationAPart1', 'registrationAPart2', 'registrationBPart1', 'registrationBPart2']) assert.equal(onlyFor(name), undefined, `${name} is needed by both pages`);
+
+// Saving: names are needed only for the 73% page; number and dates only for the 71% page.
+const { buildingWarrantCertifierDetailsSchema } = await import('../src/lib/validation/domain');
+const certifierIssues = (extra: Record<string, unknown>) => {
+  const result = buildingWarrantCertifierDetailsSchema.safeParse({
+    typeOfWorkKeys: ['domestic_alteration_extension'], description: 'Rear extension', estimatedValue: '50000',
+    designCertifierSelected: 'true', registrationAPart1: 'SER1', registrationAPart2: '1', registrationBPart1: 'SER1', registrationBPart2: '2', ...extra,
+  });
+  return result.success ? [] : result.error.issues.map((issue) => String(issue.path[0]));
+};
+assert.ok(certifierIssues({ designCertificateWithApplication: 'false' }).includes('certifierName'), 'the 73% page needs the certifier name');
+assert.ok(!certifierIssues({ designCertificateWithApplication: 'true', designCertificateNumber: 'DC', designCertifierSignatureDate: '2026-11-02', designApprovedBodySignatureDate: '2026-11-03' }).includes('certifierName'),
+  'the 71% page does not need names');
+assert.ok(certifierIssues({ designCertificateWithApplication: 'true' }).includes('designCertificateNumber'), 'the 71% page needs the certificate number');
+
+// Running: the same rule.
+const withNoNames = structuredClone(snapshot);
+withNoNames.buildingWarrant.designCertificateWithApplication = true;
+withNoNames.buildingWarrant.designCertificateFollowingApplication = false;
+withNoNames.buildingWarrant.designCertificate = { certificateNumber: 'DC-1', certifierSignatureDate: '2026-11-02', approvedBodySignatureDate: '2026-11-03' };
+withNoNames.buildingWarrant.certifier = { ...withNoNames.buildingWarrant.certifier, certifierName: null, approvedBody: null };
+assert.equal(evaluateAutomationPreflight(withNoNames).status, 'READY', 'the 71% page runs without names');
+const followingNoNames = structuredClone(withNoNames);
+followingNoNames.buildingWarrant.designCertificateWithApplication = false;
+followingNoNames.buildingWarrant.designCertificateFollowingApplication = true;
+assert.ok(evaluateAutomationPreflight(followingNoNames).missing.some((issue) => issue.field === 'buildingWarrant.certifier.certifierName'), 'the 73% page needs names');
+
+console.log('warrant design certificate page-specific fields tests passed');

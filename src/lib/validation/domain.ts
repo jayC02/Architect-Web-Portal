@@ -280,11 +280,22 @@ export const buildingWarrantCertifierDetailsSchema = z.object({
   ...fixedWarrantAnswerFields,
 }).superRefine((value, context) => {
   if (value.designCertifierSelected !== true) return;
-  for (const [field, label] of [
+  // Only what the portal's register asks for: "I will be uploading a certificate
+  // of design with this application" Yes opens the one wanting the certificate
+  // number and signature dates; No opens the one wanting the names.
+  const withApplication = value.designCertificateWithApplication ?? value.designCertificateTiming === 'with_application';
+  const required = [
     ['registrationAPart1', 'Registration number A Part 1'], ['registrationAPart2', 'Registration number A Part 2'],
-    ['certifierName', 'the name of the certifier'], ['registrationBPart1', 'Registration number B Part 1'],
-    ['registrationBPart2', 'Registration number B Part 2'], ['approvedBody', 'the name of the approved body'],
-  ] as const) if (!value[field]?.trim()) context.addIssue({ code: 'custom', path: [field], message: `Enter ${label}.` });
+    ['registrationBPart1', 'Registration number B Part 1'], ['registrationBPart2', 'Registration number B Part 2'],
+    ...(withApplication
+      ? [['designCertificateNumber', 'the design certificate number'], ['designCertifierSignatureDate', 'the date the certifier signed'],
+         ['designApprovedBodySignatureDate', 'the date the approved body signed']]
+      : [['certifierName', 'the name of the certifier'], ['approvedBody', 'the name of the approved body']]),
+  ] as const;
+  for (const [field, label] of required) {
+    const entered = value[field as keyof typeof value];
+    if (typeof entered !== 'string' || !entered.trim()) context.addIssue({ code: 'custom', path: [field], message: `Enter ${label}.` });
+  }
 });
 
 export const organisationDefaultsSchema = z.object({

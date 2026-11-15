@@ -231,10 +231,12 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
     if (answers?.designCertifierSelected === true || answers?.certifierOfDesignCertificateAvailable === true) {
       requireValue('buildingWarrant.certifier.registrationAPart1', snapshot.buildingWarrant?.certifier?.registrationAPart1, 'Choose Registration number A Part 1.');
       requireValue('buildingWarrant.certifier.registrationAPart2', snapshot.buildingWarrant?.certifier?.registrationAPart2, 'Enter Registration number A Part 2.');
-      requireValue('buildingWarrant.certifier.certifierName', snapshot.buildingWarrant?.certifier?.certifierName, 'Enter the name of the certifier.');
+      // The names are asked for only by the register for a certificate following the application.
+      const namesNeeded = snapshot.buildingWarrant?.designCertificateWithApplication !== true;
+      if (namesNeeded) requireValue('buildingWarrant.certifier.certifierName', snapshot.buildingWarrant?.certifier?.certifierName, 'Enter the name of the certifier.');
       requireValue('buildingWarrant.certifier.registrationBPart1', snapshot.buildingWarrant?.certifier?.registrationBPart1, 'Choose Registration number B Part 1.');
       requireValue('buildingWarrant.certifier.registrationBPart2', snapshot.buildingWarrant?.certifier?.registrationBPart2, 'Enter Registration number B Part 2.');
-      requireValue('buildingWarrant.certifier.approvedBody', snapshot.buildingWarrant?.certifier?.approvedBody, 'Enter the name of the approved body.');
+      if (namesNeeded) requireValue('buildingWarrant.certifier.approvedBody', snapshot.buildingWarrant?.certifier?.approvedBody, 'Enter the name of the approved body.');
     }
     if (snapshot.buildingWarrant?.feeCalculation?.calculationStatus !== 'CALCULATED') {
       missing.push({

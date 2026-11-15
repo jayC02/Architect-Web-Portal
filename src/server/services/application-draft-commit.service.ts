@@ -141,6 +141,9 @@ const buildingWarrantAnswers = (review: ApplicationDraftReview) => ({
     buildingUse: review.project.buildingUse,
     typeOfWorkKeys: selectedTypeOfWorkKeys(review),
   }),
+  // A certifier chosen here is used: the design certificate is provided. The
+  // certificate questions themselves are asked in the warrant preparation.
+  ...(review.application.selectedCertifierPresetId ? { designCertifierSelected: true, certifierOfDesignCertificateAvailable: true } : {}),
   applicantOverride: review.applicantDifferentFromClient
     ? personSnapshotOverride(review.applicant)
     : null,

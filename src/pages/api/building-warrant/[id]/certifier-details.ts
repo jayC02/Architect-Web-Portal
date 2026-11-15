@@ -128,13 +128,11 @@ export const POST: APIRoute = (context) =>
           ...(body.disabledPersonsFacilitiesOnly !== undefined
             ? { disabledPersonsFacilitiesOnly: body.disabledPersonsFacilitiesOnly }
             : {}),
-          ...(body.certifierOfDesignCertificateAvailable !== undefined
-            ? { certifierOfDesignCertificateAvailable: designSelected && body.certifierOfDesignCertificateAvailable }
-            : {}),
+          // "Use a certifier of design?" decides whether the design certificate is provided.
+          certifierOfDesignCertificateAvailable: designSelected,
           ...(body.certifierOfConstructionCertificateAvailable !== undefined
             ? { certifierOfConstructionCertificateAvailable: body.approvedCertifierOfConstruction && body.certifierOfConstructionCertificateAvailable }
             : {}),
-          ...(!designSelected ? { certifierOfDesignCertificateAvailable: false } : {}),
           ...(!body.approvedCertifierOfConstruction ? { certifierOfConstructionCertificateAvailable: false } : {}),
           applicantIsOwner: body.applicantIsOwner,
           applicationIsStaged: body.applicationIsStaged,

@@ -1,5 +1,5 @@
 import ClientApplicantReview from './ClientApplicantReview';
-import { WarrantCertificateQuestions, WarrantConfirmationQuestions } from './WarrantDraftQuestions';
+import { WarrantConfirmationQuestions } from './WarrantDraftQuestions';
 import { permitsSTAS } from '@/lib/building-warrant-branches';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { applicationFileSha256, retryTransientUpload, runUploadQueue, UploadRequestError } from '@/lib/application-upload-queue';
@@ -1226,7 +1226,6 @@ export default function ApplicationDraftReview({
                     {certifierPresets.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <WarrantCertificateQuestions confirmations={review.confirmations} update={updateConfirmation} />
               </>
             ) : null}
 

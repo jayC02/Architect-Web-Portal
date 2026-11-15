@@ -39,6 +39,11 @@ export const designCertificateTiming = (value: { designCertificateWithApplicatio
   const withApplication = value.designCertificateWithApplication === true;
   return { designCertificateWithApplication: withApplication, designCertificateFollowingApplication: !withApplication };
 };
+// "Use a certifier of design?" Yes means the design certificate is provided: the
+// Agent answers Yes in the portal and fills the certifier, and the fee discount
+// applies. Warrants saved before that question existed keep their saved answer.
+export const designCertificateProvided = (answers: { designCertifierSelected?: boolean | null; certifierOfDesignCertificateAvailable?: boolean | null }) =>
+  typeof answers.designCertifierSelected === 'boolean' ? answers.designCertifierSelected : answers.certifierOfDesignCertificateAvailable === true;
 export const warrantBranchSnapshotFields = {
   includesServices: z.boolean().optional(),
   relaxationDirections: z.array(z.object({ reference: text(750), date: z.union([z.string().date(), z.literal('')]) })).max(20).optional(),

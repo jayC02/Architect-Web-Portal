@@ -84,7 +84,9 @@ export const PATCH: APIRoute = (context) =>
           ...existingPreparation,
           typeOfWorkKeys: effectiveWorkTypes,
           ...savedAnswers,
-          ...(body.designCertifierSelected === false ? { certifier: null, certifierOfDesignCertificateAvailable: false } : {}),
+          ...(body.designCertifierSelected === false ? { certifier: null } : {}),
+          // "Use a certifier of design?" decides whether the design certificate is provided.
+          ...(body.designCertifierSelected !== undefined ? { certifierOfDesignCertificateAvailable: body.designCertifierSelected } : {}),
           ...(!body.approvedCertifierOfConstruction ? { certifierOfConstructionCertificateAvailable: false } : {}),
           ...warrantBranchesFromForm(body),
           declarationAuthorised: body.declarationAuthorised,
