@@ -216,9 +216,10 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
     if (answers?.certifierOfDesignCertificateAvailable === true) {
       const withApplication = snapshot.buildingWarrant?.designCertificateWithApplication;
       const followingApplication = snapshot.buildingWarrant?.designCertificateFollowingApplication;
-      if (typeof withApplication !== 'boolean' || typeof followingApplication !== 'boolean' || withApplication === followingApplication) missing.push({ code: 'missing_design_certificate_timing', field: 'buildingWarrant.designCertificateWithApplication', message: 'Choose whether the design certificate will accompany this application or follow it.', severity: 'error' });
-      // The portal's register for a certificate supplied with the application asks for these.
-      if (withApplication === true && followingApplication === false) {
+      // The portal accepts Yes / No, Yes / Yes and No / Yes, never No / No.
+      if (typeof withApplication !== 'boolean' || typeof followingApplication !== 'boolean' || (!withApplication && !followingApplication)) missing.push({ code: 'missing_design_certificate_timing', field: 'buildingWarrant.designCertificateWithApplication', message: 'Answer Yes to at least one design certificate question: uploading it with this application, or submitting it following the submission.', severity: 'error' });
+      // "With this application" Yes opens the register that asks for these.
+      if (withApplication === true) {
         const details = snapshot.buildingWarrant?.designCertificate;
         for (const [field, message] of [
           ['certificateNumber', 'Enter the design certificate number.'],

@@ -2,7 +2,7 @@
 // usual answer already selected; ticking one that needs more detail opens its follow-up directly
 // underneath. Field names and limits match the Building Warrant details page.
 import type { ReactNode } from 'react';
-import { OWNER_DRAFT_FIELDS, warrantTick, type WarrantTickKey } from '@/lib/building-warrant-draft-answers';
+import { draftDesignCertificateTiming, OWNER_DRAFT_FIELDS, warrantTick, type WarrantTickKey } from '@/lib/building-warrant-draft-answers';
 
 type Confirmations = Record<string, boolean | string | number | null | undefined>;
 type Update = (key: string, value: boolean | string | number | null) => void;
@@ -79,18 +79,36 @@ function Choice({ confirmations, update, name, label, options, question = false 
   );
 }
 
+// The portal's question, No unless changed. No means the certificate follows the
+// application (the portal's second answer is then Yes); Yes opens the register
+// that asks for the certificate number and signature dates.
+function DesignCertificateTiming({ confirmations, update }: { confirmations: Confirmations; update: Update }) {
+  const timing = draftDesignCertificateTiming(confirmations);
+  return (
+    <div className="mt-3 grid gap-3">
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium leading-5 text-ink">I will be uploading a certificate of design with this application</span>
+        <select className="field" name="designCertificateWithApplication" value={String(timing.designCertificateWithApplication)}
+          onChange={(event) => update('designCertificateWithApplication', event.target.value === 'true')}>
+          <option value="false">No</option><option value="true">Yes</option>
+        </select>
+        <span className="mt-1 block text-sm text-stone-600">No means the certificate will be submitted following this application.</span>
+      </label>
+      {timing.designCertificateWithApplication && <div className="grid gap-4 sm:grid-cols-3">
+        <TextInput confirmations={confirmations} update={update} name="designCertificateNumber" label="Design certificate number" max={40} />
+        <TextInput confirmations={confirmations} update={update} name="designCertifierSignatureDate" label="Date the certifier signed" max={10} type="date" />
+        <TextInput confirmations={confirmations} update={update} name="designApprovedBodySignatureDate" label="Date the approved body signed" max={10} type="date" />
+      </div>}
+    </div>
+  );
+}
+
 export function WarrantCertificateQuestions({ confirmations, update }: { confirmations: Confirmations; update: Update }) {
   const props = { confirmations, update };
   return (
     <div className="border-t border-stone-100 lg:col-span-2" data-warrant-certificates>
       <Tick {...props} name="certifierOfDesignCertificateAvailable" label="Will the appropriate Certifier of Design certificate be provided?">
-        <Choice {...props} name="designCertificateTiming" question label="When will the design certificate be provided?" options={[['', 'Choose when'], ['with_application', 'With this application'], ['following_application', 'Following this application']]} />
-        {/* The portal asks for these when the certificate accompanies the application. */}
-        {confirmations.designCertificateTiming === 'with_application' && <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          <TextInput {...props} name="designCertificateNumber" label="Design certificate number" max={40} />
-          <TextInput {...props} name="designCertifierSignatureDate" label="Date the certifier signed" max={10} type="date" />
-          <TextInput {...props} name="designApprovedBodySignatureDate" label="Date the approved body signed" max={10} type="date" />
-        </div>}
+        <DesignCertificateTiming {...props} />
       </Tick>
       <Tick {...props} name="approvedCertifierOfConstruction" label="Will an approved certifier of construction be used?">
         <div className="grid gap-4 sm:grid-cols-2">

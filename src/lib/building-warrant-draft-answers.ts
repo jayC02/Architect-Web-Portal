@@ -1,7 +1,7 @@
 // Building Warrant answers collected in the New application review, and how they become the
 // application's preparation data. The keys match the Building Warrant details page and its save
 // route, so whatever the review collects appears already filled in on that page.
-import { designCertificateDetails, permitsSTAS } from '@/lib/building-warrant-branches';
+import { designCertificateDetails, designCertificateTiming, permitsSTAS } from '@/lib/building-warrant-branches';
 import { FIXED_WARRANT_ANSWERS } from '@/lib/building-warrant-follow-ups';
 import { OWNER_FIELDS } from '@/lib/building-warrant-owner';
 
@@ -42,6 +42,15 @@ const draftDate = (confirmations: DraftConfirmations, key: string) => {
 const ownerFormKey = (key: string) => `owner${key[0].toUpperCase()}${key.slice(1)}`;
 export const OWNER_DRAFT_FIELDS = OWNER_FIELDS.map(([key, label, max]) => [key, ownerFormKey(key), label, max] as const);
 
+// "I will be uploading a certificate of design with this application" in a
+// draft, No unless changed; the portal's second answer follows from it. Older
+// drafts saved a single choice (designCertificateTiming).
+export const draftDesignCertificateTiming = (confirmations: DraftConfirmations) => designCertificateTiming({
+  designCertificateWithApplication: typeof confirmations.designCertificateWithApplication === 'boolean'
+    ? confirmations.designCertificateWithApplication
+    : confirmations.designCertificateTiming === 'with_application',
+});
+
 export const buildingWarrantDraftAnswers = (
   confirmations: DraftConfirmations,
   screening: { buildingUse: unknown; typeOfWorkKeys: readonly string[] },
@@ -58,7 +67,7 @@ export const buildingWarrantDraftAnswers = (
   const construction = tick('approvedCertifierOfConstruction');
   const designCertificate = tick('certifierOfDesignCertificateAvailable');
   const ownerIsClient = typeof confirmations.ownerIsClient === 'boolean' ? confirmations.ownerIsClient : null;
-  const timing = confirmations.designCertificateTiming;
+  const timing = draftDesignCertificateTiming(confirmations);
   const relaxationReference = relaxation ? text('relaxationReference', 750) : null;
   const relaxationDate = relaxation ? text('relaxationDate', 10) : null;
   return {
@@ -77,11 +86,10 @@ export const buildingWarrantDraftAnswers = (
     disabledPersonsFacilitiesOnly: tick('disabledPersonsFacilitiesOnly'),
     certifierOfDesignCertificateAvailable: designCertificate,
     ...(designCertificate ? { designCertifierSelected: true } : {}),
-    ...(designCertificate && (timing === 'with_application' || timing === 'following_application') ? {
-      designCertificateWithApplication: timing === 'with_application',
-      designCertificateFollowingApplication: timing === 'following_application',
-      // The portal asks for these when the certificate accompanies the application.
-      designCertificate: timing === 'with_application'
+    ...(designCertificate ? {
+      ...timing,
+      // The portal asks for these when the certificate is uploaded with the application.
+      designCertificate: timing.designCertificateWithApplication
         ? designCertificateDetails(text('designCertificateNumber', 40), draftDate(confirmations, 'designCertifierSignatureDate'), draftDate(confirmations, 'designApprovedBodySignatureDate'))
         : null,
     } : {}),

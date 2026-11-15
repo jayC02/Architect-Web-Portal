@@ -1,4 +1,4 @@
-import { permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
+import { designCertificateTiming, permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import { readProjectScreener } from '@/lib/projects/screener';
 import { z } from 'zod';
 import { resolveWarrantOwner } from '@/lib/building-warrant-owner';
@@ -547,6 +547,8 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       warrantReference: warrant?.warrantReference ?? null,
       unusualAnswers: warrantAnswers,
       ...z.object(warrantBranchSnapshotFields).parse(warrantPreparation),
+      // The portal's two design certificate questions, No / Yes unless the architect changed them.
+      ...designCertificateTiming(warrantPreparation),
       ownerIsClient: typeof warrantPreparation.ownerIsClient === 'boolean' ? warrantPreparation.ownerIsClient : null,
       owner: warrantAnswers.applicantIsOwner ? null : resolveWarrantOwner(warrantPreparation, project.client),
       fireAuthorityName: nullableString(warrantPreparation.fireAuthorityName),

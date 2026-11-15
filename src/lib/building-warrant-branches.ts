@@ -28,6 +28,17 @@ export const designCertificateSchema = z.object({
 export const designCertificateDetails = (number: string | null | undefined, certifierDate: string | null | undefined, approvedBodyDate: string | null | undefined) => ({
   certificateNumber: number ?? undefined, certifierSignatureDate: certifierDate ?? undefined, approvedBodySignatureDate: approvedBodyDate ?? undefined,
 });
+// The portal asks two Yes/No questions about when the certificates of design
+// will be submitted. Only the first matters: "I will be uploading a
+// certificate of design with this application" Yes opens the register asking
+// for the certificate number and signature dates (whatever the second answer);
+// No (the default) needs Yes to "I intend to submit a certificate of design
+// following the submission of this application" and opens the register asking
+// for names. So the architect answers the first and the second follows from it.
+export const designCertificateTiming = (value: { designCertificateWithApplication?: unknown; designCertificateFollowingApplication?: unknown }) => {
+  const withApplication = value.designCertificateWithApplication === true;
+  return { designCertificateWithApplication: withApplication, designCertificateFollowingApplication: !withApplication };
+};
 export const warrantBranchSnapshotFields = {
   includesServices: z.boolean().optional(),
   relaxationDirections: z.array(z.object({ reference: text(750), date: z.union([z.string().date(), z.literal('')]) })).max(20).optional(),
@@ -52,6 +63,8 @@ export const warrantBranchFormFields = {
   constructionCertifierName: optionalText(160), constructionRegistrationNumber: optionalText(80),
   constructionApprovedBody: optionalText(160), constructionApprovedBodyRegistrationNumber: optionalText(80), constructionWorkTypeDetails: optionalText(750),
   designCertifierSelected: optionalBoolean,
+  // The portal's two Yes/No answers; designCertificateTiming is the older single choice.
+  designCertificateWithApplication: optionalBoolean, designCertificateFollowingApplication: optionalBoolean,
   designCertificateTiming: z.preprocess(value => value === '' || value == null ? undefined : value, z.enum(['with_application', 'following_application']).optional()),
   designCertificateNumber: optionalText(40), designCertifierSignatureDate: optionalDate, designApprovedBodySignatureDate: optionalDate,
 };
@@ -66,12 +79,24 @@ export const warrantBranchesFromForm = (value: z.infer<typeof branchForm>) => ({
     registrationNumber: value.constructionRegistrationNumber, approvedBody: value.constructionApprovedBody,
     approvedBodyRegistrationNumber: value.constructionApprovedBodyRegistrationNumber, workTypeDetails: value.constructionWorkTypeDetails,
   },
-  ...(value.designCertificateTiming ? {
+  ...designCertificateTimingFromForm(value),
+});
+type DesignCertificateAnswers = {
+  designCertificateWithApplication?: boolean; designCertificateFollowingApplication?: boolean;
+  designCertificate?: z.infer<typeof designCertificateSchema> | null;
+};
+const designCertificateTimingFromForm = (value: z.infer<typeof branchForm>): DesignCertificateAnswers => {
+  const answered = value.designCertificateWithApplication !== undefined || value.designCertificateFollowingApplication !== undefined;
+  if (!answered && !value.designCertificateTiming) return {};
+  const timing = designCertificateTiming(answered ? value : {
     designCertificateWithApplication: value.designCertificateTiming === 'with_application',
     designCertificateFollowingApplication: value.designCertificateTiming === 'following_application',
-    designCertificate: value.designCertificateTiming === 'with_application'
+  });
+  return {
+    ...timing,
+    designCertificate: timing.designCertificateWithApplication
       ? designCertificateDetails(value.designCertificateNumber, value.designCertifierSignatureDate, value.designApprovedBodySignatureDate)
       : null,
-  } : {}),
-});
+  };
+};
 export const permitsSTAS = (buildingUse: unknown, workTypes: readonly string[]) => buildingUse === 'commercial' || workTypes.includes('new_build');
