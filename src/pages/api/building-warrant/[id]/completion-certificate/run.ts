@@ -27,6 +27,7 @@ export const POST: APIRoute = (context) =>
       jobId: queued.jobId,
       created: queued.created,
       compatibleAgentOnline: queued.compatibleAgentOnline,
-      redirectTo: `/building-warrant/${encodeURIComponent(id)}/completion-certificate/preparation?job=${encodeURIComponent(queued.jobId)}`,
+      // Back to the project, where the Completion Certificate tile shows it queued.
+      redirectTo: `/projects/${encodeURIComponent(queued.projectId)}#completion-certificate`,
     });
   }, context);

@@ -148,7 +148,8 @@ assert.match(projectsApi, /projectCreateSchema/, 'project creation uses the dedi
 assert.match(projectsApi, /redirectTo: `\/projects\/\$\{project\.id\}`/, 'new projects open directly in their workspace');
 assert.match(projectDetailPage, /desktopJob=\{planningDesktop\.job\}/, 'project workspace shows the current Householder desktop status');
 assert.match(projectDetailPage, /desktopJob=\{warrantDesktop\.job\}/, 'project workspace shows the current Building Warrant desktop status separately');
-assert.equal((projectDetailPage.match(/<ApplicationSummaryCard/g) ?? []).length, 2, 'planning and warrant render the same summary component');
+assert.equal((projectDetailPage.match(/<ApplicationSummaryCard/g) ?? []).length, 3, 'planning, warrant and completion certificate render the same summary component');
+assert.match(projectDetailPage, /desktopJob=\{completionJob\}/, 'project workspace shows the current Completion Certificate desktop status');
 assert.match(applicationSummaryCard, /DesktopAutomationStatus/, 'application cards share the contextual desktop status component');
 assert.match(applicationSummaryCard, /<dt class="label">Address<\/dt>/, 'shared application card shows address');
 assert.match(applicationSummaryCard, /<dt class="label">Client<\/dt>/, 'shared application card shows client');

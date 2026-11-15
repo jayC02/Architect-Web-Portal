@@ -210,7 +210,7 @@ const branchProps = {
         <div class="flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save project screening</button><span data-screening-status class="text-sm text-stone-500" aria-live="polite"></span></div>
       </form>
     </section>
-    <form data-api-form data-action={`/api/building-warrant/${application.id}/certifier-details`} data-method="POST" class="panel prep-form rounded-lg p-5">
+    <form data-api-form data-action={`/api/building-warrant/${application.id}/certifier-details`} data-method="POST" data-pending-message="Saving and starting automation..." class="panel prep-form rounded-lg p-5">
       {job && <input type="hidden" name="jobId" value={job.id} />}
       {incompleteSave && remainingRequirements.length > 0 && (
         <div class="mb-5 border-l-4 border-amber-600 bg-amber-50 px-4 py-3" role="alert">
@@ -323,7 +323,7 @@ const branchProps = {
         <div class="mt-4"><WarrantBranchFields part="declaration" {...branchProps} /></div>
       </PreparationSection>
 
-      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and return to project</button><span data-form-status class="text-sm text-stone-500" /></div>
+      <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and run application</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
     </div>
 

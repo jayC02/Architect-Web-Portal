@@ -9,7 +9,9 @@ import {
 
 interface Props {
   projectId: string;
-  type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT' | 'COMPLETION_CERTIFICATE';
+  /** Completion Certificate only: false until the warrant has been submitted. */
+  available?: boolean;
   applicationId?: string | null;
   applicationStatus: string;
   applicationLabel: string;
@@ -33,7 +35,9 @@ const {
   missingCount = 0,
   connectedAgent = false,
   recoveryContext,
+  available = true,
 } = Astro.props;
+const isCompletion = type === 'COMPLETION_CERTIFICATE';
 const preparationActionLabel = type === AutomationJobType.BUILDING_WARRANT
   ? 'Complete Building Warrant details'
   : 'Complete Planning application details';
@@ -61,7 +65,22 @@ const description = preparationReady
     lastCheckpoint: job.lastCheckpoint,
     stale: Boolean(job.agentHeartbeatAt && Date.now() - job.agentHeartbeatAt.getTime() > 90_000),
   }} applicationType={type} recoveryContext={recoveryContext} />
-) : <section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
+) : isCompletion ? <section class="p-4 sm:px-5" aria-label="Completion Certificate desktop automation">
+  <!-- Prepared and sent from its own page; the run then appears here like the others. -->
+  <div class="flex flex-wrap items-start gap-4">
+    <div class="min-w-0 flex-[1_1_14rem]">
+      <p class="text-xs font-semibold uppercase text-stone-500">Desktop automation</p>
+      <h3 class="mt-2 font-semibold text-ink">{available ? 'Ready to prepare' : 'Not available yet'}</h3>
+      <p class="mt-1.5 max-w-2xl text-sm leading-5 text-stone-600">{available
+        ? 'Work finished? Prepare the completion certificate for this warrant and send it to the Agent.'
+        : 'Available once the building warrant has been submitted to the council.'}</p>
+    </div>
+    <div class="flex min-w-0 max-w-full flex-[1_1_18rem] flex-col items-start gap-2">
+      {available && <a class="btn btn-primary" href={manageHref}>Prepare Completion Certificate</a>}
+      <a class="text-xs font-semibold text-stone-500 hover:text-ink" href="/automation-jobs">View desktop job history</a>
+    </div>
+  </div>
+</section> : <section class="p-4 sm:px-5" aria-label={`${applicationLabel} desktop automation`}>
   <div class="flex flex-wrap items-start gap-4">
     <div class="min-w-0 flex-[1_1_14rem]">
       <p class="text-xs font-semibold uppercase text-stone-500">Desktop automation</p>
@@ -80,7 +99,7 @@ const description = preparationReady
         <AutomationLaunchButton
           client:load
           projectId={projectId}
-          type={type}
+          type={type as 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT'}
           planningApplicationId={type === AutomationJobType.HOUSEHOLDER_PLANNING ? applicationId ?? undefined : undefined}
           buildingWarrantApplicationId={type === AutomationJobType.BUILDING_WARRANT ? applicationId ?? undefined : undefined}
           label="Prepare for desktop"
@@ -90,7 +109,7 @@ const description = preparationReady
         <AutomationLaunchButton
           client:load
           projectId={projectId}
-          type={type}
+          type={type as 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT'}
           planningApplicationId={type === AutomationJobType.HOUSEHOLDER_PLANNING ? applicationId ?? undefined : undefined}
           buildingWarrantApplicationId={type === AutomationJobType.BUILDING_WARRANT ? applicationId ?? undefined : undefined}
           label={preparationActionLabel}

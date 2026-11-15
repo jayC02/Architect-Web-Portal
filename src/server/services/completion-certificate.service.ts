@@ -382,7 +382,7 @@ export const queueCompletionCertificateJob = async (
     today?: Date;
   },
   dependencies: QueueDependencies = {},
-): Promise<{ jobId: string; created: boolean; compatibleAgentOnline: boolean | null }> => {
+): Promise<{ jobId: string; projectId: string; created: boolean; compatibleAgentOnline: boolean | null }> => {
   const database = dependencies.database ?? prisma;
   const authorise = dependencies.authorise ?? authoriseAutomationJobRun;
 
@@ -408,7 +408,7 @@ export const queueCompletionCertificateJob = async (
     });
     const current = candidates.find((job) => automationJobApplicationId(job) === warrant.id);
     if (current) {
-      return { jobId: current.id, created: false, authorised: Boolean(current.executionAuthorisedAt) };
+      return { jobId: current.id, projectId: warrant.projectId, created: false, authorised: Boolean(current.executionAuthorisedAt) };
     }
 
     const jobId = randomUUID();
@@ -449,12 +449,12 @@ export const queueCompletionCertificateJob = async (
         data: { completionCertificateStatus: CompletionCertificateStatus.DRAFTING },
       });
     }
-    return { jobId, created: true, authorised: false };
+    return { jobId, projectId: warrant.projectId, created: true, authorised: false };
   });
 
-  if (queued.authorised) return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline: null };
+  if (queued.authorised) return { jobId: queued.jobId, projectId: queued.projectId, created: queued.created, compatibleAgentOnline: null };
   const { compatibleAgentOnline } = await authorise({ organisationId: input.organisationId, jobId: queued.jobId });
-  return { jobId: queued.jobId, created: queued.created, compatibleAgentOnline };
+  return { jobId: queued.jobId, projectId: queued.projectId, created: queued.created, compatibleAgentOnline };
 };
 
 type UploadDependencies = {

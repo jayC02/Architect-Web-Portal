@@ -188,3 +188,10 @@ followingNoNames.buildingWarrant.designCertificateFollowingApplication = true;
 assert.ok(evaluateAutomationPreflight(followingNoNames).missing.some((issue) => issue.field === 'buildingWarrant.certifier.certifierName'), 'the 73% page needs names');
 
 console.log('warrant design certificate page-specific fields tests passed');
+
+// ---- Saving complete warrant details sends it to the Agent, as Planning does ----
+assert.match(preparationPage, /<button class="btn btn-primary">Save and run application<\/button>/);
+assert.match(preparationPage, /data-pending-message="Saving and starting automation\.\.\."/);
+const warrantSave = readFileSync('src/pages/api/building-warrant/[id]/certifier-details.ts', 'utf8');
+assert.match(warrantSave, /status === AutomationJobStatus\.READY\s*\?\s*await authoriseAutomationJobRun\(/, 'only complete details are sent');
+console.log('warrant save and run tests passed');

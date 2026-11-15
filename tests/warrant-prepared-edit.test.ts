@@ -25,7 +25,7 @@ function harness(options: { race?: boolean; identity?: string; status?: Automati
     status: options.status ?? AutomationJobStatus.READY, updatedAt: new Date('2026-10-01'), snapshotHash: 'original',
     claimedAt: null, claimedDeviceId: null, claimedByUserId: null, claimedByAgentId: null, agentRunId: null, completedAt: null,
     createdBy: { id: 'user', name: 'Architect', email: 'test@example.test' }, dataSnapshot: {},
-  } as Record<string, any>, canonical: [] as any[], writes: [] as any[], events: 0, persists: 0, builds: 0 };
+  } as Record<string, any>, canonical: [] as any[], writes: [] as any[], events: 0, persists: 0, builds: 0, authorised: [] as any[] };
   const db = {
     buildingWarrantApplication: { findFirst: async () => ({ id: 'warrant', projectId: 'project', preparationData: {} }) },
     automationJob: {
@@ -56,6 +56,10 @@ function harness(options: { race?: boolean; identity?: string; status?: Automati
     },
     '@/server/services/certifier-presets.service': { findOrCreateCertifierProfile: async () => ({ id: 'certifier', displayName: 'Saved certifier' }) },
     '@/server/services/desktop-automation-status.service': { automationJobApplicationId: () => options.identity ?? 'warrant' },
+    // Complete details go straight to the Agent, as Planning does.
+    '@/server/services/automation-job-run.service': { authoriseAutomationJobRun: async (input: unknown) => {
+      state.authorised.push(input); return { compatibleAgentOnline: true };
+    } },
     '@/server/services/automation-jobs.service': { buildAutomationJobSnapshot: async () => {
       state.builds++;
       if (options.race) Object.assign(state.job, { status: AutomationJobStatus.CLAIMED, claimedDeviceId: 'agent', updatedAt: new Date() });
@@ -78,7 +82,14 @@ function harness(options: { race?: boolean; identity?: string; status?: Automati
 }
 
 const prepared = harness();
-assert.equal((await prepared.save()).status, 200, 'a prepared READY job remains editable');
+const preparedResponse = await prepared.save();
+assert.equal(preparedResponse.status, 200, 'a prepared READY job remains editable');
+assert.equal(prepared.state.authorised.length, 1, 'complete details are sent to the Agent straight away');
+assert.equal(prepared.state.authorised[0].organisationId, 'org');
+assert.equal(prepared.state.authorised[0].jobId, 'job');
+const preparedBody = await preparedResponse.json();
+assert.equal(preparedBody.queued, true);
+assert.equal(preparedBody.redirectTo, '/projects/project');
 assert.equal(prepared.state.canonical[0].data.description, 'Corrected extension');
 assert.equal(prepared.state.job.snapshotHash, 'corrected', 'the handoff receives the corrected details');
 assert.equal(prepared.state.events, 1); assert.equal(prepared.state.persists, 1);
@@ -90,6 +101,7 @@ assert.equal(race.state.canonical.length, 1, 'canonical corrections are retained
 assert.equal(race.state.job.status, 'CLAIMED');
 assert.equal(race.state.job.snapshotHash, 'original', 'saving cannot overwrite an Agent claim');
 assert.equal(race.state.writes.length, 0); assert.equal(race.state.events, 0); assert.equal(race.state.persists, 0);
+assert.equal(race.state.authorised.length, 0, 'nothing is sent when the attempt changed underneath');
 
 const foreign = harness({ identity: 'another-warrant' });
 assert.equal((await foreign.save()).status, 404);

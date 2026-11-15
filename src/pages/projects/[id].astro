@@ -24,8 +24,10 @@ import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS, typeOfWorkLabels } f
 import { readProjectScreener } from '@/lib/projects/screener';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import {
+  automationJobDocumentCount,
   desktopAutomationJobSelect,
   getDesktopAutomationContext,
+  selectCurrentAutomationJob,
 } from '@/server/services/desktop-automation-status.service';
 import { agentSupportsJob, healthyAgentCutoff } from '@/server/services/desktop-agent.service';
 
@@ -248,6 +250,14 @@ const [planningDesktop, warrantDesktop] = await Promise.all([
     applicationId: latestWarrant?.id,
   }),
 ]);
+// The Completion Certificate tile follows the latest warrant's completion run.
+const completionAvailable = Boolean(latestWarrant && completionWarrantStatuses.has(latestWarrant.status));
+const completionJob = latestWarrant ? selectCurrentAutomationJob(automationJobs, {
+  projectId: project.id,
+  types: [AutomationJobType.COMPLETION_CERTIFICATE],
+  applicationId: latestWarrant.id,
+}) : null;
+const completionHref = latestWarrant ? `/building-warrant/${latestWarrant.id}/completion-certificate/preparation` : `/projects/${project.id}/building-warrant`;
 const healthyAgents = await prisma.agentRegistration.findMany({
   where: {
     organisationId: auth.organisation.id,
@@ -266,7 +276,12 @@ const warrantAgentConnected = healthyAgents.some((agent) => agentSupportsJob(age
   payloadVersion: warrantDesktop.job?.payloadVersion ?? 2,
   dataSnapshot: warrantDesktop.job?.dataSnapshot,
 }));
-const readyAutomationJobCount = [planningDesktop.job, warrantDesktop.job]
+const completionAgentConnected = healthyAgents.some((agent) => agentSupportsJob(agent, {
+  type: AutomationJobType.COMPLETION_CERTIFICATE,
+  payloadVersion: completionJob?.payloadVersion ?? 2,
+  dataSnapshot: completionJob?.dataSnapshot,
+}));
+const readyAutomationJobCount = [planningDesktop.job, warrantDesktop.job, completionJob]
   .filter((job) => job?.status === 'READY').length;
 const nextAction = getProjectNextAction({
   projectId: project.id,
@@ -454,9 +469,6 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         reference={latestWarrant?.warrantReference ?? 'Not assigned'}
         projectId={project.id}
         applicationKind="BUILDING_WARRANT"
-        completionHref={latestWarrant && completionWarrantStatuses.has(latestWarrant.status)
-          ? `/building-warrant/${latestWarrant.id}/completion-certificate/preparation`
-          : undefined}
         applicationId={latestWarrant?.id}
         applicationStatus={latestWarrant?.status ?? 'NOT_STARTED'}
         desktopJob={warrantDesktop.job}
@@ -468,6 +480,31 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
           applicationId: latestWarrant?.id ?? null,
           portalHref: latestWarrant?.portalUrl ?? null,
           typeOfWorkKeys: warrantTypeOfWorkKeys,
+        }}
+      />
+      <ApplicationSummaryCard
+        id="completion-certificate"
+        title="Completion Certificate"
+        subtitle="For the latest building warrant"
+        manageHref={completionHref}
+        address={siteSummary}
+        clientName={project.client?.name ?? 'Not linked'}
+        applicationType="Completion Certificate"
+        status={!latestWarrant ? 'No building warrant' : completionAvailable ? applicationStatus(latestWarrant.completionCertificateStatus) : 'Warrant not submitted'}
+        documentCount={completionJob ? automationJobDocumentCount(completionJob) : 0}
+        reference={latestWarrant?.warrantReference ?? 'Not assigned'}
+        projectId={project.id}
+        applicationKind="COMPLETION_CERTIFICATE"
+        applicationId={latestWarrant?.id}
+        applicationStatus={latestWarrant?.completionCertificateStatus ?? 'NOT_STARTED'}
+        desktopJob={completionJob}
+        connectedAgent={completionAgentConnected}
+        available={completionAvailable}
+        recoveryContext={{
+          ...sharedRecoveryContext,
+          applicationId: latestWarrant?.id ?? null,
+          portalHref: latestWarrant?.portalUrl ?? null,
+          typeOfWorkKeys: [],
         }}
       />
     </div>

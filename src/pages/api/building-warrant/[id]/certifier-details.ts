@@ -22,6 +22,7 @@ import {
 } from '@/server/services/application-lifecycle.service';
 import { findOrCreateCertifierProfile } from '@/server/services/certifier-presets.service';
 import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
+import { authoriseAutomationJobRun } from '@/server/services/automation-job-run.service';
 import { buildAutomationJobSnapshot } from '@/server/services/automation-jobs.service';
 
 const refreshableStatuses = [
@@ -230,11 +231,16 @@ export const POST: APIRoute = (context) =>
     await persistApplicationPreparationDraft(job.id, organisation.id);
     await drainLifecycleEventsBestEffort(organisation.id, [readinessLifecycleEvent?.id]);
 
+    // Complete details go straight to the Agent, as Planning does.
+    const runResult = status === AutomationJobStatus.READY
+      ? await authoriseAutomationJobRun({ organisationId: organisation.id, jobId: job.id })
+      : null;
     const preparationRedirect = `/building-warrant/${encodeURIComponent(application.id)}/preparation?job=${encodeURIComponent(job.id)}&incomplete=1`;
     return jsonResponse(200, {
       ok: true,
       status,
       preflight: snapshot.preflight,
+      ...(runResult ? { queued: true, ...runResult } : {}),
       redirectTo: status === AutomationJobStatus.READY
         ? `/projects/${application.projectId}`
         : preparationRedirect,

@@ -19,7 +19,7 @@ export type FailureRecoveryContext = {
 type Props = {
   metadata: AutomationFailureMetadata;
   context: FailureRecoveryContext;
-  applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT' | 'COMPLETION_CERTIFICATE';
   retrying: boolean;
   onRetry: () => Promise<void>;
   detailsHref: string;
@@ -57,6 +57,8 @@ export default function AutomationFailureRecovery({
   const [saveMessage, setSaveMessage] = useState('');
   const desiredEditor = recoveryEditor(metadata.recoveryAction);
   const isWarrant = applicationType === 'BUILDING_WARRANT';
+  const isCompletion = applicationType === 'COMPLETION_CERTIFICATE';
+  const inEBuildingStandards = isWarrant || isCompletion;
 
   useEffect(() => {
     if (!editor) return;
@@ -88,7 +90,7 @@ export default function AutomationFailureRecovery({
 
   const directRetry = metadata.recoveryAction === 'retry' && metadata.retrySafe;
   const nextAction = metadata.category === 'DOCUMENT_UPLOAD_FAILED' && !metadata.documentFailure
-    ? `Open Supporting Documents in the existing ${isWarrant ? 'eBuilding Standards' : 'ePlanning'} draft. Compare the attached files with your project documents, then add missing files or replace incorrect revisions. Check the existing list before uploading again.`
+    ? `Open Supporting Documents in the existing ${inEBuildingStandards ? 'eBuilding Standards' : 'ePlanning'} draft. Compare the attached files with your project documents, then add missing files or replace incorrect revisions. Check the existing list before uploading again.`
     : metadata.nextAction;
   const canOpenEditor = Boolean(desiredEditor && (
     (desiredEditor === 'address' || desiredEditor === 'site') ? context.site
@@ -100,7 +102,7 @@ export default function AutomationFailureRecovery({
 
   return <>
     <div className="mt-4 flex flex-wrap items-center gap-3">
-      {isWarrant && metadata.category === 'CERTIFICATE_VALIDATION_FAILED' && context.applicationId && <a className="btn btn-primary" href={`/building-warrant/${encodeURIComponent(context.applicationId)}/preparation`}>Correct certifier details</a>}
+      {inEBuildingStandards && metadata.category === 'CERTIFICATE_VALIDATION_FAILED' && context.applicationId && <a className="btn btn-primary" href={`/building-warrant/${encodeURIComponent(context.applicationId)}/${isCompletion ? 'completion-certificate/' : ''}preparation`}>Correct certifier details</a>}
       {directRetry && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>
         {retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}
         {retrying ? 'Queuing retry…' : 'Retry application'}
@@ -112,7 +114,7 @@ export default function AutomationFailureRecovery({
       {/* Only a real portal link: without one, View run details below already covers it. */}
       {context.portalHref && ['review_portal', 'close', 'review_documents'].includes(metadata.recoveryAction) && <a className="btn btn-primary gap-2" href={context.portalHref} target="_blank" rel="noreferrer">
         <ExternalLink size={16} />
-        {isWarrant ? 'View Warrant' : 'View Householder'}
+        {inEBuildingStandards ? 'View Warrant' : 'View Householder'}
       </a>}
       {metadata.retrySafe && !directRetry && !canOpenEditor && metadata.recoveryAction !== 'update_login' && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}><Play size={16} />Retry application</button>}
       {/* The run stopped after creating its proposal: the next run reopens that proposal and carries on. */}

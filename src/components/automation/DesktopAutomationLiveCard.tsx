@@ -28,7 +28,7 @@ type Props = {
   detailsHref: string;
   initial: DesktopJobProjection;
   connectedAgent: boolean;
-  applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT' | 'COMPLETION_CERTIFICATE';
   recoveryContext: FailureRecoveryContext;
 };
 
@@ -96,7 +96,9 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   const active = runningStatuses.has(job.status);
   const queued = job.status === 'READY' && Boolean(job.executionAuthorisedAt);
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
-  const isWarrant = applicationType === 'BUILDING_WARRANT';
+  const isCompletion = applicationType === 'COMPLETION_CERTIFICATE';
+  // Building Warrants and Completion Certificates both go through eBuilding Standards.
+  const isWarrant = applicationType !== 'HOUSEHOLDER_PLANNING';
   const visualCountdownActive = active && !awaitingFee && !addressAction;
 
   useEffect(() => {
@@ -157,6 +159,8 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   };
 
   const retry = async () => {
+    // A completion certificate is sent again from its own page.
+    if (isCompletion) { window.location.assign(manageHref); return; }
     setWorking('retry'); setError(''); setNotice('');
     try {
       const result = await apiRequest<{ job: DesktopJobProjection; compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/restart`, { method: 'POST' });
@@ -294,7 +298,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening…' : `Review in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
+        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>}
         <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>
@@ -323,7 +327,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening browser…' : `Continue in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>
+        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>}
         <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
         <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
       </div>

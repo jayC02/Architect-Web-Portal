@@ -48,12 +48,28 @@ assert.match(page, /organisationId: auth\.organisation\.id/);
 assert.match(page, /CompletionCertificateForm/);
 assert.match(page, /AutomationJobType\.COMPLETION_CERTIFICATE/);
 
-// Entry point on the Building Warrant card, only once the warrant has been submitted.
-assert.match(card, /Prepare Completion Certificate/);
-assert.match(card, /completionHref/);
-assert.match(project, /completionHref=/);
+// Its own tile on the project page, alongside Planning and Building Warrant,
+// available once the warrant has been submitted.
+assert.match(project, /<ApplicationSummaryCard\s+id="completion-certificate"/);
+assert.match(project, /applicationKind="COMPLETION_CERTIFICATE"/);
 assert.match(project, /completion-certificate\/preparation/);
 assert.match(project, /completionWarrantStatuses/);
+assert.match(project, /types: \[AutomationJobType\.COMPLETION_CERTIFICATE\]/, 'the tile shows the completion run for the warrant');
+assert.doesNotMatch(card, /completionHref/, 'the Building Warrant tile no longer carries the completion button');
+assert.match(card, /'COMPLETION_CERTIFICATE'/);
+const status = readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
+assert.match(status, /Prepare Completion Certificate/, 'with no run yet the tile offers to prepare one');
+assert.match(status, /available once the building warrant has been submitted/i);
+const live = readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
+assert.match(live, /'COMPLETION_CERTIFICATE'/, 'the live card follows completion runs like the others');
+assert.match(live, /if \(isCompletion\) \{ window\.location\.assign\(manageHref\); return; \}/, 'a completion certificate is sent again from its own page');
+assert.match(live, /!isCompletion && <button ref=\{markSubmittedButtonRef\}/, 'no Mark as submitted for a completion certificate');
+
+// Sending it returns to the project, where the tile shows it queued.
+const run = readFileSync('src/pages/api/building-warrant/[id]/completion-certificate/run.ts', 'utf8');
+assert.match(run, /redirectTo: `\/projects\/\$\{encodeURIComponent\(queued\.projectId\)\}#completion-certificate`/);
+assert.doesNotMatch(run, /preparation\?job=/);
+assert.match(readFileSync('src/server/services/completion-certificate.service.ts', 'utf8'), /return \{ jobId: queued\.jobId, projectId: queued\.projectId,/);
 
 
 // The form runs in the browser: the modules it imports must not load the
