@@ -109,9 +109,10 @@ export default function AutomationFailureRecovery({
       {metadata.recoveryAction === 'update_login' && <a className="btn btn-secondary" href="architectpro://settings/login">Update Agent login</a>}
       {metadata.recoveryAction === 'update_login' && metadata.retrySafe && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}>{retrying ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{retrying ? 'Queuing restart…' : 'Restart after updating login'}</button>}
       {metadata.recoveryAction === 'review_documents' && <a className="btn btn-primary" href={context.documentsHref}>Review documents</a>}
-      {(metadata.recoveryAction === 'review_portal' || metadata.recoveryAction === 'close' || (metadata.recoveryAction === 'review_documents' && context.portalHref)) && <a className="btn btn-primary gap-2" href={context.portalHref ?? detailsHref} target={context.portalHref ? '_blank' : undefined} rel={context.portalHref ? 'noreferrer' : undefined}>
-        {context.portalHref && <ExternalLink size={16} />}
-        {context.portalHref ? (isWarrant ? 'View Warrant' : 'View Householder') : 'Review current portal state'}
+      {/* Only a real portal link: without one, View run details below already covers it. */}
+      {context.portalHref && ['review_portal', 'close', 'review_documents'].includes(metadata.recoveryAction) && <a className="btn btn-primary gap-2" href={context.portalHref} target="_blank" rel="noreferrer">
+        <ExternalLink size={16} />
+        {isWarrant ? 'View Warrant' : 'View Householder'}
       </a>}
       {metadata.retrySafe && !directRetry && !canOpenEditor && metadata.recoveryAction !== 'update_login' && <button type="button" className="btn btn-primary gap-2" disabled={retrying} onClick={() => void onRetry().catch(() => undefined)}><Play size={16} />Retry application</button>}
       <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={detailsHref}>View run details</a>

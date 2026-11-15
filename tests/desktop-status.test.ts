@@ -232,7 +232,8 @@ assert.doesNotMatch(liveCard, /Restart desktop automation|Complete Planning appl
 assert.match(liveCard, /connectedAgent[\s\S]*Run application/, 'the connected Agent path is the primary ready-state action');
 assert.match(liveCard, /failedStatuses[\s\S]*Automation stopped[\s\S]*Stage:/, 'structured failures are prominent and name the stage');
 assert.match(failureRecovery, /directRetry[\s\S]*Retry application/, 'positively safe failures expose the primary Retry application action');
-assert.match(failureRecovery, /review_portal[\s\S]*Review current portal state/, 'uncertain and final failures expose portal review instead of blind retry');
+assert.match(failureRecovery, /context\.portalHref && \['review_portal'[\s\S]*View Warrant/, 'uncertain and final failures link to the portal application instead of a blind retry');
+assert.doesNotMatch(failureRecovery, /Review current portal state/, 'no button that only repeats View run details');
 assert.match(liveCard, /setCurrentJobId\(result\.job\.id\)[\s\S]*setJob\(result\.job\)/, 'retry transitions the open card to the replacement job without a refresh');
 assert.match(statusRoute, /organisationId: organisation\.id/, 'live projections remain organisation scoped');
 assert.doesNotMatch(statusPanel, /storageKey|password|token/i, 'normal status UI exposes no credentials or storage references');
