@@ -2,7 +2,7 @@
 import { AutomationJobType } from '@prisma/client';
 import AppShell from '@/components/layout/AppShell.astro';
 import WarrantBranchFields from '@/components/forms/WarrantBranchFields.astro';
-import { permitsSTAS } from '@/lib/building-warrant-branches';
+import { designCertificateSchema, permitsSTAS } from '@/lib/building-warrant-branches';
 import { readProjectScreener } from '@/lib/projects/screener';
 import WarrantOwnerDetails from '@/components/forms/WarrantOwnerDetails.astro';
 import { ownerDetailsSchema } from '@/lib/building-warrant-owner';
@@ -73,6 +73,8 @@ const preparation = application.preparationData && typeof application.preparatio
   ? application.preparationData as Record<string, unknown>
   : {};
 const warrantAnswers = buildingWarrantPreparationSchema.parse(preparation);
+// Saved details of a design certificate supplied with the application.
+const savedDesignCertificate = designCertificateSchema.nullable().optional().catch(null).parse(preparation.designCertificate) ?? {};
 const projectScreen = readProjectScreener(application.project);
 const selectedTypeOfWorkKeys = normaliseTypeOfWorkKeys(
   projectScreen.typeOfWorkKeys.length ? projectScreen.typeOfWorkKeys : preparation.typeOfWorkKeys,
@@ -81,6 +83,7 @@ const selectedTypeOfWorkKeys = normaliseTypeOfWorkKeys(
 const showSTAS = permitsSTAS(projectScreen.buildingUse, selectedTypeOfWorkKeys);
 const requiresExistingUse = selectedTypeOfWorkKeys.some(key => key === 'domestic_alteration_extension' || key === 'conversion_change_of_use');
 const designSelected = warrantAnswers.designCertifierSelected ?? warrantAnswers.certifierOfDesignCertificateAvailable === true;
+const showDesignCertificateDetails = designSelected && warrantAnswers.certifierOfDesignCertificateAvailable === true && preparation.designCertificateWithApplication === true;
 const warrantQuestions = [
   ['applicantIsOwner', 'Applicant is the legal owner'],
   ['fireAndRescueServiceEnforcingAuthority', 'Fire and Rescue Service is the enforcing authority'],
@@ -298,6 +301,12 @@ const branchProps = {
             </select>
           </label>
           <label class="mt-4 block" data-design-certificate-timing hidden={warrantAnswers.certifierOfDesignCertificateAvailable !== true}><span class="prep-field-question">When will the design certificate be provided?</span><select name="designCertificateTiming" class="field" required={designSelected && warrantAnswers.certifierOfDesignCertificateAvailable === true}><option value="">Choose when</option><option value="with_application" selected={preparation.designCertificateWithApplication === true}>With this application</option><option value="following_application" selected={preparation.designCertificateFollowingApplication === true}>Following this application</option></select></label>
+          <div class="mt-4 grid gap-4 sm:grid-cols-3" data-design-certificate-details hidden={!showDesignCertificateDetails}>
+            <p class="text-sm text-stone-600 sm:col-span-3">The portal asks for these when the certificate is supplied with the application. Upload the signed certificate with the supporting documents.</p>
+            <label class="block"><span class="prep-field-question">Design certificate number</span><input name="designCertificateNumber" class="field" maxlength="40" value={savedDesignCertificate.certificateNumber ?? ''} required={showDesignCertificateDetails} /></label>
+            <label class="block"><span class="prep-field-question">Date the certifier signed</span><input type="date" name="designCertifierSignatureDate" class="field" value={savedDesignCertificate.certifierSignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
+            <label class="block"><span class="prep-field-question">Date the approved body signed</span><input type="date" name="designApprovedBodySignatureDate" class="field" value={savedDesignCertificate.approvedBodySignatureDate ?? ''} required={showDesignCertificateDetails} /></label>
+          </div>
         </fieldset>
         <WarrantBranchFields part="construction" {...branchProps} />
       </PreparationSection>
@@ -469,6 +478,13 @@ const branchProps = {
       if (timing) timing.hidden = !needsTiming;
       const timingField = form?.querySelector<HTMLSelectElement>('[name="designCertificateTiming"]');
       if (timingField) timingField.required = needsTiming;
+      // Certificate number and signature dates: only for "With this application".
+      const details = form?.querySelector<HTMLElement>('[data-design-certificate-details]');
+      const needsDetails = needsTiming && fieldValue('designCertificateTiming') === 'with_application';
+      if (details) {
+        details.hidden = !needsDetails;
+        details.querySelectorAll<HTMLInputElement>('input').forEach((input) => { input.required = needsDetails; input.disabled = !needsDetails; });
+      }
     };
     form?.addEventListener('change', updateDesignFields);
     updateDesignFields();

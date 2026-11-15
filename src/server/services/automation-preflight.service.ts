@@ -50,6 +50,7 @@ type SnapshotInput = {
     constructionCertificate?: z.infer<typeof constructionCertificateSchema> | null;
     designCertificateWithApplication?: boolean;
     designCertificateFollowingApplication?: boolean;
+    designCertificate?: { certificateNumber?: string; certifierSignatureDate?: string; approvedBodySignatureDate?: string } | null;
     ownerIsClient?: boolean | null;
     owner?: WarrantOwnerDetails | null;
     fireAuthorityName?: string | null;
@@ -216,6 +217,15 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
       const withApplication = snapshot.buildingWarrant?.designCertificateWithApplication;
       const followingApplication = snapshot.buildingWarrant?.designCertificateFollowingApplication;
       if (typeof withApplication !== 'boolean' || typeof followingApplication !== 'boolean' || withApplication === followingApplication) missing.push({ code: 'missing_design_certificate_timing', field: 'buildingWarrant.designCertificateWithApplication', message: 'Choose whether the design certificate will accompany this application or follow it.', severity: 'error' });
+      // The portal's register for a certificate supplied with the application asks for these.
+      if (withApplication === true && followingApplication === false) {
+        const details = snapshot.buildingWarrant?.designCertificate;
+        for (const [field, message] of [
+          ['certificateNumber', 'Enter the design certificate number.'],
+          ['certifierSignatureDate', "Enter the date the certifier signed the design certificate."],
+          ['approvedBodySignatureDate', "Enter the date the approved body signed the design certificate."],
+        ] as const) requireValue(`buildingWarrant.designCertificate.${field}`, details?.[field], message);
+      }
     }
     if (answers?.designCertifierSelected === true || answers?.certifierOfDesignCertificateAvailable === true) {
       requireValue('buildingWarrant.certifier.registrationAPart1', snapshot.buildingWarrant?.certifier?.registrationAPart1, 'Choose Registration number A Part 1.');

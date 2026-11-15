@@ -261,10 +261,14 @@ try {
   assert.equal(newWarrantJob.snapshot.dataSnapshot.buildingWarrant?.recordId, warrantId, 'safe Warrant portal identity is preserved separately');
   warrantEdits = { includesServices: true, designCertifierSelected: true, certifierOfDesignCertificateAvailable: true,
     designCertificateWithApplication: true, designCertificateFollowingApplication: false,
+    // Supplied with the application, so the portal's register asks for its number and signature dates.
+    designCertificate: { certificateNumber: 'DC-1', certifierSignatureDate: '2026-11-02', approvedBodySignatureDate: '2026-11-03' },
     certifier: { registrationAPart1: 'SER1', registrationAPart2: 'CORRECTED-A', certifierName: 'Test Certifier', registrationBPart1: 'SER1', registrationBPart2: 'CORRECTED-B', approvedBody: 'Test Approved Body' } };
   const correctedCertificate = await buildFreshAutomationJob({ organisationId, organisationName: 'Current Organisation', projectId,
     type: AutomationJobType.BUILDING_WARRANT, createdBy, buildingWarrantApplicationId: warrantId });
   assert.equal(correctedCertificate.snapshot.preflight.status, 'READY');
+  assert.deepEqual(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.designCertificate,
+    { certificateNumber: 'DC-1', certifierSignatureDate: '2026-11-02', approvedBodySignatureDate: '2026-11-03' }, 'the run carries the certificate details to the Agent');
   assert.equal(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.includesServices, true);
   assert.equal(correctedCertificate.snapshot.dataSnapshot.buildingWarrant?.certifier?.registrationAPart2, 'CORRECTED-A');
   warrantEdits = { ...warrantEdits, certifier: { ...(warrantEdits.certifier as Record<string, unknown>), registrationAPart2: 'UPDATED-A' } };

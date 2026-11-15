@@ -85,6 +85,12 @@ export function WarrantCertificateQuestions({ confirmations, update }: { confirm
     <div className="border-t border-stone-100 lg:col-span-2" data-warrant-certificates>
       <Tick {...props} name="certifierOfDesignCertificateAvailable" label="Will the appropriate Certifier of Design certificate be provided?">
         <Choice {...props} name="designCertificateTiming" question label="When will the design certificate be provided?" options={[['', 'Choose when'], ['with_application', 'With this application'], ['following_application', 'Following this application']]} />
+        {/* The portal asks for these when the certificate accompanies the application. */}
+        {confirmations.designCertificateTiming === 'with_application' && <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <TextInput {...props} name="designCertificateNumber" label="Design certificate number" max={40} />
+          <TextInput {...props} name="designCertifierSignatureDate" label="Date the certifier signed" max={10} type="date" />
+          <TextInput {...props} name="designApprovedBodySignatureDate" label="Date the approved body signed" max={10} type="date" />
+        </div>}
       </Tick>
       <Tick {...props} name="approvedCertifierOfConstruction" label="Will an approved certifier of construction be used?">
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,7 +1,7 @@
 // Building Warrant answers collected in the New application review, and how they become the
 // application's preparation data. The keys match the Building Warrant details page and its save
 // route, so whatever the review collects appears already filled in on that page.
-import { permitsSTAS } from '@/lib/building-warrant-branches';
+import { designCertificateDetails, permitsSTAS } from '@/lib/building-warrant-branches';
 import { FIXED_WARRANT_ANSWERS } from '@/lib/building-warrant-follow-ups';
 import { OWNER_FIELDS } from '@/lib/building-warrant-owner';
 
@@ -32,6 +32,11 @@ export const warrantTick = (confirmations: DraftConfirmations, key: WarrantTickK
 const draftText = (confirmations: DraftConfirmations, key: string, max: number) => {
   const value = confirmations[key];
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+};
+
+const draftDate = (confirmations: DraftConfirmations, key: string) => {
+  const value = draftText(confirmations, key, 10);
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) ? value : null;
 };
 
 const ownerFormKey = (key: string) => `owner${key[0].toUpperCase()}${key.slice(1)}`;
@@ -75,6 +80,10 @@ export const buildingWarrantDraftAnswers = (
     ...(designCertificate && (timing === 'with_application' || timing === 'following_application') ? {
       designCertificateWithApplication: timing === 'with_application',
       designCertificateFollowingApplication: timing === 'following_application',
+      // The portal asks for these when the certificate accompanies the application.
+      designCertificate: timing === 'with_application'
+        ? designCertificateDetails(text('designCertificateNumber', 40), draftDate(confirmations, 'designCertifierSignatureDate'), draftDate(confirmations, 'designApprovedBodySignatureDate'))
+        : null,
     } : {}),
     certifierOfConstructionCertificateAvailable: construction && tick('certifierOfConstructionCertificateAvailable'),
     ...(construction ? {

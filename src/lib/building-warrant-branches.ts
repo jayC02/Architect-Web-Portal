@@ -19,6 +19,15 @@ export const constructionCertificateSchema = z.object({
   schemeType: z.enum(['1', '2']).optional(), certifierName: text(160).optional(), registrationNumber: text(80).optional(),
   approvedBody: text(160).optional(), approvedBodyRegistrationNumber: text(80).optional(), workTypeDetails: text(750).optional(),
 });
+const optionalDate = z.preprocess(value => value === '' || value == null ? undefined : value, z.string().date().optional());
+// The design certificate supplied with the application: its number and the
+// certifier's and approved body's signature dates (yyyy-mm-dd).
+export const designCertificateSchema = z.object({
+  certificateNumber: text(40).optional(), certifierSignatureDate: z.string().date().optional(), approvedBodySignatureDate: z.string().date().optional(),
+});
+export const designCertificateDetails = (number: string | null | undefined, certifierDate: string | null | undefined, approvedBodyDate: string | null | undefined) => ({
+  certificateNumber: number ?? undefined, certifierSignatureDate: certifierDate ?? undefined, approvedBodySignatureDate: approvedBodyDate ?? undefined,
+});
 export const warrantBranchSnapshotFields = {
   includesServices: z.boolean().optional(),
   relaxationDirections: z.array(z.object({ reference: text(750), date: z.union([z.string().date(), z.literal('')]) })).max(20).optional(),
@@ -27,6 +36,8 @@ export const warrantBranchSnapshotFields = {
   listingCategory: text(750).nullable().optional(), stasReference: text(20).nullable().optional(),
   constructionCertificate: constructionCertificateSchema.nullable().optional(),
   designCertificateWithApplication: z.boolean().optional(), designCertificateFollowingApplication: z.boolean().optional(),
+  // Asked for by the portal's register when the certificate accompanies the application.
+  designCertificate: designCertificateSchema.nullable().optional(),
 };
 const optionalBoolean = z.preprocess(value => value === '' || value == null ? undefined : value === 'true' || value === 'on' ? true : value === 'false' ? false : value, z.boolean().optional());
 export const warrantBranchFormFields = {
@@ -42,6 +53,7 @@ export const warrantBranchFormFields = {
   constructionApprovedBody: optionalText(160), constructionApprovedBodyRegistrationNumber: optionalText(80), constructionWorkTypeDetails: optionalText(750),
   designCertifierSelected: optionalBoolean,
   designCertificateTiming: z.preprocess(value => value === '' || value == null ? undefined : value, z.enum(['with_application', 'following_application']).optional()),
+  designCertificateNumber: optionalText(40), designCertifierSignatureDate: optionalDate, designApprovedBodySignatureDate: optionalDate,
 };
 const branchForm = z.object(warrantBranchFormFields);
 export const warrantBranchesFromForm = (value: z.infer<typeof branchForm>) => ({
@@ -57,6 +69,9 @@ export const warrantBranchesFromForm = (value: z.infer<typeof branchForm>) => ({
   ...(value.designCertificateTiming ? {
     designCertificateWithApplication: value.designCertificateTiming === 'with_application',
     designCertificateFollowingApplication: value.designCertificateTiming === 'following_application',
+    designCertificate: value.designCertificateTiming === 'with_application'
+      ? designCertificateDetails(value.designCertificateNumber, value.designCertifierSignatureDate, value.designApprovedBodySignatureDate)
+      : null,
   } : {}),
 });
 export const permitsSTAS = (buildingUse: unknown, workTypes: readonly string[]) => buildingUse === 'commercial' || workTypes.includes('new_build');
