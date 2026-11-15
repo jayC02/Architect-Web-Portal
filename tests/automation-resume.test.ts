@@ -15,11 +15,11 @@ const stoppedIn = (currentSection: string, status = 'FAILED_FINAL') => readAutom
   currentSection,
 }, status, currentSection);
 
-for (const stage of ['main_details', 'ownership', 'documents', 'declaration', 'final_review']) {
+for (const stage of ['proposal', 'main_details', 'ownership', 'documents', 'declaration', 'final_review']) {
   assert.equal(stoppedIn(stage).resumable, true, `a run that stopped in ${stage} can resume its proposal`);
 }
 assert.equal(stoppedIn('documents', 'FAILED_RETRYABLE').resumable, true);
-for (const stage of ['login', 'browser_startup', 'snapshot_validation', 'proposal']) {
+for (const stage of ['login', 'browser_startup', 'snapshot_validation']) {
   assert.equal(stoppedIn(stage).resumable, false, `a run that stopped in ${stage} has no proposal of its own to resume`);
 }
 assert.equal(readAutomationFailureMetadata({ currentSection: 'main_details' }, 'COMPLETED', 'main_details').resumable, false);

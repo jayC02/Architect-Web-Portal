@@ -39,10 +39,11 @@ const objectValue = (value: unknown): Record<string, unknown> =>
 
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
 
-// Agent stages that only run once the portal proposal exists. A failure during
-// proposal creation is not resumable: a reset that stopped because the address
-// name is taken must not quietly continue in the old proposal.
-const RESUMABLE_STAGES = new Set(['main_details', 'ownership', 'documents', 'declaration', 'final_review']);
+// Agent stages a new run can pick up from without risking a duplicate proposal.
+// From the proposal step onwards the Agent reopens the failed run's proposal,
+// or the one named by the site address; the portal refuses a second proposal
+// with that name, so nothing is created twice.
+const RESUMABLE_STAGES = new Set(['proposal', 'main_details', 'ownership', 'documents', 'declaration', 'final_review']);
 
 const knownActions = new Set<FailureRecoveryAction>([
   'retry',
