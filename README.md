@@ -51,6 +51,9 @@ An Astro/React/Prisma MVP foundation for architecture practice operations.
 - `SUPABASE_STORAGE_BUCKET`
 - `DEBUG_PERF`
 - `DOCUMENT_AI_PROVIDER`
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_DOCUMENT_MODEL`
+- `ANTHROPIC_DOCUMENT_EFFORT`
 - `GEMINI_API_KEY`
 - `GEMINI_DOCUMENT_MODEL`
 - `OPENAI_API_KEY`
@@ -86,7 +89,9 @@ The portal is the source of truth. Active internal deadlines are written to the 
 
 ## AI Document Classification
 
-Set `DOCUMENT_AI_PROVIDER` to `gemini` or `openai` and configure the matching server-side API key. The selected provider receives each uploaded PDF so it can inspect the visual document, title block, layout, and embedded text. Keys are never sent to the browser. If no provider is configured, a request fails, output is invalid, or a PDF exceeds the AI limit, the existing deterministic sorter is used instead.
+Set `DOCUMENT_AI_PROVIDER` to `anthropic`, `gemini` or `openai` and configure the matching server-side API key. The selected provider receives each uploaded PDF so it can inspect the visual document, title block, layout, and embedded text. Keys are never sent to the browser. If no provider is configured, a request fails, output is invalid, or a PDF exceeds the AI limit, the existing deterministic sorter is used instead.
+
+With `anthropic`, PDFs are read by Claude through the Messages API using structured JSON output. The default model is `claude-haiku-5-5`; `ANTHROPIC_DOCUMENT_EFFORT` (`low`, `medium` or `high`, default `medium`) trades speed and cost against thoroughness. Rate-limit (`429`) and overloaded (`529`) responses are retried using the `retry-after` header, except when the monthly spend cap has been reached. Completion certificate documents use the same provider.
 
 The default Gemini model is `gemini-3.1-flash-lite`. If a configured Gemini model has been retired and returns `404`, the classifier retries the stable `gemini-flash-lite-latest` alias before falling back to deterministic sorting.
 

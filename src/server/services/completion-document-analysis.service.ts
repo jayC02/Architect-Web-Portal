@@ -7,11 +7,23 @@ import {
   type CompletionDocumentDetails,
   type CompletionDocumentRoleKey,
 } from '@/lib/completion-documents';
+import {
+  ANTHROPIC_DOCUMENT_MAX_TOKENS,
+  ANTHROPIC_MESSAGES_ENDPOINT,
+  anthropicHeaders,
+  claudeResponseText,
+  configuredAnthropicEffort,
+  configuredAnthropicModel,
+  matchEnumIgnoringCase,
+  pdfDocumentBlock,
+  toClaudeJsonSchema,
+  type ClaudeMessageResponse,
+} from '@/server/services/claude-messages';
 
 // Reads an uploaded completion document: what it is, and the details the
 // completion certificate needs from it. An AI reader is used when one is
-// configured; otherwise, or if it fails, the first page's text and the
-// filename are used. To change AI provider, add a reader below.
+// configured (Claude, Gemini or OpenAI); otherwise, or if it fails, the first
+// page's text and the filename are used. To change AI provider, add a reader below.
 
 export type CompletionDocumentReader = {
   name: string;
@@ -117,9 +129,43 @@ const openAiReader = (apiKey: string, model: string): CompletionDocumentReader =
   },
 });
 
+export const CLAUDE_COMPLETION_DOCUMENT_RESPONSE_SCHEMA = toClaudeJsonSchema(COMPLETION_DOCUMENT_RESPONSE_SCHEMA);
+
+export const buildClaudeCompletionDocumentRequest = (bytes: Buffer, model: string) => ({
+  model,
+  max_tokens: ANTHROPIC_DOCUMENT_MAX_TOKENS,
+  messages: [{ role: 'user', content: [pdfDocumentBlock(bytes), { type: 'text', text: COMPLETION_DOCUMENT_PROMPT }] }],
+  output_config: {
+    effort: configuredAnthropicEffort(),
+    format: { type: 'json_schema', schema: CLAUDE_COMPLETION_DOCUMENT_RESPONSE_SCHEMA },
+  },
+});
+
+const claudeReader = (apiKey: string, model: string): CompletionDocumentReader => ({
+  name: 'anthropic',
+  async read({ bytes }) {
+    const response = await fetch(ANTHROPIC_MESSAGES_ENDPOINT, {
+      method: 'POST',
+      headers: anthropicHeaders(apiKey),
+      signal: timeoutSignal(),
+      body: JSON.stringify(buildClaudeCompletionDocumentRequest(bytes, model)),
+    });
+    if (!response.ok) throw new Error(`Claude completion document read failed with status ${response.status}.`);
+    const answer = claudeResponseText(await response.json() as ClaudeMessageResponse);
+    if (!answer.ok) throw new Error(`Claude completion document read stopped early (${answer.reason}).`);
+    const parsed = JSON.parse(answer.text) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return parsed;
+    const result = parsed as Record<string, unknown>;
+    return { ...result, role: matchEnumIgnoringCase(result.role, readableRoles) };
+  },
+});
+
 /** The AI reader chosen by DOCUMENT_AI_PROVIDER, or null when none is configured. */
 export const createConfiguredCompletionDocumentReader = (): CompletionDocumentReader | null => {
   const provider = process.env.DOCUMENT_AI_PROVIDER?.trim().toLowerCase();
+  if ((provider === 'anthropic' || provider === 'claude') && process.env.ANTHROPIC_API_KEY) {
+    return claudeReader(process.env.ANTHROPIC_API_KEY, configuredAnthropicModel());
+  }
   if (provider === 'gemini' && process.env.GEMINI_API_KEY) {
     return geminiReader(process.env.GEMINI_API_KEY, process.env.GEMINI_DOCUMENT_MODEL || 'gemini-3.5-flash-lite');
   }

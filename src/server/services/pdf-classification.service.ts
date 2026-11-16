@@ -11,6 +11,21 @@ import {
   type DocumentSortSuggestion,
   type SortInput,
 } from '@/server/services/document-sorter.service';
+import {
+  ANTHROPIC_DOCUMENT_MAX_TOKENS,
+  ANTHROPIC_MESSAGES_ENDPOINT,
+  ANTHROPIC_API_VERSION,
+  anthropicHeaders,
+  claudeErrorDetails,
+  claudeResponseText,
+  configuredAnthropicEffort,
+  configuredAnthropicModel,
+  matchEnumIgnoringCase,
+  pdfDocumentBlock,
+  toClaudeJsonSchema,
+  type AnthropicEffort,
+  type ClaudeMessageResponse,
+} from '@/server/services/claude-messages';
 
 export const PDF_CATEGORY_KEYS = DOCUMENT_INTELLIGENCE_CATEGORY_KEYS;
 
@@ -323,13 +338,17 @@ const responseTextFromOpenAi = (payload: unknown) => {
   return '';
 };
 
-const parseStructuredResult = (text: string) => {
-  let parsed: unknown;
+const parseJsonText = (text: string): unknown => {
   try {
-    parsed = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     throw new PdfAiProcessingError('invalid_response', 'The AI provider returned malformed JSON.');
   }
+};
+
+const parseStructuredResult = (text: string) => parseStructuredValue(parseJsonText(text));
+
+const parseStructuredValue = (parsed: unknown) => {
   const result = geminiDocumentResultSchema.safeParse(parsed);
   if (!result.success) {
     throw new PdfAiProcessingError('invalid_response', 'The AI provider returned an unexpected response.');
@@ -374,8 +393,9 @@ const retryDelayMs = (attempt: number, response: Response) => {
 
 const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
+// 529 is Anthropic's "overloaded" status.
 const isTransientProviderStatus = (status: number) =>
-  status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || status === 529;
 
 const normalizeGeminiModel = (value: string) => {
   const normalized = value.trim().toLowerCase().replace(/^models\//, '');
@@ -565,9 +585,133 @@ class OpenAiPdfClassificationProvider implements PdfClassificationProvider {
   }
 }
 
+// Same answer shape as Gemini, with the `additionalProperties: false` Claude needs.
+export const CLAUDE_DOCUMENT_RESPONSE_SCHEMA = toClaudeJsonSchema(GEMINI_DOCUMENT_RESPONSE_SCHEMA);
+
+/** Fixes enum capitalisation, which Claude's structured outputs don't guarantee. */
+export const normaliseClaudeDocumentResult = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const result = { ...(value as Record<string, unknown>) };
+  if ('categoryKey' in result) result.categoryKey = matchEnumIgnoringCase(result.categoryKey, PDF_CATEGORY_KEYS);
+  if ('certainty' in result) result.certainty = matchEnumIgnoringCase(result.certainty, ['high', 'medium', 'low'] as const);
+  if ('existingOrProposed' in result) {
+    result.existingOrProposed = matchEnumIgnoringCase(result.existingOrProposed, ['existing', 'proposed', 'mixed', 'unknown'] as const);
+  }
+  if (Array.isArray(result.extractedFacts)) {
+    result.extractedFacts = result.extractedFacts.map((fact) =>
+      fact && typeof fact === 'object' && !Array.isArray(fact)
+        ? { ...fact, key: matchEnumIgnoringCase((fact as { key?: unknown }).key, documentFactFieldKeys) }
+        : fact);
+  }
+  return result;
+};
+
+export const buildClaudeMessagesRequest = (
+  input: PdfClassificationInput,
+  model: string,
+  effort: AnthropicEffort = configuredAnthropicEffort(),
+) => {
+  const pdf = validateGeminiPdfInput(input);
+  return {
+    body: {
+      model,
+      max_tokens: ANTHROPIC_DOCUMENT_MAX_TOKENS,
+      messages: [{
+        role: 'user',
+        content: [
+          pdfDocumentBlock(input.bytes),
+          { type: 'text', text: buildPrompt(input) },
+        ],
+      }],
+      output_config: {
+        effort,
+        format: { type: 'json_schema', schema: CLAUDE_DOCUMENT_RESPONSE_SCHEMA },
+      },
+    },
+    diagnostics: {
+      apiVersion: ANTHROPIC_API_VERSION,
+      structuredOutput: true,
+      effort,
+      pdfBytes: pdf.byteLength,
+      mimeType: pdf.mimeType,
+    },
+  };
+};
+
+export class ClaudePdfClassificationProvider implements PdfClassificationProvider {
+  readonly name = 'anthropic';
+
+  constructor(
+    private readonly apiKey: string,
+    readonly model = configuredAnthropicModel(),
+  ) {}
+
+  async classifyDocument(input: PdfClassificationInput) {
+    const request = buildClaudeMessagesRequest(input, this.model);
+    const configuredRetries = Number(process.env.DOCUMENT_AI_MAX_RETRIES ?? 2);
+    const maxRetries = Number.isFinite(configuredRetries) ? Math.min(Math.max(configuredRetries, 0), 3) : 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const response = await fetch(ANTHROPIC_MESSAGES_ENDPOINT, {
+        method: 'POST',
+        headers: anthropicHeaders(this.apiKey),
+        signal: timeoutSignal(),
+        body: JSON.stringify(request.body),
+      });
+
+      if (response.ok) {
+        const answer = claudeResponseText(await response.json() as ClaudeMessageResponse);
+        if (!answer.ok) {
+          throw new PdfAiProcessingError(
+            'invalid_response',
+            answer.reason === 'max_tokens'
+              ? 'The AI response was cut off before it finished. A fallback classification was used.'
+              : answer.reason === 'refusal'
+                ? 'The AI provider declined to read this document. A fallback classification was used.'
+                : 'The AI provider returned an empty response. A fallback classification was used.',
+          );
+        }
+        return parseStructuredValue(normaliseClaudeDocumentResult(parseJsonText(answer.text)));
+      }
+
+      const providerError = await claudeErrorDetails(response);
+      console.error('Claude document request rejected', {
+        model: this.model,
+        responseStatus: response.status,
+        providerStatus: providerError.errorType,
+        providerErrorCode: providerError.errorCode,
+        providerMessage: providerError.message,
+        attempt: attempt + 1,
+        ...request.diagnostics,
+      });
+
+      // The monthly spend cap also returns 429, but retrying cannot succeed.
+      const spendCapReached = providerError.errorCode === 'enforced_spend_limit_reached';
+      if (isTransientProviderStatus(response.status) && !spendCapReached && attempt < maxRetries) {
+        await wait(retryDelayMs(attempt, response));
+        continue;
+      }
+
+      const status: AiProcessingStatus = response.status === 400 ? 'invalid_request' : 'provider_unavailable';
+      throw new PdfAiProcessingError(
+        status,
+        status === 'invalid_request'
+          ? 'The AI request format was rejected. A fallback classification was used.'
+          : 'The AI provider was unavailable. A fallback classification was used.',
+        response.status,
+        providerError.errorCode ?? providerError.errorType,
+      );
+    }
+    throw new PdfAiProcessingError('provider_unavailable', 'Claude document classification was unavailable.');
+  }
+}
+
 export const createConfiguredPdfClassificationProvider = (): PdfClassificationProvider | null => {
   const configured = process.env.DOCUMENT_AI_PROVIDER?.trim().toLowerCase();
   if (!configured) return null;
+  if (configured === 'anthropic' || configured === 'claude') {
+    const key = process.env.ANTHROPIC_API_KEY;
+    return key ? new ClaudePdfClassificationProvider(key) : null;
+  }
   if (configured === 'gemini') {
     const key = process.env.GEMINI_API_KEY;
     return key ? new GeminiPdfClassificationProvider(key) : null;

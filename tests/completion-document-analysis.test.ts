@@ -71,4 +71,34 @@ for (const key of ['BUILDING_WARRANT', 'ENERGY_PERFORMANCE_CERTIFICATE', 'SUSTAI
   if (saved !== undefined) process.env.DOCUMENT_AI_PROVIDER = saved;
 }
 
+// Claude reader: sends the PDF as a document block and fixes enum capitalisation.
+{
+  const saved = { provider: process.env.DOCUMENT_AI_PROVIDER, key: process.env.ANTHROPIC_API_KEY };
+  const originalFetch = globalThis.fetch;
+  let sentBody: { model?: string; messages?: Array<{ content: Array<{ type: string }> }>; output_config?: { format?: { schema?: { additionalProperties?: unknown } } } } = {};
+  try {
+    process.env.DOCUMENT_AI_PROVIDER = 'claude';
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
+    const claude = createConfiguredCompletionDocumentReader();
+    assert.equal(claude?.name, 'anthropic');
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: JSON.stringify({ role: 'building_warrant', warrantReference: '26/01234/WARR' }) }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const result = await analyseCompletionDocument(pdf, { reader: claude, readText: text('ignored') });
+    assert.equal(result.source, 'ai');
+    assert.equal(result.role, 'BUILDING_WARRANT');
+    assert.equal(sentBody.model, 'claude-haiku-5-5');
+    assert.equal(sentBody.messages?.[0].content[0].type, 'document');
+    assert.equal(sentBody.output_config?.format?.schema?.additionalProperties, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (saved.provider === undefined) delete process.env.DOCUMENT_AI_PROVIDER; else process.env.DOCUMENT_AI_PROVIDER = saved.provider;
+    if (saved.key === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = saved.key;
+  }
+}
+
 console.log('completion-document-analysis: ok');

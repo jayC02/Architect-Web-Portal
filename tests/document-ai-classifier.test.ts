@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import {
   analysisStatusForSuggestion,
+  buildClaudeMessagesRequest,
   buildGeminiGenerateContentRequest,
+  CLAUDE_DOCUMENT_RESPONSE_SCHEMA,
+  ClaudePdfClassificationProvider,
   classifyProjectDocumentBatch,
+  createConfiguredPdfClassificationProvider,
   GEMINI_DOCUMENT_RESPONSE_SCHEMA,
   GeminiPdfClassificationProvider,
   geminiDocumentGenerationConfig,
@@ -337,6 +341,134 @@ try {
   else process.env.DOCUMENT_AI_MAX_RETRIES = originalRetries;
   if (originalRetryBase === undefined) delete process.env.DOCUMENT_AI_RETRY_BASE_MS;
   else process.env.DOCUMENT_AI_RETRY_BASE_MS = originalRetryBase;
+}
+
+// Claude (Anthropic Messages API)
+{
+  type SchemaNode = { type?: unknown; additionalProperties?: unknown; properties?: Record<string, SchemaNode>; items?: SchemaNode; required?: string[] };
+  const objects: SchemaNode[] = [];
+  let unionTypes = 0;
+  let optionalProperties = 0;
+  const walk = (node: SchemaNode) => {
+    if (Array.isArray(node.type)) unionTypes += 1;
+    if (node.type === 'object') {
+      objects.push(node);
+      const keys = Object.keys(node.properties ?? {});
+      optionalProperties += keys.filter((key) => !(node.required ?? []).includes(key)).length;
+    }
+    Object.values(node.properties ?? {}).forEach(walk);
+    if (node.items) walk(node.items);
+  };
+  walk(CLAUDE_DOCUMENT_RESPONSE_SCHEMA as SchemaNode);
+  assert.ok(objects.length >= 2);
+  assert.ok(objects.every((node) => node.additionalProperties === false), 'Claude needs additionalProperties: false on every object');
+  assert.ok(unionTypes <= 16, 'Claude allows at most 16 union-typed parameters');
+  assert.ok(optionalProperties <= 24, 'Claude allows at most 24 optional parameters');
+  assert.ok(
+    !JSON.stringify(GEMINI_DOCUMENT_RESPONSE_SCHEMA).includes('additionalProperties'),
+    'building the Claude schema must not change the Gemini schema',
+  );
+
+  const request = buildClaudeMessagesRequest(input('claude.pdf'), 'claude-haiku-5-5');
+  const [documentBlock, textBlock] = request.body.messages[0].content;
+  assert.equal(documentBlock.type, 'document');
+  assert.ok('source' in documentBlock);
+  assert.equal(documentBlock.source.type, 'base64');
+  assert.equal(documentBlock.source.media_type, 'application/pdf');
+  assert.ok(documentBlock.source.data.startsWith('JVBERi0'));
+  assert.equal(textBlock.type, 'text');
+  assert.equal(request.body.output_config.format.type, 'json_schema');
+  assert.equal(request.body.output_config.effort, 'medium');
+  assert.ok(!('temperature' in request.body), 'temperature is rejected by the current API version');
+
+  const originalEnv = {
+    provider: process.env.DOCUMENT_AI_PROVIDER,
+    key: process.env.ANTHROPIC_API_KEY,
+    retries: process.env.DOCUMENT_AI_MAX_RETRIES,
+    retryBase: process.env.DOCUMENT_AI_RETRY_BASE_MS,
+  };
+  const restore = (name: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  };
+  try {
+    process.env.DOCUMENT_AI_PROVIDER = 'anthropic';
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
+    const configured = createConfiguredPdfClassificationProvider();
+    assert.equal(configured?.name, 'anthropic');
+    assert.equal(configured?.model, 'claude-haiku-5-5');
+    delete process.env.ANTHROPIC_API_KEY;
+    assert.equal(createConfiguredPdfClassificationProvider(), null, 'no key means deterministic sorting');
+
+    process.env.DOCUMENT_AI_MAX_RETRIES = '1';
+    process.env.DOCUMENT_AI_RETRY_BASE_MS = '50';
+    const claudeReply = (body: unknown, stopReason = 'end_turn') => new Response(JSON.stringify({
+      content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(body) }],
+      stop_reason: stopReason,
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+    let calls = 0;
+    const seenHeaders: Record<string, string>[] = [];
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      calls += 1;
+      seenHeaders.push(init?.headers as Record<string, string>);
+      if (calls === 1) {
+        return new Response(JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'Rate limited.' } }), {
+          status: 429,
+          headers: { 'content-type': 'application/json', 'retry-after': '0' },
+        });
+      }
+      // Claude may vary enum capitalisation.
+      return claudeReply({ ...validGeminiWireResult('location_plan'), categoryKey: 'Location_plan', certainty: 'High' });
+    }) as typeof fetch;
+    const claudeResult = await new ClaudePdfClassificationProvider('test-anthropic-key', 'claude-haiku-5-5')
+      .classifyDocument(input('claude-retry.pdf'));
+    assert.equal(claudeResult.categoryKey, 'location_plan');
+    assert.equal(claudeResult.certainty, 'high');
+    assert.equal(calls, 2, 'a 429 is retried');
+    assert.equal(seenHeaders[0]['x-api-key'], 'test-anthropic-key');
+    assert.equal(seenHeaders[0]['anthropic-version'], '2026-10-21');
+
+    calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      return new Response(JSON.stringify({
+        type: 'error',
+        error: { type: 'rate_limit_error', message: 'Monthly limit reached.', details: { error_code: 'enforced_spend_limit_reached' } },
+      }), { status: 429, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    await assert.rejects(
+      () => new ClaudePdfClassificationProvider('test-anthropic-key').classifyDocument(input('spend-cap.pdf')),
+      (error: unknown) => error instanceof PdfAiProcessingError
+        && error.aiStatus === 'provider_unavailable'
+        && error.providerStatus === 'enforced_spend_limit_reached',
+    );
+    assert.equal(calls, 1, 'the spend-cap 429 is not retried');
+
+    globalThis.fetch = (async () => claudeReply({ categoryKey: 'location_plan' }, 'max_tokens')) as typeof fetch;
+    await assert.rejects(
+      () => new ClaudePdfClassificationProvider('test-anthropic-key').classifyDocument(input('cut-off.pdf')),
+      (error: unknown) => error instanceof PdfAiProcessingError && error.aiStatus === 'invalid_response',
+      'a truncated answer is rejected',
+    );
+
+    globalThis.fetch = (async () => claudeReply(validGeminiWireResult('sections'))) as typeof fetch;
+    const [viaBatch] = await classifyProjectDocumentBatch(
+      [input('section.pdf')],
+      {},
+      new ClaudePdfClassificationProvider('test-anthropic-key'),
+    );
+    assert.equal(viaBatch.source, DocumentSortSource.AI);
+    assert.equal(viaBatch.suggestedDocumentType, DocumentType.SECTION);
+    assert.equal(viaBatch.classificationDetails?.provider, 'anthropic');
+    assert.equal(viaBatch.classificationDetails?.model, 'claude-haiku-5-5');
+  } finally {
+    globalThis.fetch = originalFetch;
+    restore('DOCUMENT_AI_PROVIDER', originalEnv.provider);
+    restore('ANTHROPIC_API_KEY', originalEnv.key);
+    restore('DOCUMENT_AI_MAX_RETRIES', originalEnv.retries);
+    restore('DOCUMENT_AI_RETRY_BASE_MS', originalEnv.retryBase);
+  }
 }
 
 console.log('AI document classifier tests passed');
