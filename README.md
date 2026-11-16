@@ -101,7 +101,7 @@ The original uploaded PDF is never modified. AI suggestions remain in review unt
 
 AI-first application documents use metadata-only portal requests and direct private Supabase Storage uploads. The portal creates each document ID and object key, then finalises the upload by checking provider metadata before analysis. Limits are centralised at 20 files, 25 MB per file, and 75 MB per draft; browser uploads use at most three workers and analysis uses two.
 
-An unfinished draft expires after seven days. Objects that were uploaded but never finalised are removed after 24 hours by the existing opportunistic cleanup path. A future authenticated scheduled cleanup invocation should call the same cleanup service; no scheduler is created by this change. Storage accounting is database metadata based, so it can temporarily differ from provider billing while an abandoned provider object awaits cleanup.
+An unfinished draft expires after seven days and is hidden from the New application page as soon as it expires. Objects that were uploaded but never finalised are removed after 24 hours. The `/api/cron/application-draft-cleanup` Vercel cron (daily, 05:00 UTC, authenticated with `CRON_SECRET`) marks expired drafts, deletes their temporary files, and removes abandoned uploads for every organisation. Users can also remove a draft from the "Continue an application" list, which cancels it through the same endpoint as "Cancel draft". Storage accounting is database metadata based, so it can temporarily differ from provider billing while an abandoned provider object awaits cleanup.
 
 ## Validation
 

@@ -1,6 +1,6 @@
 ---
 import { ApplicationDraftStatus } from '@prisma/client';
-import { FileText, FolderClock, LockKeyhole, Sparkles, UploadCloud } from 'lucide-react';
+import { FileText, FolderClock, LockKeyhole, Sparkles, Trash2, UploadCloud } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import { prisma } from '@/lib/db/prisma';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -8,9 +8,11 @@ import { requirePageAuth } from '@/lib/server/page-auth';
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
 
+// Expired drafts are hidden straight away; the daily cleanup job removes their files.
 const drafts = await prisma.applicationDraft.findMany({
   where: {
     organisationId: auth.organisation.id,
+    expiresAt: { gt: new Date() },
     status: {
       notIn: [
         ApplicationDraftStatus.COMMITTED,
@@ -191,7 +193,7 @@ const formatDate = (date: Date) =>
   </form>
 
   {drafts.length > 0 && (
-    <section class="mt-8">
+    <section data-drafts-section class="mt-8">
       <div class="mb-3 flex items-center justify-between gap-4">
         <div>
           <h2 class="text-xl font-semibold">Continue an application</h2>
@@ -199,23 +201,37 @@ const formatDate = (date: Date) =>
         </div>
         <FolderClock size={20} className="text-stone-400" />
       </div>
-      <div class="panel divide-y divide-stone-100 overflow-hidden rounded-lg">
+      <p data-draft-remove-error class="mb-3 hidden rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert"></p>
+      <div data-draft-list class="panel divide-y divide-stone-100 overflow-hidden rounded-lg">
         {drafts.map((draft) => (
-          <a href={`/applications/${draft.id}`} class="flex flex-col gap-3 px-4 py-4 transition hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
-            <span class="flex min-w-0 items-start gap-3">
-              <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500">
-                <FileText size={17} />
+          <div data-draft-row class="flex items-center transition hover:bg-stone-50">
+            <a href={`/applications/${draft.id}`} class="flex min-w-0 flex-1 flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <span class="flex min-w-0 items-start gap-3">
+                <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500">
+                  <FileText size={17} />
+                </span>
+                <span class="min-w-0">
+                  <span class="block truncate font-semibold text-ink">{draft.notes?.trim() || typeLabel(draft.selectedApplicationType)}</span>
+                  <span class="mt-1 block text-sm text-stone-500">{draft._count.documents} document{draft._count.documents === 1 ? '' : 's'} - Updated {formatDate(draft.updatedAt)}</span>
+                </span>
               </span>
-              <span class="min-w-0">
-                <span class="block truncate font-semibold text-ink">{draft.notes?.trim() || typeLabel(draft.selectedApplicationType)}</span>
-                <span class="mt-1 block text-sm text-stone-500">{draft._count.documents} document{draft._count.documents === 1 ? '' : 's'} - Updated {formatDate(draft.updatedAt)}</span>
-              </span>
-            </span>
-            <span class:list={[
-              'text-sm font-semibold',
-              draft.status === ApplicationDraftStatus.FAILED ? 'text-red-700' : 'text-stone-600',
-            ]}>{statusLabel(draft.status)} -></span>
-          </a>
+              <span class:list={[
+                'text-sm font-semibold',
+                draft.status === ApplicationDraftStatus.FAILED ? 'text-red-700' : 'text-stone-600',
+              ]}>{statusLabel(draft.status)} -></span>
+            </a>
+            {draft.status !== ApplicationDraftStatus.COMMITTING && (
+              <button
+                type="button"
+                data-remove-draft={draft.id}
+                class="mr-3 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-stone-400 hover:bg-stone-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30 disabled:opacity-50"
+                aria-label="Remove draft"
+                title="Remove draft"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
         ))}
       </div>
     </section>
@@ -510,5 +526,38 @@ const formatDate = (date: Date) =>
       return;
     }
     if (submitButton) submitButton.disabled = false;
+  });
+
+  // Remove an unfinished draft from the "Continue an application" list. Uses the same
+  // cancel endpoint as the draft page, which also deletes its temporary files.
+  const draftRemoveError = document.querySelector<HTMLElement>('[data-draft-remove-error]');
+  document.querySelectorAll<HTMLButtonElement>('[data-remove-draft]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.dataset.removeDraft;
+      if (!id || button.disabled) return;
+      if (!window.confirm('Remove this draft and its uploaded files? This cannot be undone.')) return;
+      button.disabled = true;
+      draftRemoveError?.classList.add('hidden');
+      try {
+        const response = await fetch(`/api/application-drafts/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const payload = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) throw new Error(payload.error || 'The draft could not be removed.');
+        button.closest('[data-draft-row]')?.remove();
+        if (!document.querySelector('[data-draft-row]')) {
+          document.querySelector('[data-drafts-section]')?.remove();
+        }
+      } catch (removeError) {
+        if (draftRemoveError) {
+          draftRemoveError.textContent = removeError instanceof Error ? removeError.message : 'The draft could not be removed.';
+          draftRemoveError.classList.remove('hidden');
+        }
+        button.disabled = false;
+      }
+    });
   });
 </script>

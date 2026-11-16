@@ -405,25 +405,42 @@ export const removeApplicationDraftDocument = async (
   await removeFiles([document]);
 };
 
+const EXPIRED_DRAFT_BATCH = 20;
+const ABANDONED_DOCUMENT_BATCH = 50;
+const cleanableDraftStatuses = [
+  ApplicationDraftStatus.UPLOADING,
+  ApplicationDraftStatus.ANALYSING,
+  ApplicationDraftStatus.NEEDS_REVIEW,
+  ApplicationDraftStatus.READY_TO_CREATE,
+  ApplicationDraftStatus.FAILED,
+  ApplicationDraftStatus.CANCELLED,
+];
+const abandonedUploadStatuses = [
+  ApplicationDraftDocumentUploadStatus.UPLOADING,
+  ApplicationDraftDocumentUploadStatus.UPLOADED,
+  ApplicationDraftDocumentUploadStatus.FAILED,
+];
+const unfinalisedCutoff = () => new Date(
+  Date.now() - APPLICATION_UPLOAD_LIMITS.unfinalisedRetentionHours * 60 * 60 * 1000,
+);
+
+// Expires drafts past their 7-day limit and removes uploads that were never finalised.
+// Works in batches; `more` is true when a batch was full and another pass may find more.
 export const cleanupExpiredApplicationDrafts = async (organisationId: string) => {
-  const unfinalisedBefore = new Date(
-    Date.now() - APPLICATION_UPLOAD_LIMITS.unfinalisedRetentionHours * 60 * 60 * 1000,
-  );
+  const unfinalisedBefore = unfinalisedCutoff();
+  // Match the claim conditions below, so a draft that can never be claimed
+  // cannot fill every batch and stop the rest from expiring.
   const expired = await prisma.applicationDraft.findMany({
     where: {
       organisationId,
+      resultingProjectId: null,
       expiresAt: { lte: new Date() },
-      status: {
-        notIn: [
-          ApplicationDraftStatus.COMMITTED,
-          ApplicationDraftStatus.COMMITTING,
-          ApplicationDraftStatus.EXPIRED,
-        ],
-      },
+      status: { in: cleanableDraftStatuses },
     },
     include: { documents: true },
-    take: 20,
+    take: EXPIRED_DRAFT_BATCH,
   });
+  let expiredCount = 0;
   for (const draft of expired) {
     const claimed = await prisma.applicationDraft.updateMany({
       where: {
@@ -433,6 +450,7 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
       data: { status: ApplicationDraftStatus.EXPIRED },
     });
     if (!claimed.count) continue;
+    expiredCount += 1;
     const temporaryDocuments = draft.documents.filter((document) => !document.committedDocumentId);
     await removeFiles(temporaryDocuments);
     if (temporaryDocuments.length) {
@@ -449,20 +467,16 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
     where: {
       draft: {
         organisationId,
-        status: { notIn: [ApplicationDraftStatus.COMMITTED, ApplicationDraftStatus.COMMITTING] },
+        resultingProjectId: null,
+        status: { in: [...mutableStatuses] },
       },
       committedDocumentId: null,
-      uploadStatus: {
-        in: [
-          ApplicationDraftDocumentUploadStatus.UPLOADING,
-          ApplicationDraftDocumentUploadStatus.UPLOADED,
-          ApplicationDraftDocumentUploadStatus.FAILED,
-        ],
-      },
+      uploadStatus: { in: abandonedUploadStatuses },
       updatedAt: { lte: unfinalisedBefore },
     },
-    take: 50,
+    take: ABANDONED_DOCUMENT_BATCH,
   });
+  let abandonedCount = 0;
   for (const document of abandoned) {
     const removed = await prisma.$transaction(async (tx) => {
       const parent = await tx.applicationDraft.updateMany({
@@ -476,14 +490,57 @@ export const cleanupExpiredApplicationDrafts = async (organisationId: string) =>
       const result = await tx.applicationDraftDocument.deleteMany({
         where: {
           id: document.id, committedDocumentId: null, updatedAt: { lte: unfinalisedBefore },
-          uploadStatus: { in: [ApplicationDraftDocumentUploadStatus.UPLOADING, ApplicationDraftDocumentUploadStatus.UPLOADED, ApplicationDraftDocumentUploadStatus.FAILED] },
+          uploadStatus: { in: abandonedUploadStatuses },
         },
       });
       if (result.count) await tx.applicationDraft.update({ where: { id: document.draftId }, data: { status: ApplicationDraftStatus.UPLOADING } });
       return result.count > 0;
     });
-    if (removed) await removeFiles([document]);
+    if (removed) {
+      abandonedCount += 1;
+      await removeFiles([document]);
+    }
   }
+  return {
+    expired: expiredCount,
+    abandoned: abandonedCount,
+    more: expired.length === EXPIRED_DRAFT_BATCH || abandoned.length === ABANDONED_DOCUMENT_BATCH,
+  };
+};
+
+/** Runs the cleanup for every organisation that has something to clean. Used by the daily cron. */
+export const cleanupExpiredApplicationDraftsForAllOrganisations = async (maxPassesPerOrganisation = 10) => {
+  const organisations = await prisma.applicationDraft.findMany({
+    where: {
+      resultingProjectId: null,
+      OR: [
+        { expiresAt: { lte: new Date() }, status: { in: cleanableDraftStatuses } },
+        {
+          status: { in: [...mutableStatuses] },
+          documents: {
+            some: {
+              committedDocumentId: null,
+              uploadStatus: { in: abandonedUploadStatuses },
+              updatedAt: { lte: unfinalisedCutoff() },
+            },
+          },
+        },
+      ],
+    },
+    distinct: ['organisationId'],
+    select: { organisationId: true },
+    take: 200,
+  });
+  const totals = { organisations: organisations.length, expired: 0, abandoned: 0 };
+  for (const { organisationId } of organisations) {
+    for (let pass = 0; pass < maxPassesPerOrganisation; pass += 1) {
+      const result = await cleanupExpiredApplicationDrafts(organisationId);
+      totals.expired += result.expired;
+      totals.abandoned += result.abandoned;
+      if (!result.more || (!result.expired && !result.abandoned)) break;
+    }
+  }
+  return totals;
 };
 
 export const applicationDraftExpiry = () => {
