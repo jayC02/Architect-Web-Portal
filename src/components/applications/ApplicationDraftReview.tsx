@@ -306,6 +306,11 @@ const evidenceLabels: Record<string, string> = {
   currentUse: 'Current use',
   proposedUse: 'Proposed use',
   estimatedValue: 'Estimated value',
+  buildingUse: 'Building use',
+  treesOnOrAdjacentToSite: 'Trees on or next to the site',
+  newOrAlteredVehicleAccess: 'New or altered vehicle access',
+  currentParkingSpaces: 'Current parking spaces',
+  proposedParkingSpaces: 'Proposed parking spaces',
   route: 'Application route',
   presetKey: 'Application preset',
 };

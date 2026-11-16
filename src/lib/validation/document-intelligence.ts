@@ -22,6 +22,7 @@ export const intelligenceCertaintySchema = z.enum(['high', 'medium', 'low']);
 export const documentFactFieldKeys = [
   'project.title',
   'project.typeOfWork',
+  'project.buildingUse',
   'site.buildingNumber',
   'site.addressLine1',
   'site.addressLine2',
@@ -58,6 +59,10 @@ export const documentFactFieldKeys = [
   'application.numberOfStoreys',
   'application.estimatedValue',
   'application.planningReference',
+  'planning.treesOnOrAdjacentToSite',
+  'planning.newOrAlteredVehicleAccess',
+  'planning.currentParkingSpaces',
+  'planning.proposedParkingSpaces',
   'evidence.listedOrConservation',
   'evidence.ownership',
   'evidence.certifier',

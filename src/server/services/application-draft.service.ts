@@ -20,6 +20,7 @@ import {
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
 import { prisma } from '@/lib/db/prisma';
 import type { TypeOfWorkKey } from '@/lib/projects/type-of-work';
+import type { BuildingUse } from '@/lib/projects/screener';
 import { deleteStoredDocument, readStoredDocumentBytes } from '@/lib/server/upload-storage';
 import {
   applicationDraftReviewSchema,
@@ -188,14 +189,76 @@ const commonReference = (documents: SynthesisDocument[]) => {
   };
 };
 
-const explicitTypeOfWork = (value: unknown): TypeOfWorkKey | null => {
+export const explicitTypeOfWork = (value: unknown): TypeOfWorkKey | null => {
   const text = String(value ?? '').trim().toLowerCase();
   if (!text) return null;
+  // Matches the stored keys (e.g. "new_build"), the portal labels and plain document wording.
   if (text.includes('demol')) return 'demolition';
-  if (text.includes('convert') || text.includes('change of use')) return 'conversion_change_of_use';
-  if (text.includes('new build')) return 'new_build';
+  if (text.includes('conver') || text.includes('change of use')) return 'conversion_change_of_use';
+  if (/new[\s_-]?build|new (?:detached |semi-detached )?(?:house|home|dwelling)/.test(text)) return 'new_build';
   if (text.includes('alter') || text.includes('extension')) return 'domestic_alteration_extension';
+  if (/erection of (?:a |an )?(?:detached |semi-detached )?(?:house|home|dwelling)/.test(text)) return 'new_build';
   return null;
+};
+
+export const buildingUseFrom = (value: unknown): BuildingUse | null => {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return null;
+  if (/residential|dwelling|house|home|flat|domestic/.test(text)) return 'residential';
+  if (/commercial|office|retail|shop|industrial|business|non-domestic/.test(text)) return 'commercial';
+  return null;
+};
+
+export const yesNoFrom = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') return value;
+  const text = String(value ?? '').trim().toLowerCase();
+  if (/^(?:yes|y|true)\b/.test(text)) return true;
+  if (/^(?:no|n|false|none)\b/.test(text)) return false;
+  return null;
+};
+
+const NUMBER_WORDS: Record<string, number> = {
+  none: 0, zero: 0, no: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+export const countFrom = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isInteger(value) && value >= 0 && value <= 999 ? value : null;
+  const text = String(value ?? '').trim().toLowerCase();
+  const digits = text.match(/\d+/);
+  if (digits) return Number(digits[0]) <= 999 ? Number(digits[0]) : null;
+  const word = text.match(/[a-z]+/);
+  return word && word[0] in NUMBER_WORDS ? NUMBER_WORDS[word[0]] : null;
+};
+
+// Keeps a document suggestion's evidence but stores the value in the form's own type.
+const mappedSuggestion = (
+  suggestion: PreparedApplicationDraft['project'][string],
+  map: (value: unknown) => string | number | boolean | null,
+) => {
+  if (suggestion.value === null) return suggestion;
+  const value = map(suggestion.value);
+  return value === null ? missingSuggestion() : { ...suggestion, value };
+};
+
+const isPlanningType = (type: ApplicationDraftType) =>
+  type === ApplicationDraftType.HOUSEHOLDER_PLANNING || type === ApplicationDraftType.PLANNING_APPLICATION;
+
+/** Planning-form answers the drawings showed (trees, vehicle access, parking), for a new review. */
+export const planningAnswersFromPrepared = (
+  type: ApplicationDraftType,
+  application: PreparedApplicationDraft['application'],
+): ApplicationDraftReview['confirmations'] => {
+  if (!isPlanningType(type)) return {};
+  const answers: ApplicationDraftReview['confirmations'] = {};
+  const trees = yesNoFrom(application.treesOnOrAdjacentToSite?.value);
+  const access = yesNoFrom(application.newOrAlteredVehicleAccess?.value);
+  const currentSpaces = countFrom(application.currentParkingSpaces?.value);
+  const proposedSpaces = countFrom(application.proposedParkingSpaces?.value);
+  if (trees !== null) answers.treesOnOrAdjacentToSite = trees;
+  if (access !== null) answers.newOrAlteredVehicleAccess = access;
+  if (currentSpaces !== null) answers.currentParkingSpaces = currentSpaces;
+  if (proposedSpaces !== null) answers.proposedParkingSpaces = proposedSpaces;
+  return answers;
 };
 
 const inferApplicationType = (
@@ -482,6 +545,7 @@ export const synthesisePreparedApplicationDraft = async (
           )
         : missingSuggestion(),
       summary: suggestionFromFacts(facts, 'application.descriptionOfWork'),
+      buildingUse: mappedSuggestion(suggestionFromFacts(facts, 'project.buildingUse'), buildingUseFrom),
     },
     site: siteFields,
     client: {
@@ -504,6 +568,10 @@ export const synthesisePreparedApplicationDraft = async (
       proposedUse: suggestionFromFacts(facts, 'application.proposedUse'),
       estimatedValue: suggestionFromFacts(facts, 'application.estimatedValue'),
       planningReference: suggestionFromFacts(facts, 'application.planningReference'),
+      treesOnOrAdjacentToSite: mappedSuggestion(suggestionFromFacts(facts, 'planning.treesOnOrAdjacentToSite'), yesNoFrom),
+      newOrAlteredVehicleAccess: mappedSuggestion(suggestionFromFacts(facts, 'planning.newOrAlteredVehicleAccess'), yesNoFrom),
+      currentParkingSpaces: mappedSuggestion(suggestionFromFacts(facts, 'planning.currentParkingSpaces'), countFrom),
+      proposedParkingSpaces: mappedSuggestion(suggestionFromFacts(facts, 'planning.proposedParkingSpaces'), countFrom),
       presetKey: typeOfWork ? customSuggestion(typeOfWork, rawTypeOfWork.sources, rawTypeOfWork.certainty) : missingSuggestion(),
     },
     matches: { clients: [], sites: [], projects: [] },
@@ -643,7 +711,7 @@ const buildInitialReview = (
       name: suggestionString(prepared.project, 'name'),
       internalReference: suggestionString(prepared.project, 'internalReference'),
       typeOfWorkKey: typeOfWork,
-      buildingUse: null,
+      buildingUse: buildingUseFrom(suggestionString(prepared.project, 'buildingUse')),
       summary: suggestionString(prepared.project, 'summary'),
     },
     siteMode: strongSite ? 'existing' : 'create',
@@ -665,7 +733,10 @@ const buildInitialReview = (
       typeOfWorkKeys: typeOfWork ? [typeOfWork] : [],
       selectedCertifierPresetId: defaults?.defaultCertifierPresetId ?? null,
     },
-    confirmations: mergeApplicationDraftConfirmationDefaults(requestedType, {}),
+    confirmations: mergeApplicationDraftConfirmationDefaults(
+      requestedType,
+      planningAnswersFromPrepared(requestedType, prepared.application),
+    ),
     documents: currentDocuments,
   });
 };

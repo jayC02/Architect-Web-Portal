@@ -74,8 +74,8 @@ export interface PdfClassificationProvider {
 export type ProjectClassificationContext = PdfClassificationInput['projectContext'];
 
 export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
-export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v3';
-export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v3';
+export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v4';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v4';
 const MAX_AI_FILE_BYTES = APPLICATION_UPLOAD_LIMITS.maxFileBytes;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
@@ -179,19 +179,7 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
         type: 'object',
         required: ['key', 'value', 'page', 'evidence'],
         properties: {
-          key: { type: 'string', enum: [
-            'project.title', 'project.typeOfWork',
-            'site.buildingNumber', 'site.addressLine1', 'site.addressLine2', 'site.townCity', 'site.postcode', 'site.localAuthority',
-            'applicant.clientType', 'applicant.title', 'applicant.firstName', 'applicant.lastName',
-            'applicant.companyName', 'applicant.email', 'applicant.phone', 'applicant.buildingNumber', 'applicant.addressLine1',
-            'applicant.addressLine2', 'applicant.townCity', 'applicant.postcode', 'applicant.country',
-            'agent.practiceName', 'agent.firstName', 'agent.lastName', 'agent.email', 'agent.phone',
-            'agent.addressLine1', 'agent.addressLine2', 'agent.townCity', 'agent.postcode', 'agent.country',
-            'application.descriptionOfWork', 'application.currentUse', 'application.proposedUse',
-            'application.buildingType', 'application.numberOfStoreys', 'application.estimatedValue',
-            'application.planningReference', 'evidence.listedOrConservation', 'evidence.ownership',
-            'evidence.certifier',
-          ] },
+          key: { type: 'string', enum: [...documentFactFieldKeys] },
           value: { type: 'string' },
           page: { type: ['integer', 'null'] },
           evidence: { type: 'string' },
@@ -296,26 +284,43 @@ const buildPrompt = (input: PdfClassificationInput) => {
     input.projectContext?.projectNotes && `Project notes: ${input.projectContext.projectNotes.slice(0, 1000)}`,
   ].filter(Boolean).join('\n');
 
-  return `Classify this architecture-practice PDF using exactly one permitted category.
+  return `Classify this architecture-practice PDF using exactly one permitted category, and extract every permitted fact the document shows. The facts pre-fill a planning or building warrant application, so a fact that is visible but left out has to be typed in by hand.
 
 Inspect the visible title block or document heading first, then actual page content and layout, embedded text, and finally the filename. The filename must not override contradictory visible content.
 
 Permitted categories:
 ${PDF_CATEGORY_KEYS.join(', ')}
 
+Fact keys (record each one the document shows, under its own key; leave out any it does not show):
+- project.title: the project or job title, e.g. "New house at Daviot".
+- project.typeOfWork: exactly one of "New build", "Domestic alteration / extension", "Conversion / change of use" or "Demolition". A new house is "New build".
+- project.buildingUse: "Residential" or "Commercial", from what the building is or will be used for.
+- site.buildingNumber, site.addressLine1, site.addressLine2, site.townCity, site.postcode, site.localAuthority: where the work happens. A plot or site name such as "Plot 3" can go in site.addressLine1.
+- applicant.*: the client or applicant named on the document, often after "Client", "For" or "Applicant", or as a company. Put a company in applicant.companyName. For a person, applicant.title is only an honorific (Mr, Mrs, Ms, Miss, Dr); an initial goes in applicant.firstName, so "D Glennie" is firstName "D" and lastName "Glennie". Also record their email, phone and address when shown (applicant.buildingNumber, applicant.addressLine1, applicant.addressLine2, applicant.townCity, applicant.postcode, applicant.country).
+- agent.*: the architect, designer or agent who prepared the document, usually in the title block: agent.practiceName, agent.firstName, agent.lastName, agent.email, agent.phone and the practice address (agent.addressLine1, agent.addressLine2, agent.townCity, agent.postcode, agent.country).
+- application.descriptionOfWork: one sentence describing the proposed work as shown, e.g. "Erection of a single-storey dwelling house with parking and a new access".
+- application.currentUse and application.proposedUse: the existing and proposed use of the land or building where the document states or plainly shows it, e.g. "Grazing field" and "Residential dwelling".
+- application.buildingType, application.numberOfStoreys, application.estimatedValue, application.planningReference: only where shown.
+- planning.treesOnOrAdjacentToSite: "Yes" when trees are shown or noted on or next to the site (existing, retained, removed or proposed planting); "No" only when the document says there are none.
+- planning.newOrAlteredVehicleAccess: "Yes" when a new or altered vehicle access, driveway, dropped kerb or visibility splay is shown; "No" only when the document says the access is unchanged.
+- planning.currentParkingSpaces and planning.proposedParkingSpaces: whole numbers of existing and proposed car parking spaces, where shown or stated (e.g. "parking for three vehicles" is 3). An undeveloped site has 0 current spaces.
+- evidence.listedOrConservation, evidence.ownership, evidence.certifier: only where the document mentions them.
+
 Rules:
-- Use "unsure" rather than guessing.
+- Use "unsure" rather than guessing the category.
 - A map is not automatically a location plan.
 - Distinguish existing and proposed drawings carefully.
 - Keep calculations separate from specifications.
 - If the PDF contains mixed document types, choose the best overall category, require manual review, and add a warning.
 - Do not invent a title, drawing number, or revision.
 - Keep evidence to one short, human-readable sentence.
-- Extract only facts supported by visible evidence, using only the permitted field keys in the schema.
+- Record only what is visible, but record all of it. Title blocks usually give the project title, the client and the architect's practice details; record each under its own keys.
 - Split site and applicant addresses into buildingNumber, addressLine1 (street without the number), addressLine2, townCity and postcode. Preserve flat identifiers and building names.
-- Check all pages, title blocks and location plans for the site postcode and local authority. Never substitute the architect or applicant address for the site, or guess a missing postcode or council.
+- Check all pages, title blocks and location plans for the site postcode and local authority. Each address goes only under its own keys: never put the architect's or the applicant's address under site.*, and never guess a missing postcode or council.
 - Never convert a mention of ownership, listing, certification, or legal status into a confirmed declaration.
-- Include a short evidence excerpt and page number when visible.
+- Include a short evidence excerpt and page number for each fact when visible.
+- Use warnings only for problems a reviewer must act on, such as mixed document types, contradictions between sheets, or key text that cannot be read. Do not add a warning because a detail is simply not on this document, or to explain what you left out.
+- Set manualReviewRequired only when the category is uncertain, the document is mixed, or a warning needs action.
 
 Filename: ${input.filename}
 ${context || 'No additional project context.'}`;
