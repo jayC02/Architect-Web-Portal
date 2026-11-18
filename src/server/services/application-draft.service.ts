@@ -168,6 +168,80 @@ const collectFacts = (documents: SynthesisDocument[]): Fact[] => {
   return facts;
 };
 
+// A site plan or statement describes the whole proposal; a floor plan or services
+// layout describes only itself, so its description is used only when nothing better exists.
+const DESCRIPTION_SOURCE_RANK: Record<string, number> = {
+  site_block_plan: 0,
+  location_plan: 0,
+  supporting_documents: 1,
+  specifications: 2,
+};
+
+const documentCategories = (documents: SynthesisDocument[]) => new Map(documents.map((document) => [
+  document.id,
+  String(classificationDetailsFromAudit(document.analysisResult)?.categoryKey ?? 'unsure'),
+]));
+
+/** The proposal description from the sheet best placed to describe the whole application. */
+export const overallDescriptionFromFacts = (facts: Fact[], categories: Map<string, string>) => {
+  const rank = (fact: Fact) => DESCRIPTION_SOURCE_RANK[categories.get(fact.documentId) ?? ''] ?? 3;
+  const candidates = facts
+    .filter((fact) => fact.fieldKey === 'application.descriptionOfWork' && String(fact.value).trim())
+    .sort((left, right) => rank(left) - rank(right) || certaintyRank(right.certainty) - certaintyRank(left.certainty));
+  if (!candidates.length) return missingSuggestion();
+  // Free text: each sheet words it differently, so differing wording is not a conflict.
+  return {
+    value: candidates[0].value,
+    status: 'suggested' as const,
+    certainty: candidates[0].certainty,
+    sources: factSources(candidates),
+  };
+};
+
+const partyText = (value: unknown) => String(value ?? '')
+  .toLowerCase()
+  .replace(/\b(?:ltd|limited|plc|llp)\b\.?/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+type ApplicantParty = { label: string; documentIds: Set<string>; facts: Fact[] };
+
+/**
+ * Applicant details come from one party only. When sheets name different applicants
+ * (e.g. a developer on the site plan and a buyer on the house drawings), the party named
+ * on the most sheets is used and the others are returned so the review can flag them.
+ */
+export const applicantFactsFromOneParty = (facts: Fact[]) => {
+  const applicantFacts = facts.filter((fact) => fact.fieldKey.startsWith('applicant.'));
+  const byDocument = new Map<string, Fact[]>();
+  for (const fact of applicantFacts) byDocument.set(fact.documentId, [...(byDocument.get(fact.documentId) ?? []), fact]);
+  const parties = new Map<string, ApplicantParty>();
+  const unnamed: Fact[] = [];
+  for (const [documentId, documentFacts] of byDocument) {
+    const value = (key: string) => documentFacts.find((fact) => fact.fieldKey === key && partyText(fact.value))?.value;
+    const company = value('applicant.companyName');
+    const lastName = value('applicant.lastName');
+    const key = company ? `company:${partyText(company)}` : lastName ? `person:${partyText(lastName)}` : null;
+    if (!key) {
+      unnamed.push(...documentFacts);
+      continue;
+    }
+    const label = company
+      ? String(company).trim()
+      : [value('applicant.firstName'), lastName].filter(Boolean).map(String).join(' ').trim();
+    const party = parties.get(key) ?? { label, documentIds: new Set<string>(), facts: [] };
+    party.documentIds.add(documentId);
+    party.facts.push(...documentFacts);
+    parties.set(key, party);
+  }
+  if (parties.size <= 1) return { facts: applicantFacts, chosen: null, others: [] as ApplicantParty[] };
+  const [chosen, ...others] = [...parties.values()].sort((left, right) => right.documentIds.size - left.documentIds.size);
+  // Contact details on a sheet that names no one can't be tied to either party.
+  return { facts: chosen.facts, chosen, others };
+};
+
+const sheetCount = (party: ApplicantParty) => `${party.documentIds.size} sheet${party.documentIds.size === 1 ? '' : 's'}`;
+
 const commonReference = (documents: SynthesisDocument[]) => {
   const counts = new Map<string, { count: number; document: SynthesisDocument }>();
   for (const document of documents) {
@@ -201,11 +275,16 @@ export const explicitTypeOfWork = (value: unknown): TypeOfWorkKey | null => {
   return null;
 };
 
+// Non-domestic uses are checked first: "care home", "public house" and "non-domestic"
+// contain words that would otherwise read as residential.
+const NON_RESIDENTIAL_USE = /non[\s-]?(?:domestic|residential)|commercial|office|retail|shop|industrial|business|warehouse|storage|factory|workshop|care home|nursing|hotel|guest ?house|hostel|public house|\bpub\b|restaurant|caf[eé]|bar\b|school|nursery|college|hospital|surgery|clinic|church|hall\b|agricultur|farm building|leisure|gym|sport/;
+const RESIDENTIAL_USE = /\bresidential\b|\bdomestic\b|dwelling|\bhouse\b|\bhome\b|\bflats?\b|bungalow|cottage|apartment/;
+
 export const buildingUseFrom = (value: unknown): BuildingUse | null => {
   const text = String(value ?? '').trim().toLowerCase();
   if (!text) return null;
-  if (/residential|dwelling|house|home|flat|domestic/.test(text)) return 'residential';
-  if (/commercial|office|retail|shop|industrial|business|non-domestic/.test(text)) return 'commercial';
+  if (NON_RESIDENTIAL_USE.test(text)) return 'commercial';
+  if (RESIDENTIAL_USE.test(text)) return 'residential';
   return null;
 };
 
@@ -250,10 +329,12 @@ export const planningAnswersFromPrepared = (
 ): ApplicationDraftReview['confirmations'] => {
   if (!isPlanningType(type)) return {};
   const answers: ApplicationDraftReview['confirmations'] = {};
-  const trees = yesNoFrom(application.treesOnOrAdjacentToSite?.value);
-  const access = yesNoFrom(application.newOrAlteredVehicleAccess?.value);
-  const currentSpaces = countFrom(application.currentParkingSpaces?.value);
-  const proposedSpaces = countFrom(application.proposedParkingSpaces?.value);
+  // Sheets that disagree leave the usual default for the architect to answer.
+  const agreed = (key: string) => application[key]?.status === 'conflict' ? null : application[key]?.value;
+  const trees = yesNoFrom(agreed('treesOnOrAdjacentToSite'));
+  const access = yesNoFrom(agreed('newOrAlteredVehicleAccess'));
+  const currentSpaces = countFrom(agreed('currentParkingSpaces'));
+  const proposedSpaces = countFrom(agreed('proposedParkingSpaces'));
   if (trees !== null) answers.treesOnOrAdjacentToSite = trees;
   if (access !== null) answers.newOrAlteredVehicleAccess = access;
   if (currentSpaces !== null) answers.currentParkingSpaces = currentSpaces;
@@ -429,7 +510,13 @@ export const synthesisePreparedApplicationDraft = async (
   draft: DraftWithDocuments,
 ) => {
   const defaults = await prisma.organisationDefaults.findUnique({ where: { organisationId } });
-  const facts = collectFacts(draft.documents);
+  const allFacts = collectFacts(draft.documents);
+  const applicantParty = applicantFactsFromOneParty(allFacts);
+  const facts = [
+    ...allFacts.filter((fact) => !fact.fieldKey.startsWith('applicant.')),
+    ...applicantParty.facts,
+  ];
+  const categories = documentCategories(draft.documents);
   const reference = commonReference(draft.documents);
   const siteFields = normalisePreparedAddress({
     buildingNumber: suggestionFromFacts(facts, 'site.buildingNumber'),
@@ -500,6 +587,8 @@ export const synthesisePreparedApplicationDraft = async (
     firstName: scalar(clientFields.firstName.value) as string | null,
     lastName: scalar(clientFields.lastName.value) as string | null,
   });
+  const otherApplicantSources = factSources(applicantParty.others.flatMap((party) => party.facts
+    .filter((fact) => ['applicant.companyName', 'applicant.firstName', 'applicant.lastName'].includes(fact.fieldKey))));
 
   const agent = {
     practiceName: defaultSuggestion(defaults?.practiceName ?? null),
@@ -521,6 +610,10 @@ export const synthesisePreparedApplicationDraft = async (
   const warnings = [
     ...new Set(classifications.flatMap((details) => details?.warnings ?? [])),
   ];
+  if (applicantParty.chosen) {
+    warnings.push(`The documents name different applicants: ${[applicantParty.chosen, ...applicantParty.others]
+      .map((party) => `${party.label} (${sheetCount(party)})`).join(' and ')}. ${applicantParty.chosen.label} has been used; confirm the applicant.`.slice(0, 300));
+  }
   if (facts.some((fact) => fact.fieldKey.startsWith('evidence.'))) {
     warnings.push('Possible legal or application declarations were found. They remain unanswered until you confirm them.');
   }
@@ -544,17 +637,23 @@ export const synthesisePreparedApplicationDraft = async (
             rawTypeOfWork.certainty,
           )
         : missingSuggestion(),
-      summary: suggestionFromFacts(facts, 'application.descriptionOfWork'),
+      summary: overallDescriptionFromFacts(facts, categories),
       buildingUse: mappedSuggestion(suggestionFromFacts(facts, 'project.buildingUse'), buildingUseFrom),
     },
     site: siteFields,
     client: {
       name: clientName
-        ? customSuggestion(clientName, [
-            ...clientFields.companyName.sources,
-            ...clientFields.firstName.sources,
-            ...clientFields.lastName.sources,
-          ], 'medium')
+        ? {
+            ...customSuggestion(clientName, [
+              ...clientFields.companyName.sources,
+              ...clientFields.firstName.sources,
+              ...clientFields.lastName.sources,
+              ...otherApplicantSources,
+            ], 'medium'),
+            ...(applicantParty.others.length
+              ? { status: 'conflict' as const, currentValue: applicantParty.others[0].label }
+              : {}),
+          }
         : missingSuggestion(),
       ...clientFields,
     },
@@ -563,7 +662,7 @@ export const synthesisePreparedApplicationDraft = async (
       route: suggestedApplicationType
         ? customSuggestion(suggestedApplicationType, [], draft.selectedApplicationType === ApplicationDraftType.AUTO ? 'medium' : 'high')
         : missingSuggestion(),
-      description: suggestionFromFacts(facts, 'application.descriptionOfWork'),
+      description: overallDescriptionFromFacts(facts, categories),
       currentUse: suggestionFromFacts(facts, 'application.currentUse'),
       proposedUse: suggestionFromFacts(facts, 'application.proposedUse'),
       estimatedValue: suggestionFromFacts(facts, 'application.estimatedValue'),
@@ -711,7 +810,9 @@ const buildInitialReview = (
       name: suggestionString(prepared.project, 'name'),
       internalReference: suggestionString(prepared.project, 'internalReference'),
       typeOfWorkKey: typeOfWork,
-      buildingUse: buildingUseFrom(suggestionString(prepared.project, 'buildingUse')),
+      buildingUse: prepared.project.buildingUse?.status === 'conflict'
+        ? null
+        : buildingUseFrom(suggestionString(prepared.project, 'buildingUse')),
       summary: suggestionString(prepared.project, 'summary'),
     },
     siteMode: strongSite ? 'existing' : 'create',

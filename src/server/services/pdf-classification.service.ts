@@ -75,7 +75,7 @@ export type ProjectClassificationContext = PdfClassificationInput['projectContex
 
 export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
 export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v4';
-export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v4';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v5';
 const MAX_AI_FILE_BYTES = APPLICATION_UPLOAD_LIMITS.maxFileBytes;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
@@ -298,10 +298,10 @@ Fact keys (record each one the document shows, under its own key; leave out any 
 - site.buildingNumber, site.addressLine1, site.addressLine2, site.townCity, site.postcode, site.localAuthority: where the work happens. A plot or site name such as "Plot 3" can go in site.addressLine1.
 - applicant.*: the client or applicant named on the document, often after "Client", "For" or "Applicant", or as a company. Put a company in applicant.companyName. For a person, applicant.title is only an honorific (Mr, Mrs, Ms, Miss, Dr); an initial goes in applicant.firstName, so "D Glennie" is firstName "D" and lastName "Glennie". Also record their email, phone and address when shown (applicant.buildingNumber, applicant.addressLine1, applicant.addressLine2, applicant.townCity, applicant.postcode, applicant.country).
 - agent.*: the architect, designer or agent who prepared the document, usually in the title block: agent.practiceName, agent.firstName, agent.lastName, agent.email, agent.phone and the practice address (agent.addressLine1, agent.addressLine2, agent.townCity, agent.postcode, agent.country).
-- application.descriptionOfWork: one sentence describing the proposed work as shown, e.g. "Erection of a single-storey dwelling house with parking and a new access".
+- application.descriptionOfWork: one sentence describing the whole proposal as it would read on the application form, e.g. "Erection of a single-storey dwelling house with parking and a new access". Describe the development, never this sheet: not "Ground floor layout for…" or "Electrical layout for…". Leave it out when the sheet does not show what the overall proposal is.
 - application.currentUse and application.proposedUse: the existing and proposed use of the land or building where the document states or plainly shows it, e.g. "Grazing field" and "Residential dwelling".
 - application.buildingType, application.numberOfStoreys, application.estimatedValue, application.planningReference: only where shown.
-- planning.treesOnOrAdjacentToSite: "Yes" when trees are shown or noted on or next to the site (existing, retained, removed or proposed planting); "No" only when the document says there are none.
+- planning.treesOnOrAdjacentToSite: the form asks whether there are trees on or next to the site now. "Yes" when existing trees are shown or noted on or next to the site, including trees to be retained or removed. Proposed new planting is not a reason for "Yes". "No" only when the document says there are no existing trees. Otherwise leave it out.
 - planning.newOrAlteredVehicleAccess: "Yes" when a new or altered vehicle access, driveway, dropped kerb or visibility splay is shown; "No" only when the document says the access is unchanged.
 - planning.currentParkingSpaces and planning.proposedParkingSpaces: whole numbers of existing and proposed car parking spaces, where shown or stated (e.g. "parking for three vehicles" is 3). An undeveloped site has 0 current spaces.
 - evidence.listedOrConservation, evidence.ownership, evidence.certifier: only where the document mentions them.

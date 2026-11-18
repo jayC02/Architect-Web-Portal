@@ -34,6 +34,13 @@ const preparedPerson = (draft: ApplicationDraftResponse): ReviewPerson => {
   return person;
 };
 
+// The sheets named more than one applicant; the one on most sheets was pre-filled.
+const preparedApplicantConflict = (draft: ApplicationDraftResponse) => {
+  const name = draft.prepared?.client.name;
+  if (name?.status !== 'conflict' || name.currentValue === undefined || name.currentValue === null) return '';
+  return `The documents name different applicants. "${String(name.value)}" is filled in, but another sheet names "${String(name.currentValue)}". Confirm who is applying.`;
+};
+
 function PersonField({ person, name, label, prefix, onChange, issue, required = false, readOnly = false, options }: {
   person: ReviewPerson; name: keyof ReviewPerson; label: string; prefix: string;
   onChange: (name: keyof ReviewPerson, value: string) => void; issue?: string; required?: boolean; readOnly?: boolean;
@@ -270,6 +277,7 @@ export default function ClientApplicantReview({ draft, review, onChange, issueFo
       <div className="cr-body">
         {lookupError || pickerError ? <p className="cr-error" role="alert">{lookupError || pickerError} <button type="button" className="btn btn-secondary" onClick={() => setRetry(value => value + 1)}>Retry</button></p> : null}
         {matchNotice ? <p className="cr-helper" role="status">{matchNotice}</p> : null}
+        {preparedApplicantConflict(draft) ? <p className="cr-conflict" role="note">{preparedApplicantConflict(draft)}</p> : null}
         {personHeading(review.client, 'client')}
         <PersonDetails person={review.client} prefix="client" onChange={(key, value) => updatePerson('client', key, value)} issueFor={issueFor}
           readOnly={false} site={review.site} useSite={() => useSite('client')} sameAsSite={review.clientAddressSameAsSite} />

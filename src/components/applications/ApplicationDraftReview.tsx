@@ -315,6 +315,42 @@ const evidenceLabels: Record<string, string> = {
   presetKey: 'Application preset',
 };
 
+// Fields the uploaded sheets disagree on. The first value is pre-filled; this tells the
+// architect another sheet says something different so they check it before submitting.
+function DocumentConflicts({
+  prepared,
+  sections,
+}: {
+  prepared: Prepared | null;
+  sections: Array<'project' | 'site' | 'application'>;
+}) {
+  const conflicts = sections.flatMap((section) => {
+    const fields = prepared?.[section] as Record<string, { value?: unknown; status?: string; currentValue?: unknown }> | undefined;
+    return Object.entries(fields ?? {})
+      .filter(([key, field]) => field.status === 'conflict' && !['route', 'name', 'internalReference'].includes(key)
+        && field.currentValue !== undefined && field.currentValue !== null)
+      .map(([key, field]) => ({
+        key: `${section}.${key}`,
+        label: evidenceLabels[key] ?? key,
+        used: String(field.value ?? ''),
+        other: String(field.currentValue),
+      }));
+  });
+  if (!conflicts.length) return null;
+  return (
+    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="note">
+      <p className="font-semibold">The documents disagree</p>
+      <ul className="mt-1 space-y-1">
+        {conflicts.map((conflict) => (
+          <li key={conflict.key}>
+            {conflict.label}: &ldquo;{conflict.used}&rdquo; is filled in, but another sheet says &ldquo;{conflict.other}&rdquo;. Check which is right.
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function EvidenceList({
   draftId,
   prepared,
@@ -1246,6 +1282,7 @@ export default function ApplicationDraftReview({
               </label>
             ) : null}
           </div>
+          <DocumentConflicts prepared={draft.prepared} sections={['project', 'application']} />
           <EvidenceList draftId={draft.id} prepared={draft.prepared} sections={['project', 'application']} />
         </Section>
 
@@ -1293,6 +1330,7 @@ export default function ApplicationDraftReview({
             {review.siteMode === 'create' && addressLookupNotice ? (
               <p className="mt-3 text-sm text-stone-500" role="status">{addressLookupNotice}</p>
             ) : null}
+            <DocumentConflicts prepared={draft.prepared} sections={['site']} />
             <EvidenceList draftId={draft.id} prepared={draft.prepared} sections={['site']} />
           </Section>
         ) : null}
