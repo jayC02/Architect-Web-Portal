@@ -150,7 +150,8 @@ else {
       await page.setViewportSize({ width: 1280, height: 1000 });
       await open(`?state=${state}`);
       check(`${state}: actual application state is rendered`, await page.locator('#planning').getByRole('heading', { name: headings[state], exact: true }).isVisible());
-      const current = (await geometry())['building-warrant'];
+      // Applications are stacked rows, so a taller row above moves this one down; its own shape must not change.
+      const { x: _x, y: _y, ...current } = (await geometry())['building-warrant'];
       unchangedCard ??= current;
       check(`${state}: neighbour dimensions, fields and footer remain unchanged`, JSON.stringify(current) === JSON.stringify(unchangedCard));
       check(`${state}: each application has its own Reset button`, await page.getByRole('button', { name: 'Reset Planning', exact: true }).isVisible() && await page.getByRole('button', { name: 'Reset Building Warrant', exact: true }).isVisible());

@@ -255,8 +255,11 @@ assert.match(projectFees, /Agreed[\s\S]*Invoiced[\s\S]*Paid[\s\S]*Outstanding[\s
 assert.match(projectFees, /Ready to invoice[\s\S]*Draft created[\s\S]*Waived[\s\S]*Needs attention/, 'milestones use semantic states');
 assert.match(projectFees, /milestone\.state === 'ELIGIBLE'[\s\S]*Create Xero draft/, 'Xero draft creation stays inside the eligible milestone action area');
 assert.match(projectFees, /<details class="border-t border-stone-100">[\s\S]*Link an existing Xero invoice/, 'manual invoice linking remains accessible through secondary disclosure');
-assert.ok(projectPage.indexOf('<ApplicationSummaryCard') < projectPage.indexOf('<ProjectFees'), 'applications render before fees');
-assert.ok(projectPage.indexOf('<ProjectFees') < projectPage.indexOf('id="attention"'), 'next actions and recent activity render below fees');
+const projectFeesPage = fs.readFileSync('src/pages/projects/[id]/fees.astro', 'utf8');
+assert.doesNotMatch(projectPage, /<ProjectFees|id="attention"|id="project-activity"/, 'the project overview stays focused on applications, without fees, next actions or activity');
+assert.match(projectPage, /href=\{`\/projects\/\$\{project\.id\}\/fees`\}/, 'owners and admins reach fees from the project header');
+assert.match(projectFeesPage, /<ProjectFees[\s\S]*organisationId: auth\.organisation\.id|organisationId: auth\.organisation\.id[\s\S]*<ProjectFees/, 'the fees page is organisation scoped');
+assert.match(projectFeesPage, /\['OWNER', 'ADMIN'\]\.includes\(auth\.membership\.role\)/, 'fees stay limited to owners and admins');
 
 for (const route of [projectRoute, globalRoute]) {
   assert.match(route, /findReusableAutomationJob/, 'contextual preparation reuses an existing active job');

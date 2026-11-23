@@ -58,7 +58,7 @@ export const reconcileXeroFinanceAttention = async (database: PrismaClient, orga
           kind: ActionItemKind.XERO_INVOICE,
           title: `Xero invoice ${invoice.invoiceNumber ?? ''} is overdue`.replace('  ', ' '),
           summary: `${invoice.currency} ${invoice.amountDue.toFixed(2)} remains outstanding.`,
-          actionUrl: `/projects/${link.projectId}#fees`,
+          actionUrl: `/projects/${link.projectId}/fees`,
           priority: ActionItemPriority.HIGH,
           dueAt: invoice.dueDate,
           dedupeKey: overdueKey,

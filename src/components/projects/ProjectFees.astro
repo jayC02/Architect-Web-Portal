@@ -30,9 +30,9 @@ const statusFor = (state: string) => ({
 const currency = projectFeePlan?.currency ?? 'GBP';
 const totals = projectFinance?.totals.get(currency) ?? { invoiced: 0, paid: 0, outstanding: 0, overdue: 0 };
 ---
-<section id="fees" class="panel mt-8 scroll-mt-24 overflow-hidden rounded-lg">
+<section id="fees" class="panel scroll-mt-24 overflow-hidden rounded-lg">
   <header class="flex flex-col gap-3 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
-    <div class="flex gap-3"><CircleDollarSign size={22} className="mt-0.5 shrink-0 text-moss" /><div><h2 class="text-2xl font-semibold text-ink">Fees agreed</h2><p class="mt-1 text-sm text-stone-500">The agreed schedule and current Xero position.</p></div></div>
+    <div class="flex gap-3"><CircleDollarSign size={22} className="mt-0.5 shrink-0 text-moss" /><div><h2 class="text-xl font-semibold text-ink">Fee schedule</h2><p class="mt-1 text-sm text-stone-500">The agreed schedule and current Xero position.</p></div></div>
     <a class="text-sm font-semibold text-stone-600 hover:text-moss" href="/finance">Finance dashboard</a>
   </header>
   <div class="grid grid-cols-2 gap-px border-b border-stone-200 bg-stone-200 lg:grid-cols-5">

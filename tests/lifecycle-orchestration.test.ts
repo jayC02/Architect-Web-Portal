@@ -399,7 +399,7 @@ assert.match(draftCommitSource, /records\.projectCreated\s*\?\s*await emitProjec
 assert.match(draftCommitSource, /if \(selected\.project\)[\s\S]*projectCreated: false/, 'reused intake projects do not emit PROJECT_CREATED');
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
 for (const model of ['actionItem', 'projectActivity']) {
-  assert.match(projectPage, new RegExp(`prisma\\.${model}\\.findMany\\([\\s\\S]*organisationId: auth\\.organisation\\.id`), `${model} project UI is organisation scoped`);
+  assert.doesNotMatch(projectPage, new RegExp(`prisma\\.${model}\\.findMany`), `${model} is no longer loaded on the project overview`);
 }
 
 console.log('lifecycle orchestration tests passed');

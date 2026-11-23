@@ -1,25 +1,21 @@
 ﻿---
 import {
-  ActionItemStatus,
-  ActionItemKind,
   AutomationJobType,
   DeadlineStatus,
   DocumentStatus,
   DocumentType,
   ProjectStage,
   ProjectStatus,
-  Prisma,
 } from '@prisma/client';
-import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, FileText, Inbox, Pencil, Upload, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, ClipboardList, FileText, Inbox, Pencil, Receipt, Upload, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
-import ProjectFees from '@/components/projects/ProjectFees.astro';
 import ProjectLinkedRecordEditor from '@/components/projects/ProjectLinkedRecordEditor';
 import { prisma } from '@/lib/db/prisma';
 import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { hasLocationPlanDocument } from '@/lib/location-plan';
 import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
-import { getProjectNextAction, isProjectDateOverdue } from '@/lib/projects/next-action';
+import { isProjectDateOverdue } from '@/lib/projects/next-action';
 import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS, typeOfWorkLabels } from '@/lib/projects/type-of-work';
 import { readProjectScreener } from '@/lib/projects/screener';
 import { requirePageAuth } from '@/lib/server/page-auth';
@@ -53,8 +49,6 @@ const [
   deadlines,
   automationJobs,
   recentEmailActivity,
-  actionItems,
-  projectActivities,
 ] = await Promise.all([
   prisma.client.findMany({
     where: { organisationId: auth.organisation.id },
@@ -74,7 +68,7 @@ const [
   prisma.projectDocument.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, originalName: true, type: true, status: true, revision: true, notes: true, sizeBytes: true, createdAt: true },
+    select: { id: true, originalName: true, type: true, status: true, revision: true, notes: true, sizeBytes: true, createdAt: true, analysisResult: true },
   }),
   prisma.planningApplication.findMany({
     where: { organisationId: auth.organisation.id, projectId: project.id },
@@ -116,87 +110,13 @@ const [
       trackedEmail: { select: { sender: true, subject: true } },
     },
   }),
-  prisma.actionItem.findMany({
-    where: {
-      organisationId: auth.organisation.id,
-      projectId: project.id,
-      status: ActionItemStatus.OPEN,
-      availableAt: { lte: new Date() },
-      ...(!canViewFinance ? { kind: { not: ActionItemKind.XERO_INVOICE } } : {}),
-    },
-    orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
-    take: 5,
-    select: { id: true, title: true, summary: true, actionUrl: true, priority: true, dueAt: true },
-  }),
-  prisma.projectActivity.findMany({
-    where: {
-      organisationId: auth.organisation.id,
-      projectId: project.id,
-      ...(!canViewFinance ? { visibility: 'STANDARD' as const } : {}),
-    },
-    orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
-    take: 8,
-    select: { id: true, summary: true, occurredAt: true, actorUser: { select: { name: true } } },
-  }),
 ]);
 
-const [projectFeePlan, feePlanTemplates] = canViewFinance ? await Promise.all([
-  prisma.projectFeePlan.findFirst({
-    where: { organisationId: auth.organisation.id, projectId: project.id, active: true },
-    include: { milestones: { orderBy: { sortOrder: 'asc' } } },
-  }),
-  prisma.feePlanTemplate.findMany({
-    where: { organisationId: auth.organisation.id, active: true },
-    orderBy: [{ name: 'asc' }, { version: 'desc' }],
-  }),
-]) : [null, []];
 const organisationDefaults = await prisma.organisationDefaults.findUnique({
   where: { organisationId: auth.organisation.id },
 });
-const agreedFeeTotal = projectFeePlan?.milestones
-  .filter((milestone) => milestone.enabled && milestone.state !== 'WAIVED')
-  .reduce((total, milestone) => total.plus(milestone.amount), new Prisma.Decimal(0)) ?? null;
-const projectFinance = canViewFinance ? await (async () => {
-  const connection = await prisma.xeroConnection.findUnique({ where: { organisationId: auth.organisation.id } });
-  if (!connection) return null;
-  const clientLink = project.clientId ? await prisma.xeroClientLink.findUnique({ where: { clientId: project.clientId } }) : null;
-  const [links, candidates] = await Promise.all([
-    prisma.xeroProjectInvoiceLink.findMany({
-      where: { organisationId: auth.organisation.id, projectId: project.id },
-      include: { invoice: true },
-      orderBy: { linkedAt: 'desc' },
-    }),
-    prisma.xeroInvoiceSnapshot.findMany({
-      where: {
-        organisationId: auth.organisation.id,
-        invoiceType: 'ACCREC',
-        ...(clientLink ? { xeroContactId: clientLink.xeroContactId } : {}),
-        projectLinks: { none: {} },
-      },
-      orderBy: { invoiceDate: 'desc' },
-      take: 100,
-    }),
-  ]);
-  const totals = links.reduce((result, link) => {
-    const currency = link.invoice.currency;
-    const current = result.get(currency) ?? { invoiced: new Prisma.Decimal(0), paid: new Prisma.Decimal(0), outstanding: new Prisma.Decimal(0), overdue: new Prisma.Decimal(0) };
-    if (['AUTHORISED', 'PAID'].includes(link.invoice.status)) {
-      current.invoiced = current.invoiced.plus(link.invoice.total);
-      current.paid = current.paid.plus(link.invoice.amountPaid);
-      current.outstanding = current.outstanding.plus(link.invoice.amountDue);
-      if (link.invoice.dueDate && link.invoice.dueDate < new Date() && link.invoice.amountDue.greaterThan(0)) current.overdue = current.overdue.plus(link.invoice.amountDue);
-    }
-    result.set(currency, current);
-    return result;
-  }, new Map<string, { invoiced: Prisma.Decimal; paid: Prisma.Decimal; outstanding: Prisma.Decimal; overdue: Prisma.Decimal }>());
-  return { connection, links, candidates, clientLink, totals };
-})() : null;
-
 
 const documentCount = documentStats.reduce((total, group) => total + group._count._all, 0);
-const documentReviewCount = documentStats
-  .filter((group) => group.status === DocumentStatus.IN_REVIEW)
-  .reduce((total, group) => total + group._count._all, 0);
 const hasLocationPlan = hasLocationPlanDocument(projectDocuments);
 const planningDocumentTypes = new Set<DocumentType>([
   DocumentType.LOCATION_PLAN,
@@ -281,19 +201,6 @@ const completionAgentConnected = healthyAgents.some((agent) => agentSupportsJob(
   payloadVersion: completionJob?.payloadVersion ?? 2,
   dataSnapshot: completionJob?.dataSnapshot,
 }));
-const readyAutomationJobCount = [planningDesktop.job, warrantDesktop.job, completionJob]
-  .filter((job) => job?.status === 'READY').length;
-const nextAction = getProjectNextAction({
-  projectId: project.id,
-  stage: project.stage,
-  documentCount,
-  documentReviewCount,
-  hasLocationPlan,
-  planningStatus: latestPlanning?.status,
-  warrantStatus: latestWarrant?.status,
-  readyAutomationJobCount,
-  nextDeadline,
-});
 
 const siteSummary = project.site
   ? [project.site.buildingNumber, project.site.addressLine1, project.site.townCity, project.site.postcode].filter(Boolean).join(', ')
@@ -363,6 +270,9 @@ const emailActivityLabel = (activity: typeof recentEmailActivity[number]) => {
   return `${humanizeEnum(activity.fieldName)} updated${display ? ` to ${humanizeEnum(display)}` : ''}`;
 };
 
+const buildingUseLabel = projectScreener.buildingUse === 'residential' ? 'Residential'
+  : projectScreener.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed';
+
 const preparedJobId = Astro.url.searchParams.get('job');
 const preparedContext = [planningDesktop, warrantDesktop]
   .find((context) => context.job?.id === preparedJobId);
@@ -370,21 +280,27 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
 
 ---
 <AppShell title={project.name} user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
-  <header class="mb-6">
-    <a href="/projects" class="inline-flex items-center gap-1.5 text-sm font-semibold text-moss hover:text-ink"><ArrowLeft size={15} aria-hidden="true" />Back to projects</a>
-    <div class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+  <header class="mb-8">
+    <a href="/projects" class="inline-flex items-center gap-1.5 text-sm font-medium text-stone-500 transition hover:text-ink"><ArrowLeft size={15} aria-hidden="true" />Projects</a>
+    <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="min-w-0">
-        <h1 class="break-words text-3xl font-semibold leading-tight text-ink sm:text-4xl">{project.name}</h1>
-        <p data-project-site-summary data-project-site-id={project.siteId ?? ''} class="mt-2 text-base leading-6 text-stone-500">{siteSummary}</p>
-        {project.internalReference && <p class="mt-1 text-xs font-semibold text-stone-400">Reference {project.internalReference}</p>}
-        <p class="mt-2 text-sm text-stone-600">{projectScreener.buildingUse === 'residential' ? 'Residential' : projectScreener.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed'}{projectScreener.typeOfWorkKeys.length ? ` · ${typeOfWorkLabels(projectScreener.typeOfWorkKeys).join(', ')}` : ''}. <a class="font-semibold underline" href={`/projects/${project.id}/screener`}>{projectScreener.complete ? 'Edit project screening' : 'Complete project screening'}</a></p>
+        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          {project.internalReference && <><span>{project.internalReference}</span><span class="text-stone-300" aria-hidden="true">/</span></>}
+          <span>{humanizeEnum(project.stage)}</span>
+          {project.status !== ProjectStatus.ACTIVE && <><span class="text-stone-300" aria-hidden="true">/</span><span>{humanizeEnum(project.status)}</span></>}
+        </p>
+        <h1 class="mt-2 break-words text-3xl font-semibold leading-tight text-ink sm:text-[2.125rem]">{project.name}</h1>
+        <p data-project-site-summary data-project-site-id={project.siteId ?? ''} class="mt-1.5 text-base leading-6 text-stone-500">{siteSummary}</p>
       </div>
-      <button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button>
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
+        {canViewFinance && <a href={`/projects/${project.id}/fees`} class="btn btn-secondary min-h-9 gap-2 px-3 py-1.5 text-xs"><Receipt size={14} aria-hidden="true" />Fees</a>}
+        <button type="button" data-project-edit-toggle aria-controls="project-details" aria-expanded="false" class="btn btn-secondary min-h-9 shrink-0 gap-2 px-3 py-1.5 text-xs"><Pencil size={14} aria-hidden="true" />Edit project details</button>
+      </div>
     </div>
   </header>
 
   {showPreparedNotice && (
-    <section class="panel mb-5 rounded-lg border-l-4 border-l-moss p-4" aria-live="polite">
+    <section class="panel mb-6 rounded-lg border-l-4 border-l-moss p-4" aria-live="polite">
       <p class="font-semibold">{preparedContext.job?.status === 'READY' ? 'Application prepared' : 'Application created'}</p>
       <p class="mt-1 text-sm text-stone-600">
         {preparedContext.job?.status === 'READY'
@@ -397,46 +313,43 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   <nav aria-label="Project sections" class="mb-6 flex gap-7 overflow-x-auto border-b border-stone-200">
     {[
       ['Overview', '#overview'],
-      ['Planning', '#planning'],
-      ['Building Warrant', '#building-warrant'],
-      ...(canViewFinance ? [['Fees', '#fees']] : []),
+      ['Applications', '#applications'],
       ['Documents', '#documents'],
       ['Deadlines', '#deadlines'],
-      ['Next actions', '#attention'],
-      ['Activity', '#project-activity'],
-      ['Email Activity', '#email-activity'],
+      ['Email activity', '#email-activity'],
       ['Notes', '#notes'],
-    ].map(([label, href], index) => <a href={href} aria-current={index === 0 ? 'page' : undefined} class:list={['shrink-0 border-b-2 px-0.5 pb-3 pt-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', index === 0 ? 'border-moss text-ink' : 'border-transparent text-stone-600 hover:border-stone-300 hover:text-ink']}>{label}</a>)}
+    ].map(([label, href], index) => <a href={href} aria-current={index === 0 ? 'page' : undefined} class:list={['shrink-0 border-b-2 px-0.5 pb-3 pt-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', index === 0 ? 'border-moss text-ink' : 'border-transparent text-stone-500 hover:border-stone-300 hover:text-ink']}>{label}</a>)}
   </nav>
 
   <section id="overview" class="scroll-mt-6">
     <div class="grid overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_28px_rgba(32,35,31,0.035)] sm:grid-cols-2 xl:grid-cols-4">
       <ProjectLinkedRecordEditor client:load client={clientEditorRecord} site={siteEditorRecord} />
-      <article class="flex min-h-28 gap-3 border-b border-stone-200 bg-moss/[0.055] p-4 sm:border-r xl:border-b-0">
-        <CircleCheck size={19} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
-        <div class="min-w-0"><p class="mb-1 text-xs font-semibold uppercase text-moss">Next action</p><a href={nextAction.href} class="block font-semibold text-ink hover:underline">{nextAction.label}</a><p class="mt-1 text-xs leading-5 text-moss/80">Based on current project records</p></div>
-      </article>
+      <a href={`/projects/${project.id}/screener`} class="group flex min-h-28 gap-3 border-b border-stone-200 p-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/30 sm:border-b-0 sm:border-r">
+        <ClipboardList size={19} className="mt-0.5 shrink-0 text-stone-500 transition group-hover:text-moss" aria-hidden="true" />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-3"><p class="label">Scope</p><span class="text-xs font-semibold text-stone-400 transition group-hover:text-moss">{projectScreener.complete ? 'Edit' : 'Complete'}</span></div>
+          <p class="truncate font-semibold text-ink">{buildingUseLabel}</p>
+          <p class="mt-1 line-clamp-2 text-sm text-stone-500">{projectScreener.typeOfWorkKeys.length ? typeOfWorkLabels(projectScreener.typeOfWorkKeys).join(', ') : 'Type of work not set'}</p>
+        </div>
+      </a>
       <article class="flex min-h-28 gap-3 p-4">
         <CalendarDays size={19} className="mt-0.5 shrink-0 text-stone-500" aria-hidden="true" />
-        <div class="min-w-0"><p class="label">Next deadline</p>{nextDeadline ? <><p class="truncate font-semibold text-ink">{nextDeadline.title}</p><p class="mt-1 text-sm text-stone-500">{formatDate(nextDeadline.dueDate)}</p></> : <p class="font-semibold text-stone-500">None scheduled</p>}</div>
+        <div class="min-w-0"><p class="label">Next deadline</p>{nextDeadline ? <><p class="truncate font-semibold text-ink">{nextDeadline.title}</p><p class:list={['mt-1 text-sm', isProjectDateOverdue(nextDeadline.dueDate) ? 'font-semibold text-red-700' : 'text-stone-500']}>{formatDate(nextDeadline.dueDate)}</p></> : <><p class="font-semibold text-ink">None scheduled</p><a href={`/deadlines?projectId=${project.id}`} class="mt-1 inline-block text-sm text-stone-500 hover:text-ink hover:underline">Add a deadline</a></>}</div>
       </article>
     </div>
   </section>
 
-
-  <section aria-labelledby="applications-heading" class="mt-8">
+  <section id="applications" aria-labelledby="applications-heading" class="mt-10 scroll-mt-24">
     <div class="mb-4">
-      <h2 id="applications-heading" class="text-2xl font-semibold leading-8 text-ink">Applications</h2>
-      <p class="mt-1 text-sm text-stone-500">Your active applications</p>
+      <h2 id="applications-heading" class="text-xl font-semibold leading-7 text-ink">Applications</h2>
+      <p class="mt-1 text-sm text-stone-500">Planning, building warrant and completion for this project.</p>
     </div>
-    <div class="grid items-start gap-5 lg:grid-cols-2">
+    <div class="divide-y divide-stone-200 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_28px_rgba(32,35,31,0.035)]">
       <ApplicationSummaryCard
         id="planning"
         title="Planning"
         subtitle="Latest planning application"
         manageHref={`/projects/${project.id}/planning`}
-        address={siteSummary}
-        clientName={project.client?.name ?? 'Not linked'}
         applicationType="Householder"
         status={applicationStatus(latestPlanning?.status)}
         documentCount={planningDocumentCount}
@@ -461,8 +374,6 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         title="Building Warrant"
         subtitle="Latest building warrant application"
         manageHref={`/projects/${project.id}/building-warrant`}
-        address={siteSummary}
-        clientName={project.client?.name ?? 'Not linked'}
         applicationType="Building Warrant"
         status={applicationStatus(latestWarrant?.status)}
         documentCount={warrantDocumentCount}
@@ -487,8 +398,6 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
         title="Completion Certificate"
         subtitle="For the latest building warrant"
         manageHref={completionHref}
-        address={siteSummary}
-        clientName={project.client?.name ?? 'Not linked'}
         applicationType="Completion Certificate"
         status={!latestWarrant ? 'No building warrant' : completionAvailable ? applicationStatus(latestWarrant.completionCertificateStatus) : 'Warrant not submitted'}
         documentCount={completionJob ? automationJobDocumentCount(completionJob) : 0}
@@ -509,42 +418,6 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
       />
     </div>
   </section>
-
-  {canViewFinance && <ProjectFees
-    projectId={project.id}
-    projectFeePlan={projectFeePlan}
-    feePlanTemplates={feePlanTemplates}
-    projectFinance={projectFinance}
-    agreedFeeTotal={agreedFeeTotal}
-  />}
-
-  <div class="mt-6 grid gap-5 lg:grid-cols-2">
-    <section id="attention" class="panel scroll-mt-24 rounded-lg p-4 sm:p-5">
-      <div class="flex items-start gap-3">
-        <Inbox size={20} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
-        <div><h2 class="text-xl font-semibold text-ink">Next actions</h2><p class="mt-1 text-sm text-stone-500">Project work that is ready for you.</p></div>
-      </div>
-      {actionItems.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
-        {actionItems.map((item) => <a href={item.actionUrl} class="block px-4 py-3 transition hover:bg-stone-50">
-          <div class="flex items-start justify-between gap-3"><p class="font-semibold text-ink">{item.title}</p>{item.dueAt && <time class="shrink-0 text-xs text-stone-500">{formatDate(item.dueAt)}</time>}</div>
-          {item.summary && <p class="mt-1 text-sm leading-5 text-stone-500">{item.summary}</p>}
-        </a>)}
-      </div> : <p class="mt-4 rounded-lg border border-dashed border-stone-300 px-4 py-5 text-center text-sm text-stone-500">No tracked actions need attention.</p>}
-    </section>
-
-    <section id="project-activity" class="panel scroll-mt-24 rounded-lg p-4 sm:p-5">
-      <div class="flex items-start gap-3">
-        <CircleCheck size={20} className="mt-0.5 shrink-0 text-moss" aria-hidden="true" />
-        <div><h2 class="text-xl font-semibold text-ink">Recent activity</h2><p class="mt-1 text-sm text-stone-500">Concise project lifecycle history.</p></div>
-      </div>
-      {projectActivities.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">
-        {projectActivities.map((activity) => <article class="flex items-start justify-between gap-3 px-4 py-3">
-          <div><p class="font-semibold text-ink">{activity.summary}</p>{activity.actorUser && <p class="mt-1 text-xs text-stone-500">By {activity.actorUser.name}</p>}</div>
-          <time class="shrink-0 text-xs text-stone-500">{formatDate(activity.occurredAt)}</time>
-        </article>)}
-      </div> : <p class="mt-4 rounded-lg border border-dashed border-stone-300 px-4 py-5 text-center text-sm text-stone-500">No lifecycle activity recorded yet.</p>}
-    </section>
-  </div>
 
   <div id="project-details" data-project-edit-panel hidden class="fixed inset-0 z-50">
     <button type="button" data-project-edit-close aria-label="Close project details" class="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]"></button>
@@ -579,10 +452,10 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
     </aside>
   </div>
 
-  <section id="documents" class="panel mt-8 scroll-mt-24 rounded-lg p-4 sm:p-5">
+  <section id="documents" class="panel mt-10 scroll-mt-24 rounded-lg p-4 sm:p-5">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 class="text-2xl font-semibold leading-8 text-ink">Documents</h2>
+        <h2 class="text-xl font-semibold leading-7 text-ink">Documents</h2>
         <p class="mt-1 text-sm text-stone-500">{documentCount} document{documentCount === 1 ? '' : 's'}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -637,13 +510,13 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   </section>
 
   <section id="deadlines" class="panel mt-6 scroll-mt-24 rounded-lg p-4 sm:p-5">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-2xl font-semibold leading-8 text-ink">Deadlines</h2><p class="mt-1 text-sm text-stone-500">{activeDeadlines.length} upcoming &middot; {overdueCount} overdue &middot; {completedDeadlines.length} completed</p></div><a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add or manage deadlines</a></div>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 class="text-xl font-semibold leading-7 text-ink">Deadlines</h2><p class="mt-1 text-sm text-stone-500">{activeDeadlines.length} upcoming &middot; {overdueCount} overdue &middot; {completedDeadlines.length} completed</p></div><a class="btn btn-secondary" href={`/deadlines?projectId=${project.id}`}>Add or manage deadlines</a></div>
     {activeDeadlines.length ? <div class="mt-4 divide-y divide-stone-100 rounded-lg border border-stone-200">{activeDeadlines.slice(0, 6).map((deadline) => <a href={`/deadlines?projectId=${project.id}`} class="flex flex-col gap-2 px-4 py-3 hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between"><div><p class="font-semibold">{deadline.title}</p><p class="mt-1 text-xs text-stone-500">{humanizeEnum(deadline.type)} &middot; {humanizeEnum(deadline.priority)}</p></div><span class={`status-chip ${isProjectDateOverdue(deadline.dueDate) ? 'bg-red-100 text-red-800' : 'bg-stone-100 text-stone-700'}`}>{formatDate(deadline.dueDate)}</span></a>)}</div> : <div class="mt-4 flex min-h-28 items-center justify-center gap-4 rounded-lg border border-dashed border-stone-300 px-5 py-6 text-left"><CalendarDays size={25} className="shrink-0 text-stone-400" aria-hidden="true" /><div><p class="font-semibold">No deadlines added yet</p><p class="mt-1 text-sm text-stone-500">Add an internal task or statutory date for this project.</p></div></div>}
   </section>
 
   <section id="email-activity" class="panel mt-6 scroll-mt-24 overflow-hidden rounded-lg">
     <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-5">
-      <div><h2 class="text-2xl font-semibold leading-8 text-ink">Email activity</h2><p class="mt-1 text-sm text-stone-500">Confirmed project updates detected from the connected Gmail account.</p></div>
+      <div><h2 class="text-xl font-semibold leading-7 text-ink">Email activity</h2><p class="mt-1 text-sm text-stone-500">Confirmed project updates detected from the connected Gmail account.</p></div>
       <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/email-updates">Review email updates</a>
     </div>
     {recentEmailActivity.length ? <div class="divide-y divide-stone-200">
@@ -658,7 +531,7 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   </section>
 
   <section id="notes" class="panel mt-6 scroll-mt-24 rounded-lg p-4 sm:p-5">
-    <h2 class="text-2xl font-semibold leading-8 text-ink">Notes</h2>
+    <h2 class="text-xl font-semibold leading-7 text-ink">Notes</h2>
     <p class="mt-1 text-sm text-stone-500">Keep the client brief, useful email excerpts and manual source notes with the project.</p>
     <form data-api-form data-action={`/api/projects/${project.id}`} data-method="PATCH" class="mt-4">
       <label class="block"><span class="sr-only">Project notes</span><textarea name="notes" rows="4" class="field" placeholder="Client brief, source notes and important context">{project.notes ?? ''}</textarea></label>
@@ -669,6 +542,9 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   <details class="mt-8 border-t border-stone-200 pt-5"><summary class="cursor-pointer text-sm font-semibold text-red-700">Delete project</summary><p class="mt-3 text-sm text-stone-500">Deleting a project also removes its linked files, applications, deadlines and submission packages.</p><form data-api-form data-action={`/api/projects/${project.id}`} data-method="DELETE" data-redirect="/projects" data-confirm="Delete this project and its linked records?" class="mt-3"><button class="btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">Delete project</button><span data-form-status class="ml-3 text-sm text-stone-500"></span></form></details>
 
   <script>
+    // Older Xero action items link to #fees; fees now have their own page.
+    if (window.location.hash === '#fees') window.location.replace(`${window.location.pathname.replace(/\/$/, '')}/fees`);
+
     document.addEventListener('portal:mutation-success', (event) => {
       const detail = event instanceof CustomEvent ? event.detail : null;
       const values = detail?.values;

@@ -151,13 +151,13 @@ assert.match(projectDetailPage, /desktopJob=\{warrantDesktop\.job\}/, 'project w
 assert.equal((projectDetailPage.match(/<ApplicationSummaryCard/g) ?? []).length, 3, 'planning, warrant and completion certificate render the same summary component');
 assert.match(projectDetailPage, /desktopJob=\{completionJob\}/, 'project workspace shows the current Completion Certificate desktop status');
 assert.match(applicationSummaryCard, /DesktopAutomationStatus/, 'application cards share the contextual desktop status component');
-assert.match(applicationSummaryCard, /<dt class="label">Address<\/dt>/, 'shared application card shows address');
-assert.match(applicationSummaryCard, /<dt class="label">Client<\/dt>/, 'shared application card shows client');
+assert.doesNotMatch(applicationSummaryCard, /<dt class="label">(Address|Client)<\/dt>/, 'application rows do not repeat the client and site shown in the project summary');
 assert.match(applicationSummaryCard, /<dt class="label">Application type<\/dt>/, 'shared application card shows application type');
 assert.match(applicationSummaryCard, /bg-moss\/5[\s\S]*\{status\}/, 'shared application card shows status in a restrained pill');
 assert.match(applicationSummaryCard, /<dt class="label">Documents<\/dt>/, 'shared application card shows document count');
 assert.match(applicationSummaryCard, /<dt class="label">Reference<\/dt>/, 'shared application card shows reference');
-assert.match(applicationSummaryCard, /sm:grid-cols-2/, 'shared application details collapse cleanly below the small breakpoint');
+assert.match(applicationSummaryCard, /grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3/, 'shared application details collapse cleanly below the small breakpoint');
+assert.match(applicationSummaryCard, /lg:grid-cols-\[minmax\(0,5fr\)_minmax\(0,7fr\)\]/, 'application rows place details beside desktop automation on wide screens');
 assert.match(projectDetailPage, /Not assigned/, 'missing application records use useful reference fallbacks');
 assert.doesNotMatch(projectDetailPage, /application ready to prepare/, 'missing application records no longer switch to a large empty-state box');
 assert.doesNotMatch(projectDetailPage, />Add planning record</, 'project overview does not require a planning tracker before automation');

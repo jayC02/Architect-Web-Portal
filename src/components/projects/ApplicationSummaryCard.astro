@@ -1,6 +1,6 @@
 ---
 import { AutomationJobType } from '@prisma/client';
-import { Building2 } from 'lucide-react';
+import { BadgeCheck, Building2, Map as MapIcon } from 'lucide-react';
 import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
 import AutomationRunResetButton from '@/components/automation/AutomationRunResetButton';
 import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
@@ -11,8 +11,6 @@ interface Props {
   title: string;
   subtitle: string;
   manageHref: string;
-  address: string;
-  clientName: string;
   applicationType: string;
   status: string;
   documentCount: number;
@@ -35,8 +33,6 @@ const {
   title,
   subtitle,
   manageHref,
-  address,
-  clientName,
   applicationType,
   status,
   documentCount,
@@ -57,45 +53,38 @@ const jobType = applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_P
     : AutomationJobType.BUILDING_WARRANT;
 const applicationLabel = applicationKind === 'PLANNING' ? 'Householder application'
   : applicationKind === 'COMPLETION_CERTIFICATE' ? 'Completion Certificate' : 'Building Warrant application';
+const Icon = applicationKind === 'PLANNING' ? MapIcon : applicationKind === 'COMPLETION_CERTIFICATE' ? BadgeCheck : Building2;
 ---
-<section id={id} class="flex min-w-0 scroll-mt-24 flex-col overflow-hidden rounded-lg border border-stone-200 bg-white [overflow-wrap:anywhere]">
-  <header class="flex items-start justify-between gap-4 px-4 pb-3 pt-4 sm:px-5 sm:pt-5">
-    <div class="flex min-w-0 items-start gap-3">
-      <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-moss text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)]" aria-hidden="true"><Building2 size={19} strokeWidth={1.8} /></span>
-      <div class="min-w-0">
-        <h2 class="text-lg font-semibold leading-6 text-ink">{title}</h2>
-        <p class="mt-0.5 text-sm text-stone-500">{subtitle}</p>
+<section id={id} class="grid min-w-0 scroll-mt-24 [overflow-wrap:anywhere] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+  <div class="flex min-w-0 flex-col gap-5 p-4 sm:p-5">
+    <header class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div class="flex min-w-0 items-start gap-3">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-moss/10 text-moss" aria-hidden="true"><Icon size={18} strokeWidth={1.8} /></span>
+        <div class="min-w-0">
+          <h3 class="text-base font-semibold leading-6 text-ink">{title}</h3>
+          <p class="mt-0.5 text-sm leading-5 text-stone-500">{subtitle}</p>
+        </div>
       </div>
-    </div>
-    <div class="flex shrink-0 flex-col items-end gap-2">
-      <span class="inline-flex items-center gap-2 rounded-md bg-moss/5 px-2.5 py-1.5 text-xs font-semibold text-stone-700"><span class="h-1.5 w-1.5 rounded-full bg-moss" aria-hidden="true"></span>{status}</span>
-    </div>
-  </header>
+      <span class="inline-flex shrink-0 items-center gap-2 rounded-md bg-moss/5 px-2.5 py-1 text-xs font-semibold text-stone-700"><span class:list={['h-1.5 w-1.5 rounded-full', available ? 'bg-moss' : 'bg-stone-400']} aria-hidden="true"></span>{status}</span>
+    </header>
 
-  <dl class="grid content-start gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
-    <div class="min-w-0">
-      <dt class="label">Address</dt>
-      <dd class="break-words text-sm font-medium leading-6 text-ink">{address}</dd>
-    </div>
-    <div class="min-w-0">
-      <dt class="label">Documents</dt>
-      <dd class="text-sm font-medium leading-6 text-ink">{documentCount} document{documentCount === 1 ? '' : 's'}</dd>
-    </div>
-    <div class="min-w-0">
-      <dt class="label">Client</dt>
-      <dd class="break-words text-sm font-medium leading-6 text-ink">{clientName}</dd>
-    </div>
-    <div class="min-w-0">
-      <dt class="label">Application type</dt>
-      <dd class="break-words text-sm font-medium leading-6 text-ink">{applicationType}</dd>
-    </div>
-    <div class="min-w-0">
-      <dt class="label">Reference</dt>
-      <dd class="break-words text-sm font-medium leading-6 text-ink">{reference}</dd>
-    </div>
-  </dl>
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+      <div class="min-w-0">
+        <dt class="label">Application type</dt>
+        <dd class="break-words text-sm font-medium leading-5 text-ink">{applicationType}</dd>
+      </div>
+      <div class="min-w-0">
+        <dt class="label">Reference</dt>
+        <dd class:list={['break-words text-sm font-medium leading-5', reference === 'Not assigned' ? 'text-stone-500' : 'text-ink']}>{reference}</dd>
+      </div>
+      <div class="min-w-0">
+        <dt class="label">Documents</dt>
+        <dd class="text-sm font-medium leading-5 text-ink">{documentCount}</dd>
+      </div>
+    </dl>
+  </div>
 
-  <footer class="border-t border-stone-200 bg-moss/[0.035]">
+  <footer class="min-w-0 border-t border-stone-200 bg-stone-50/60 lg:border-l lg:border-t-0">
     <DesktopAutomationStatus
       projectId={projectId}
       type={jobType}
