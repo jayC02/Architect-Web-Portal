@@ -161,7 +161,7 @@ else {
     await open('?state=failed');
     await page.getByText('Technical details', { exact: true }).focus();
     await page.keyboard.press('Enter');
-    check('Technical details remain keyboard operable', await page.locator('#planning details').evaluate(details => details.open));
+    check('Technical details remain keyboard operable', await page.locator('#planning details:not([data-more-menu])').evaluate(details => details.open));
     for (const state of ['upload', 'legacy-upload']) {
       for (const width of [1280, 390]) {
         await page.setViewportSize({ width, height: 1000 });

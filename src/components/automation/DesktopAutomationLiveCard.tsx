@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, FilePenLine, LoaderCircle, Play, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleCheck, CircleSlash, Clock3, ExternalLink, FilePenLine, Hand, LoaderCircle, MapPin, Play, Send, Unplug, X, type LucideIcon } from 'lucide-react';
+import ApplicationMoreMenu from '@/components/automation/ApplicationMoreMenu';
 import AutomationFailureRecovery, { type FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
+import AutomationRunResetButton from '@/components/automation/AutomationRunResetButton';
 import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { apiRequest } from '@/lib/api/http';
 
@@ -30,7 +32,32 @@ type Props = {
   connectedAgent: boolean;
   applicationType: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT' | 'COMPLETION_CERTIFICATE';
   recoveryContext: FailureRecoveryContext;
+  /** Planning and Building Warrant runs can be reset from the card. */
+  reset?: { applicationId: string; type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT' } | null;
 };
+
+type Tone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
+const actionRow = 'mt-4 flex flex-wrap items-center gap-2';
+
+// Colour for an application that has moved past portal preparation.
+const lifecycleTone = (status: string): Tone => {
+  if (['REFUSED', 'REJECTED', 'EXPIRED'].includes(status)) return 'danger';
+  if (status === 'FURTHER_INFORMATION_REQUESTED') return 'warning';
+  if (['WITHDRAWN', 'CLOSED', 'NOT_REQUIRED'].includes(status)) return 'neutral';
+  return 'success';
+};
+
+function StateHeading({ icon: Icon, eyebrow, title, spin = false }: { icon: LucideIcon; eyebrow: string; title: string; spin?: boolean }) {
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="app-tone-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-full" aria-hidden="true"><Icon size={17} strokeWidth={2} className={spin ? 'animate-spin motion-reduce:animate-none' : undefined} /></span>
+      <div className="min-w-0">
+        <p className="app-tone-text text-xs font-semibold uppercase tracking-wide">{eyebrow}</p>
+        <h3 className="mt-0.5 text-lg font-semibold leading-6 text-ink">{title}</h3>
+      </div>
+    </div>
+  );
+}
 
 const runningStatuses = new Set(['CLAIMED', 'IN_PROGRESS']);
 const failedStatuses = new Set(['FAILED', 'FAILED_RETRYABLE', 'FAILED_FINAL']);
@@ -69,7 +96,7 @@ const visualCountdownLabel = (seconds: number) => {
   return `About ${minutes} min ${remainingSeconds} sec remaining`;
 };
 
-export default function DesktopAutomationLiveCard({ jobId, applicationId, applicationStatus, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext }: Props) {
+export default function DesktopAutomationLiveCard({ jobId, applicationId, applicationStatus, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext, reset = null }: Props) {
   const [currentJobId, setCurrentJobId] = useState(jobId);
   const [job, setJob] = useState(initial);
   const [agentOnline, setAgentOnline] = useState<boolean | null>(connectedAgent);
@@ -263,93 +290,88 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     </dialog>
   );
 
+  // Reset and the overflow menu close every action row, so each state reads the same way.
+  const secondaryActions = (withRunDetails = true) => <>
+    {reset && <AutomationRunResetButton applicationId={reset.applicationId} type={reset.type} currentJobId={currentJobId} />}
+    <ApplicationMoreMenu label="More application actions" items={[
+      ...(withRunDetails ? [{ label: 'View run details', href: currentDetailsHref }] : []),
+      { label: 'Desktop job history', href: '/automation-jobs' },
+    ]} />
+  </>;
+  const reviewLink = <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>;
+
   if (applicationHasProgressed) return (
-    <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
-      <div className="flex gap-3">
-        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Application lifecycle</p>
-          <h3 className="mt-1 text-lg font-semibold text-ink">{applicationStatus === 'SUBMITTED' ? 'Submitted — waiting for council' : humanApplicationStatus}</h3>
-        </div>
-      </div>
-      <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600">
+    <section className="p-5" data-tone={lifecycleTone(applicationStatus)} aria-live="polite">
+      <StateHeading icon={lifecycleTone(applicationStatus) === 'danger' ? AlertTriangle : CheckCircle2} eyebrow="Application lifecycle" title={applicationStatus === 'SUBMITTED' ? 'Submitted — waiting for council' : humanApplicationStatus} />
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
         {applicationStatus === 'SUBMITTED'
           ? 'Architect Pro has recorded the manual portal submission. No prepared-review action remains.'
           : 'This application has progressed beyond portal preparation. Its canonical application status now takes priority.'}
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3"><a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
+      <div className={actionRow}>{reviewLink}{secondaryActions()}</div>
     </section>
   );
 
   if (job.status === 'COMPLETED' && !pausedForInput) return (
-    <section className="border-l-4 border-l-moss bg-emerald-50/55 p-4 sm:px-5" aria-live="polite">
-      <div className="flex gap-3">
-        <CheckCircle2 className="mt-0.5 shrink-0 text-moss" size={21} aria-hidden="true" />
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-moss">Prepared application</p>
-          <h3 className="mt-1 text-lg font-semibold text-ink">Prepared — needs your review</h3>
-        </div>
-      </div>
-      <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-600">
+    <section className="p-5" data-tone="info" aria-live="polite">
+      <StateHeading icon={FilePenLine} eyebrow="Prepared application" title="Prepared — needs your review" />
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
         Architect Pro prepared this application but did not submit it. {isWarrant ? 'Complete payment, review and submit it in eBuilding Standards.' : 'Review and submit it in ePlanning.'}
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className={actionRow}>
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening…' : `Review in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>}
-        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
+        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>}
+        {reviewLink}
+        {secondaryActions()}
       </div>
-      {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
+      {notice && <p role="status" className="app-tone-text mt-3 text-sm font-medium">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       {submissionDialog}
     </section>
   );
 
   if (pausedForInput) return (
-    <section className="p-4 sm:px-5" aria-live="polite">
-      <h3 className="font-semibold text-ink">Needs your input</h3>
-      <p className="mt-1 text-sm text-stone-600">{job.resultSummary || job.progressMessage || 'The Agent paused safely. Confirm the requested information before continuing.'}</p>
-      <p className="mt-2 text-sm text-stone-600">0%</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3"><a className="btn btn-secondary" href={manageHref}>Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a></div>
+    <section className="p-5" data-tone="warning" aria-live="polite">
+      <StateHeading icon={Hand} eyebrow="Agent paused" title="Needs your input" />
+      <p className="mt-2 text-sm leading-6 text-stone-600">{job.resultSummary || job.progressMessage || 'The Agent paused safely. Confirm the requested information before continuing.'}</p>
+      <p className="mt-1 text-xs text-stone-500">0%</p>
+      <div className={actionRow}>{reviewLink}{secondaryActions()}</div>
     </section>
   );
 
   if (awaitingFee) return (
-    <section className="border-l-4 border-l-amber-500 bg-amber-50/70 p-4 sm:px-5" aria-live="polite">
-      <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Prepared application</p>
-      <h3 className="mt-1 text-lg font-semibold text-ink">Prepared — needs your review</h3>
-      <p className="mt-1 max-w-2xl text-sm leading-5 text-stone-600">Architect Pro prepared the portal draft and calculated the fee. Complete payment, review and submit it yourself in {isWarrant ? 'eBuilding Standards' : 'ePlanning'}.</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+    <section className="p-5" data-tone="info" aria-live="polite">
+      <StateHeading icon={FilePenLine} eyebrow="Prepared application" title="Prepared — needs your review" />
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">Architect Pro prepared the portal draft and calculated the fee. Complete payment, review and submit it yourself in {isWarrant ? 'eBuilding Standards' : 'ePlanning'}.</p>
+      <div className={actionRow}>
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'reveal'} onClick={() => void reveal()}>
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening browser…' : `Continue in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary" disabled={working === 'submit'} onClick={openSubmissionDialog}>Mark as submitted</button>}
-        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
-        <a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View run details</a>
+        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>}
+        {reviewLink}
+        {secondaryActions()}
       </div>
-      {notice && <p role="status" className="mt-3 text-sm font-medium text-amber-900">{notice}</p>}
+      {notice && <p role="status" className="app-tone-text mt-3 text-sm font-medium">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       {submissionDialog}
     </section>
   );
 
   if (failedStatuses.has(job.status)) return (
-    <section className="border-l-4 border-l-red-700 bg-red-50/75 p-4 sm:px-5" aria-live="assertive">
-      <div className="flex gap-3"><AlertTriangle className="mt-0.5 shrink-0 text-red-700" size={20} />
-        <div><p className="text-xs font-semibold uppercase tracking-wide text-red-800">Automation stopped</p><h3 className="mt-1 text-lg font-semibold text-ink">{failure.headline || 'The application could not be completed'}</h3></div>
-      </div>
-      <p className="mt-2 max-w-2xl text-sm leading-5 text-stone-700">{job.error || job.resultSummary || 'Architect Pro stopped before taking any further portal action.'}</p>
+    <section className="p-5" data-tone="danger" aria-live="assertive">
+      <StateHeading icon={AlertTriangle} eyebrow="Automation stopped" title={failure.headline || 'The application could not be completed'} />
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">{job.error || job.resultSummary || 'Architect Pro stopped before taking any further portal action.'}</p>
       <p className="mt-2 text-sm text-stone-600"><span className="font-semibold">Stage:</span> {failure.stageDescription || stageLabel(failure.stage)}</p>
       {failure.documentFailure?.filename && <p className="mt-2 break-words text-sm text-stone-700"><span className="font-semibold">Document:</span> {failure.documentFailure.filename}</p>}
       {failure.documentFailure?.portalMessage && <p className="mt-2 break-words text-sm text-stone-700"><span className="font-semibold">Portal message:</span> {failure.documentFailure.portalMessage}</p>}
       {failure.explanation && <p className="mt-2 text-sm font-medium text-stone-700">{failure.explanation}</p>}
       {failure.category === 'DOCUMENT_UPLOAD_FAILED' && !failure.documentFailure && <p className="mt-2 text-sm text-stone-700">This Agent did not save the failed filename or original portal message. The exact cause cannot be determined from this run record. Review Supporting Documents in the existing {isWarrant ? 'eBuilding Standards' : 'ePlanning'} draft before uploading again.</p>}
       <AutomationFailureRecovery metadata={failure} context={recoveryContext} applicationType={applicationType} retrying={working === 'retry'} onRetry={retry} detailsHref={currentDetailsHref} />
-      <a className="btn btn-secondary mt-3 gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
+      <div className="mt-3 flex flex-wrap items-center gap-2">{reviewLink}{secondaryActions(false)}</div>
       {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
       <details className="mt-3 text-xs text-stone-600"><summary className="cursor-pointer font-semibold">Technical details</summary><p className="mt-2">Job {currentJobId} · {job.status} · {failure.category ?? 'AUTOMATION_FAILED'} · {failure.stage ?? 'stage not reported'}</p></details>
@@ -357,43 +379,53 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   );
 
   if (queued) return (
-    <section className="p-4 sm:px-5" aria-live="polite">
-      <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Queued</p>
-      <h3 className="mt-1 font-semibold text-ink">{agentOnline === null ? 'Checking Agent connection' : agentOnline ? 'Waiting for Architect Pro Agent' : 'Agent disconnected'}</h3>
-      <p className="mt-1 text-sm text-stone-600">{agentOnline === null ? 'Connection status is temporarily unavailable. Your application remains queued.' : agentOnline ? 'Your Agent is connected and should start this application shortly.' : 'Reconnect Architect Pro Agent to continue this application.'}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+    <section className="p-5" data-tone={agentOnline === false ? 'warning' : 'info'} aria-live="polite">
+      <StateHeading icon={agentOnline === false ? Unplug : Clock3} eyebrow="Queued" title={agentOnline === null ? 'Checking Agent connection' : agentOnline ? 'Waiting for Architect Pro Agent' : 'Agent disconnected'} />
+      <p className="mt-2 text-sm leading-6 text-stone-600">{agentOnline === null ? 'Connection status is temporarily unavailable. Your application remains queued.' : agentOnline ? 'Your Agent is connected and should start this application shortly.' : 'Reconnect Architect Pro Agent to continue this application.'}</p>
+      <div className={actionRow}>
         {agentOnline === false && <a className="btn btn-primary" href="/settings/integrations#desktop-agent">Reconnect Agent</a>}
-        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
+        {reviewLink}
+        {secondaryActions()}
       </div>
     </section>
   );
 
   if (active || addressAction) return (
-    <section className="p-4 sm:px-5" aria-live="polite">
-      <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-moss">{addressAction ? 'Action required' : job.status === 'READY' ? 'Queued' : 'Agent running'}</p><h3 className="mt-1 font-semibold text-ink">{job.stale ? 'Agent connection lost' : addressAction ? 'Confirm the property address' : stageLabel(job.progressStage)}</h3><p className="mt-1 text-sm text-stone-600">{job.progressMessage || (job.status === 'READY' ? 'Waiting for your Agent to claim the application.' : 'Chrome is running securely in the background.')}</p></div><span className="text-sm font-semibold text-moss">{progress}%</span></div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full rounded-full bg-moss transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
+    <section className="p-5" data-tone={addressAction || job.stale ? 'warning' : 'info'} aria-live="polite">
+      <div className="flex items-start justify-between gap-4">
+        <StateHeading icon={addressAction ? MapPin : job.stale ? Unplug : LoaderCircle} spin={!addressAction && !job.stale} eyebrow={addressAction ? 'Action required' : job.status === 'READY' ? 'Queued' : 'Agent running'} title={job.stale ? 'Agent connection lost' : addressAction ? 'Confirm the property address' : stageLabel(job.progressStage)} />
+        <span className="app-tone-text text-sm font-semibold">{progress}%</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-stone-600">{job.progressMessage || (job.status === 'READY' ? 'Waiting for your Agent to claim the application.' : 'Chrome is running securely in the background.')}</p>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="app-tone-dot h-full rounded-full transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
       {visualEta && <p className="mt-2 text-xs text-stone-500" aria-live="off">{visualEta}</p>}
       {addressAction && <p className="mt-3 text-sm font-medium text-amber-800">Choose the correct address in the Agent. The browser remains paused safely.</p>}
-      <div className="mt-3 flex flex-wrap items-center gap-3"><a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a><a className="text-sm font-semibold text-stone-600 hover:text-ink" href={currentDetailsHref}>View details</a></div>
+      <div className={actionRow}>{reviewLink}{secondaryActions()}</div>
     </section>
   );
 
   if (job.status === 'READY') return (
-    <section className="p-4 sm:px-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-moss">Ready to run</p>
-      <h3 className="mt-1 font-semibold text-ink">Application prepared</h3>
-      <p className="mt-1 text-sm text-stone-600">{connectedAgent ? 'Your connected Agent can prepare this application in the background.' : 'Run the application, then open or connect the Desktop Agent.'}</p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+    <section className="p-5" data-tone="info">
+      <StateHeading icon={CircleCheck} eyebrow="Ready to run" title="Application prepared" />
+      <p className="mt-2 text-sm leading-6 text-stone-600">{connectedAgent ? 'Your connected Agent can prepare this application in the background.' : 'Run the application, then open or connect the Desktop Agent.'}</p>
+      <div className={actionRow}>
         <button type="button" className="btn btn-primary gap-2" disabled={working === 'run'} onClick={() => void run()}>{working === 'run' ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}{working === 'run' ? 'Queuing…' : 'Run application'}</button>
-        <a className="btn btn-secondary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>
+        {reviewLink}
+        {secondaryActions()}
       </div>
       {!connectedAgent && <details className="mt-3 text-sm text-stone-600"><summary className="cursor-pointer font-semibold">Desktop fallback</summary><p className="mt-2">Open the Agent manually if it is installed but not currently connected.</p></details>}
-      {notice && <p role="status" className="mt-3 text-sm font-medium text-moss">{notice}</p>}
+      {notice && <p role="status" className="app-tone-text mt-3 text-sm font-medium">{notice}</p>}
       {error && <p role="alert" className="mt-3 text-sm font-semibold text-red-800">{error}</p>}
     </section>
   );
 
   const finalTitle = job.status === 'CANCELLED' ? 'Automation cancelled' : 'Needs your attention';
   const finalMessage = job.status === 'CANCELLED' ? 'The previous run stopped safely. Review the application before starting again.' : job.resultSummary || 'Review the application before continuing.';
-  return <section className="p-4 sm:px-5"><p className="font-semibold text-ink">{finalTitle}</p><p className="mt-1 text-sm text-stone-600">{finalMessage}</p><a className="btn btn-primary mt-4 gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a></section>;
+  return (
+    <section className="p-5" data-tone={job.status === 'CANCELLED' ? 'neutral' : 'warning'}>
+      <StateHeading icon={job.status === 'CANCELLED' ? CircleSlash : AlertTriangle} eyebrow="Desktop automation" title={finalTitle} />
+      <p className="mt-2 text-sm leading-6 text-stone-600">{finalMessage}</p>
+      <div className={actionRow}><a className="btn btn-primary gap-2" href={manageHref}><FilePenLine size={16} aria-hidden="true" />Review application</a>{secondaryActions()}</div>
+    </section>
+  );
 }

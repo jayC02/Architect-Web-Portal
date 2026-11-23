@@ -7,7 +7,7 @@ import {
   ProjectStage,
   ProjectStatus,
 } from '@prisma/client';
-import { ArrowLeft, CalendarDays, ChevronDown, ClipboardList, FileText, Inbox, Pencil, Receipt, Upload, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, ClipboardList, FileText, Inbox, Layers, Pencil, Receipt, Upload, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
 import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
 import ProjectLinkedRecordEditor from '@/components/projects/ProjectLinkedRecordEditor';
@@ -270,6 +270,12 @@ const emailActivityLabel = (activity: typeof recentEmailActivity[number]) => {
   return `${humanizeEnum(activity.fieldName)} updated${display ? ` to ${humanizeEnum(display)}` : ''}`;
 };
 
+// Applications that have reached the council (or been decided).
+const submittedApplicationCount = [
+  latestPlanning && !['NOT_STARTED', 'DRAFTING'].includes(latestPlanning.status),
+  latestWarrant && !['NOT_STARTED', 'DRAFTING'].includes(latestWarrant.status),
+  latestWarrant && ['SUBMITTED', 'ACCEPTED', 'REJECTED'].includes(latestWarrant.completionCertificateStatus),
+].filter(Boolean).length;
 const buildingUseLabel = projectScreener.buildingUse === 'residential' ? 'Residential'
   : projectScreener.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed';
 
@@ -340,11 +346,20 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
   </section>
 
   <section id="applications" aria-labelledby="applications-heading" class="mt-10 scroll-mt-24">
-    <div class="mb-4">
-      <h2 id="applications-heading" class="text-xl font-semibold leading-7 text-ink">Applications</h2>
-      <p class="mt-1 text-sm text-stone-500">Planning, building warrant and completion for this project.</p>
+    <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss/10 text-moss" aria-hidden="true"><Layers size={20} strokeWidth={1.8} /></span>
+        <div>
+          <h2 id="applications-heading" class="text-xl font-semibold leading-7 text-ink">Applications</h2>
+          <p class="mt-0.5 text-sm text-stone-500">Planning, building warrant and completion for this project.</p>
+        </div>
+      </div>
+      <dl class="flex shrink-0 divide-x divide-stone-200 rounded-lg border border-stone-200 bg-white text-sm">
+        <div class="px-4 py-2"><dt class="text-xs font-medium text-stone-500">Submitted</dt><dd class="font-semibold text-ink">{submittedApplicationCount} of 3</dd></div>
+        <div class="px-4 py-2"><dt class="text-xs font-medium text-stone-500">Documents</dt><dd class="font-semibold text-ink">{documentCount}</dd></div>
+      </dl>
     </div>
-    <div class="divide-y divide-stone-200 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_28px_rgba(32,35,31,0.035)]">
+    <div class="grid gap-4">
       <ApplicationSummaryCard
         id="planning"
         title="Planning"

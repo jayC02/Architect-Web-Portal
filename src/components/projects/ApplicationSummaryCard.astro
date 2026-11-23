@@ -1,8 +1,7 @@
 ---
 import { AutomationJobType } from '@prisma/client';
-import { BadgeCheck, Building2, Map as MapIcon } from 'lucide-react';
+import { BadgeCheck, Building2, FileText, Map as MapIcon } from 'lucide-react';
 import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
-import AutomationRunResetButton from '@/components/automation/AutomationRunResetButton';
 import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
 import type { DesktopAutomationJob } from '@/server/services/desktop-automation-status.service';
 
@@ -53,38 +52,41 @@ const jobType = applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_P
     : AutomationJobType.BUILDING_WARRANT;
 const applicationLabel = applicationKind === 'PLANNING' ? 'Householder application'
   : applicationKind === 'COMPLETION_CERTIFICATE' ? 'Completion Certificate' : 'Building Warrant application';
+const resetType = applicationKind === 'PLANNING' ? 'HOUSEHOLDER_PLANNING' as const
+  : applicationKind === 'BUILDING_WARRANT' ? 'BUILDING_WARRANT' as const : null;
+const reset = applicationId && resetType ? { applicationId, type: resetType } : null;
 const Icon = applicationKind === 'PLANNING' ? MapIcon : applicationKind === 'COMPLETION_CERTIFICATE' ? BadgeCheck : Building2;
 ---
-<section id={id} class="grid min-w-0 scroll-mt-24 [overflow-wrap:anywhere] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-  <div class="flex min-w-0 flex-col gap-5 p-4 sm:p-5">
+<section id={id} class="app-card grid min-w-0 scroll-mt-24 rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(32,35,31,0.04),0_10px_28px_rgba(32,35,31,0.045)] [overflow-wrap:anywhere] lg:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
+  <div class="flex min-w-0 flex-col gap-6 p-5 sm:p-6">
     <header class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-      <div class="flex min-w-0 items-start gap-3">
-        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-moss/10 text-moss" aria-hidden="true"><Icon size={18} strokeWidth={1.8} /></span>
+      <div class="flex min-w-0 items-start gap-3.5">
+        <span class="app-tone-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-lg" aria-hidden="true"><Icon size={21} strokeWidth={1.7} /></span>
         <div class="min-w-0">
-          <h3 class="text-base font-semibold leading-6 text-ink">{title}</h3>
+          <h3 class="text-lg font-semibold leading-6 text-ink">{title}</h3>
           <p class="mt-0.5 text-sm leading-5 text-stone-500">{subtitle}</p>
         </div>
       </div>
-      <span class="inline-flex shrink-0 items-center gap-2 rounded-md bg-moss/5 px-2.5 py-1 text-xs font-semibold text-stone-700"><span class:list={['h-1.5 w-1.5 rounded-full', available ? 'bg-moss' : 'bg-stone-400']} aria-hidden="true"></span>{status}</span>
+      <span class="app-tone-pill inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"><span class="app-tone-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>{status}</span>
     </header>
 
-    <dl class="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-      <div class="min-w-0">
+    <dl class="grid grid-cols-3 divide-x divide-stone-200">
+      <div class="min-w-0 pr-3 sm:pr-4">
         <dt class="label">Application type</dt>
-        <dd class="break-words text-sm font-medium leading-5 text-ink">{applicationType}</dd>
+        <dd class="break-words text-sm font-semibold leading-5 text-ink">{applicationType}</dd>
       </div>
-      <div class="min-w-0">
+      <div class="min-w-0 px-3 sm:px-4">
         <dt class="label">Reference</dt>
-        <dd class:list={['break-words text-sm font-medium leading-5', reference === 'Not assigned' ? 'text-stone-500' : 'text-ink']}>{reference}</dd>
+        <dd class:list={['break-words text-sm leading-5', reference === 'Not assigned' ? 'text-stone-500' : 'font-semibold text-ink']}>{reference}</dd>
       </div>
-      <div class="min-w-0">
+      <div class="min-w-0 pl-3 sm:pl-4">
         <dt class="label">Documents</dt>
-        <dd class="text-sm font-medium leading-5 text-ink">{documentCount}</dd>
+        <dd class="flex items-center gap-1.5 text-sm font-semibold leading-5 text-ink"><FileText size={15} className="shrink-0 text-stone-400" aria-hidden="true" />{documentCount}</dd>
       </div>
     </dl>
   </div>
 
-  <footer class="min-w-0 border-t border-stone-200 bg-stone-50/60 lg:border-l lg:border-t-0">
+  <footer class="app-card-panel min-w-0 rounded-b-[11px] border-t border-stone-200/80 lg:rounded-bl-none lg:rounded-r-[11px] lg:border-l lg:border-t-0">
     <DesktopAutomationStatus
       projectId={projectId}
       type={jobType}
@@ -98,7 +100,19 @@ const Icon = applicationKind === 'PLANNING' ? MapIcon : applicationKind === 'COM
       missingCount={desktopMissingCount}
       connectedAgent={connectedAgent}
       recoveryContext={recoveryContext}
+      reset={reset}
     />
-    {applicationId && applicationKind !== 'COMPLETION_CERTIFICATE' && <AutomationRunResetButton client:load applicationId={applicationId} type={applicationKind === 'PLANNING' ? 'HOUSEHOLDER_PLANNING' : 'BUILDING_WARRANT'} currentJobId={desktopJob?.id ?? null} />}
   </footer>
 </section>
+
+<script>
+  // Close any open "more actions" menu on an outside click or Escape.
+  const openMenus = () => [...document.querySelectorAll('details[data-more-menu][open]')];
+  document.addEventListener('click', (event) => {
+    openMenus().forEach((menu) => { if (!menu.contains(event.target as Node)) menu.removeAttribute('open'); });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    openMenus().forEach((menu) => { menu.removeAttribute('open'); menu.querySelector('summary')?.focus(); });
+  });
+</script>

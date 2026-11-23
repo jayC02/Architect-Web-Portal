@@ -49,8 +49,8 @@ export default function AutomationRunResetButton({ applicationId, type, currentJ
     }
   };
 
-  return <div className="border-t border-stone-200 px-4 py-3 sm:px-5">
-    <button ref={triggerRef} type="button" className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-stone-600 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" disabled={working} onClick={() => dialogRef.current?.showModal()}>
+  return <>
+    <button ref={triggerRef} type="button" className="btn btn-secondary gap-2" disabled={working} onClick={() => dialogRef.current?.showModal()}>
       <RotateCcw size={15} aria-hidden="true" />Reset {label}
     </button>
     <dialog ref={dialogRef} aria-labelledby={headingId} onCancel={event => { event.preventDefault(); close(); }} className="settings-dialog m-auto w-[min(34rem,calc(100%-2rem))] rounded-xl bg-white p-0 text-ink shadow-2xl backdrop:bg-ink/40">
@@ -70,5 +70,5 @@ export default function AutomationRunResetButton({ applicationId, type, currentJ
         </div>
       </div>
     </dialog>
-  </div>;
+  </>;
 }
