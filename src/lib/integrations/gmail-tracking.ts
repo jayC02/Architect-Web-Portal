@@ -407,6 +407,12 @@ export const extractGmailUpdates = (email: Pick<ParsedGmailMessage, 'sender' | '
   const planningContext = /planning|householder|eplanning/.test(lower);
   const warrantContext = /building warrant|warrant application|edevelopment/.test(lower);
   const receivedDate = email.sentAt.toISOString();
+  // Completion certificate receipts and rejections arrive through the same
+  // eBuilding Standards channel as warrant emails; read them as the certificate's
+  // own status so they never move the warrant itself.
+  const completionSubmitted = /\bcompletion certificate\b.{0,80}\b(has been submitted|was submitted|submitted|received)\b|\b(we have received|receipt of|received)\b.{0,80}\bcompletion certificate\b/.test(lower);
+  const completionRejected = /\bcompletion certificate\b.{0,80}\b(rejected|refused|not been accepted|not accepted)\b/.test(lower);
+  const completionAccepted = /\bcompletion certificate\b.{0,80}\b(accepted|approved)\b/.test(lower) && !completionRejected;
 
   if (planningContext && /\b(validated|validation complete|application is valid)\b/.test(lower)) {
     push({ updateType: 'PLANNING_APPLICATION', fieldName: 'status', value: 'VALIDATED', confidence: strong, reason: 'The email explicitly states that the planning application was validated.' });
@@ -427,7 +433,7 @@ export const extractGmailUpdates = (email: Pick<ParsedGmailMessage, 'sender' | '
     push({ updateType: 'PLANNING_APPLICATION', fieldName: 'decisionDate', value: receivedDate, confidence: official ? 0.92 : 0.78, reason: 'Planning decision email received date.' });
   }
 
-  if (warrantContext && /\b(submitted|application received|we have received)\b/.test(lower)) {
+  if (warrantContext && !completionSubmitted && /\b(submitted|application received|we have received)\b/.test(lower)) {
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'status', value: 'SUBMITTED', confidence: strong, reason: 'The email explicitly confirms building warrant submission or receipt.' });
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'submissionDate', value: receivedDate, confidence: official ? 0.92 : 0.78, reason: 'Submission confirmation email received date.' });
   }
@@ -438,11 +444,15 @@ export const extractGmailUpdates = (email: Pick<ParsedGmailMessage, 'sender' | '
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'status', value: 'GRANTED', confidence: strong, reason: 'The email explicitly confirms that the building warrant was granted.' });
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'grantedDate', value: receivedDate, confidence: official ? 0.92 : 0.78, reason: 'Building warrant grant email received date.' });
   }
-  if (warrantContext && /\b(rejected|application refused)\b/.test(lower)) {
+  if (warrantContext && !completionRejected && /\b(rejected|application refused)\b/.test(lower)) {
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'status', value: 'REJECTED', confidence: strong, reason: 'The email explicitly confirms warrant rejection.' });
   }
-  if (warrantContext && /\b(completion certificate).{0,80}\b(accepted|approved)\b/.test(lower)) {
+  if (completionAccepted) {
     push({ updateType: 'BUILDING_WARRANT', fieldName: 'completionCertificateStatus', value: 'ACCEPTED', confidence: strong, reason: 'The email explicitly confirms acceptance of the completion certificate.' });
+  } else if (completionRejected) {
+    push({ updateType: 'BUILDING_WARRANT', fieldName: 'completionCertificateStatus', value: 'REJECTED', confidence: strong, reason: 'The email explicitly states that the completion certificate was rejected.' });
+  } else if (completionSubmitted) {
+    push({ updateType: 'BUILDING_WARRANT', fieldName: 'completionCertificateStatus', value: 'SUBMITTED', confidence: strong, reason: 'The email explicitly confirms submission or receipt of the completion certificate.' });
   }
 
   const decisionTarget = firstDateNear(combined, /(?:decision|determination)\s+(?:target|due|date)|target\s+date/i);

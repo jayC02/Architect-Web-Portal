@@ -63,7 +63,31 @@ assert.match(status, /available once the building warrant has been submitted/i);
 const live = readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
 assert.match(live, /'COMPLETION_CERTIFICATE'/, 'the live card follows completion runs like the others');
 assert.match(live, /if \(isCompletion\) \{ window\.location\.assign\(manageHref\); return; \}/, 'a completion certificate is sent again from its own page');
-assert.match(live, /!isCompletion && <button ref=\{markSubmittedButtonRef\}/, 'no Mark as submitted for a completion certificate');
+assert.doesNotMatch(live, /!isCompletion && <button ref=\{markSubmittedButtonRef\}/, 'a prepared completion certificate can be marked as submitted');
+assert.match(live, /isCompletion\s*\?\s*`\/api\/building-warrant\/\$\{applicationId\}\/completion-certificate\/mark-submitted`/, 'completion submission is recorded on its own route, never as the warrant submission');
+const markSubmitted = readFileSync('src/pages/api/building-warrant/[id]/completion-certificate/mark-submitted.ts', 'utf8');
+assert.match(markSubmitted, /assertAllowedOrigin[\s\S]*requireOrganisation[\s\S]*organisationId: organisation\.id/, 'the completion submission route is origin-checked and organisation scoped');
+
+// Confirming moves the certificate forward only, and leaves a decided one alone.
+const { confirmCompletionCertificateSubmitted } = await import('../src/server/services/application-lifecycle.service');
+const fakeWarrants = (status: string) => {
+  const row = { id: 'w1', projectId: 'p1', organisationId: 'org', completionCertificateStatus: status };
+  return { row, database: { buildingWarrantApplication: {
+    findFirst: async ({ where }: any) => (where.id === row.id && where.organisationId === row.organisationId ? row : null),
+    updateMany: async ({ where, data }: any) => {
+      if (where.organisationId !== row.organisationId || !where.completionCertificateStatus.in.includes(row.completionCertificateStatus)) return { count: 0 };
+      Object.assign(row, data); return { count: 1 };
+    },
+    findUniqueOrThrow: async () => row,
+  } } as any };
+};
+const drafting = fakeWarrants('DRAFTING');
+assert.equal((await confirmCompletionCertificateSubmitted({ organisationId: 'org', buildingWarrantApplicationId: 'w1', actorUserId: 'u' }, drafting.database)).changed, true);
+assert.equal(drafting.row.completionCertificateStatus, 'SUBMITTED');
+const accepted = fakeWarrants('ACCEPTED');
+assert.equal((await confirmCompletionCertificateSubmitted({ organisationId: 'org', buildingWarrantApplicationId: 'w1', actorUserId: 'u' }, accepted.database)).changed, false);
+assert.equal(accepted.row.completionCertificateStatus, 'ACCEPTED', 'an accepted certificate is not moved back');
+await assert.rejects(confirmCompletionCertificateSubmitted({ organisationId: 'other', buildingWarrantApplicationId: 'w1', actorUserId: 'u' }, fakeWarrants('DRAFTING').database), /not found/, 'another organisation cannot mark it submitted');
 
 // Sending it returns to the project, where the tile shows it queued.
 const run = readFileSync('src/pages/api/building-warrant/[id]/completion-certificate/run.ts', 'utf8');

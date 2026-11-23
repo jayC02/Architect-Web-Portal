@@ -1,6 +1,7 @@
 import {
   AutomationJobStatus,
   AutomationJobType,
+  CompletionCertificateStatus,
   LifecycleEventSource,
   LifecycleEventType,
   PlanningStatus,
@@ -331,6 +332,45 @@ export const confirmBuildingWarrantSubmittedInTransaction = async (
       source: LifecycleEventSource.APPLICATION_STATUS,
     });
     return { application, changed: true, lifecycleEventIds: [event.id] };
+};
+
+const submissionEligibleCompletionStatuses = [
+  CompletionCertificateStatus.NOT_REQUIRED,
+  CompletionCertificateStatus.NOT_STARTED,
+  CompletionCertificateStatus.DRAFTING,
+] as const;
+
+/**
+ * Record that the completion certificate for a warrant was submitted in
+ * eBuilding Standards. Only moves forward: an accepted or rejected
+ * certificate is left as it is.
+ */
+export const confirmCompletionCertificateSubmitted = async (
+  input: {
+    organisationId: string;
+    buildingWarrantApplicationId: string;
+    actorUserId: string;
+  },
+  database: PrismaClient = prisma,
+) => {
+  const existing = await database.buildingWarrantApplication.findFirst({
+    where: { id: input.buildingWarrantApplicationId, organisationId: input.organisationId },
+    select: { id: true, projectId: true, completionCertificateStatus: true },
+  });
+  if (!existing) throw new HttpError(404, 'Building Warrant application not found.');
+  const updated = await database.buildingWarrantApplication.updateMany({
+    where: {
+      id: existing.id,
+      organisationId: input.organisationId,
+      completionCertificateStatus: { in: [...submissionEligibleCompletionStatuses] },
+    },
+    data: { completionCertificateStatus: CompletionCertificateStatus.SUBMITTED },
+  });
+  const application = await database.buildingWarrantApplication.findUniqueOrThrow({
+    where: { id: existing.id },
+    select: { id: true, projectId: true, completionCertificateStatus: true },
+  });
+  return { application, changed: updated.count > 0 };
 };
 
 export const recordAutomationReadinessTransition = async (

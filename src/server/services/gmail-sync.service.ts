@@ -1,6 +1,7 @@
 import {
   CalendarConnectionStatus,
   CalendarProvider,
+  CompletionCertificateStatus,
   GmailMatchStatus,
   GmailPlanningClassification,
   GmailProcessingStatus,
@@ -99,6 +100,12 @@ const loadProjectCandidates = async (organisationId: string) => {
             WarrantStatus.SUBMITTED,
             WarrantStatus.IN_REVIEW,
             WarrantStatus.FURTHER_INFORMATION_REQUESTED,
+          ] } } } },
+          // Completion certificates are sent after the warrant is granted, so keep
+          // watching those projects until the certificate is accepted or rejected.
+          { warrantApplications: { some: { completionCertificateStatus: { in: [
+            CompletionCertificateStatus.DRAFTING,
+            CompletionCertificateStatus.SUBMITTED,
           ] } } } },
         ],
       },
@@ -399,6 +406,12 @@ const persistCandidateMessage = async (
       match.planningApplicationId,
       match.buildingWarrantApplicationId,
     );
+    // A receipt read late must not move a decided certificate back to submitted.
+    if (
+      update.fieldName === 'completionCertificateStatus'
+      && update.value === CompletionCertificateStatus.SUBMITTED
+      && ([CompletionCertificateStatus.SUBMITTED, CompletionCertificateStatus.ACCEPTED, CompletionCertificateStatus.REJECTED] as unknown[]).includes(existingValue)
+    ) continue;
     if (updateType === GmailUpdateType.DEADLINE) {
       const sourceKey = `gmail:${parsed.gmailThreadId}:${candidate.id}:${update.fieldName}`;
       existingValue = (await prisma.deadline.findUnique({

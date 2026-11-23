@@ -113,6 +113,24 @@ assert.ok(updates.some((update) => update.fieldName === 'status' && update.value
 assert.ok(updates.some((update) => update.fieldName === 'decisionTargetDate' && update.value === '2026-08-14T12:00:00.000Z'));
 assert.ok(updates.some((update) => update.updateType === 'DEADLINE' && update.deadline?.type === 'PLANNING_DECISION'));
 
+// Completion certificate emails update the certificate, never the warrant itself.
+const completionEmail = (subject: string, text: string) => extractGmailUpdates({
+  sender: 'noreply@edevelopment.scot', subject, text, sentAt: new Date('2026-11-20T09:00:00Z'),
+});
+const completionReceipt = completionEmail('Building warrant 26/00456/BW completion certificate received', 'We have received your completion certificate submission for building warrant 26/00456/BW.');
+assert.ok(completionReceipt.some((update) => update.fieldName === 'completionCertificateStatus' && update.value === 'SUBMITTED'), 'a completion receipt marks the certificate submitted');
+assert.ok(!completionReceipt.some((update) => update.fieldName === 'status' && update.value === 'SUBMITTED'), 'a completion receipt does not re-submit the warrant');
+const completionAccepted = completionEmail('Completion certificate accepted', 'The completion certificate for building warrant 26/00456/BW has been accepted.');
+assert.ok(completionAccepted.some((update) => update.fieldName === 'completionCertificateStatus' && update.value === 'ACCEPTED'));
+const completionRejected = completionEmail('Completion certificate rejected', 'The completion certificate for building warrant 26/00456/BW has been rejected.');
+assert.ok(completionRejected.some((update) => update.fieldName === 'completionCertificateStatus' && update.value === 'REJECTED'));
+assert.ok(!completionRejected.some((update) => update.fieldName === 'status' && update.value === 'REJECTED'), 'a rejected certificate does not reject the warrant');
+const warrantReceipt = completionEmail('Building warrant application received', 'We have received your building warrant application 26/00456/BW.');
+assert.ok(warrantReceipt.some((update) => update.fieldName === 'status' && update.value === 'SUBMITTED'), 'ordinary warrant receipts still mark the warrant submitted');
+assert.ok(!warrantReceipt.some((update) => update.fieldName === 'completionCertificateStatus'));
+const gmailSyncSource = fs.readFileSync('src/server/services/gmail-sync.service.ts', 'utf8');
+assert.match(gmailSyncSource, /completionCertificateStatus: \{ in: \[\s*CompletionCertificateStatus\.DRAFTING,\s*CompletionCertificateStatus\.SUBMITTED/, 'projects with a certificate in progress stay in email matching after the warrant is granted');
+
 const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
 const syncRoute = fs.readFileSync('src/pages/api/integrations/gmail/sync.ts', 'utf8');
 const linkRoute = fs.readFileSync('src/pages/api/gmail/emails/[id].ts', 'utf8');

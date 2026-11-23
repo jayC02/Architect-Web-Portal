@@ -236,9 +236,12 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     setWorking('submit');
     setError('');
     try {
-      const endpoint = isWarrant
-        ? `/api/building-warrant/${applicationId}/mark-submitted`
-        : `/api/planning/${applicationId}/mark-submitted`;
+      // A completion certificate is recorded on its warrant, apart from the warrant's own submission.
+      const endpoint = isCompletion
+        ? `/api/building-warrant/${applicationId}/completion-certificate/mark-submitted`
+        : isWarrant
+          ? `/api/building-warrant/${applicationId}/mark-submitted`
+          : `/api/planning/${applicationId}/mark-submitted`;
       await apiRequest(endpoint, { method: 'POST', json: {} });
       submissionDialogRef.current?.close();
       window.location.reload();
@@ -271,7 +274,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           <div>
             <h2 id={`confirm-submission-${applicationId}`} className="text-xl font-semibold">Confirm submission</h2>
             <p className="mt-2 max-w-lg text-sm leading-6 text-stone-600">
-              Confirm that you have submitted this application through {isWarrant ? 'eBuilding Standards' : 'ePlanning'}. Architect Pro will record it as submitted and begin tracking the council stage.
+              Confirm that you have submitted this {isCompletion ? 'completion certificate' : 'application'} through {isWarrant ? 'eBuilding Standards' : 'ePlanning'}. Architect Pro will record it as submitted and begin tracking the council stage.
             </p>
           </div>
           <button type="button" onClick={closeSubmissionDialog} disabled={working === 'submit'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-stone-500 hover:bg-stone-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" aria-label="Cancel submission confirmation">
@@ -323,7 +326,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening…' : `Review in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>}
+        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>
         {reviewLink}
         {secondaryActions()}
       </div>
@@ -351,7 +354,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
           {working === 'reveal' ? <LoaderCircle size={16} className="animate-spin" /> : <ExternalLink size={16} />}
           {working === 'reveal' ? 'Opening browser…' : `Continue in ${isWarrant ? 'eBuilding Standards' : 'ePlanning'}`}
         </button>
-        {!isCompletion && <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>}
+        <button ref={markSubmittedButtonRef} type="button" className="btn btn-secondary gap-2" disabled={working === 'submit'} onClick={openSubmissionDialog}><Send size={15} aria-hidden="true" />Mark as submitted</button>
         {reviewLink}
         {secondaryActions()}
       </div>
