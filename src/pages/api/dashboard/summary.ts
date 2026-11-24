@@ -13,6 +13,8 @@ import { withPerf } from '@/lib/utils/perf';
 import { withErrorHandling } from '@/lib/utils/handlers';
 import { jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
+import { buildDashboardActivity } from '@/lib/dashboard/activity';
+import { loadFinanceDashboard } from '@/lib/xero/finance';
 
 const pipelineDefinitions: Array<{ key: string; label: string; stages: ProjectStage[] }> = [
   { key: 'lead', label: 'Lead', stages: [ProjectStage.LEAD] },
@@ -30,7 +32,8 @@ const activeProjectWhere = (organisationId: string) => ({
 
 const toTime = (value: unknown) => (value ? new Date(String(value)).getTime() : Number.MAX_SAFE_INTEGER);
 
-export const getDashboardSummary = async (orgId: string, searchParams: URLSearchParams, now = new Date()) => {
+// Finance figures come from Xero and are only included for owners and admins.
+export const getDashboardSummary = async (orgId: string, searchParams: URLSearchParams, now = new Date(), options: { includeFinance?: boolean } = {}) => {
     const range = Number(searchParams.get('deadlineRange') ?? 14);
     const deadlineRange = [7, 14, 30].includes(range) ? range : 14;
     const { firstDay, lastDay, queryEnd: deadlineEnd } = dashboardDeadlineWindow(now, deadlineRange);
@@ -77,7 +80,7 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
         ) warrant_row), '[]'::jsonb) AS "warrantsAwaitingAction"
     `);
 
-    const [documentsNeedingReview, automationJobs, preparedReviewActions, pipelineProjects, documentStatusCounts, activeProjects, documentReviewProjects] = await Promise.all([
+    const [documentsNeedingReview, automationJobs, preparedReviewActions, pipelineProjects, documentStatusCounts, activeProjects, documentReviewProjects, planningActivity, warrantActivity, finance] = await Promise.all([
       prisma.projectDocument.count({ where: { organisationId: orgId, status: DocumentStatus.IN_REVIEW } }),
       prisma.automationJob.findMany({ where: { organisationId: orgId, project: activeProjectWhere(orgId) }, select: {
         id: true, projectId: true, type: true, status: true, dataSnapshot: true, createdAt: true,
@@ -127,7 +130,14 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
         orderBy: { updatedAt: 'desc' },
         select: { id: true, name: true, _count: { select: { documents: { where: { status: DocumentStatus.IN_REVIEW } } } } },
       }),
+      prisma.planningApplication.findMany({ where: { organisationId: orgId }, select: { status: true, submissionDate: true, decisionDate: true } }),
+      prisma.buildingWarrantApplication.findMany({ where: { organisationId: orgId }, select: { status: true, submissionDate: true, grantedDate: true } }),
+      options.includeFinance ? loadFinanceDashboard(orgId, now) : Promise.resolve(null),
     ]);
+    const activity = buildDashboardActivity({
+      planning: planningActivity,
+      warrant: warrantActivity.map(({ grantedDate, ...application }) => ({ ...application, decisionDate: grantedDate })),
+    }, now);
 
     const latestJobs = currentDashboardJobs(automationJobs.map(job => {
       const applicationId = automationJobApplicationId(job);
@@ -328,6 +338,20 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
       completedProjectSummaries: projectSummaries.filter(project => project.status === ProjectStatus.COMPLETED),
       completedProjects: pipelineProjects.filter(project => project.status === ProjectStatus.COMPLETED).length,
       needsAttention,
+      activity,
+      finance: finance ? {
+        currency: finance.connection.baseCurrency,
+        connectedTo: finance.connection.xeroTenantName,
+        lastSyncedAt: finance.connection.lastSyncedAt,
+        metrics: {
+          invoicedThisMonth: finance.metrics.invoicedThisMonth,
+          paidThisMonth: finance.metrics.paidThisMonth,
+          outstanding: finance.metrics.outstanding,
+          overdue: finance.metrics.overdue,
+        },
+        monthly: finance.monthly,
+        overdueInvoices: finance.debtors.filter(invoice => invoice.daysOverdue > 0).length,
+      } : null,
       deadlineRange,
       generatedAt: now.toISOString(),
     };
@@ -335,6 +359,6 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
-    const { organisation } = await requireOrganisation(context);
-    return jsonResponse(200, await getDashboardSummary(organisation.id, new URL(context.request.url).searchParams));
+    const { organisation, membership } = await requireOrganisation(context);
+    return jsonResponse(200, await getDashboardSummary(organisation.id, new URL(context.request.url).searchParams, new Date(), { includeFinance: ['OWNER', 'ADMIN'].includes(membership.role) }));
   }, context);

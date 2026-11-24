@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, CircleAlert, FileCheck2, FolderKanban, Plus, Search, X, Zap } from 'lucide-react';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { ArrowRight, ArrowUpRight, CalendarDays, CheckCheck, ChevronLeft, ChevronRight, CircleAlert, FileCheck2, FolderKanban, PoundSterling, Plus, ReceiptText, Search, Send, X } from 'lucide-react';
 import { apiRequest } from '@/lib/api/http';
 import { dashboardDayKey, dashboardPhase } from '@/lib/dashboard/overview';
 import { Badge, type BadgeColor } from '@/components/tailadmin/Badge';
+import { ApprovalGauge, MetricCard, StatisticsChart, SubmissionsChart, formatMoney, moneyIn, type DashboardFinance } from '@/components/dashboard/DashboardCharts';
+import type { DashboardActivity } from '@/lib/dashboard/activity';
 
 // Layout, cards, table and badges follow TailAdmin's dashboard (MIT):
 // https://github.com/TailAdmin/free-react-tailwind-admin-dashboard
@@ -23,6 +25,8 @@ type Summary = {
   activeProjectSummaries: Project[]; completedProjectSummaries?: Project[]; needsAttention: Attention[]; upcomingDeadlines: Deadline[]; pipeline: PipelineStage[];
   documentOverview: { total: number; reviewed: number; needsReview: number; statuses?: { status: string; count: number }[]; projects?: { id: string; name: string; count: number }[] };
   automationOverview?: { ready: number; queued: number; running: number; connectionLost: number; needsAttention: number };
+  activity?: DashboardActivity;
+  finance?: DashboardFinance | null;
 };
 type Props = { initialRange?: number; initialPhase?: string };
 
@@ -45,55 +49,41 @@ const outlineButton = 'inline-flex items-center justify-center gap-2 rounded-lg 
 const primaryButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600';
 const tab = (active: boolean) => `inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium ${active ? 'bg-white text-gray-900 shadow-theme-xs' : 'text-gray-500 hover:text-gray-900'}`;
 
-function MetricCard({ icon, title, value, href, badge }: { icon: ReactNode; title: string; value: number; href: string; badge?: ReactNode }) {
-  return <a href={href} className={`${card} block p-5 transition hover:border-gray-300 hover:shadow-theme-sm md:p-6`}>
-    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-800 [&>svg]:size-6">{icon}</div>
-    <div className="mt-5 flex items-end justify-between gap-3">
-      <div>
-        <span className="text-sm text-gray-500">{title}</span>
-        <h4 className="mt-2 text-title-md font-bold text-gray-800">{number(value)}</h4>
-      </div>
-      {badge}
-    </div>
-  </a>;
-}
+const percentChange = (current: number, previous: number) => previous ? Math.round(((current - previous) / previous) * 1000) / 10 : null;
 
-function SummaryStrip({ data }: { data: Summary }) {
+function Metrics({ data }: { data: Summary }) {
+  const activity = data.activity;
+  const finance = data.finance;
   const today = dashboardDayKey(new Date());
-  const overdue = data.upcomingDeadlines.filter(deadline => dashboardDayKey(deadline.dueDate) < today).length;
-  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4">
-    <MetricCard icon={<FolderKanban />} title="Active projects" value={data.activeProjects} href="#active-projects"
-      badge={data.needsAttention.length ? <Badge color="warning">{data.activeProjectSummaries.filter(project => project.needsAttention).length} need you</Badge> : <Badge color="success">All on track</Badge>} />
-    <MetricCard icon={<CalendarDays />} title={`Deadlines, next ${data.deadlineRange} days`} value={data.upcomingDeadlineCount} href="#upcoming-deadlines"
-      badge={overdue ? <Badge color="error">{overdue} overdue</Badge> : <Badge color="success">None overdue</Badge>} />
-    <MetricCard icon={<FileCheck2 />} title="Documents to review" value={data.documentsNeedingReview} href="#document-review"
-      badge={<Badge color={data.documentsNeedingReview ? 'warning' : 'success'}>{data.documentOverview.reviewed} of {data.documentOverview.total} approved</Badge>} />
-    <MetricCard icon={<Zap />} title="Automation ready" value={data.automationJobsReady} href="#automation-status"
-      badge={<Badge color={data.automationJobsReady ? 'primary' : 'gray'}>{data.automationJobsReady ? 'Ready to queue' : 'Nothing queued'}</Badge>} />
-  </div>;
-}
-
-function ProjectPipeline({ stages, phase, onPhaseChange }: { stages: PipelineStage[]; phase: string; onPhaseChange: (phase: string) => void }) {
-  const total = stages.reduce((sum, stage) => sum + stage.count, 0);
-  return <section className={`${card} p-5 md:p-6`} aria-labelledby="pipeline-heading">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div><h3 id="pipeline-heading" className={cardTitle}>Project pipeline</h3><p className="mt-1 text-sm text-gray-500">{number(total)} non-archived projects by stage. Choose a stage to filter the list.</p></div>
-    </div>
-    <div className="mt-5 flex h-2.5 w-full gap-1 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
-      {stages.filter(stage => stage.count > 0).map(stage => <span key={stage.key} className={`h-full rounded-full ${phases.find(item => item.key === stage.key)?.bar ?? 'bg-gray-300'}`} style={{ flex: stage.count }} />)}
-    </div>
-    <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="Filter projects by stage">
-      {phases.map(item => {
-        const count = stages.find(stage => stage.key === item.key)?.count ?? 0;
-        const active = phase === item.key;
-        return <button key={item.key} type="button" aria-pressed={active} onClick={() => onPhaseChange(active ? 'all' : item.key)}
-          className={`rounded-xl border px-3 py-2.5 text-left transition ${active ? 'border-brand-300 bg-brand-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}>
-          <span className="flex items-center gap-2 text-xs font-medium text-gray-500"><span className={`h-2 w-2 rounded-full ${item.bar}`} aria-hidden="true" />{item.label}</span>
-          <span className="mt-1 block text-title-sm font-semibold text-gray-800">{number(count)}</span>
-        </button>;
-      })}
-    </div>
-  </section>;
+  const overdueDeadlines = data.upcomingDeadlines.filter(deadline => dashboardDayKey(deadline.dueDate) < today).length;
+  const waiting = data.activeProjectSummaries.filter(project => project.needsAttention).length;
+  const cards = [
+    <MetricCard key="projects" icon={<FolderKanban />} title="Active projects" value={number(data.activeProjects)} href="#active-projects"
+      note={waiting ? <Badge color="warning">{waiting} need you</Badge> : <Badge color="success">All on track</Badge>} />,
+    <MetricCard key="submitted" icon={<Send />} title="Submitted this month" value={number(activity?.submittedThisMonth ?? 0)}
+      change={activity ? percentChange(activity.submittedThisMonth, activity.submittedLastMonth) : null}
+      note={<Badge color="gray">{activity?.submittedLastMonth ?? 0} last month</Badge>} />,
+  ];
+  if (finance) {
+    const invoiced = moneyIn(finance, finance.metrics.invoicedThisMonth);
+    const previous = finance.monthly.length > 1 ? moneyIn(finance, finance.monthly[finance.monthly.length - 2].invoiced).value : 0;
+    const outstanding = moneyIn(finance, finance.metrics.outstanding);
+    const overdue = moneyIn(finance, finance.metrics.overdue);
+    cards.push(
+      <MetricCard key="invoiced" icon={<ReceiptText />} title="Invoiced this month" value={formatMoney(invoiced.value, invoiced.currency)} href="/finance"
+        change={percentChange(invoiced.value, previous)} note={<Badge color="gray">From Xero</Badge>} />,
+      <MetricCard key="outstanding" icon={<PoundSterling />} title="Outstanding" value={formatMoney(outstanding.value, outstanding.currency)} href="/finance"
+        note={overdue.value > 0 ? <Badge color="error">{formatMoney(overdue.value, overdue.currency, true)} overdue</Badge> : <Badge color="success">None overdue</Badge>} />,
+    );
+  } else {
+    cards.push(
+      <MetricCard key="deadlines" icon={<CalendarDays />} title={`Deadlines, next ${data.deadlineRange} days`} value={number(data.upcomingDeadlineCount)} href="#upcoming-deadlines"
+        note={overdueDeadlines ? <Badge color="error">{overdueDeadlines} overdue</Badge> : <Badge color="success">None overdue</Badge>} />,
+      <MetricCard key="documents" icon={<FileCheck2 />} title="Documents to review" value={number(data.documentsNeedingReview)} href="#document-review"
+        note={<Badge color={data.documentsNeedingReview ? 'warning' : 'success'}>{data.documentOverview.reviewed} of {data.documentOverview.total} approved</Badge>} />,
+    );
+  }
+  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6">{cards}</div>;
 }
 
 function ProjectRegister({ projects, completedProjects, phase, onPhaseChange }: { projects: Project[]; completedProjects: Project[]; phase: string; onPhaseChange: (phase: string) => void }) {
@@ -124,6 +114,11 @@ function ProjectRegister({ projects, completedProjects, phase, onPhaseChange }: 
         <button type="button" aria-pressed={filter === 'all'} className={tab(filter === 'all')} onClick={() => { setFilter('all'); onPhaseChange('all'); }}>All active</button>
         <button type="button" aria-pressed={filter === 'attention'} className={tab(filter === 'attention')} onClick={() => setFilter('attention')}>Needs attention <Badge size="sm" color="warning">{attentionCount}</Badge></button>
       </div>
+      <label className="sr-only" htmlFor={`${searchId}-stage`}>Stage</label>
+      <select id={`${searchId}-stage`} value={phase} onChange={event => onPhaseChange(event.target.value)} className="h-11 rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-9 text-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:outline-none focus:ring-[3px] focus:ring-brand-500/10">
+        <option value="all">All stages</option>
+        {phases.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+      </select>
       <div className="relative flex-1">
         <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
         <label htmlFor={searchId} className="sr-only">Search active projects</label>
@@ -334,17 +329,21 @@ export default function DashboardWorkspace({ initialRange = 14, initialPhase = '
     {error && <div className="mb-6 flex flex-wrap items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800" role="alert"><CircleAlert size={20} aria-hidden="true" /><div className="min-w-0 flex-1"><strong className="font-semibold">{data ? 'The latest changes could not be loaded.' : 'Your overview could not be loaded.'}</strong><p className="mt-1 text-sm">{error}{data ? ' The previous data is still shown.' : ''}</p></div><button type="button" className={outlineButton} onClick={() => setRetry(value => value + 1)} disabled={loading}>{loading ? 'Retrying…' : 'Try again'}</button></div>}
     {!data && loading && <div role="status" className="grid gap-6"><span className="sr-only">Loading your overview…</span><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4">{[0, 1, 2, 3].map(item => <div key={item} className="h-40 animate-pulse rounded-2xl bg-gray-100" />)}</div><div className="h-96 animate-pulse rounded-2xl bg-gray-100" /></div>}
     {data && <div className="grid grid-cols-12 gap-4 md:gap-6">
-      <div className="col-span-12"><SummaryStrip data={data} /></div>
-      <div className="col-span-12 space-y-4 md:space-y-6 xl:col-span-8">
-        <ProjectPipeline stages={data.pipeline} phase={phase} onPhaseChange={changePhase} />
-        <ProjectRegister projects={data.activeProjectSummaries} completedProjects={data.completedProjectSummaries ?? []} phase={phase} onPhaseChange={changePhase} />
-        <DocumentReview overview={data.documentOverview} />
+      <div className="col-span-12 space-y-4 md:space-y-6 xl:col-span-7">
+        <Metrics data={data} />
+        {data.activity && <SubmissionsChart activity={data.activity} />}
       </div>
-      <aside className="col-span-12 space-y-4 md:space-y-6 xl:col-span-4" aria-label="Actions and deadlines">
+      <div className="col-span-12 xl:col-span-5">{data.activity && <ApprovalGauge activity={data.activity} />}</div>
+      {data.activity && <div className="col-span-12"><StatisticsChart activity={data.activity} finance={data.finance ?? null} /></div>}
+      <div className="col-span-12 xl:col-span-7 [&>section]:h-full">
+        <ProjectRegister projects={data.activeProjectSummaries} completedProjects={data.completedProjectSummaries ?? []} phase={phase} onPhaseChange={changePhase} />
+      </div>
+      <aside className="col-span-12 xl:col-span-5 [&>section]:h-full" aria-label="Needs attention">
         <AttentionList items={data.needsAttention} planningActions={data.planningActionCount} warrantActions={data.warrantActionCount} />
-        <Deadlines deadlines={data.upcomingDeadlines} range={range} onRangeChange={changeRange} loading={loading} currentRange={data.deadlineRange} />
-        <AutomationStatus overview={data.automationOverview ?? { ready: data.automationJobsReady, queued: 0, running: 0, connectionLost: 0, needsAttention: 0 }} />
       </aside>
+      <div className="col-span-12 lg:col-span-6 xl:col-span-4 [&>section]:h-full"><Deadlines deadlines={data.upcomingDeadlines} range={range} onRangeChange={changeRange} loading={loading} currentRange={data.deadlineRange} /></div>
+      <div className="col-span-12 lg:col-span-6 xl:col-span-4 [&>section]:h-full"><DocumentReview overview={data.documentOverview} /></div>
+      <div className="col-span-12 xl:col-span-4 [&>section]:h-full"><AutomationStatus overview={data.automationOverview ?? { ready: data.automationJobsReady, queued: 0, running: 0, connectionLost: 0, needsAttention: 0 }} /></div>
     </div>}
   </div>;
 }

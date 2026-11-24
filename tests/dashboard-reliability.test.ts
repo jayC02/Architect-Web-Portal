@@ -50,6 +50,8 @@ const deadline = (id: string, dueDate: string) => ({ id, title: id, dueDate, sta
 try {
   mock(prisma, '$queryRaw', async () => [{ activeProjects: 9, planningActionCount: 2, warrantActionCount: 1, planningAwaitingAction: [], warrantsAwaitingAction: [], upcomingDeadlines: [deadline('old', '2026-10-21T12:00Z'), deadline('today', '2026-10-22T23:30Z'), deadline('last-evening', '2026-10-29T23:59:59Z'), deadline('outside-range', '2026-10-30T00:00Z')] }]);
   mock(prisma.projectDocument, 'count', async () => 3);
+  mock(prisma.planningApplication, 'findMany', async () => []);
+  mock(prisma.buildingWarrantApplication, 'findMany', async () => []);
   mock(prisma.projectDocument, 'groupBy', async () => [{ status: 'IN_REVIEW', _count: { _all: 3 } }, { status: 'APPROVED', _count: { _all: 4 } }, { status: 'DRAFT', _count: { _all: 2 } }, { status: 'REJECTED', _count: { _all: 1 } }, { status: 'SUPERSEDED', _count: { _all: 2 } }]);
   mock(prisma.automationJob, 'findMany', async (query: any) => { queries.push(query); return []; });
   mock(prisma.actionItem, 'findMany', async (query: any) => { queries.push(query); assert.deepEqual(query.where.availableAt, { lte: now }); return []; });
