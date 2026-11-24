@@ -116,9 +116,15 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
           client: { select: { name: true } },
           site: { select: { addressLine1: true, postcode: true } },
           documents: { where: { OR: [{ status: DocumentStatus.IN_REVIEW }, locationPlanPresenceWhere] }, select: { status: true, type: true } },
-          deadlines: { where: { status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] } }, orderBy: { dueDate: 'asc' }, take: 1, select: { title: true, dueDate: true } },
-          planningApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
-          warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: { status: true } },
+          // The first is the project's next deadline; the rest mark the timeline.
+          deadlines: { where: { status: { notIn: [DeadlineStatus.COMPLETED, DeadlineStatus.CANCELLED] } }, orderBy: { dueDate: 'asc' }, take: 6, select: { id: true, title: true, dueDate: true } },
+          planningApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: {
+            id: true, status: true, createdAt: true, submissionDate: true, validDate: true, decisionTargetDate: true, decisionDate: true, applicationReference: true,
+          } },
+          warrantApplications: { orderBy: { updatedAt: 'desc' }, take: 1, select: {
+            id: true, status: true, createdAt: true, submissionDate: true, firstResponseTargetDate: true, grantedDate: true, warrantReference: true,
+            completionCertificateStatus: true, completionPreparedAt: true,
+          } },
           _count: { select: { documents: true } },
         },
       }),
@@ -227,6 +233,31 @@ export const getDashboardSummary = async (orgId: string, searchParams: URLSearch
           || currentJobs.some(job => job.projectId === project.id && ['connectionLost', 'needsAttention'].includes(job.dashboardState)),
         nextDeadline,
         nextAction,
+        // Raw application dates for the dashboard timeline; the client draws the bars.
+        timeline: {
+          planning: project.planningApplications[0] ? {
+            id: project.planningApplications[0].id,
+            status: project.planningApplications[0].status,
+            createdAt: project.planningApplications[0].createdAt,
+            submissionDate: project.planningApplications[0].submissionDate,
+            validDate: project.planningApplications[0].validDate,
+            targetDate: project.planningApplications[0].decisionTargetDate,
+            decisionDate: project.planningApplications[0].decisionDate,
+            reference: project.planningApplications[0].applicationReference,
+          } : null,
+          warrant: project.warrantApplications[0] ? {
+            id: project.warrantApplications[0].id,
+            status: project.warrantApplications[0].status,
+            createdAt: project.warrantApplications[0].createdAt,
+            submissionDate: project.warrantApplications[0].submissionDate,
+            targetDate: project.warrantApplications[0].firstResponseTargetDate,
+            decisionDate: project.warrantApplications[0].grantedDate,
+            reference: project.warrantApplications[0].warrantReference,
+            completionCertificateStatus: project.warrantApplications[0].completionCertificateStatus,
+            completionPreparedAt: project.warrantApplications[0].completionPreparedAt,
+          } : null,
+          deadlines: project.deadlines.map(({ id, title, dueDate }) => ({ id, title, dueDate })),
+        },
       };
     });
     const activeProjectSummaries = projectSummaries.filter(project => project.status !== ProjectStatus.COMPLETED);

@@ -16,7 +16,7 @@ const projectPhase = ['lead', 'documents', 'planning', 'warrant', 'complete'].in
 ---
 <AppShell title="Dashboard" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="dashboard-surface">
-  <DashboardWorkspace client:load initialRange={deadlineRange} initialPhase={projectPhase} />
+  <DashboardWorkspace client:load initialRange={deadlineRange} initialPhase={projectPhase} userName={auth.user.name} />
   <DesktopAutomationSetupCard client:idle />
   <details class="practice-calendar">
     <summary><span><strong>Calendar</strong><span>Your deadlines, month by month</span></span><span class="practice-calendar-toggle">View calendar</span></summary>
