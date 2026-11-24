@@ -1,57 +1,60 @@
-import { useId, useMemo, useState } from 'react';
-import { ArrowUpRight, Bot, CalendarClock, CircleAlert, FileSearch, Flag, Landmark, ScrollText, Sparkles } from 'lucide-react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
+import { ArrowUpRight, ChevronRight, Sparkles } from 'lucide-react';
 import { dashboardDayKey } from '@/lib/dashboard/overview';
 import { timelineDay } from '@/lib/dashboard/timeline';
+import { BarList } from '@/components/tremor/BarList';
+import { Badge } from '@/components/tremor/Badge';
+import { CategoryBar } from '@/components/tremor/CategoryBar';
+import { DonutChart } from '@/components/tremor/DonutChart';
+import { Tracker } from '@/components/tremor/Tracker';
 import type { TimelineFilter, TimelineProject } from '@/components/dashboard/ProjectTimeline';
 
+// The charts here are Tremor components (Apache 2.0), copied into src/components/tremor.
+
 const dayMonth = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/London' });
-const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'Europe/London' });
 const longDay = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' });
-const dayNumber = new Intl.DateTimeFormat('en-GB', { day: 'numeric', timeZone: 'Europe/London' });
+const shortDay = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });
 
 const isOverdue = (project: TimelineProject, now: number) => Boolean(project.nextDeadline && new Date(project.nextDeadline.dueDate).getTime() < now - timelineDay / 2);
 
-/* ---------- On track ring ---------- */
+const Card = ({ id, title, aside, className = '', children }: { id: string; title: string; aside?: ReactNode; className?: string; children: ReactNode }) =>
+  <section id={id} className={`flex min-w-0 flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm ${className}`} aria-labelledby={`${id}-heading`}>
+    <div className="flex items-center justify-between gap-3">
+      <h2 id={`${id}-heading`} className="text-sm font-medium text-gray-500">{title}</h2>
+      {aside}
+    </div>
+    {children}
+  </section>;
+
+/* ---------- On track ---------- */
 
 export function OnTrackRing({ projects, onFilter }: { projects: TimelineProject[]; onFilter: (filter: TimelineFilter) => void }) {
   const now = Date.now();
   const overdue = projects.filter(project => isOverdue(project, now)).length;
   const needsYou = projects.filter(project => project.needsAttention && !isOverdue(project, now)).length;
   const onTrack = projects.length - overdue - needsYou;
-  const total = Math.max(projects.length, 1);
-  const percent = projects.length ? Math.round((onTrack / total) * 100) : 100;
-  const radius = 52;
-  const circumference = 2 * Math.PI * radius;
-  const segments = [
-    { key: 'ontrack', value: onTrack, className: 'ring-ontrack', label: 'On track', filter: 'all' as TimelineFilter },
-    { key: 'needs', value: needsYou, className: 'ring-needs', label: 'Needs you', filter: 'attention' as TimelineFilter },
-    { key: 'overdue', value: overdue, className: 'ring-overdue', label: 'Overdue', filter: 'overdue' as TimelineFilter },
+  const rows = [
+    { name: 'On track', amount: onTrack, color: 'bg-emerald-500', filter: 'all' as TimelineFilter },
+    { name: 'Waiting on you', amount: needsYou, color: 'bg-amber-500', filter: 'attention' as TimelineFilter },
+    { name: 'Overdue', amount: overdue, color: 'bg-red-500', filter: 'overdue' as TimelineFilter },
   ];
-  let offset = 0;
-  return <section className="ins-card ins-ring panel rounded-lg" aria-labelledby="ring-heading">
-    <h2 id="ring-heading">Projects on track</h2>
-    <div className="ins-ring-body">
-      <svg viewBox="0 0 140 140" role="img" aria-label={`${percent}% of ${projects.length} active projects on track; ${needsYou} need you; ${overdue} overdue`}>
-        <circle cx="70" cy="70" r={radius} className="ring-track" />
-        {segments.filter(segment => segment.value > 0).map(segment => {
-          const length = (segment.value / total) * circumference;
-          const element = <circle key={segment.key} cx="70" cy="70" r={radius} className={`ring-segment ${segment.className}`}
-            strokeDasharray={`${Math.max(length - 3, 0.5)} ${circumference}`} strokeDashoffset={-offset} transform="rotate(-90 70 70)" />;
-          offset += length;
-          return element;
-        })}
-        <text x="70" y="68" textAnchor="middle" className="ring-value">{percent}%</text>
-        <text x="70" y="88" textAnchor="middle" className="ring-caption">on track</text>
-      </svg>
-      <ul className="ins-ring-legend">
-        {segments.map(segment => <li key={segment.key}>
-          <button type="button" onClick={() => onFilter(segment.filter)} disabled={!segment.value && segment.key !== 'ontrack'}>
-            <span className={`ins-dot ${segment.className}`} aria-hidden="true" />{segment.label}<strong>{segment.value}</strong>
+  return <Card id="on-track" title="Projects on track">
+    <p className="mt-1 text-3xl font-semibold text-gray-900">{onTrack}<span className="text-lg font-medium text-gray-400"> / {projects.length}</span></p>
+    <div className="mt-6 flex items-center gap-6">
+      <DonutChart className="h-36 w-36 shrink-0" data={rows.filter(row => row.amount > 0)} category="name" value="amount"
+        colors={rows.filter(row => row.amount > 0).map(row => row.name === 'On track' ? 'emerald' : row.name === 'Overdue' ? 'red' : 'amber')}
+        showLabel label={`${projects.length ? Math.round((onTrack / projects.length) * 100) : 100}%`}
+        valueFormatter={value => `${value} project${value === 1 ? '' : 's'}`} />
+      <ul className="min-w-0 flex-1 divide-y divide-gray-100 text-sm">
+        {rows.map(row => <li key={row.name}>
+          <button type="button" className="flex w-full items-center gap-2.5 py-2 text-left text-gray-600 hover:text-gray-900 disabled:opacity-50" disabled={!row.amount && row.filter !== 'all'} onClick={() => onFilter(row.filter)}>
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${row.color}`} aria-hidden="true" />{row.name}
+            <span className="ml-auto font-medium tabular-nums text-gray-900">{row.amount}</span>
           </button>
         </li>)}
       </ul>
     </div>
-  </section>;
+  </Card>;
 }
 
 /* ---------- With the council ---------- */
@@ -60,46 +63,47 @@ const planningWithCouncil = new Set(['SUBMITTED', 'VALIDATED', 'IN_REVIEW', 'FUR
 const warrantWithCouncil = new Set(['SUBMITTED', 'IN_REVIEW', 'FURTHER_INFORMATION_REQUESTED']);
 
 export function WithCouncil({ projects, onFilter }: { projects: TimelineProject[]; onFilter: (filter: TimelineFilter) => void }) {
-  const today = dashboardDayKey(new Date());
+  const now = Date.now();
   const summary = useMemo(() => {
-    const planning = projects.filter(project => project.timeline?.planning && planningWithCouncil.has(project.timeline.planning.status));
-    const warrant = projects.filter(project => project.timeline?.warrant && warrantWithCouncil.has(project.timeline.warrant.status));
-    const completion = projects.filter(project => project.timeline?.warrant?.completionCertificateStatus === 'SUBMITTED');
-    const targets = [
-      ...planning.map(project => ({ project, kind: 'Planning decision', date: project.timeline?.planning?.targetDate })),
-      ...warrant.map(project => ({ project, kind: 'Warrant response', date: project.timeline?.warrant?.targetDate })),
-    ].filter((item): item is { project: TimelineProject; kind: string; date: string } => Boolean(item.date) && dashboardDayKey(item.date as string) >= today)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    return { planning: planning.length, warrant: warrant.length, completion: completion.length, next: targets[0] ?? null };
-  }, [projects, today]);
+    const waiting: { name: string; value: number; href: string; key: string }[] = [];
+    let planning = 0; let warrant = 0; let completion = 0;
+    for (const project of projects) {
+      const plan = project.timeline?.planning;
+      if (plan && planningWithCouncil.has(plan.status)) {
+        planning += 1;
+        if (plan.submissionDate) waiting.push({ key: `${project.id}-p`, name: `${project.name} · planning`, value: Math.max(1, Math.round((now - new Date(plan.submissionDate).getTime()) / timelineDay)), href: `/projects/${project.id}#planning` });
+      }
+      const bw = project.timeline?.warrant;
+      if (bw && warrantWithCouncil.has(bw.status)) {
+        warrant += 1;
+        if (bw.submissionDate) waiting.push({ key: `${project.id}-w`, name: `${project.name} · warrant`, value: Math.max(1, Math.round((now - new Date(bw.submissionDate).getTime()) / timelineDay)), href: `/projects/${project.id}#building-warrant` });
+      }
+      if (bw?.completionCertificateStatus === 'SUBMITTED') completion += 1;
+    }
+    return { planning, warrant, completion, waiting };
+  }, [projects, now]);
   const total = summary.planning + summary.warrant + summary.completion;
   const parts = [
-    { key: 'planning' as const, label: 'Planning', value: summary.planning },
-    { key: 'warrant' as const, label: 'Building warrant', value: summary.warrant },
-    { key: 'completion' as const, label: 'Completion', value: summary.completion },
+    { key: 'planning' as const, label: 'Planning', value: summary.planning, dot: 'bg-cyan-500' },
+    { key: 'warrant' as const, label: 'Warrant', value: summary.warrant, dot: 'bg-violet-500' },
+    { key: 'completion' as const, label: 'Completion', value: summary.completion, dot: 'bg-emerald-500' },
   ];
-  const daysAway = summary.next ? Math.round((new Date(`${dashboardDayKey(summary.next.date)}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / timelineDay) : 0;
-  return <section className="ins-card ins-council panel rounded-lg" aria-labelledby="council-heading">
-    <div className="ins-title"><h2 id="council-heading">With the council</h2><Landmark size={18} aria-hidden="true" /></div>
-    <p className="ins-big"><strong>{total}</strong> application{total === 1 ? '' : 's'} waiting on a decision</p>
-    <div className="ins-stack" aria-hidden="true">
-      {total ? parts.filter(part => part.value).map(part => <span key={part.key} className={`ins-fill-${part.key}`} style={{ flex: part.value }} />) : <span className="ins-fill-empty" />}
-    </div>
-    <ul className="ins-council-parts">
-      {parts.map(part => <li key={part.key}><button type="button" disabled={!part.value} onClick={() => onFilter(part.key)}>
-        <span className={`ins-dot ins-fill-${part.key}`} aria-hidden="true" />{part.label}<strong>{part.value}</strong>
+  return <Card id="with-council" title="With the council">
+    <p className="mt-1 text-3xl font-semibold text-gray-900">{total}<span className="text-lg font-medium text-gray-400"> waiting on a decision</span></p>
+    {total > 0 && <CategoryBar className="mt-5" values={parts.map(part => part.value)} colors={['cyan', 'violet', 'emerald']} showLabels={false} />}
+    <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-gray-600">
+      {parts.map(part => <li key={part.key}><button type="button" disabled={!part.value} className="inline-flex items-center gap-2 hover:text-gray-900 disabled:opacity-50" onClick={() => onFilter(part.key)}>
+        <span className={`h-2.5 w-2.5 rounded-sm ${part.dot}`} aria-hidden="true" />{part.label}<span className="font-medium tabular-nums text-gray-900">{part.value}</span>
       </button></li>)}
     </ul>
-    <div className="ins-next">
-      <CalendarClock size={16} aria-hidden="true" />
-      {summary.next
-        ? <span><a href={`/projects/${summary.next.project.id}`}>{summary.next.project.name}</a>: {summary.next.kind.toLowerCase()} {daysAway === 0 ? 'due today' : `due in ${daysAway} day${daysAway === 1 ? '' : 's'}`} ({dayMonth.format(new Date(summary.next.date))})</span>
-        : <span>No council target dates recorded yet.</span>}
-    </div>
-  </section>;
+    {summary.waiting.length > 0 && <>
+      <p className="mt-7 flex justify-between text-xs font-medium text-gray-500"><span>Application</span><span>Days with council</span></p>
+      <BarList className="mt-2" data={summary.waiting.slice(0, 5)} valueFormatter={value => `${value}`} onValueChange={item => { window.location.href = item.href ?? '/projects'; }} />
+    </>}
+  </Card>;
 }
 
-/* ---------- Day strip ---------- */
+/* ---------- Coming up ---------- */
 
 type Deadline = { id: string; title: string; dueDate: string; project?: { id: string; name: string } | null };
 type DayEvent = { id: string; kind: 'deadline' | 'planning' | 'warrant'; title: string; project?: { id: string; name: string } | null; date: string };
@@ -126,81 +130,72 @@ export function NextDays({ deadlines, projects, range, onRangeChange, loading }:
   }, [deadlines, projects]);
   const byDay = useMemo(() => {
     const map = new Map<string, DayEvent[]>();
-    for (const event of events) {
-      const key = dashboardDayKey(event.date);
-      map.set(key, [...(map.get(key) ?? []), event]);
-    }
+    for (const event of events) map.set(dashboardDayKey(event.date), [...(map.get(dashboardDayKey(event.date)) ?? []), event]);
     return map;
   }, [events]);
   const overdue = events.filter(event => event.kind === 'deadline' && dashboardDayKey(event.date) < today);
-  const firstBusy = overdue.length ? 'overdue' : days.find(day => byDay.has(day)) ?? days[0];
-  const [picked, setPicked] = useState<string | null>(null);
-  const selected = picked && (picked === 'overdue' || days.includes(picked)) ? picked : firstBusy;
-  const list = selected === 'overdue' ? overdue : byDay.get(selected) ?? [];
+  const upcoming = days.flatMap(day => (byDay.get(day) ?? []).map(event => ({ ...event, day })));
+  const blocks = days.map(day => {
+    const dayEvents = byDay.get(day) ?? [];
+    const label = shortDay.format(new Date(`${day}T12:00:00Z`));
+    const color = !dayEvents.length ? 'bg-gray-200' : dayEvents.some(event => event.kind === 'deadline') ? 'bg-amber-500' : dayEvents.some(event => event.kind === 'warrant') ? 'bg-violet-500' : 'bg-cyan-500';
+    return { key: day, color, tooltip: dayEvents.length ? `${label}: ${dayEvents.map(event => event.project?.name ? `${event.title} (${event.project.name})` : event.title).join(', ')}` : `${label}: nothing due` };
+  });
+  const list = [...overdue.map(event => ({ ...event, day: 'overdue' })), ...upcoming];
+  const href = (event: DayEvent) => event.project?.id ? `/projects/${event.project.id}${event.kind === 'deadline' ? '#deadlines' : event.kind === 'warrant' ? '#building-warrant' : '#planning'}` : '/deadlines';
 
-  return <section id="upcoming-deadlines" className="ins-card ins-days panel rounded-lg" aria-labelledby="days-heading" aria-busy={loading}>
-    <div className="ins-title">
-      <h2 id="days-heading">Coming up</h2>
-      <label htmlFor={rangeId} className="sr-only">Days to show</label>
-      <select id={rangeId} className="ins-range" value={range} onChange={event => { setPicked(null); onRangeChange(Number(event.target.value)); }}>
-        <option value={7}>Next 7 days</option><option value={14}>Next 14 days</option><option value={30}>Next 30 days</option>
-      </select>
-    </div>
-    <div className="ins-strip" role="group" aria-label="Choose a day">
-      {overdue.length > 0 && <button type="button" className="ins-day is-overdue" aria-pressed={selected === 'overdue'} onClick={() => setPicked('overdue')}>
-        <span>Late</span><strong>{overdue.length}</strong><i className="ins-day-dots"><b className="dot-overdue" /></i>
-      </button>}
-      {days.map(day => {
-        const dayEvents = byDay.get(day) ?? [];
-        const date = new Date(`${day}T12:00:00Z`);
-        const weekend = [0, 6].includes(date.getUTCDay());
-        return <button key={day} type="button" className={`ins-day${day === today ? ' is-today' : ''}${weekend ? ' is-weekend' : ''}`} aria-pressed={selected === day}
-          aria-label={`${longDay.format(date)}: ${dayEvents.length ? `${dayEvents.length} item${dayEvents.length === 1 ? '' : 's'}` : 'nothing due'}`} onClick={() => setPicked(day)}>
-          <span>{day === today ? 'Today' : weekday.format(date)}</span><strong>{dayNumber.format(date)}</strong>
-          <i className="ins-day-dots">{dayEvents.slice(0, 3).map(event => <b key={event.id} className={`dot-${event.kind}`} />)}</i>
-        </button>;
-      })}
-    </div>
-    <div className="ins-day-list" aria-live="polite">
-      <p className="ins-day-heading">{selected === 'overdue' ? 'Overdue deadlines' : longDay.format(new Date(`${selected}T12:00:00Z`))}</p>
-      {list.length ? <ul>{list.map(event => <li key={event.id}>
-        <a href={event.project?.id ? `/projects/${event.project.id}${event.kind === 'deadline' ? '#deadlines' : event.kind === 'warrant' ? '#building-warrant' : '#planning'}` : '/deadlines'} className={`ins-event ins-event-${selected === 'overdue' ? 'overdue' : event.kind}`}>
-          <span className="ins-event-icon" aria-hidden="true">{event.kind === 'deadline' ? <Flag size={14} /> : <Landmark size={14} />}</span>
-          <span><strong>{event.title}</strong><span>{event.project?.name ?? 'General deadline'}{selected === 'overdue' ? ` · due ${dayMonth.format(new Date(event.date))}` : ''}</span></span>
+  return <Card id="upcoming-deadlines" title="Coming up" className="mb-1" aside={<div className="flex items-center gap-4">
+    <a href="/deadlines" className="inline-flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 hover:underline">Manage deadlines <ArrowUpRight size={14} aria-hidden="true" /></a>
+    <label htmlFor={rangeId} className="sr-only">Days to show</label>
+    <select id={rangeId} aria-busy={loading} className="rounded-md border border-gray-300 bg-white py-1.5 pl-3 pr-8 text-sm text-gray-700 shadow-sm" value={range} onChange={event => onRangeChange(Number(event.target.value))}>
+      <option value={7}>Next 7 days</option><option value={14}>Next 14 days</option><option value={30}>Next 30 days</option>
+    </select>
+  </div>}>
+    <p className="mt-1 text-3xl font-semibold text-gray-900">{upcoming.length}<span className="text-lg font-medium text-gray-400"> due in the next {range} days{overdue.length ? `, ${overdue.length} overdue` : ''}</span></p>
+    <Tracker className="mt-5 h-10" data={blocks} hoverEffect />
+    <div className="mt-2 flex justify-between text-xs text-gray-500"><span>Today</span><span>{dayMonth.format(new Date(`${days[days.length - 1]}T12:00:00Z`))}</span></div>
+    {list.length ? <ul className="mt-6 grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
+      {list.slice(0, 9).map(event => <li key={event.id} className="border-t border-gray-100">
+        <a href={href(event)} className="group flex items-center gap-3 py-3">
+          <span className={`h-9 w-1 shrink-0 rounded-full ${event.day === 'overdue' ? 'bg-red-500' : event.kind === 'deadline' ? 'bg-amber-500' : event.kind === 'warrant' ? 'bg-violet-500' : 'bg-cyan-500'}`} aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-gray-900 group-hover:underline">{event.title}</span>
+            <span className="block truncate text-xs text-gray-500">{event.project?.name ?? 'General deadline'}</span>
+          </span>
+          <Badge variant={event.day === 'overdue' ? 'error' : event.day === today ? 'warning' : 'neutral'}>{event.day === 'overdue' ? `Overdue, ${dayMonth.format(new Date(event.date))}` : event.day === today ? 'Today' : longDay.format(new Date(`${event.day}T12:00:00Z`)).replace(/ \w+$/, '')}</Badge>
         </a>
-      </li>)}</ul> : <p className="ins-muted">Nothing due this day.</p>}
-    </div>
-    <a href="/deadlines" className="ins-link">Manage deadlines <ArrowUpRight size={14} aria-hidden="true" /></a>
-  </section>;
+      </li>)}
+    </ul> : <p className="mt-6 text-sm text-gray-500">Nothing due in the next {range} days.</p>}
+  </Card>;
 }
 
 /* ---------- Needs you ---------- */
 
 type Attention = { id: string; type: string; projectName: string; reason: string; href: string; tone: string };
 
-const attentionStyle = (item: Attention) => {
-  if (item.type.startsWith('Overdue')) return { tone: 'overdue', icon: CircleAlert };
-  if (item.type.includes('deadline')) return { tone: 'deadline', icon: Flag };
-  if (item.type.startsWith('Documents') || item.type.startsWith('Missing')) return { tone: 'documents', icon: FileSearch };
-  if (item.type.startsWith('Automation') || item.type.startsWith('Agent')) return { tone: 'automation', icon: Bot };
-  if (item.type.startsWith('Warrant')) return { tone: 'warrant', icon: ScrollText };
-  if (item.type.startsWith('Planning')) return { tone: 'planning', icon: Landmark };
-  return { tone: 'review', icon: Sparkles };
-};
+// Some reasons carry raw status codes such as FURTHER_INFORMATION_REQUESTED; show them as words.
+const readable = (text: string) => text.replace(/\b[A-Z]+(?:_[A-Z]+)+\b/g, code => {
+  const words = code.toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}).replace(/ - /g, ', ');
+
+const badgeFor = (item: Attention): 'error' | 'warning' | 'default' | 'neutral' =>
+  item.type.startsWith('Overdue') || item.tone === 'danger' ? 'error' : item.tone === 'warning' ? 'warning' : item.tone === 'ready' ? 'default' : 'neutral';
 
 export function NeedsYou({ items }: { items: Attention[] }) {
   const [expanded, setExpanded] = useState(false);
   const shown = expanded ? items : items.slice(0, 5);
-  return <section className="ins-card ins-needs panel rounded-lg" aria-labelledby="needs-heading">
-    <div className="ins-title"><h2 id="needs-heading">Needs you</h2><span className="ins-count">{items.length}</span></div>
-    {items.length ? <ul className="ins-needs-list">{shown.map(item => {
-      const style = attentionStyle(item);
-      const Icon = style.icon;
-      return <li key={item.id}><a href={item.href} className={`ins-need ins-need-${style.tone}`}>
-        <span className="ins-need-icon" aria-hidden="true"><Icon size={16} /></span>
-        <span className="ins-need-copy"><span className="ins-need-type">{item.type}</span><strong>{item.projectName}</strong><span>{item.reason}</span></span>
-      </a></li>;
-    })}</ul> : <p className="ins-clear"><Sparkles size={18} aria-hidden="true" />Nothing needs you right now.</p>}
-    {items.length > 5 && <button type="button" className="ins-more" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show fewer' : `Show all ${items.length}`}</button>}
-  </section>;
+  return <Card id="needs-you" title="Needs you" aside={items.length > 0 && <Badge variant="warning">{items.length} open</Badge>}>
+    {items.length ? <ul className="mt-3 divide-y divide-gray-100">{shown.map(item => <li key={item.id}>
+      <a href={item.href} className="group flex items-center gap-3 py-3">
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2"><span className="truncate text-sm font-medium text-gray-900 group-hover:underline">{item.projectName}</span></span>
+          <span className="mt-0.5 block truncate text-xs text-gray-500">{readable(item.reason)}</span>
+        </span>
+        <Badge variant={badgeFor(item)}>{item.type}</Badge>
+        <ChevronRight size={16} className="shrink-0 text-gray-400 group-hover:text-gray-700" aria-hidden="true" />
+      </a>
+    </li>)}</ul> : <p className="mt-4 flex items-center gap-2 text-sm font-medium text-emerald-700"><Sparkles size={16} aria-hidden="true" />Nothing needs you right now.</p>}
+    {items.length > 5 && <button type="button" className="mt-auto self-start pt-2 text-sm font-medium text-gray-700 hover:underline" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? 'Show fewer' : `Show all ${items.length}`}</button>}
+  </Card>;
 }

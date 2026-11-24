@@ -94,9 +94,9 @@ export default function DashboardWorkspace({ initialRange = 14, initialPhase = '
       <div className="dash-insights">
         <OnTrackRing projects={data.activeProjectSummaries} onFilter={focusTimeline} />
         <WithCouncil projects={data.activeProjectSummaries} onFilter={focusTimeline} />
-        <NextDays deadlines={data.upcomingDeadlines} projects={data.activeProjectSummaries} range={range} onRangeChange={changeRange} loading={loading} />
+        <NeedsYou items={data.needsAttention} />
       </div>
-      <NeedsYou items={data.needsAttention} />
+      <NextDays deadlines={data.upcomingDeadlines} projects={data.activeProjectSummaries} range={range} onRangeChange={changeRange} loading={loading} />
     </>}
   </div>;
 }
