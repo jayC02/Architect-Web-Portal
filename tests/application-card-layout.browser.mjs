@@ -99,6 +99,65 @@ else {
     await page.waitForFunction(() => !document.querySelector('astro-island[ssr]'));
   };
   try {
+    const statusPattern = '**/api/automation-jobs/*/status';
+    const timestamp = () => new Date().toISOString();
+    let liveJob;
+    await page.route(statusPattern, route => route.fulfill({
+      json: { job: liveJob, compatibleAgentOnline: true },
+    }));
+    for (const [cardId, query, estimate] of [
+      ['planning', '?state=active', 'About 1 min 15 sec remaining'],
+      ['building-warrant', '?state=active&mirror=1', 'About 2 minutes remaining'],
+    ]) {
+      liveJob = {
+        ...records.active, executionAuthorisedAt: '2026-10-22T10:00:00Z',
+        progressStage: 'proposal', progressStageState: 'running', progressPercent: 8,
+        claimedAt: timestamp(), progressUpdatedAt: timestamp(),
+      };
+      await open(query);
+      const card = page.locator(`#${cardId}`);
+      await card.getByText(estimate, { exact: true }).waitFor();
+      check(`${cardId}: fallback ETA starts at claim time`, await card.getByText(estimate, { exact: true }).isVisible());
+    }
+    const liveCard = page.locator('#building-warrant');
+    const progress = value => liveCard.getByRole('progressbar', { name: 'Application preparation progress' })
+      .and(liveCard.locator(`[aria-valuenow="${value}"]`));
+    liveJob = {
+      ...liveJob, progressStage: 'documents', progressMessage: 'Uploading supporting documents',
+      progressPercent: 42, etaSeconds: 59, progressUpdatedAt: new Date(Date.now() - 15_000).toISOString(),
+    };
+    await progress(42).waitFor();
+    check('the in-flight estimate ages from the Agent update', await liveCard.getByText('About 45 seconds remaining', { exact: true }).isVisible());
+    check('the active step tracks the real report', await liveCard.getByRole('heading', { name: 'Uploading supporting documents' }).isVisible());
+    await page.screenshot({ path: path.join(output, 'live-progress-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    liveJob = {
+      ...liveJob, progressPercent: 47, etaSeconds: 5, progressUpdatedAt: timestamp(),
+      progressMessage: 'Checking the supporting document upload',
+    };
+    await progress(47).waitFor();
+    await liveCard.getByText('About 5 seconds remaining', { exact: true }).waitFor();
+    check('the progress value fits on one line on mobile', await liveCard.getByText('47%', { exact: true })
+      .evaluate(label => label.getBoundingClientRect().height <= parseFloat(getComputedStyle(label).lineHeight)));
+    await page.screenshot({ path: path.join(output, 'live-progress-mobile.png'), fullPage: true });
+    await liveCard.getByText('Still working…', { exact: true }).waitFor();
+    check('progress stays at the last reported value if the ETA expires', await progress(47).isVisible());
+    liveJob = { ...liveJob, progressStage: 'address_selection', progressStageState: 'user_action_required' };
+    await liveCard.getByRole('heading', { name: 'Confirm the property address' }).waitFor();
+    check('a live pause keeps progress and removes the ETA', await progress(47).isVisible()
+      && await liveCard.getByText(/remaining|Still working/).count() === 0);
+    liveJob = { ...liveJob, progressStage: 'proposal', progressStageState: 'running', etaSeconds: 30, progressUpdatedAt: timestamp() };
+    await liveCard.getByText('About 30 seconds remaining', { exact: true }).waitFor();
+    liveJob = { ...liveJob, stale: true };
+    await liveCard.getByRole('heading', { name: 'Agent connection lost' }).waitFor();
+    check('a dropped Agent connection removes the ETA', await liveCard.getByText(/remaining|Still working/).count() === 0);
+    liveJob = { ...liveJob, stale: false, status: 'COMPLETED', progressPercent: 100 };
+    await liveCard.getByRole('heading', { name: 'Prepared — needs your review' }).waitFor();
+    check('the confirmed result replaces the progress bar and ETA', await liveCard.getByRole('progressbar').count() === 0
+      && await liveCard.getByText(/remaining|Still working/).count() === 0);
+    await page.unroute(statusPattern);
+    await page.setViewportSize({ width: 1600, height: 1050 });
+
     for (const state of ['review', 'fee']) {
       for (const [mirror, cardId, portal] of [[false, 'planning', 'ePlanning'], [true, 'building-warrant', 'eBuilding Standards']]) {
         const requests = [];

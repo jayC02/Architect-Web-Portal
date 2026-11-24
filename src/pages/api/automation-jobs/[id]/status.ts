@@ -14,7 +14,7 @@ export const GET: APIRoute = (context) => withErrorHandling(async () => {
   const job = await prisma.automationJob.findFirst({
     where: { id, organisationId: organisation.id },
     select: {
-      id: true, type: true, payloadVersion: true, status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true, progressPercent: true,
+      id: true, type: true, payloadVersion: true, status: true, executionAuthorisedAt: true, claimedAt: true, progressStage: true, progressStageState: true, progressPercent: true,
       etaSeconds: true, progressMessage: true, progressUpdatedAt: true, agentHeartbeatAt: true,
       resultSummary: true, error: true,
       resultData: true, lastCheckpoint: true, dataSnapshot: true,

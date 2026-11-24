@@ -29,8 +29,8 @@ type RestartInput = {
 
 const retryJobSelect = {
   id: true, organisationId: true, projectId: true, type: true, payloadVersion: true,
-  status: true, executionAuthorisedAt: true, progressStage: true, progressStageState: true,
-  progressPercent: true, etaSeconds: true, progressMessage: true, resultSummary: true,
+  status: true, executionAuthorisedAt: true, claimedAt: true, progressStage: true, progressStageState: true,
+  progressPercent: true, etaSeconds: true, progressUpdatedAt: true, progressMessage: true, resultSummary: true,
   error: true, agentHeartbeatAt: true, resultData: true, lastCheckpoint: true,
   dataSnapshot: true,
 } satisfies Prisma.AutomationJobSelect;

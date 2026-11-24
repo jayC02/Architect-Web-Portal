@@ -10,10 +10,12 @@ export type DesktopJobProjection = {
   id?: string;
   status: string;
   executionAuthorisedAt: string | null;
+  claimedAt: string | null;
   progressStage: string | null;
   progressStageState: string | null;
   progressPercent: number | null;
   etaSeconds: number | null;
+  progressUpdatedAt: string | null;
   progressMessage: string | null;
   resultSummary: string | null;
   error: string | null;
@@ -61,13 +63,19 @@ function StateHeading({ icon: Icon, eyebrow, title, spin = false }: { icon: Luci
 
 const runningStatuses = new Set(['CLAIMED', 'IN_PROGRESS']);
 const failedStatuses = new Set(['FAILED', 'FAILED_RETRYABLE', 'FAILED_FINAL']);
-const visualCountdownDurationSeconds = 90;
+const typicalRunSeconds: Record<Props['applicationType'], number> = {
+  HOUSEHOLDER_PLANNING: 75,
+  BUILDING_WARRANT: 120,
+  COMPLETION_CERTIFICATE: 90,
+};
 
 const stageLabel = (stage: string | null) => ({
+  claimed: 'Starting the Agent',
   validation: 'Checking the prepared application',
   browser: 'Starting the secure browser',
   login: 'Signing in',
   proposal: 'Opening the proposal',
+  completion_form: 'Opening the completion certificate',
   main_details: 'Completing application details',
   ownership: 'Completing ownership and certificates',
   documents: 'Uploading supporting documents',
@@ -77,23 +85,30 @@ const stageLabel = (stage: string | null) => ({
   address_selection: 'Confirming the property address',
   applicant_details: 'Completing applicant details',
   agent_details: 'Completing agent details',
-}[stage ?? ''] ?? 'Preparing the application');
+}[stage?.split('.')[0] ?? ''] ?? 'Preparing the application');
 
-const executionStartTime = (executionAuthorisedAt: string | null) => {
-  if (!executionAuthorisedAt) return null;
-  const timestamp = Date.parse(executionAuthorisedAt);
-  return Number.isFinite(timestamp) ? timestamp : null;
+const remainingSeconds = (job: DesktopJobProjection, applicationType: Props['applicationType'], now: number) => {
+  const reportedAt = Date.parse(job.progressUpdatedAt ?? '');
+  if (job.etaSeconds != null) {
+    const age = Number.isFinite(reportedAt) ? Math.max(0, now - reportedAt) : 0;
+    return job.etaSeconds - Math.floor(age / 1_000);
+  }
+  const claimedAt = Date.parse(job.claimedAt ?? '');
+  const startedAt = Number.isFinite(claimedAt) ? claimedAt : reportedAt;
+  if (!Number.isFinite(startedAt)) return null;
+  return typicalRunSeconds[applicationType] - Math.floor(Math.max(0, now - startedAt) / 1_000);
 };
 
-const visualCountdownLabel = (seconds: number) => {
-  if (seconds <= 0) return 'Finishing up…';
-  if (seconds === visualCountdownDurationSeconds) return 'About 90 seconds remaining';
-  if (seconds < 60) return `About ${seconds} second${seconds === 1 ? '' : 's'} remaining`;
+const etaLabel = (seconds: number | null) => {
+  if (seconds === null) return 'Estimating time remaining…';
+  if (seconds <= 0) return 'Still working…';
+  const rounded = Math.ceil(seconds / 5) * 5;
+  if (rounded < 60) return `About ${rounded} seconds remaining`;
 
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (remainingSeconds === 0) return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
-  return `About ${minutes} min ${remainingSeconds} sec remaining`;
+  const minutes = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  if (remainder === 0) return `About ${minutes} minute${minutes === 1 ? '' : 's'} remaining`;
+  return `About ${minutes} min ${remainder} sec remaining`;
 };
 
 export default function DesktopAutomationLiveCard({ jobId, applicationId, applicationStatus, manageHref, detailsHref, initial, connectedAgent, applicationType, recoveryContext, reset = null }: Props) {
@@ -106,69 +121,58 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   const submissionDialogRef = useRef<HTMLDialogElement>(null);
   const markSubmittedButtonRef = useRef<HTMLButtonElement>(null);
   const submissionInFlightRef = useRef(false);
-  const [visualClock, setVisualClock] = useState(() => ({
-    jobId,
-    startAt: runningStatuses.has(initial.status)
-      ? executionStartTime(initial.executionAuthorisedAt) ?? Date.now()
-      : null,
-  }));
-  const [visualNow, setVisualNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   const resultOutcome = job.resultData && typeof job.resultData === 'object'
     ? (job.resultData as { outcome?: string }).outcome : undefined;
   const pausedForInput = resultOutcome === 'paused_for_manual_input';
   const awaitingFee = (resultOutcome === 'awaiting_user_portal_review' || resultOutcome === 'completed_to_final_review')
     && (job.status === 'AWAITING_PORTAL_REVIEW' || (job.progressStage === 'fee' && job.progressStageState === 'user_action_required'));
-  const addressAction = job.progressStage === 'address_selection' && job.progressStageState === 'user_action_required';
+  const actionRequired = job.progressStageState === 'user_action_required';
+  const addressAction = actionRequired && job.progressStage === 'address_selection';
   const active = runningStatuses.has(job.status);
   const queued = job.status === 'READY' && Boolean(job.executionAuthorisedAt);
   const currentDetailsHref = currentJobId === jobId ? detailsHref : `/automation-job/${currentJobId}`;
   const isCompletion = applicationType === 'COMPLETION_CERTIFICATE';
   // Building Warrants and Completion Certificates both go through eBuilding Standards.
   const isWarrant = applicationType !== 'HOUSEHOLDER_PLANNING';
-  const visualCountdownActive = active && !awaitingFee && !addressAction;
+  const showEta = job.status === 'IN_PROGRESS' && !pausedForInput && !awaitingFee && !actionRequired
+    && !job.stale && job.progressStageState !== 'failed';
+  const eta = showEta ? etaLabel(now === null ? null : remainingSeconds(job, applicationType, now)) : null;
 
   useEffect(() => {
-    setVisualClock((current) => {
-      const authorisedStartAt = executionStartTime(job.executionAuthorisedAt);
-      if (current.jobId !== currentJobId) {
-        return {
-          jobId: currentJobId,
-          startAt: active ? authorisedStartAt ?? Date.now() : null,
-        };
-      }
-      if (authorisedStartAt !== null && current.startAt !== authorisedStartAt) {
-        return { ...current, startAt: authorisedStartAt };
-      }
-      if (active && current.startAt === null) {
-        return { ...current, startAt: Date.now() };
-      }
-      return current;
-    });
-  }, [active, currentJobId, job.executionAuthorisedAt]);
-
-  useEffect(() => {
-    if (!visualCountdownActive || visualClock.startAt === null) return;
-    setVisualNow(Date.now());
-    const timer = window.setInterval(() => setVisualNow(Date.now()), 1_000);
+    if (!showEta) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(timer);
-  }, [visualClock.startAt, visualCountdownActive]);
+  }, [showEta]);
 
   useEffect(() => {
     if (!active && !awaitingFee && job.status !== 'READY') return;
-    let mounted = true;
+    let timer: number;
+    let stopped = false;
+    let request: AbortController;
+    const interval = awaitingFee ? 5_000 : active ? 2_000 : 3_000;
     const poll = async () => {
+      request = new AbortController();
+      const deadline = window.setTimeout(() => request.abort(), 10_000);
       try {
-        const response = await apiRequest<{ job: DesktopJobProjection; compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/status`);
-        if (mounted) { setJob(response.job); setAgentOnline(response.compatibleAgentOnline); }
+        const response = await apiRequest<{ job: DesktopJobProjection; compatibleAgentOnline: boolean }>(`/api/automation-jobs/${currentJobId}/status`, { signal: request.signal });
+        if (!stopped) {
+          setNow(Date.now());
+          setJob(response.job);
+          setAgentOnline(response.compatibleAgentOnline);
+        }
       } catch {
-        if (mounted) setAgentOnline(null);
-        // Keep the last verified projection; the next lightweight poll retries.
+        if (!stopped) setAgentOnline(null);
+      } finally {
+        window.clearTimeout(deadline);
+        // Leave only one request in flight so a late response cannot rewind the card.
+        if (!stopped) timer = window.setTimeout(poll, interval);
       }
     };
-    const timer = window.setInterval(() => void poll(), awaitingFee ? 5_000 : 3_000);
     void poll();
-    return () => { mounted = false; window.clearInterval(timer); };
+    return () => { stopped = true; window.clearTimeout(timer); request.abort(); };
   }, [active, awaitingFee, currentJobId, job.status]);
 
   const run = async () => {
@@ -253,11 +257,7 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
     }
   };
 
-  const progress = pausedForInput ? 0 : Math.max(0, Math.min(100, job.progressPercent ?? 0));
-  const visualRemaining = visualCountdownActive && visualClock.startAt !== null
-    ? Math.max(0, visualCountdownDurationSeconds - Math.floor((visualNow - visualClock.startAt) / 1_000))
-    : null;
-  const visualEta = visualRemaining === null ? null : visualCountdownLabel(visualRemaining);
+  const progress = Math.max(0, Math.min(99, job.progressPercent ?? 0));
   const failure = useMemo(
     () => readAutomationFailureMetadata(job.resultData, job.status, job.progressStage ?? job.lastCheckpoint, job),
     [job.lastCheckpoint, job.progressStage, job.resultData, job.status],
@@ -394,14 +394,16 @@ export default function DesktopAutomationLiveCard({ jobId, applicationId, applic
   );
 
   if (active || addressAction) return (
-    <section className="p-5" data-tone={addressAction || job.stale ? 'warning' : 'info'} aria-live="polite">
+    <section className="p-5" data-tone={actionRequired || job.stale ? 'warning' : 'info'}>
       <div className="flex items-start justify-between gap-4">
-        <StateHeading icon={addressAction ? MapPin : job.stale ? Unplug : LoaderCircle} spin={!addressAction && !job.stale} eyebrow={addressAction ? 'Action required' : job.status === 'READY' ? 'Queued' : 'Agent running'} title={job.stale ? 'Agent connection lost' : addressAction ? 'Confirm the property address' : stageLabel(job.progressStage)} />
-        <span className="app-tone-text text-sm font-semibold">{progress}%</span>
+        <div className="min-w-0" aria-live="polite">
+          <StateHeading icon={job.stale ? Unplug : addressAction ? MapPin : actionRequired ? Hand : LoaderCircle} spin={!actionRequired && !job.stale} eyebrow={actionRequired ? 'Action required' : 'Agent running'} title={job.stale ? 'Agent connection lost' : addressAction ? 'Confirm the property address' : actionRequired ? 'Needs your input' : stageLabel(job.progressStage)} />
+        </div>
+        <span className="app-tone-text shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums" aria-hidden="true">{progress}%</span>
       </div>
-      <p className="mt-2 text-sm leading-6 text-stone-600">{job.progressMessage || (job.status === 'READY' ? 'Waiting for your Agent to claim the application.' : 'Chrome is running securely in the background.')}</p>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="app-tone-dot h-full rounded-full transition-[width] motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
-      {visualEta && <p className="mt-2 text-xs text-stone-500" aria-live="off">{visualEta}</p>}
+      <p className="mt-2 text-sm leading-6 text-stone-600" aria-live="polite">{job.progressMessage || 'Chrome is running securely in the background.'}</p>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-stone-200" role="progressbar" aria-label="Application preparation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="app-tone-dot h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
+      {eta && <p className="mt-2 text-xs text-stone-500 tabular-nums">{eta}</p>}
       {addressAction && <p className="mt-3 text-sm font-medium text-amber-800">Choose the correct address in the Agent. The browser remains paused safely.</p>}
       <div className={actionRow}>{reviewLink}{secondaryActions()}</div>
     </section>
