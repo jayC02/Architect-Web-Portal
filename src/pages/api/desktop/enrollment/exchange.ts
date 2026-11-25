@@ -15,6 +15,7 @@ import {
   createAgentCredential,
   verifyPkceChallenge,
 } from '@/server/auth/agent-credential';
+import { assertOrganisationEntitled } from '@/server/billing/access';
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertRateLimit(context, rateLimitPolicies.auth, 'desktop-agent:exchange');
@@ -49,6 +50,19 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       throw new HttpError(403, 'This computer is connected to another Architect Pro organisation. Choose Reset & reconnect in the Agent. If its old connection is no longer available, ask an administrator of the previous organisation to disconnect this computer in Settings, then try again.');
     }
     if (existing) await assertAgentConnectionResettable(tx, existing.organisationId, existing.id);
+    // Licence check: the organisation must be paid up and under its plan's
+    // Agent computer limit. Re-enrolling the same installation doesn't count twice.
+    const { subscription } = await assertOrganisationEntitled(enrollment.organisationId, tx);
+    const activeAgents = await tx.agentRegistration.count({
+      where: {
+        organisationId: enrollment.organisationId, enabled: true, revokedAt: null,
+        NOT: { installationId: body.installationId },
+      },
+    });
+    const deviceLimit = subscription?.agentDeviceLimit ?? 1;
+    if (activeAgents >= deviceLimit) {
+      throw new HttpError(403, `Your plan allows ${deviceLimit} Agent computer${deviceLimit === 1 ? '' : 's'}. Disconnect one in Settings > Integrations or upgrade your plan in Billing.`, { code: 'AGENT_DEVICE_LIMIT' });
+    }
     const data = {
       organisationId: enrollment.organisationId,
       enrolledByUserId: enrollment.createdByUserId,

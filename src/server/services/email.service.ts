@@ -44,3 +44,49 @@ export const sendPasswordResetEmail = async (to: string, token: string) => {
 
   if (!response.ok) throw new Error('Password reset email delivery failed.');
 };
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
+
+const sendEmail = async (to: string[], subject: string, text: string, html: string) => {
+  const { apiKey, from } = getEmailConfig();
+  if (!apiKey || !to.length) return false;
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ from, to, subject, text, html }),
+  });
+  if (!response.ok) throw new Error('Email delivery failed.');
+  return true;
+};
+
+// Best-effort: tells platform admins a demo request is waiting for review.
+export const sendAccessRequestNotification = async (
+  to: string[],
+  request: { name: string; email: string; practiceName: string; plan?: string | null; message?: string | null },
+) => {
+  const reviewUrl = absoluteUrl('/admin/access');
+  const summary = `${request.name} (${request.email}) from ${request.practiceName} requested a demo${request.plan ? ` of the ${request.plan} plan` : ''}.`;
+  return sendEmail(
+    to,
+    `Demo request: ${request.practiceName}`,
+    `${summary}\n\n${request.message ?? ''}\n\nReview it: ${reviewUrl}`,
+    `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f211d;max-width:560px">
+      <p>${escapeHtml(summary)}</p>
+      ${request.message ? `<blockquote style="border-left:3px solid #ddd;margin:0;padding-left:12px;color:#555">${escapeHtml(request.message)}</blockquote>` : ''}
+      <p><a href="${reviewUrl}">Review access requests</a></p>
+    </div>`,
+  );
+};
+
+export const sendAccessInviteEmail = async (to: string, name: string, inviteUrl: string) => sendEmail(
+  [to],
+  'Your Architect Pro demo is approved',
+  `Hi ${name},\n\nYour Architect Pro demo has been approved. Create your workspace with this link to start a 14-day free trial:\n${inviteUrl}\n\nThe link is for ${to} only and expires in 14 days.`,
+  `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f211d;max-width:560px;margin:0 auto">
+    <h1 style="font-size:24px;margin:0 0 16px">Your demo is approved</h1>
+    <p>Hi ${escapeHtml(name)}, create your Architect Pro workspace to start a 14-day free trial.</p>
+    <p style="margin:28px 0"><a href="${inviteUrl}" style="display:inline-block;background:#1f211d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px">Create your workspace</a></p>
+    <p style="color:#6f6b63;font-size:14px">This link is for ${escapeHtml(to)} only and expires in 14 days.</p>
+  </div>`,
+);

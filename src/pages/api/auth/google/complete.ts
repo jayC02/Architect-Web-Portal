@@ -15,6 +15,13 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { completeGoogleSignupSchema } from '@/lib/validation/auth';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import {
+  findInviteForVerifiedEmail,
+  markInviteAccepted,
+  postSignupRedirect,
+  signupMode,
+  subscriptionCreateFor,
+} from '@/server/billing/onboarding';
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -33,6 +40,8 @@ export const POST: APIRoute = (context) =>
     }
 
     const organisationSlug = await resolveOrganisationSlug(body.organisationName);
+    const invite = await findInviteForVerifiedEmail(pending.email);
+    let createdWorkspace = false;
     const userId = await prisma.$transaction(async (tx) => {
       const linkedProvider = await tx.authProvider.findUnique({
         where: {
@@ -72,6 +81,9 @@ export const POST: APIRoute = (context) =>
         return existingUser.id;
       }
 
+      if (!invite && signupMode() === 'invite_only') {
+        throw new HttpError(403, 'Architect Pro is invitation only at the moment. Request a demo and we will send you an invitation.');
+      }
       const user = await tx.user.create({
         data: {
           name: pending.displayName,
@@ -96,18 +108,23 @@ export const POST: APIRoute = (context) =>
                   calendarConnections: {
                     create: [{ provider: 'GOOGLE' }, { provider: 'OUTLOOK' }],
                   },
+                  subscription: { create: subscriptionCreateFor(invite) },
                 },
               },
             },
           },
         },
-        select: { id: true },
+        select: { id: true, organisationLinks: { select: { organisationId: true }, take: 1 } },
       });
+      if (invite) await markInviteAccepted(tx, invite.id, user.organisationLinks[0].organisationId);
       await tx.pendingOAuthSignup.delete({ where: { id: pending.id } });
+      createdWorkspace = true;
       return user.id;
     });
 
-    const returnTo = pendingGoogleSignupReturnTo(context);
+    const returnTo = createdWorkspace && !invite
+      ? postSignupRedirect(false)
+      : pendingGoogleSignupReturnTo(context);
     clearPendingGoogleSignupCookie(context);
     await createSession(userId, context);
     return jsonResponse(201, { redirectTo: returnTo });

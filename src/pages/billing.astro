@@ -1,0 +1,88 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { prisma } from '@/lib/db/prisma';
+import { PLANS, PLAN_IDS } from '@/config/plans';
+import { resolveEntitlement } from '@/server/billing/entitlement';
+import { hasLiveStripeSubscription } from '@/server/billing/checkout';
+import { stripeConfigured } from '@/server/billing/stripe';
+import { isPlatformAdmin } from '@/server/billing/access';
+
+export const prerender = false;
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login?returnTo=/billing');
+
+const subscription = auth.organisation.subscription;
+const entitlement = resolveEntitlement(subscription);
+const canManage = ['OWNER', 'ADMIN'].includes(auth.membership.role);
+const live = hasLiveStripeSubscription(subscription);
+const agentsInUse = await prisma.agentRegistration.count({
+  where: { organisationId: auth.organisation.id, enabled: true, revokedAt: null },
+});
+const checkout = Astro.url.searchParams.get('checkout');
+const error = Astro.url.searchParams.get('error')?.slice(0, 300) ?? null;
+const formatDate = (value: Date | null | undefined) => (value ? value.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null);
+
+const statusLabel: Record<string, string> = {
+  NONE: 'No plan', PENDING_PAYMENT: 'Awaiting payment', TRIALING: 'Free trial', ACTIVE: 'Active',
+  PAST_DUE: 'Payment failed', CANCELED: 'Cancelled', SUSPENDED: 'Suspended', COMPLIMENTARY: 'Complimentary',
+};
+const planName = subscription?.plan && subscription.plan in PLANS ? PLANS[subscription.plan as keyof typeof PLANS].name : null;
+const showPlans = canManage && !live && !['COMPLIMENTARY', 'SUSPENDED'].includes(subscription?.status ?? '');
+---
+<AppShell title="Billing" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-7 max-w-3xl">
+    <h1 class="text-3xl font-semibold text-ink">Billing</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">{entitlement.allowed ? 'Your plan, payment details and Agent computer limit.' : entitlement.reason}</p>
+  </div>
+
+  {checkout === 'success' && !entitlement.allowed && <p role="status" class="mb-5 max-w-3xl rounded-md border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Payment received. We're activating your workspace, which usually takes a few seconds. <a class="font-semibold underline" href="/billing">Refresh</a></p>}
+  {checkout === 'success' && entitlement.allowed && <p role="status" class="mb-5 max-w-3xl rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">Your subscription is active. <a class="font-semibold underline" href="/dashboard">Go to your dashboard</a></p>}
+  {error && <p role="alert" class="mb-5 max-w-3xl rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
+
+  <section class="panel mb-6 max-w-3xl rounded-lg p-6">
+    <dl class="grid gap-4 sm:grid-cols-2">
+      <div><dt class="text-xs font-semibold uppercase text-stone-500">Status</dt><dd class="mt-1 text-lg font-semibold text-ink">{statusLabel[entitlement.status] ?? entitlement.status}</dd></div>
+      {planName && <div><dt class="text-xs font-semibold uppercase text-stone-500">Plan</dt><dd class="mt-1 text-lg font-semibold text-ink">{planName}{subscription?.billingInterval ? ` (${subscription.billingInterval})` : ''}</dd></div>}
+      {subscription?.status === 'TRIALING' && <div><dt class="text-xs font-semibold uppercase text-stone-500">Trial ends</dt><dd class="mt-1 text-ink">{formatDate(subscription.trialEndsAt)}</dd></div>}
+      {live && subscription?.currentPeriodEndsAt && <div><dt class="text-xs font-semibold uppercase text-stone-500">{subscription.cancelAtPeriodEnd ? 'Ends on' : 'Renews on'}</dt><dd class="mt-1 text-ink">{formatDate(subscription.currentPeriodEndsAt)}</dd></div>}
+      <div><dt class="text-xs font-semibold uppercase text-stone-500">Agent computers</dt><dd class="mt-1 text-ink">{agentsInUse} of {subscription?.agentDeviceLimit ?? 0} in use</dd></div>
+    </dl>
+    {entitlement.warning && <p class="mt-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{entitlement.warning}</p>}
+    {canManage && subscription?.stripeCustomerId && (
+      <form data-api-form data-action="/api/billing/portal" data-method="POST" class="mt-6">
+        <button class="btn btn-secondary">Manage payment details and invoices</button>
+        <p data-form-status class="mt-2 text-sm text-stone-500"></p>
+      </form>
+    )}
+    {!canManage && !entitlement.allowed && <p class="mt-5 text-sm text-stone-600">Ask an owner or admin of {auth.organisation.name} to choose a plan.</p>}
+  </section>
+
+  {showPlans && (
+    <section class="max-w-5xl">
+      <h2 class="mb-4 text-xl font-semibold text-ink">{subscription?.status === 'TRIALING' ? 'Choose a plan before your trial ends' : 'Choose a plan'}</h2>
+      {!stripeConfigured() && <p class="mb-4 text-sm text-stone-600">Online payment isn't available yet. <a class="font-semibold text-ink underline" href="/contact">Contact us</a> to subscribe.</p>}
+      <div class="grid gap-4 md:grid-cols-3">
+        {PLAN_IDS.map((id) => (
+          <form data-api-form data-action="/api/billing/checkout" data-method="POST" class="panel flex flex-col rounded-lg p-5">
+            <h3 class="text-lg font-semibold text-ink">{PLANS[id].name}</h3>
+            <p class="mt-1 flex-1 text-sm leading-6 text-stone-600">{PLANS[id].summary}</p>
+            <input type="hidden" name="plan" value={id} />
+            <label class="mt-4 block"><span class="label">Billing</span>
+              <select name="billing" class="field"><option value="monthly">Monthly</option><option value="annual">Annual</option></select>
+            </label>
+            <button class="btn btn-primary mt-4" disabled={!stripeConfigured()}>Continue to payment</button>
+            <p data-form-status class="mt-2 text-sm text-stone-500"></p>
+          </form>
+        ))}
+      </div>
+      <p class="mt-4 text-sm text-stone-500">See <a class="font-semibold text-ink underline" href="/pricing">pricing</a> for what each plan includes. Payments are handled securely by Stripe.</p>
+    </section>
+  )}
+
+  <div class="mt-8 flex flex-wrap gap-4 text-sm">
+    {isPlatformAdmin(auth.user.email) && <a class="font-semibold text-ink underline" href="/admin/access">Platform admin: access requests</a>}
+    <form data-api-form data-action="/api/auth/logout" data-method="POST" data-redirect="/login"><button class="font-semibold text-stone-600 underline">Sign out</button></form>
+  </div>
+</AppShell>

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { APIContext } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
+import { assertOrganisationEntitled } from '@/server/billing/access';
 
 const AGENT_PREFIX = 'apa_';
 const ENROLLMENT_PREFIX = 'ape_';
@@ -58,5 +59,7 @@ export const requireAgentAuth = async (context: APIContext) => {
   if (!agent || !agent.enabled || agent.revokedAt) {
     throw new HttpError(401, 'This Architect Pro Agent has been revoked or is not registered.');
   }
+  // A copied or still-installed Agent is useless once the subscription lapses.
+  await assertOrganisationEntitled(agent.organisationId);
   return agent;
 };

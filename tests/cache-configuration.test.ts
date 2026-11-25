@@ -7,6 +7,7 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const read = (relativePath: string) => fs.readFileSync(path.join(repositoryRoot, relativePath), 'utf8');
 const deployment = JSON.parse(read('vercel.json')) as {
   headers?: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
+  redirects?: Array<{ source: string; destination: string }>;
 };
 const headerRules = deployment.headers ?? [];
 
@@ -20,12 +21,13 @@ assert.equal(
   'missing /_astro assets must never inherit a wildcard immutable browser cache directive',
 );
 
-const downloadsRule = headerRules.find((rule) => rule.source === '/downloads/(.*)');
-assert.ok(downloadsRule, 'the downloads header rule remains configured');
-assert.deepEqual(downloadsRule.headers, [
-  { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-  { key: 'Content-Disposition', value: 'attachment' },
-]);
+// Installers are no longer public static files: old links go to the gated route.
+assert.equal(headerRules.some((rule) => rule.source.startsWith('/downloads')), false, 'installers must not be cacheable public assets');
+assert.ok(
+  deployment.redirects?.some((rule) => rule.source === '/downloads/:path*' && rule.destination === '/agent/download'),
+  'old public download links redirect to the gated download route',
+);
+assert.equal(fs.existsSync(path.join(repositoryRoot, 'public/downloads')), false, 'no installers under public/');
 
 const pageAuth = read('src/lib/server/page-auth.ts');
 const cacheControl = read('src/lib/server/cache-control.ts');

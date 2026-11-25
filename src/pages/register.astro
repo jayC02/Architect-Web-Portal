@@ -4,6 +4,10 @@ import BrandLogo from '@/components/brand/BrandLogo.astro';
 import GoogleAuthButton from '@/components/auth/GoogleAuthButton.astro';
 import { getSessionUser } from '@/lib/auth/session';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
+import { hashOpaqueToken } from '@/lib/auth/tokens';
+import { prisma } from '@/lib/db/prisma';
+import { PLANS, isPlanId, isBillingInterval } from '@/config/plans';
+import { signupMode } from '@/server/billing/onboarding';
 
 export const prerender = false;
 
@@ -12,6 +16,24 @@ setAstroCache(Astro, privateNoStore);
 if (await getSessionUser(Astro)) {
   return Astro.redirect('/dashboard');
 }
+
+const params = Astro.url.searchParams;
+const inviteToken = params.get('invite')?.slice(0, 200) ?? '';
+const plan = isPlanId(params.get('plan')) ? params.get('plan')! : '';
+const billing = isBillingInterval(params.get('billing')) ? params.get('billing')! : '';
+const invite = inviteToken
+  ? await prisma.accessRequest.findFirst({
+    where: { inviteTokenHash: hashOpaqueToken(inviteToken), status: 'APPROVED', acceptedAt: null, inviteExpiresAt: { gt: new Date() } },
+    select: { name: true, email: true, practiceName: true },
+  })
+  : null;
+const inviteInvalid = Boolean(inviteToken) && !invite;
+const closed = !invite && signupMode() === 'invite_only';
+const subtitle = invite
+  ? 'Your demo has been approved. Your workspace starts with a 14-day free trial.'
+  : plan
+    ? `You're subscribing to ${PLANS[plan as keyof typeof PLANS].name}. Create your account, then complete payment.`
+    : 'Create your account, then choose a plan to activate your workspace.';
 ---
 <BaseLayout title="Register | Architect Pro">
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
@@ -19,8 +41,12 @@ if (await getSessionUser(Astro)) {
       <div class="mb-6">
         <BrandLogo class="mb-6 h-auto w-36" />
         <h1 class="text-2xl font-semibold text-ink">Create workspace</h1>
-        <p class="mt-1 text-sm text-stone-500">Start with an owner account and organisation.</p>
+        <p class="mt-1 text-sm text-stone-500">{subtitle}</p>
       </div>
+      {inviteInvalid && <p role="alert" class="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This invitation link has expired or has already been used. <a class="font-semibold underline" href="/demo">Request a new one</a>.</p>}
+      {closed ? (
+        <p class="rounded-md border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700">Architect Pro is invitation only at the moment. <a class="font-semibold text-ink underline" href="/demo">Request a demo</a> and we'll send you an invitation.</p>
+      ) : (<>
       <GoogleAuthButton label="Create account with Google" />
       <div class="my-5 flex items-center gap-3" aria-hidden="true">
         <span class="h-px flex-1 bg-stone-200"></span>
@@ -28,12 +54,16 @@ if (await getSessionUser(Astro)) {
         <span class="h-px flex-1 bg-stone-200"></span>
       </div>
       <div class="space-y-4">
-        <label class="block"><span class="label">Your name</span><input required name="name" minlength="2" class="field" autocomplete="name" /></label>
-        <label class="block"><span class="label">Organisation</span><input required name="organisationName" minlength="2" class="field" autocomplete="organization" /></label>
-        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" /></label>
+        <label class="block"><span class="label">Your name</span><input required name="name" minlength="2" class="field" autocomplete="name" value={invite?.name ?? ''} /></label>
+        <label class="block"><span class="label">Organisation</span><input required name="organisationName" minlength="2" class="field" autocomplete="organization" value={invite?.practiceName ?? ''} /></label>
+        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" value={invite?.email ?? ''} readonly={Boolean(invite)} /></label>
         <label class="block"><span class="label">Password</span><input required type="password" name="password" minlength="8" class="field" autocomplete="new-password" /></label>
       </div>
-      <button class="btn btn-primary mt-6 w-full">Create account</button>
+      {invite && <input type="hidden" name="invite" value={inviteToken} />}
+      {plan && <input type="hidden" name="plan" value={plan} />}
+      {billing && <input type="hidden" name="billing" value={billing} />}
+      <button class="btn btn-primary mt-6 w-full">{invite ? 'Start free trial' : 'Create account'}</button>
+      </>)}
       <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
       <p class="mt-4 text-center text-sm text-stone-500">Already registered? <a class="font-semibold text-ink" href="/login">Sign in</a></p>
     </form>

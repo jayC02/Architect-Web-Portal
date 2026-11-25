@@ -1,0 +1,129 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { prisma } from '@/lib/db/prisma';
+import { isPlatformAdmin } from '@/server/billing/access';
+import { resolveEntitlement } from '@/server/billing/entitlement';
+
+export const prerender = false;
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login?returnTo=/admin/access');
+if (!isPlatformAdmin(auth.user.email)) return new Response('Not found', { status: 404 });
+
+const [requests, organisations] = await Promise.all([
+  prisma.accessRequest.findMany({
+    where: { OR: [{ status: 'PENDING' }, { status: 'APPROVED', acceptedAt: null }, { createdAt: { gt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }] },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    take: 100,
+  }),
+  prisma.organisation.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    select: {
+      id: true, name: true, createdAt: true, subscription: true,
+      _count: { select: { members: true, agentRegistrations: { where: { enabled: true, revokedAt: null } } } },
+    },
+  }),
+]);
+const date = (value: Date | null | undefined) => (value ? value.toLocaleDateString('en-GB') : '');
+---
+<AppShell title="Access" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-7 max-w-3xl">
+    <h1 class="text-3xl font-semibold text-ink">Access and subscriptions</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">Approve demo requests and manage which workspaces can use Architect Pro. Approving sends a single-use invitation that starts a 14-day trial.</p>
+  </div>
+  <p id="admin-invite-result" role="status" class="mb-5 hidden max-w-3xl break-all rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"></p>
+
+  <section class="mb-10">
+    <h2 class="mb-3 text-xl font-semibold text-ink">Demo requests</h2>
+    {requests.length === 0 ? <p class="text-sm text-stone-600">No recent requests.</p> : (
+      <div class="panel overflow-x-auto rounded-lg">
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-stone-200 text-xs uppercase text-stone-500"><tr><th class="p-3">Requested</th><th class="p-3">Contact</th><th class="p-3">Practice</th><th class="p-3">Plan</th><th class="p-3">Status</th><th class="p-3"></th></tr></thead>
+          <tbody>
+            {requests.map((request) => (
+              <tr class="border-b border-stone-100 align-top">
+                <td class="p-3 whitespace-nowrap">{date(request.createdAt)}</td>
+                <td class="p-3"><div class="font-semibold text-ink">{request.name}</div><div>{request.email}</div>{request.phone && <div>{request.phone}</div>}{request.role && <div class="text-stone-500">{request.role}</div>}</td>
+                <td class="p-3"><div>{request.practiceName}</div>{request.practiceSize && <div class="text-stone-500">{request.practiceSize}</div>}{request.message && <p class="mt-1 max-w-xs text-stone-600">{request.message}</p>}</td>
+                <td class="p-3">{request.plan ?? ''}{request.interest && <div class="text-stone-500">{request.interest}</div>}</td>
+                <td class="p-3">{request.acceptedAt ? `Joined ${date(request.acceptedAt)}` : request.status === 'APPROVED' ? `Invited, expires ${date(request.inviteExpiresAt)}` : request.status.toLowerCase()}</td>
+                <td class="p-3">
+                  {!request.acceptedAt && (
+                    <div class="flex flex-wrap gap-2">
+                      <form data-api-form data-action={`/api/admin/access-requests/${request.id}`} data-method="POST" data-admin-action>
+                        <input type="hidden" name="action" value={request.status === 'APPROVED' ? 'resend' : 'approve'} />
+                        <button class="btn btn-primary">{request.status === 'APPROVED' ? 'New invite link' : 'Approve'}</button>
+                        <p data-form-status class="mt-1 text-xs text-stone-500"></p>
+                      </form>
+                      {request.status !== 'REJECTED' && (
+                        <form data-api-form data-action={`/api/admin/access-requests/${request.id}`} data-method="POST" data-admin-action>
+                          <input type="hidden" name="action" value="reject" />
+                          <button class="btn btn-secondary">Reject</button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+
+  <section>
+    <h2 class="mb-3 text-xl font-semibold text-ink">Workspaces</h2>
+    <div class="panel overflow-x-auto rounded-lg">
+      <table class="w-full text-left text-sm">
+        <thead class="border-b border-stone-200 text-xs uppercase text-stone-500"><tr><th class="p-3">Workspace</th><th class="p-3">Status</th><th class="p-3">Plan</th><th class="p-3">Users</th><th class="p-3">Agents</th><th class="p-3">Change access</th></tr></thead>
+        <tbody>
+          {organisations.map((organisation) => {
+            const entitlement = resolveEntitlement(organisation.subscription);
+            return (
+              <tr class="border-b border-stone-100 align-top">
+                <td class="p-3"><div class="font-semibold text-ink">{organisation.name}</div><div class="text-stone-500">Created {date(organisation.createdAt)}</div></td>
+                <td class="p-3"><span class={entitlement.allowed ? 'text-emerald-800' : 'text-red-700'}>{entitlement.status.toLowerCase().replace('_', ' ')}</span>{organisation.subscription?.trialEndsAt && organisation.subscription.status === 'TRIALING' && <div class="text-stone-500">until {date(organisation.subscription.trialEndsAt)}</div>}</td>
+                <td class="p-3">{organisation.subscription?.plan ?? ''}</td>
+                <td class="p-3">{organisation._count.members}</td>
+                <td class="p-3">{organisation._count.agentRegistrations} / {organisation.subscription?.agentDeviceLimit ?? 0}</td>
+                <td class="p-3">
+                  <form data-api-form data-action={`/api/admin/organisations/${organisation.id}`} data-method="POST" data-admin-action class="flex flex-wrap items-center gap-2">
+                    <select name="action" class="field w-auto">
+                      <option value="extend_trial">Extend trial 14 days</option>
+                      <option value="comp">Make complimentary</option>
+                      <option value="require_payment">Require payment</option>
+                      <option value="suspend">Suspend</option>
+                    </select>
+                    <button class="btn btn-secondary">Apply</button>
+                    <p data-form-status class="w-full text-xs text-stone-500"></p>
+                  </form>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AppShell>
+
+<script>
+  // Approving returns a one-time invite link; show it so it can be sent by hand
+  // when email isn't configured. Other actions just refresh the tables.
+  window.addEventListener('portal:mutation-success', (event) => {
+    const payload = (event as CustomEvent).detail?.payload ?? {};
+    if (typeof payload.inviteUrl === 'string') {
+      const target = document.getElementById('admin-invite-result');
+      if (target) {
+        target.textContent = `${payload.emailed ? 'Invitation emailed.' : 'Email is not configured, so send this link yourself.'} Single-use link: ${payload.inviteUrl}`;
+        target.classList.remove('hidden');
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+    window.location.reload();
+  });
+</script>
