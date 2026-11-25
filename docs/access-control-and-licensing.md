@@ -59,7 +59,7 @@ Logic lives in `src/server/billing/entitlement.ts` (pure, unit tested).
 - **Signed licence**: `POST /api/desktop/licence` (Agent bearer auth) returns an Ed25519-signed JWT: organisation, Agent id, installation id, plan, status, `exp` = 72 hours (never past a trial end), `refreshAfter` = 12 hours. Signed with `LICENCE_SIGNING_PRIVATE_KEY`; the Agent ships the public key.
 - **Device limit** per plan (Starter 1, Practice 3, Studio 10; 14-day evaluation 1; complimentary 10), enforced at enrollment.
 - **Revocation**: revoking an Agent in Settings, suspending the organisation or the subscription lapsing all stop licence refresh and job access immediately. The offline window is at most 72 hours.
-- **Downloads**: installers are no longer public. They moved from `public/downloads/` to `agent-releases/` (outside `public/`, so never served statically). `/agent/download` requires a signed-in entitled user or an entitled Agent bearer token, then redirects to a **5-minute signed URL** in a private Supabase bucket (or streams from `agent-releases/` in local dev). `vercel.json` redirects the old `/downloads/*` links to it.
+- **Downloads**: installers are no longer public. They moved from `public/downloads/` to `agent-releases/` (outside `public/`, so never served statically). `/agent/download` requires a signed-in entitled user or an entitled Agent bearer token, then redirects to a **5-minute signed URL** in a private Supabase bucket (or, in local dev, streams from the folder named by `AGENT_RELEASE_LOCAL_DIR`). `vercel.json` redirects the old `/downloads/*` links to it.
 
 ## Owner steps before this goes live
 

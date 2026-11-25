@@ -14,9 +14,14 @@ const releaseStorageConfig = () => {
   return url && key ? { url, key, bucket } : null;
 };
 
-// Local development without Supabase: the repo's agent-releases/ folder
-// (deliberately outside public/ so it is never served statically).
-export const LOCAL_RELEASE_DIR = 'agent-releases';
+// Local development without Supabase: set AGENT_RELEASE_LOCAL_DIR to the
+// absolute path of the repo's agent-releases/ folder. It is only read from env
+// (no literal path) so Vercel's file tracer never bundles 1.2 GB of installers
+// into the server function.
+const localReleasePath = (storageKey: string) => {
+  const dir = process.env.AGENT_RELEASE_LOCAL_DIR?.trim();
+  return dir ? path.join(dir, storageKey) : null;
+};
 
 export type ReleaseLocation = { kind: 'redirect'; url: string } | { kind: 'local'; path: string };
 
@@ -24,7 +29,8 @@ export const resolveReleaseLocation = async (storageKey: string, filename: strin
   if (!/^[A-Za-z0-9._-]+$/.test(storageKey)) throw new HttpError(500, 'Invalid release storage key.');
   const config = releaseStorageConfig();
   if (!config) {
-    if (process.env.NODE_ENV !== 'production') return { kind: 'local', path: path.resolve(LOCAL_RELEASE_DIR, storageKey) };
+    const local = process.env.NODE_ENV !== 'production' ? localReleasePath(storageKey) : null;
+    if (local) return { kind: 'local', path: local };
     throw new HttpError(503, 'The Agent download is being prepared. Please try again shortly.');
   }
   return { kind: 'redirect', url: await createSignedReleaseUrl(config, storageKey, filename) };
