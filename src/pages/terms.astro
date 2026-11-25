@@ -1,71 +1,94 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro';
-import BrandLogo from '@/components/brand/BrandLogo.astro';
-import PublicFooter from '@/components/layout/PublicFooter.astro';
+import LegalPage from '@/components/marketing/LegalPage.astro';
+import { marketingRoutes, contactDetails } from '@/lib/marketing/routes';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 
 export const prerender = true;
 setAstroCache(Astro, publicPageShort);
+
+// DRAFT: the subscription, evaluation, licence and termination sections were added
+// on 25 November 2026 and need review by a solicitor before launch.
+const sections = [
+  { id: 'using-architect-pro', title: 'Using Architect Pro' },
+  { id: 'access', title: 'Access and approval' },
+  { id: 'subscriptions', title: 'Subscriptions and billing' },
+  { id: 'desktop-agent', title: 'Desktop Agent licence' },
+  { id: 'your-account', title: 'Your account' },
+  { id: 'your-content', title: 'Your content and responsibilities' },
+  { id: 'acceptable-use', title: 'Acceptable use' },
+  { id: 'availability', title: 'Service availability' },
+  { id: 'third-party', title: 'Third-party services' },
+  { id: 'ending', title: 'Ending your subscription' },
+  { id: 'changes', title: 'Changes and contact' },
+  { id: 'law', title: 'Governing law' },
+];
 ---
-<BaseLayout
+<LegalPage
   title="Terms of Use | Architect Pro"
-  description="Terms for using the Architect Pro workspace."
+  heading="Terms of Use"
+  description="Terms for using the Architect Pro workspace, subscriptions and desktop Agent."
+  updated="25 November 2026"
+  sections={sections}
 >
-  <main class="min-h-screen bg-paper px-4 py-10 sm:px-8 lg:px-12">
-    <div class="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl flex-col">
-      <header class="flex items-center justify-between gap-4">
-        <a class="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-moss/40" href="/" aria-label="Architect Pro home">
-          <BrandLogo class="h-auto w-40" />
-        </a>
-        <a class="text-sm font-semibold text-stone-600 hover:text-ink" href="/login">Sign in</a>
-      </header>
+  <section>
+    <h2 id="using-architect-pro">Using Architect Pro</h2>
+    <p>Architect Pro is a workspace for organising project information and preparing planning and building warrant materials for review. You may use it only for lawful business purposes and in accordance with these terms.</p>
+  </section>
 
-      <article class="panel my-10 rounded-lg p-6 sm:p-10">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-moss">Architect Pro</p>
-        <h1 class="mt-3 text-3xl font-semibold text-ink">Terms of Use</h1>
-        <p class="mt-3 text-sm text-stone-500">Last updated: 13 August 2026</p>
+  <section>
+    <h2 id="access">Access and approval</h2>
+    <p>Architect Pro is available only to organisations with an active paid subscription or an evaluation workspace that we have approved. We may decline or withdraw an evaluation at our discretion. An evaluation lasts for the period we tell you when we approve it, after which the workspace becomes read-only unless you start a subscription.</p>
+  </section>
 
-        <div class="mt-8 space-y-7 text-sm leading-7 text-stone-600">
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Using Architect Pro</h2>
-            <p class="mt-2">Architect Pro is a workspace for organising project information and preparing planning and building warrant materials for review. You may use it only for lawful business purposes and in accordance with these terms.</p>
-          </section>
+  <section>
+    <h2 id="subscriptions">Subscriptions and billing</h2>
+    <p>Subscriptions are charged per organisation, monthly or annually in advance, at the price shown when you subscribe, plus VAT. Each plan includes the number of users, desktop Agents and automated submissions described on our <a href={marketingRoutes.pricing}>pricing page</a> at the time you subscribe.</p>
+    <p>Subscriptions renew automatically until cancelled. Upgrades take effect immediately and are charged pro rata; downgrades take effect from the next renewal. If a payment fails we will tell you and may restrict the workspace to read-only access until it is resolved. Statutory planning, building warrant and verifier fees are paid by you directly to the relevant authority and are not part of your subscription.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Your account</h2>
-            <p class="mt-2">You are responsible for keeping your sign-in details secure and for the activity carried out through your account. You must provide accurate information and tell your organisation administrator promptly if you believe your account has been misused.</p>
-          </section>
+  <section>
+    <h2 id="desktop-agent">Desktop Agent licence</h2>
+    <p>While your subscription or approved evaluation is active, we grant your organisation a non-exclusive, non-transferable licence to install and run the Architect Pro desktop Agent on the number of devices your plan allows, solely to carry out work for your workspace.</p>
+    <p>The Agent is available only from within an active workspace. Each installation must be paired to your workspace, and it checks its licence when it starts and periodically while it runs. You must not copy, redistribute, resell, reverse engineer or attempt to bypass the licence checks of the Agent. When your subscription or evaluation ends, or a device is revoked, the licence for that device ends and the Agent will stop working.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Your content and responsibilities</h2>
-            <p class="mt-2">You retain responsibility for the documents and information you upload. You must have the necessary rights and permissions to use that content, and you must not upload unlawful, harmful or malicious material. Architect Pro outputs are aids for professional review and do not replace your own checks, decisions or statutory responsibilities.</p>
-          </section>
+  <section>
+    <h2 id="your-account">Your account</h2>
+    <p>You are responsible for keeping your sign-in details secure and for the activity carried out through your account. You must provide accurate information and tell your organisation administrator promptly if you believe your account has been misused. Accounts are for named individuals and must not be shared.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Service availability</h2>
-            <p class="mt-2">We aim to keep Architect Pro available and secure, but the service may occasionally be changed, suspended or unavailable for maintenance, updates or reasons outside our reasonable control. We may suspend access where necessary to protect the service or its users.</p>
-          </section>
+  <section>
+    <h2 id="your-content">Your content and responsibilities</h2>
+    <p>You retain responsibility for the documents and information you upload. You must have the necessary rights and permissions to use that content, and you must not upload unlawful, harmful or malicious material. Architect Pro outputs are aids for professional review and do not replace your own checks, decisions or statutory responsibilities. You remain responsible for every application submitted on your behalf, and for the portal credentials you use with the desktop Agent.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Third-party services</h2>
-            <p class="mt-2">Architect Pro may use third-party services, including Google sign-in. Your use of those services may also be subject to their own terms and privacy policies.</p>
-          </section>
+  <section>
+    <h2 id="acceptable-use">Acceptable use</h2>
+    <p>You must not use Architect Pro to submit applications you are not authorised to make, to interfere with any public authority's systems, to exceed your plan's limits by technical means, or to give access to anyone outside your organisation.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Changes and contact</h2>
-            <p class="mt-2">We may update these terms when the service changes. We will publish the updated version on this page. If you have a question about these terms, please contact your Architect Pro organisation administrator.</p>
-          </section>
+  <section>
+    <h2 id="availability">Service availability</h2>
+    <p>We aim to keep Architect Pro available and secure, but the service may occasionally be changed, suspended or unavailable for maintenance, updates or reasons outside our reasonable control, including the availability of government portals. We may suspend access where necessary to protect the service or its users.</p>
+  </section>
 
-          <section>
-            <h2 class="text-lg font-semibold text-ink">Governing law</h2>
-            <p class="mt-2">These terms are governed by the laws of Scotland. The courts of Scotland will have exclusive jurisdiction, subject to any rights you have under applicable law.</p>
-          </section>
-        </div>
-      </article>
+  <section>
+    <h2 id="third-party">Third-party services</h2>
+    <p>Architect Pro may use third-party services, including Google sign-in, Google Calendar, Gmail, Xero and our payment provider. Your use of those services may also be subject to their own terms and privacy policies.</p>
+  </section>
 
-      <div class="mt-auto">
-        <PublicFooter />
-      </div>
-    </div>
-  </main>
-</BaseLayout>
+  <section>
+    <h2 id="ending">Ending your subscription</h2>
+    <p>You can cancel at any time from your workspace settings; your subscription runs to the end of the period you have paid for. When it ends, your workspace becomes read-only and paired Agents stop working. You may export your records for 30 days, after which we will delete them in line with our <a href={marketingRoutes.privacy}>privacy policy</a>.</p>
+  </section>
+
+  <section>
+    <h2 id="changes">Changes and contact</h2>
+    <p>We may update these terms when the service changes. We will publish the updated version on this page and tell subscribers about material changes before they take effect. If you have a question about these terms, contact <a href={`mailto:${contactDetails.supportEmail}`}>{contactDetails.supportEmail}</a>.</p>
+  </section>
+
+  <section>
+    <h2 id="law">Governing law</h2>
+    <p>These terms are governed by the laws of Scotland. The courts of Scotland will have exclusive jurisdiction, subject to any rights you have under applicable law.</p>
+  </section>
+</LegalPage>

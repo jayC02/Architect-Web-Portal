@@ -1,0 +1,189 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import LineArt from '@/components/marketing/LineArt.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import { marketingRoutes } from '@/lib/marketing/routes';
+import { MANUAL_MIN, AUTO_MIN } from '@/components/home/scroll-story/story.js';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+
+const extras = [
+  { title: 'Deadlines that find you', body: 'Determination dates, warrant expiries and follow-ups gather in one list, synced to Google Calendar.', icon: '<path d="M4 7h16v13H4zM4 11h16M9 4v5M15 4v5"/>' },
+  { title: 'Clients and sites', body: 'Every applicant, agent and address lives once and fills every application that needs it.', icon: '<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' },
+  { title: 'U-value calculator', body: 'Build up walls, roofs and floors and export a report to attach to the warrant.', icon: '<path d="M5 4h14v16H5zM5 9h14M5 14h14M10 4v16"/>' },
+  { title: 'Xero overview', body: 'Read-only invoices and fee positions per project, without leaving the workspace.', icon: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>' },
+  { title: 'Roles and permissions', body: 'Owners, architects and assistants see and change only what their role allows.', icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M17 11l2 2 3-4"/>' },
+  { title: 'Audit history', body: 'Every prepared draft, submission and reply is recorded with who did it and when.', icon: '<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/>' },
+];
+---
+<MarketingLayout
+  title="Features | Architect Pro"
+  description="Project records, AI document sorting, planning, building warrant and completion certificate preparation, and a desktop Agent that completes the portal for you."
+  world="site"
+>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Features</p>
+        <h1>One project record. Every application.</h1>
+        <p class="lede">Architect Pro keeps your projects, drawings and deadlines together, prepares planning, building warrant and completion certificate applications from them, then completes the portal for you in the background.</p>
+        <div class="actions">
+          <a class="button primary" href={marketingRoutes.demo}>Book a demo</a>
+          <a class="button" href={marketingRoutes.pricing}>See pricing</a>
+        </div>
+      </div>
+      <LineArt variant="plan" />
+    </div>
+  </section>
+
+  <section class="section" aria-label="How Architect Pro works">
+    <div class="wrap">
+      <article class="chapter reveal">
+        <div class="chapter-copy">
+          <p class="chapter-index"><b>01</b>Projects</p>
+          <h2>Start every project in one place.</h2>
+          <p>Record the site, client and red line once. Stages run from lead to completion with the next useful action shown beside every project, so the whole practice can see what is moving.</p>
+          <ul class="ticks">
+            <li>Project register with stage and next action together</li>
+            <li>Clients, applicants and agents reused across projects</li>
+            <li>Scottish address lookup for sites</li>
+          </ul>
+        </div>
+        <div class="world site">
+          <div class="mock">
+            <div class="mock-title">Project register <span class="tag">Illustrative</span></div>
+            <div class="mock-row"><span>14 Harbour Lane · Extension</span><span class="tag">Planning</span></div>
+            <div class="mock-row"><span>Glebe Cottage · Alterations</span><span class="tag wait">Warrant</span></div>
+            <div class="mock-row"><span>Mill Wynd · New build</span><span class="tag ok">Completion</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="chapter reveal">
+        <div class="chapter-copy">
+          <p class="chapter-index"><b>02</b>Documents</p>
+          <h2>Drop the drawings in. They sort themselves.</h2>
+          <p>Upload a folder of PDFs and AI reads each one: location plans, elevations, sections, specifications and certificates are labelled and attached to the right application.</p>
+          <ul class="ticks">
+            <li>Drawing type, number and revision read from the sheet</li>
+            <li>You review every suggestion before it is used</li>
+            <li>Upload limits and file checks before anything is sent</li>
+          </ul>
+        </div>
+        <div class="world design">
+          <div class="mock">
+            <div class="mock-title">Sorting 6 drawings</div>
+            <div class="mock-row"><span>A-001 Location plan.pdf</span><span class="tag ok">Location plan</span></div>
+            <div class="mock-row"><span>A-110 Proposed elevations.pdf</span><span class="tag ok">Elevations</span></div>
+            <div class="mock-row"><span>A-120 Sections.pdf</span><span class="tag ok">Sections</span></div>
+            <div class="mock-row"><span>Spec rev C.pdf</span><span class="tag wait">Check</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="chapter reveal">
+        <div class="chapter-copy">
+          <p class="chapter-index"><b>03</b>Applications</p>
+          <h2>Planning, warrant and completion, prepared from the record.</h2>
+          <p>Architect Pro drafts each application from the project you already keep: applicant, site, description, documents and fee. You review it on one page and decide when it goes.</p>
+          <ul class="ticks">
+            <li>Planning permission and building warrant drafts</li>
+            <li>Completion certificates with the right supporting documents</li>
+            <li>Building standards fee calculated for you</li>
+          </ul>
+        </div>
+        <div class="world portal">
+          <div class="mock">
+            <div class="mock-title">Building warrant draft <span class="tag live">Ready to review</span></div>
+            <div class="mock-row"><span>Applicant</span><span>Taken from client</span></div>
+            <div class="mock-row"><span>Description of works</span><span>Taken from project</span></div>
+            <div class="mock-row"><span>Documents</span><span class="num">9 attached</span></div>
+            <div class="mock-row"><span>Fee</span><span>Calculated</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="chapter reveal">
+        <div class="chapter-copy">
+          <p class="chapter-index"><b>04</b>Desktop Agent</p>
+          <h2>The portal, done in the background.</h2>
+          <p>The Architect Pro Agent runs on a licensed Windows PC in your office. It signs in to the portal with your practice's own account, keys in every field, attaches each document and stops at payment for you to approve.</p>
+          <ul class="ticks">
+            <li>Works from a frozen snapshot of the approved draft</li>
+            <li>Shows live progress and an estimated finish time</li>
+            <li>Recovers from portal timeouts and picks up where it left off</li>
+            <li>Licensed per device and only runs with an active subscription</li>
+          </ul>
+        </div>
+        <div class="world automation">
+          <div class="mock">
+            <div class="mock-title">Agent · Office PC <span class="tag ok">Licensed</span></div>
+            <div class="mock-row"><span>Creating proposal</span><span class="tag ok">Done</span></div>
+            <div class="mock-row"><span>Entering applicant and site</span><span class="tag ok">Done</span></div>
+            <div class="mock-row"><span>Attaching documents</span><span class="tag live">7 of 9</span></div>
+            <div class="bar" aria-hidden="true"><span style="width: 78%"></span></div>
+            <p class="mock-caption">Illustrative progress. Actual times vary.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="chapter reveal">
+        <div class="chapter-copy">
+          <p class="chapter-index"><b>05</b>Tracking</p>
+          <h2>Then it keeps track.</h2>
+          <p>Connect Gmail and Architect Pro recognises council and verifier emails, matches them to the right application and updates its status. Validation, requests for information and decisions arrive on the project, not lost in an inbox.</p>
+          <ul class="ticks">
+            <li>Gmail tracking of submissions, validations and decisions</li>
+            <li>Deadlines synced to Google Calendar</li>
+            <li>Daily checks for anything waiting on you</li>
+          </ul>
+        </div>
+        <div class="world tracking">
+          <div class="mock">
+            <div class="mock-title">14 Harbour Lane</div>
+            <div class="mock-row"><span>Planning permission</span><span class="tag ok">Validated</span></div>
+            <div class="mock-row"><span>Building warrant</span><span class="tag wait">Further information</span></div>
+            <div class="mock-row"><span>Completion certificate</span><span class="tag">Not started</span></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section tint" aria-labelledby="also-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="also-title">Everything else a practice runs on.</h2>
+        <p>The working tools around the applications, built for how Scottish practices actually run projects.</p>
+      </div>
+      <div class="grid three">
+        {extras.map((item) => (
+          <article class="card reveal">
+            <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" set:html={item.icon} aria-hidden="true" /></span>
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="time-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="time-title">Time back on every project.</h2>
+        <p>The same three applications, keyed in by hand or prepared and submitted for you.</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="num">{MANUAL_MIN}<small>min</small></b><span>Typical time to key planning, warrant and completion certificate into the portal by hand.</span></div>
+        <div class="stat"><b class="num">{AUTO_MIN}<small>min</small></b><span>Your time reviewing and approving the same three with Architect Pro.</span></div>
+        <div class="stat"><b class="num">0</b><span>Fields re-typed from one application to the next.</span></div>
+      </div>
+      <p class="footnote">Illustrative figures from the homepage story. Actual times vary by project and portal availability. Planning and building standards decisions rest with the relevant authority.</p>
+    </div>
+  </section>
+
+  <ClosingCta />
+</MarketingLayout>

@@ -1,0 +1,64 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import LineArt from '@/components/marketing/LineArt.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import { marketingRoutes, contactDetails } from '@/lib/marketing/routes';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+
+// Claims here describe how the application is built today. Confirm hosting and
+// database regions before launch.
+const pillars = [
+  { title: 'Your practice, walled off', body: 'Every record belongs to one organisation. Requests are checked against your membership and role before any project, document or application is read.', icon: '<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>' },
+  { title: 'Hosted in the UK', body: 'The application runs in London. Documents are kept in private storage and served through short-lived signed links.', icon: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4a12 12 0 0 1 0 16M12 4a12 12 0 0 0 0 16"/>' },
+  { title: 'Paid and approved access only', body: 'Workspaces open only for approved demo practices or active subscriptions. There is no open sign-up and no public download.', icon: '<path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6z"/><path d="m9 12 2 2 4-4"/>' },
+  { title: 'Licensed desktop Agents', body: 'Each Agent is paired to your workspace with a one-time code, holds a revocable device credential and re-checks its licence while it runs.', icon: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>' },
+  { title: 'You approve every submission', body: 'The Agent works from a frozen snapshot of the draft you approved and stops before payment so a person always confirms.', icon: '<path d="M4 12l5 5L20 6"/>' },
+  { title: 'Careful sign-in', body: 'Passwords are hashed with bcrypt, sessions use secure HTTP-only cookies, and sign-in attempts are rate limited. Google sign-in is available.', icon: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>' },
+];
+---
+<MarketingLayout
+  title="Security | Architect Pro"
+  description="How Architect Pro protects your practice's projects, documents, portal submissions and desktop Agents."
+  world="portal"
+>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Security</p>
+        <h1>Built to be trusted with your portal accounts.</h1>
+        <p class="lede">Architect Pro handles client details, drawings and submissions to public authorities. Here is how we keep them safe and who can reach them.</p>
+      </div>
+      <LineArt variant="stack" />
+    </div>
+  </section>
+
+  <section class="section" aria-label="Security practices">
+    <div class="wrap">
+      <div class="grid three">
+        {pillars.map((item) => (
+          <article class="card reveal">
+            <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" set:html={item.icon} aria-hidden="true" /></span>
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section tint" aria-labelledby="data-title">
+    <div class="wrap section-head">
+      <h2 id="data-title">Your data stays yours.</h2>
+      <div class="body-copy" style="display: grid; gap: 16px;">
+        <p>We use your information only to run your workspace. AI document sorting sends a document to a model provider only to classify it, and we do not allow it to be used for training.</p>
+        <p>Connected Google and Xero accounts use the narrowest permissions each feature needs, and you can disconnect them at any time. If you leave, you can export your records before your workspace is closed.</p>
+        <p>Read the <a class="text-link" href={marketingRoutes.privacy}>privacy policy</a> for detail, or report a security concern to <a class="text-link" href={`mailto:${contactDetails.supportEmail}`}>{contactDetails.supportEmail}</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta title="Ask us anything about security." body="Book a demo and bring your questions. We can walk your IT contact through how access, Agents and storage work." />
+</MarketingLayout>

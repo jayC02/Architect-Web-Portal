@@ -63,7 +63,7 @@ export function mountScrollHome() {
       ? `<p class="act-index"><span>${pad(act)}</span>${a.name}</p>
          <h2 class="final-title">No more portal.<br />${MANUAL_MIN} minutes down to ${AUTO_MIN}.</h2>
          <div class="final-actions">
-           <a class="button primary" href="/register">Create your workspace</a>
+           <a class="button primary" href="/demo">Book a demo</a>
            <button type="button" class="button" data-action="replay">Replay</button>
          </div>
          <p class="note">${fictionNote}</p>`

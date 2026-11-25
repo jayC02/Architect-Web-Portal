@@ -1,0 +1,196 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import { marketingRoutes, subscribeHref, demoHref } from '@/lib/marketing/routes';
+import { plans, enterprise, pricingNotes, formatPrice } from '@/lib/marketing/plans';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+
+const yes = { label: 'Included', className: 'yes', text: 'Yes' };
+const no = { label: 'Not included', className: 'no', text: '—' };
+type Cell = typeof yes | string;
+const comparison: { group: string; rows: [string, Cell, Cell, Cell][] }[] = [
+  {
+    group: 'Workspace',
+    rows: [
+      ['Users', '1', 'Up to 5', 'Up to 15'],
+      ['Projects, clients, sites and deadlines', yes, yes, yes],
+      ['AI document sorting', yes, yes, yes],
+      ['Google Calendar sync', yes, yes, yes],
+      ['Roles and permissions', no, yes, yes],
+    ],
+  },
+  {
+    group: 'Applications',
+    rows: [
+      ['Planning, warrant and completion certificate drafts', yes, yes, yes],
+      ['Licensed desktop Agents', '1', '3', '10'],
+      ['Automated portal submissions a month', '10', '40', 'Unlimited'],
+      ['Gmail tracking of replies and decisions', no, yes, yes],
+      ['Audit history for every submission', no, no, yes],
+    ],
+  },
+  {
+    group: 'Tools and support',
+    rows: [
+      ['U-value calculator and reports', no, yes, yes],
+      ['Xero finance overview', no, yes, yes],
+      ['Onboarding', 'Self-serve', 'Guided call', 'Guided with data import'],
+      ['Support', 'Email', 'Priority email', 'Phone and video'],
+    ],
+  },
+];
+
+const faqs = [
+  { q: 'Is there a free trial?', a: 'There is no open free trial. Book a demo and, if Architect Pro suits your practice, we approve a 14-day guided evaluation workspace with one licensed Agent. When it ends you choose a plan or the workspace locks.' },
+  { q: 'What happens to the desktop Agent if we cancel?', a: 'Each Agent is licensed to your workspace and checks its licence when it starts and regularly while running. When a subscription ends, Agents stop submitting. Your project records stay available to export for 30 days.' },
+  { q: 'Can we change plan later?', a: 'Yes. Upgrades take effect immediately and are prorated. Downgrades apply from your next billing date.' },
+  { q: 'Do prices include council fees?', a: 'No. Planning, building warrant and verifier fees are paid to the relevant authority. Architect Pro calculates them for you but never charges them.' },
+];
+---
+<MarketingLayout
+  title="Pricing | Architect Pro"
+  description="Plans for Scottish architecture practices, from sole practitioners to growing studios. Book a demo or start a subscription."
+  world="design"
+>
+  <section class="hero compact">
+    <div class="wrap">
+      <p class="eyebrow">Pricing</p>
+      <h1>Priced per practice, not per application.</h1>
+      <p class="lede">Every plan includes planning, building warrant and completion certificate preparation and a licensed desktop Agent. Start a subscription today or book a demo first.</p>
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button type="button" data-billing="monthly" aria-pressed="false">Monthly</button>
+        <button type="button" data-billing="annual" aria-pressed="true">Annual <span class="save">2 months free</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-label="Plans" style="padding-top: 56px;">
+    <div class="wrap">
+      <div class="plans">
+        {plans.map((plan) => (
+          <article class:list={['plan', { highlight: plan.highlight }]} aria-labelledby={`plan-${plan.id}`}>
+            {plan.highlight && <span class="badge">Most practices</span>}
+            <h3 id={`plan-${plan.id}`}>{plan.name}</h3>
+            <p class="plan-summary">{plan.summary}</p>
+            <p class="price">
+              <b data-monthly={formatPrice(plan.monthly)} data-annual={formatPrice(plan.annualMonthly)}>{formatPrice(plan.annualMonthly)}</b>
+              <span>per month</span>
+            </p>
+            <p class="price-note" data-monthly="Billed monthly, cancel any time" data-annual={`Billed annually at ${formatPrice(plan.annualMonthly * 12)}`}>Billed annually at {formatPrice(plan.annualMonthly * 12)}</p>
+            <a
+              class:list={['button', plan.highlight ? 'primary' : 'dark', 'subscribe']}
+              href={subscribeHref(plan.id, 'annual')}
+              data-monthly={subscribeHref(plan.id, 'monthly')}
+              data-annual={subscribeHref(plan.id, 'annual')}
+            >Start subscription</a>
+            <a class="secondary-link text-link" href={demoHref(plan.id)}>Book a demo first</a>
+            <ul class="plan-limits">
+              <li>{plan.seats}</li>
+              <li>{plan.agentSeats}</li>
+              <li>{plan.applications}</li>
+            </ul>
+            <ul class="ticks">
+              {plan.features.map((feature) => <li>{feature}</li>)}
+            </ul>
+          </article>
+        ))}
+      </div>
+
+      <div class="enterprise">
+        <div>
+          <h3>{enterprise.name}</h3>
+          <p>{enterprise.summary}</p>
+        </div>
+        <ul>{enterprise.features.map((feature) => <li>{feature}</li>)}</ul>
+        <a class="button" href={demoHref('enterprise')}>Talk to us</a>
+      </div>
+
+      <ul class="footnote" style="display: grid; gap: 4px;">
+        {pricingNotes.map((note) => <li>{note}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section tint" aria-labelledby="access-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="access-title">How access works.</h2>
+        <p>Architect Pro is only available to approved practices with an active subscription. That keeps your data, and the portal accounts the Agent uses, in trusted hands.</p>
+      </div>
+      <ol class="access-steps">
+        <li><h3>Book a demo or choose a plan</h3><p>Walk through a real project with us, or go straight to checkout if you already know.</p></li>
+        <li><h3>We approve your practice</h3><p>Demo practices are approved for a guided evaluation. Subscriptions are active as soon as payment clears.</p></li>
+        <li><h3>Your workspace opens</h3><p>Invite your team. Seats follow your plan and the owner controls who has access.</p></li>
+        <li><h3>Licence your Agent</h3><p>Download the Agent from inside your workspace and pair it to an office PC with a one-time code.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="compare-title">
+    <div class="wrap">
+      <div class="section-head single">
+        <h2 id="compare-title">Compare plans.</h2>
+      </div>
+      <div class="table-scroll">
+        <table class="compare">
+          <caption class="sr-only">Plan comparison</caption>
+          <thead>
+            <tr><th scope="col"><span class="sr-only">Feature</span></th>{plans.map((plan) => <th scope="col">{plan.name}</th>)}</tr>
+          </thead>
+          <tbody>
+            {comparison.map((section) => (
+              <Fragment>
+                <tr class="group"><th scope="colgroup" colspan="4">{section.group}</th></tr>
+                {section.rows.map(([label, ...cells]) => (
+                  <tr>
+                    <th scope="row">{label}</th>
+                    {cells.map((cell) => typeof cell === 'string'
+                      ? <td>{cell}</td>
+                      : <td class={cell.className}><span aria-hidden="true">{cell.text}</span><span class="sr-only">{cell.label}</span></td>)}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section bordered" aria-labelledby="pricing-faq-title">
+    <div class="wrap faq-layout">
+      <div>
+        <h2 id="pricing-faq-title" style="font-size: clamp(26px, 2.6vw, 36px);">Pricing questions</h2>
+        <p class="body-copy" style="margin-top: 12px;">More in the <a class="text-link" href={marketingRoutes.faq}>full FAQ</a>.</p>
+      </div>
+      <div class="faq">
+        {faqs.map((item) => (
+          <details>
+            <summary>{item.q}</summary>
+            <div class="answer"><p>{item.a}</p></div>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta title="Not sure which plan fits?" body="Book a demo and we will recommend a plan from the number of applications your practice submits each month." />
+
+  <script>
+    const toggle = document.querySelector('.billing-toggle');
+    toggle?.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-billing]');
+      if (!button) return;
+      const period = button.dataset.billing as 'monthly' | 'annual';
+      toggle.querySelectorAll('button').forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+      document.querySelectorAll<HTMLElement>('.plan [data-monthly]').forEach((element) => {
+        const value = element.dataset[period] ?? '';
+        if (element instanceof HTMLAnchorElement) element.href = value;
+        else element.textContent = value;
+      });
+    });
+  </script>
+</MarketingLayout>

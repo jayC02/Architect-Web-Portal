@@ -9,14 +9,16 @@ export function header() {
   return `<header class="top">
     <a href="/" class="brand" aria-label="Architect Pro home"><img src="/brand/architect-pro-logo.png" width="800" height="280" alt="Architect Pro" /></a>
     <nav class="account-links" aria-label="Homepage navigation">
+      <a class="site-link" href="/features">Features</a>
+      <a class="site-link" href="/pricing">Pricing</a>
       <a class="sign-in" href="/login">Sign in</a>
-      <a class="button primary account-create" href="/register">Create workspace</a>
+      <a class="button primary account-create" href="/demo">Book a demo</a>
     </nav>
   </header>`;
 }
 
 export function footer() {
-  return `<footer class="site-footer" id="home-footer"><span>&copy; ${new Date().getFullYear()} Architect Pro</span><nav aria-label="Footer navigation"><a href="/login">Sign in</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>`;
+  return `<footer class="site-footer" id="home-footer"><span>&copy; ${new Date().getFullYear()} Architect Pro</span><nav aria-label="Footer navigation"><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/about">About</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/login">Sign in</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>`;
 }
 
 // The rail exists in the server response, before scroll restoration or graphics loading.
@@ -42,7 +44,7 @@ export function storyMarkup() {
       <noscript><style>.scroll-home .rail { display:none; }</style><article class="story-transcript">
         <h2>No more portal.</h2><p>Architect Pro prepares planning permission, building warrant and completion certificate applications and keeps your project together.</p>
         ${acts.map(a=>`<section><h2>${a.title}</h2><p>${a.body}</p></section>`).join('')}
-        <p>${fictionNote}</p><a class="button primary" href="/register">Create your workspace</a>
+        <p>${fictionNote}</p><a class="button primary" href="/demo">Book a demo</a> <a class="button" href="/pricing">See pricing</a>
       </article></noscript>
     </main>${footer()}`;
 }

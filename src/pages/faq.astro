@@ -1,0 +1,96 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import { marketingRoutes } from '@/lib/marketing/routes';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+
+const groups = [
+  {
+    id: 'product',
+    title: 'The product',
+    items: [
+      { q: 'What does Architect Pro do?', a: ['It keeps your projects, clients, sites, drawings and deadlines in one workspace, prepares planning permission, building warrant and completion certificate applications from that record, and uses a desktop Agent to complete the government portal for you.'] },
+      { q: 'Which portals does it work with?', a: ['The Scottish eDevelopment service for planning and building standards. Tell us in your demo if you work with anything else.'] },
+      { q: 'Does it submit without asking me?', a: ['No. You review every prepared application. The Agent works from a frozen copy of the draft you approved and stops before payment so a person always confirms.'] },
+      { q: 'How accurate is the AI document sorting?', a: ['It reads each drawing and suggests its type, number and revision. You confirm or correct every suggestion before it is attached to an application.'] },
+    ],
+  },
+  {
+    id: 'access',
+    title: 'Access and licensing',
+    items: [
+      { q: 'Can I sign up and try it for free?', a: ['There is no open free sign-up. Book a demo and, if it suits your practice, we approve a 14-day guided evaluation workspace. You can also start a paid subscription straight away.'] },
+      { q: 'Where do I download the desktop Agent?', a: ['From inside your workspace once it is active. The Agent is not publicly downloadable. You pair it to an office PC with a one-time code, and it only runs while your subscription is active.'] },
+      { q: 'How many PCs can run the Agent?', a: ['It depends on your plan: one on Starter, three on Practice and ten on Studio. You can revoke a PC from your workspace and pair a new one at any time.'] },
+      { q: 'What happens when an evaluation or subscription ends?', a: ['The workspace becomes read-only and paired Agents stop submitting. Your records remain available to export for 30 days before they are deleted.'] },
+    ],
+  },
+  {
+    id: 'billing',
+    title: 'Billing',
+    items: [
+      { q: 'How do you charge?', a: ['A monthly or annual subscription per practice, paid by card. Annual plans are billed up front and save roughly two months. VAT is added at the standard rate.'] },
+      { q: 'Are council and verifier fees included?', a: ['No. Statutory fees are paid to the authority. Architect Pro calculates the building standards fee for you but never charges it.'] },
+      { q: 'Can I cancel?', a: ['Yes. Monthly plans can be cancelled at any time and run to the end of the paid month. Annual plans run to the end of the year.'] },
+    ],
+  },
+  {
+    id: 'data',
+    title: 'Data and security',
+    items: [
+      { q: 'Where is my data kept?', a: ['The application runs in the UK and documents are held in private storage. See the security page for more.'] },
+      { q: 'Who at my practice can see what?', a: ['The workspace owner invites team members and assigns roles. Each role sees and changes only what it is allowed to.'] },
+    ],
+  },
+];
+---
+<MarketingLayout
+  title="FAQ | Architect Pro"
+  description="Answers about Architect Pro, the desktop Agent, access, licensing, billing and data."
+  world="tracking"
+>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: groups.flatMap((group) => group.items.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a.join(' ') },
+      }))),
+    })} />
+  </Fragment>
+  <section class="hero compact">
+    <div class="wrap">
+      <p class="eyebrow">FAQ</p>
+      <h1>Questions, answered.</h1>
+      <p class="lede">Something missing? <a class="text-link" href={marketingRoutes.contact}>Ask us</a> and we will reply within one working day.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap faq-layout">
+      <nav class="faq-index" aria-label="FAQ sections">
+        {groups.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
+      </nav>
+      <div>
+        {groups.map((group) => (
+          <section class="faq-group faq" id={group.id} aria-labelledby={`${group.id}-title`} style="scroll-margin-top: 100px;">
+            <h2 id={`${group.id}-title`}>{group.title}</h2>
+            {group.items.map((item) => (
+              <details>
+                <summary>{item.q}</summary>
+                <div class="answer">{item.a.map((paragraph) => <p>{paragraph}</p>)}</div>
+              </details>
+            ))}
+          </section>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta />
+</MarketingLayout>

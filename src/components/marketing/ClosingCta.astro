@@ -1,0 +1,25 @@
+---
+import { marketingRoutes } from '@/lib/marketing/routes';
+
+interface Props {
+  title?: string;
+  body?: string;
+}
+const {
+  title = 'See your next application prepared in front of you.',
+  body = 'Book a 30-minute walkthrough with a real project from your practice. If it fits, we will set up your workspace and licence your desktop Agent the same week.',
+} = Astro.props;
+---
+<section class="closing" aria-labelledby="closing-title">
+  <div class="wrap">
+    <h2 id="closing-title">{title}</h2>
+    <p>{body}</p>
+    <div class="actions">
+      <a class="button primary" href={marketingRoutes.demo}>Book a demo</a>
+      <a class="button" href={marketingRoutes.pricing}>See pricing</a>
+    </div>
+  </div>
+  <svg class="closing-art" viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+    <path d="M20 330h440M70 330V178l170-118 170 118v152M110 206h70v64h-70zM300 206h70v64h-70zM210 330v-86h60v86" />
+  </svg>
+</section>

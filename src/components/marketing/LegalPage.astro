@@ -1,0 +1,31 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+
+interface Props {
+  title: string;
+  heading: string;
+  description: string;
+  updated: string;
+  sections: { id: string; title: string }[];
+}
+const { title, heading, description, updated, sections } = Astro.props;
+---
+<MarketingLayout title={title} description={description} world="site">
+  <section class="hero compact" style="padding-bottom: 48px;">
+    <div class="wrap">
+      <p class="eyebrow">Legal</p>
+      <h1>{heading}</h1>
+      <p class="meta">Last updated: {updated}</p>
+    </div>
+  </section>
+  <section class="section" style="padding-top: 56px;">
+    <div class="wrap legal">
+      <nav aria-label="On this page">
+        {sections.map((section) => <a href={`#${section.id}`}>{section.title}</a>)}
+      </nav>
+      <article class="prose">
+        <slot />
+      </article>
+    </div>
+  </section>
+</MarketingLayout>
