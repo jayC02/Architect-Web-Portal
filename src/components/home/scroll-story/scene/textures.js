@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { DOC_COUNT, DOCS_PER_GROUP } from "../story.js";
 
 const FONT = '"Space Grotesk", system-ui, sans-serif';
 const INK = "#16264a";
@@ -146,7 +147,7 @@ const drawings = {
 };
 
 const docSpecs = [
-  // Planning permission, 12 sheets
+  // Planning permission
   ["Planning", "Application form", "Householder", "form"],
   ["Planning", "Location plan", "1:1250", "location"],
   ["Planning", "Site plan", "1:200", "plan"],
@@ -156,10 +157,7 @@ const docSpecs = [
   ["Planning", "Design statement", "Rev B", "text"],
   ["Planning", "Ownership certificate", "Certificate A", "form"],
   ["Planning", "Roof plan", "1:100", "plan"],
-  ["Planning", "Street elevation", "1:200", "elevation"],
-  ["Planning", "Heritage statement", "Conservation area", "text"],
-  ["Planning", "Tree survey", "Arboricultural", "location"],
-  // Building warrant, 12 sheets
+  // Building warrant
   ["Warrant", "Warrant application", "Form A", "form"],
   ["Warrant", "Structural calculations", "Certificate of design", "calc"],
   ["Warrant", "Fire safety strategy", "Section 2", "text"],
@@ -168,10 +166,17 @@ const docSpecs = [
   ["Warrant", "Building sections", "1:50", "section"],
   ["Warrant", "Specification", "Materials", "text"],
   ["Warrant", "Construction details", "1:20", "section"],
-  ["Warrant", "Ventilation", "Section 3.14", "calc"],
-  ["Warrant", "Accessibility", "Section 4", "text"],
   ["Warrant", "Foundations", "1:50", "section"],
-  ["Warrant", "Noise separation", "Section 5", "calc"],
+  // Completion certificate
+  ["Completion", "Completion certificate", "Relevant person", "form"],
+  ["Completion", "Construction certificate", "Electrical", "form"],
+  ["Completion", "Energy certificate", "EPC", "calc"],
+  ["Completion", "Sustainability", "Statement", "text"],
+  ["Completion", "Fire safety", "Design summary", "text"],
+  ["Completion", "Design certificate", "Form Q", "form"],
+  ["Completion", "As-built plans", "1:100", "plan"],
+  ["Completion", "As-built sections", "1:50", "section"],
+  ["Completion", "Drainage test", "Results", "calc"],
 ];
 // Noise the AI clears away.
 const noiseSpecs = [
@@ -204,10 +209,10 @@ function documentTexture([group, title, sub, kind]) {
     }
     ctx.fillStyle = "#f8f9fc";
     ctx.fillRect(0, 0, w, h);
-    const band = { Planning: "#16264a", Warrant: "#1f3f9a" }[group] ?? "#8a93a8";
+    const band = { Planning: "#16264a", Warrant: "#1f3f9a", Completion: "#0f6b5c" }[group] ?? "#8a93a8";
     ctx.fillStyle = band;
     ctx.fillRect(0, 0, w, 18);
-    const heading = { Planning: "Planning permission", Warrant: "Building warrant" }[group] ?? "Inbox";
+    const heading = { Planning: "Planning permission", Warrant: "Building warrant", Completion: "Completion certificate" }[group] ?? "Inbox";
     txt(ctx, heading, 46, 74, 19, SOFT, 500);
     txt(ctx, title, 46, 120, title.length > 18 ? 34 : 40, INK, 700);
     if (sub) txt(ctx, sub, 46, 154, 19, SOFT, 400);
@@ -367,7 +372,7 @@ function paintPortal(ctx, w, h, st) {
     ctx.fillStyle = "#1f7a52";
     ctx.fillRect(0, h - 120, w, 120);
     txt(ctx, "Submitted by ArchitectPro", 34, h - 70, 34, "#ffffff", 700);
-    txt(ctx, "Paid and submitted. Planning permission and building warrant done.", 34, h - 30, 24, "#c9f2dc", 400);
+    txt(ctx, "Planning permission, building warrant and completion certificate done.", 34, h - 30, 24, "#c9f2dc", 400);
   } else {
     ctx.fillStyle = "#d5d9df";
     ctx.fillRect(0, h - 90, w, 90);
@@ -383,6 +388,7 @@ const statusStyle = {
   Submitted: ["#fdebc4", "#8a5a00"],
   Validated: ["#d9e8fb", "#1b5fb8"],
   Approved: ["#0d9a78", "#ffffff"],
+  Accepted: ["#0d9a78", "#ffffff"],
 };
 function paintRecord(ctx, w, h, st) {
   ctx.fillStyle = "#ffffff";
@@ -403,7 +409,7 @@ function paintRecord(ctx, w, h, st) {
     ctx.font = `600 24px ${FONT}`;
     pill(ctx, w - 96 - ctx.measureText(status).width - 34, y + 22, status, bg, fg, 24);
   });
-  const stats = [["24", "documents"], ["9", "drawings"], ["0", "portal logins"]];
+  const stats = [[String(DOC_COUNT), "documents"], ["12", "drawings"], ["0", "portal logins"]];
   stats.forEach(([n, l], i) => {
     const x = 56 + i * 300;
     txt(ctx, n, x, h - 74, 60, st.saved ? "#0d9a78" : "#a9c9c0", 700);
@@ -421,8 +427,9 @@ export function createTextures({ mobile = false } = {}) {
     prepared: badgeTexture("prepared"),
     approved: badgeTexture("approved"),
     labels: [
-      labelTexture("Planning permission", "12 documents", "#1e1560"),
-      labelTexture("Building warrant", "12 documents", "#1e1560"),
+      labelTexture("Planning permission", `${DOCS_PER_GROUP} documents`, "#1e1560"),
+      labelTexture("Building warrant", `${DOCS_PER_GROUP} documents`, "#1e1560"),
+      labelTexture("Completion certificate", `${DOCS_PER_GROUP} documents`, "#1e1560"),
     ],
     portal: liveTexture(1024, 720, paintPortal),
     record: liveTexture(1024, 720, paintRecord),

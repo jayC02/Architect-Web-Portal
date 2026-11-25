@@ -212,7 +212,7 @@ export function createSite(scene, { mobile }) {
   });
   group.add(poles, bulbs);
 
-  // The minute ring: one segment per minute in the portal. 30 by hand, 3 with ArchitectPro.
+  // The minute ring: one segment per minute in the portal, so by hand fills a whole hour.
   const MINUTES = Math.round(MANUAL_MIN),
     KEEP = Math.round(AUTO_MIN),
     ringR = 12.6,

@@ -61,7 +61,7 @@ export function mountScrollHome() {
     const timeBack = act === 5 && !final;
     copy.innerHTML = final
       ? `<p class="act-index"><span>${pad(act)}</span>${a.name}</p>
-         <h2 class="final-title">No more portal.<br />30 minutes down to 3.</h2>
+         <h2 class="final-title">No more portal.<br />${MANUAL_MIN} minutes down to ${AUTO_MIN}.</h2>
          <div class="final-actions">
            <a class="button primary" href="/register">Create your workspace</a>
            <button type="button" class="button" data-action="replay">Replay</button>
@@ -69,7 +69,7 @@ export function mountScrollHome() {
          <p class="note">${fictionNote}</p>`
       : timeBack
         ? `<p class="act-index"><span>${pad(act)}</span>${a.name}</p>
-           <p class="minutes" aria-label="${MANUAL_MIN} minutes down to ${AUTO_MIN} minutes for both applications">
+           <p class="minutes" aria-label="${MANUAL_MIN} minutes down to ${AUTO_MIN} minutes for all three applications">
              <span class="was">${MANUAL_MIN} min</span><span class="now"><b id="big-min">${MANUAL_MIN}</b><small>min</small></span>
            </p>
            <h2 class="time-title">${a.title}</h2><p class="body">${a.body}</p>`

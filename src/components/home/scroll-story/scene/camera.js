@@ -11,7 +11,7 @@ const rail = [
   // design: low hero angles as the walls rise
   [0.19, 17, 5, 12, 0, 3.4, 0, 36, 4],
   [0.25, 7, 4.6, 23, 0, 4.4, 0, 36, 0],
-  // the portal: tilted orbit through the storm, face to face with the portal, then up to see the 30-minute ring
+  // the portal: tilted orbit through the storm, face to face with the portal, then up to see the 60-minute ring
   [0.31, -16, 9, 13, 0, 4.8, 0, 36, -3],
   [0.35, -9, 6.5, 11, 0, 6.5, 0, 52, -12],
   [0.395, 5, 12.8, 18.5, 0, 13.4, 2.8, 42, -5],

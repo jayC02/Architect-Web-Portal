@@ -13,11 +13,13 @@ export const lin = (p, a, b) => clamp((p - a) / (b - a));
 export const mix = (a, b, t) => a + (b - a) * t;
 
 /** The headline numbers, in minutes, roughly. By hand means keying it all into the portal. */
-export const PLANNING_MIN = 12;
-export const WARRANT_MIN = 18;
-export const AUTO_EACH_MIN = 1.5;
-export const MANUAL_MIN = PLANNING_MIN + WARRANT_MIN; // both applications by hand
-export const AUTO_MIN = AUTO_EACH_MIN * 2; // both with ArchitectPro
+export const MANUAL_MIN = 60; // planning, warrant and completion certificate by hand
+export const AUTO_MIN = 4; // all three with ArchitectPro
+export const SAVED_MIN = MANUAL_MIN - AUTO_MIN;
+/** Documents on the board: one group per application. */
+export const GROUPS = 3;
+export const DOCS_PER_GROUP = 9;
+export const DOC_COUNT = GROUPS * DOCS_PER_GROUP;
 
 export const acts = [
   {
@@ -39,14 +41,14 @@ export const acts = [
     start: 0.3,
     jump: 0.41,
     title: "And then the portal.",
-    body: "By hand, every application means logging into eDevelopment, creating the proposal, finding the address, keying in every detail, attaching each document one by one and working out the fee. Roughly 12 minutes for planning permission and 18 for a building warrant.",
+    body: `By hand, every application means logging into eDevelopment, creating the proposal, finding the address, keying in every detail, attaching each document one by one and working out the fee. Roughly ${MANUAL_MIN} minutes for planning, warrant and completion certificate.`,
   },
   {
     name: "Automation",
     start: 0.45,
     jump: 0.55,
     title: "ArchitectPro does it in the background.",
-    body: "It reads the project once, then does the whole portal for you in the background, fee calculation included. About a minute and a half per application. Add your payment method, pay, and you’re done.",
+    body: `It reads the project once, then does the whole portal for you in the background, fee calculation included. About ${AUTO_MIN} minutes for all three applications. Add your payment method, pay, and you’re done.`,
   },
   {
     name: "Tracking",
@@ -59,8 +61,8 @@ export const acts = [
     name: "Time back",
     start: 0.78,
     jump: 0.88,
-    title: "27 minutes back on every project.",
-    body: "Planning permission and building warrant, submitted for you. No portal, no re-typing, no timeouts. That time goes back into the architecture.",
+    title: `${SAVED_MIN} minutes back on every project.`,
+    body: "Planning permission, building warrant and completion certificate, submitted for you. No portal, no re-typing, no timeouts. That time goes back into the architecture.",
   },
 ];
 
@@ -74,12 +76,12 @@ export function actAt(p) {
 
 /**
  * Side panel per act. `clock` is a stopwatch driven by scroll; `compare` shows the
- * 16 vs 3 minute bars; a line's `steps` change its status text as you scroll.
+ * by-hand and ArchitectPro bars; a line's `steps` change its status text as you scroll.
  */
 export const hud = {
   2: {
     title: "By hand, in the portal",
-    clock: { to: MANUAL_MIN, a: 0.31, b: 0.44, label: "both applications", tone: "manual" },
+    clock: { to: MANUAL_MIN, a: 0.31, b: 0.44, label: "for all three", tone: "manual" },
     lines: [
       { at: 0.32, text: "Log in to eDevelopment" },
       { at: 0.334, text: "Create the proposal" },
@@ -88,12 +90,12 @@ export const hud = {
       { at: 0.376, text: "Type every main detail into the portal" },
       { at: 0.39, text: "Attach each document and the location plan, one by one" },
       { at: 0.405, text: "Calculate the fee" },
-      { at: 0.42, text: "Submit. Then do it all again for the warrant" },
+      { at: 0.42, text: "Submit. Then again for the warrant and completion" },
     ],
   },
   3: {
     title: "With ArchitectPro",
-    clock: { to: AUTO_MIN, a: 0.49, b: 0.6, label: "both applications", tone: "auto" },
+    clock: { to: AUTO_MIN, a: 0.49, b: 0.6, label: "for all three", tone: "auto" },
     compare: { a: 0.49, b: 0.6 },
     lines: [
       { at: 0.5, text: "Project details read once" },
@@ -102,7 +104,7 @@ export const hud = {
       { at: 0.545, text: "Documents and location plan attached" },
       { at: 0.56, text: "Fee calculated" },
       { at: 0.575, text: "You add your payment method and pay", you: true },
-      { at: 0.6, text: "Planning and warrant submitted", detail: "1:30 each" },
+      { at: 0.6, text: "Planning, warrant and completion certificate submitted" },
     ],
   },
   4: {
@@ -110,8 +112,9 @@ export const hud = {
     lines: [
       { at: 0.655, text: "Planning permission", steps: [[0.655, "Submitted"], [0.69, "Validated"], [0.72, "Approved"]] },
       { at: 0.67, text: "Building warrant", steps: [[0.67, "Submitted"], [0.705, "Validated"], [0.735, "Approved"]] },
-      { at: 0.745, text: "Portal logins needed", detail: "None" },
-      { at: 0.76, text: "Project record saved", detail: "24 documents" },
+      { at: 0.685, text: "Completion certificate", steps: [[0.685, "Submitted"], [0.738, "Accepted"]] },
+      { at: 0.753, text: "Portal logins needed", detail: "None" },
+      { at: 0.76, text: "Project record saved", detail: `${DOC_COUNT} documents` },
     ],
   },
 };

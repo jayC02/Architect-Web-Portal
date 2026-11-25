@@ -275,7 +275,7 @@
 .scroll-home .compare .ap i::after { background: var(--accent); }
 .scroll-home .compare b { color: var(--fg); font-weight: 500; }
 
-/* Time back: a countdown from 30 to 3 owns the screen */
+/* Time back: the minutes countdown owns the screen */
 .scroll-home .minutes { display: flex; align-items: flex-end; gap: 22px; margin: 0 0 12px; line-height: 0.86; padding-top: 0.1em; }
 .scroll-home .minutes .now { display: flex; align-items: baseline; gap: 10px; color: var(--accent); }
 .scroll-home .minutes .now b {

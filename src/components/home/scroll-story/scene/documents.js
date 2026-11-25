@@ -1,31 +1,37 @@
 import * as THREE from "three";
-import { clamp, mix, smooth, win } from "../story.js";
+import { clamp, mix, smooth, win, DOC_COUNT, DOCS_PER_GROUP } from "../story.js";
 import { seeded } from "./site.js";
 
 const SHEET_W = 1.6,
   SHEET_H = 2.26;
-const BOARD = { y: 15.6, z: -6.5, gap: 1.95, row: 2.62, tilt: 0.2 };
-const GROUP_X = [-4.75, 4.75]; // planning permission, building warrant
-const STACK_X = GROUP_X.map((x) => x * 0.75);
-const STACK_Y = 12.6,
+const BOARD = { y: 15.6, z: -6.5, gap: 1.72, row: 2.62, cols: 3, tilt: 0.2 };
+const GROUP_X = [-6.1, -0.5, 5.1]; // planning permission, building warrant, completion certificate
+const STACK_X = [-3.9, 0, 3.9];
+const STACK_Y = 12.1,
   STACK_Z = -3.2;
 // When each application is submitted, validated and approved (scroll progress). Matches the side panel.
 const STATUS = [
   [0.655, 0.69, 0.72],
   [0.67, 0.705, 0.735],
+  [0.685, 0.738, 0.738], // a completion certificate goes straight from submitted to accepted
 ];
-const STATUS_NAMES = ["Submitted", "Validated", "Approved"];
-const ROW_LABELS = ["Planning permission", "Building warrant"];
+const STATUS_NAMES = [
+  ["Submitted", "Validated", "Approved"],
+  ["Submitted", "Validated", "Approved"],
+  ["Submitted", "Submitted", "Accepted"],
+];
+const ROW_LABELS = ["Planning permission", "Building warrant", "Completion certificate"];
+const PORTAL_TITLES = ["Planning permission application", "Building warrant application", "Completion certificate"];
 const PORTAL_HOME = new THREE.Vector3(0, 13.8, 2.8);
 const PORTAL_AWAY = new THREE.Vector3(0, 19.5, -26);
 const statusColors = [new THREE.Color("#f0a51a"), new THREE.Color("#2b7de0"), new THREE.Color("#0d9a78")];
 
 function slot(i) {
-  const g = Math.floor(i / 12),
-    k = i % 12,
-    c = k % 4,
-    r = Math.floor(k / 4);
-  const x = GROUP_X[g] + (c - 1.5) * BOARD.gap;
+  const g = Math.floor(i / DOCS_PER_GROUP),
+    k = i % DOCS_PER_GROUP,
+    c = k % BOARD.cols,
+    r = Math.floor(k / BOARD.cols);
+  const x = GROUP_X[g] + (c - (BOARD.cols - 1) / 2) * BOARD.gap;
   const y = BOARD.y + (1 - r) * BOARD.row;
   return { g, k, x, y, z: BOARD.z - Math.abs(x) * 0.1 + (1 - r) * Math.sin(BOARD.tilt) * BOARD.row * 0.5 };
 }
@@ -100,7 +106,7 @@ export function createDocuments(scene, textures, { mobile }) {
   const labels = textures.labels.map((map, g) => {
     const m = own(new THREE.MeshBasicMaterial({ map, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
     const mesh = new THREE.Mesh(own(new THREE.PlaneGeometry(5.6, 1.1)), m);
-    mesh.position.set(GROUP_X[g] - 0.9, BOARD.y + BOARD.row * 1.5 + 0.75, BOARD.z - Math.abs(GROUP_X[g]) * 0.1 + 0.2);
+    mesh.position.set(GROUP_X[g] + 0.15, BOARD.y + BOARD.row * 1.5 + 0.75, BOARD.z - Math.abs(GROUP_X[g]) * 0.1 + 0.2);
     mesh.rotation.x = -BOARD.tilt;
     root.add(mesh);
     return mesh;
@@ -139,7 +145,7 @@ export function createDocuments(scene, textures, { mobile }) {
   // The project record ArchitectPro keeps, shown while it tracks the applications.
   const recordMat = own(new THREE.MeshBasicMaterial({ map: textures.record.map, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
   const record = new THREE.Mesh(own(new THREE.PlaneGeometry(8.6, (8.6 * 720) / 1024)), recordMat);
-  record.position.set(0, 16.4, -7.4);
+  record.position.set(0, 17.4, -7.4);
   record.rotation.x = -BOARD.tilt;
   root.add(record);
 
@@ -152,7 +158,7 @@ export function createDocuments(scene, textures, { mobile }) {
     start[i * 3] = mix(-5, 5, rand());
     start[i * 3 + 1] = mix(0.5, 10, rand());
     start[i * 3 + 2] = mix(-3.3, 3.3, rand());
-    const s = slot(Math.floor(rand() * 24));
+    const s = slot(Math.floor(rand() * DOC_COUNT));
     end[i * 3] = s.x + (rand() - 0.5) * SHEET_W;
     end[i * 3 + 1] = s.y + (rand() - 0.5) * SHEET_H;
     end[i * 3 + 2] = s.z + 0.05;
@@ -264,7 +270,7 @@ export function createDocuments(scene, textures, { mobile }) {
           scale *= 1 - st;
         }
         // "prepared" badges as automation reaches each document
-        const pi = clamp(prepared * 1.6 - (s.index / 24) * 0.6);
+        const pi = clamp(prepared * 1.6 - (s.index / DOC_COUNT) * 0.6);
         s.badge.material.opacity = pi * (1 - pack);
         s.badge.scale.setScalar(mix(0.2, 1, smooth(pi)) * (1 + Math.sin(time * 4 + n) * 0.05));
         s.badge.visible = s.badge.material.opacity > 0.01;
@@ -308,7 +314,7 @@ export function createDocuments(scene, textures, { mobile }) {
     if (fill > 0) {
       textures.portal.draw({
         auto: true,
-        title: fill < 0.5 ? "Planning permission application" : "Building warrant application",
+        title: PORTAL_TITLES[Math.min(2, Math.floor(fill * 3))],
         page: Math.min(14, 4 + Math.round(fill * 10)),
         filled: Math.min(6, Math.round(fill * 9)),
         uploads: Math.min(9, Math.round(fill * 14)),
@@ -316,11 +322,12 @@ export function createDocuments(scene, textures, { mobile }) {
         submitted: fill >= 1,
       });
     } else {
+      // planning in full, then straight back to page one for the other two
       const planning = m < 0.75;
-      const t = planning ? m / 0.75 : (m - 0.75) / 0.25;
+      const t = planning ? m / 0.75 : ((m - 0.75) / 0.125) % 1;
       textures.portal.draw({
         auto: false,
-        title: planning ? "Planning permission application" : "Building warrant application",
+        title: PORTAL_TITLES[planning ? 0 : m < 0.875 ? 1 : 2],
         page: planning ? 1 + Math.floor(t * 4.99) : 1,
         filled: planning ? Math.min(6, Math.floor(t * 7)) : Math.floor(t * 2.5),
         uploads: planning ? Math.min(9, Math.floor(Math.max(0, t - 0.45) * 14)) : 0,
@@ -338,12 +345,12 @@ export function createDocuments(scene, textures, { mobile }) {
     const recOn = pose.record * (1 - win(p, 0.77, 0.8));
     recordMat.opacity = recOn;
     record.visible = recOn > 0.01;
-    record.position.y = 16.4 + (1 - pose.record) * -1.5;
+    record.position.y = 17.4 + (1 - pose.record) * -1.5;
     if (record.visible) {
       textures.record.draw({
         rows: ROW_LABELS.map((label, g) => {
           const [s0, s1, s2] = STATUS[g];
-          return [label, p < s0 ? "Waiting" : STATUS_NAMES[p < s1 ? 0 : p < s2 ? 1 : 2]];
+          return [label, p < s0 ? "Waiting" : STATUS_NAMES[g][p < s1 ? 0 : p < s2 ? 1 : 2]];
         }),
         saved: p >= 0.76,
       });
