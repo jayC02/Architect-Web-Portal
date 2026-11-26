@@ -2,7 +2,7 @@ import type { AccessRequest, Prisma } from '@prisma/client';
 import { createOpaqueToken, hashOpaqueToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
-import { isBillingInterval, isPlanId, TRIAL_AGENT_DEVICE_LIMIT, TRIAL_DAYS } from '@/config/plans';
+import { intervalFor, isPlanId, PLANS, planLimits, TRIAL_AGENT_DEVICE_LIMIT, TRIAL_DAYS } from '@/config/plans';
 
 export const INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,9 +45,9 @@ export const subscriptionCreateFor = (invite: Pick<AccessRequest, 'plan'> | null
   if (!invite) return { status: 'PENDING_PAYMENT', source: 'SELF_SERVE', agentDeviceLimit: 1 };
   const plan = isPlanId(invite.plan) ? invite.plan : 'practice';
   return {
+    ...planLimits(plan),
     status: 'TRIALING',
     source: 'DEMO_INVITE',
-    plan,
     trialEndsAt: new Date(Date.now() + TRIAL_DAYS * DAY_MS),
     // Evaluation workspaces get one licensed Agent computer whatever the plan.
     agentDeviceLimit: TRIAL_AGENT_DEVICE_LIMIT,
@@ -65,8 +65,8 @@ export const markInviteAccepted = async (tx: Prisma.TransactionClient, inviteId:
 export const postSignupRedirect = (hasTrial: boolean, plan?: string | null, billing?: string | null) => {
   if (hasTrial) return '/dashboard';
   if (isPlanId(plan)) {
-    const interval = isBillingInterval(billing) ? billing : 'monthly';
-    return `/subscribe?plan=${plan}&billing=${interval}`;
+    if (!PLANS[plan].selfServe) return '/demo?interest=firm';
+    return `/subscribe?plan=${plan}&billing=${intervalFor(plan, billing)}`;
   }
   return '/billing';
 };

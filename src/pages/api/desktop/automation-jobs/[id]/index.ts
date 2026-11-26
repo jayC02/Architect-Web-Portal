@@ -19,6 +19,8 @@ import { assertDesktopJobAccess, requireDesktopAuth, assertDesktopTokenActive } 
 import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
 import { assertAutomationJobTransition } from '@/server/services/automation-lifecycle.service';
 import { reconcilePreparedApplicationReview } from '@/server/services/prepared-application-review.service';
+import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
+import { recordApplicationUsage, reportPendingUsage } from '@/server/billing/usage';
 
 const selectableStatuses = [
   AutomationJobStatus.READY,
@@ -177,6 +179,15 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
       },
     });
     if (!update.count) throw new HttpError(409, 'Automation job changed while the desktop result was being saved.');
+    if (body.status === AutomationJobStatus.COMPLETED) {
+      // Per-application billing: first completion of each application counts.
+      await recordApplicationUsage(tx, {
+        organisationId: access.organisationId,
+        job,
+        applicationId: automationJobApplicationId(job),
+        completedAt: new Date(),
+      });
+    }
     await recordAutomationOwnership(tx, { organisationId: access.organisationId, jobId: id }, {
       reason: body.eventType, eventId: body.callbackId, browserSessionId: body.result?.browserSessionId,
     });
@@ -243,5 +254,9 @@ export const PATCH: APIRoute = (context) => withErrorHandling(async () => {
     }
     return { duplicate: false, status: body.status };
   });
+  if (!outcome.duplicate && outcome.status === AutomationJobStatus.COMPLETED) {
+    // Awaited so serverless doesn't freeze it; failures stay PENDING for the cron.
+    await reportPendingUsage(access.organisationId).catch((error) => console.error('Usage reporting failed', error));
+  }
   return jsonResponse(200, { ok: true, ...outcome });
 }, context);

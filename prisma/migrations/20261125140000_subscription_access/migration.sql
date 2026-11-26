@@ -14,6 +14,8 @@ CREATE TABLE "OrganisationSubscription" (
     "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
     "graceEndsAt" TIMESTAMP(3),
     "agentDeviceLimit" INTEGER NOT NULL DEFAULT 1,
+    "includedApplications" INTEGER NOT NULL DEFAULT 0,
+    "userLimit" INTEGER,
     "stripeCustomerId" TEXT,
     "stripeSubscriptionId" TEXT,
     "stripePriceId" TEXT,
@@ -59,6 +61,30 @@ CREATE INDEX "AccessRequest_status_createdAt_idx" ON "AccessRequest"("status", "
 CREATE INDEX "AccessRequest_email_idx" ON "AccessRequest"("email");
 ALTER TABLE "AccessRequest" ADD CONSTRAINT "AccessRequest_organisationId_fkey"
     FOREIGN KEY ("organisationId") REFERENCES "Organisation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE TYPE "ApplicationUsageStatus" AS ENUM ('INCLUDED', 'NOT_BILLED', 'PENDING', 'REPORTED');
+
+CREATE TABLE "ApplicationUsage" (
+    "id" TEXT NOT NULL,
+    "organisationId" TEXT NOT NULL,
+    "automationJobId" TEXT NOT NULL,
+    "billableKey" TEXT NOT NULL,
+    "jobType" TEXT NOT NULL,
+    "periodMonth" TEXT NOT NULL,
+    "plan" TEXT,
+    "status" "ApplicationUsageStatus" NOT NULL,
+    "reportedAt" TIMESTAMP(3),
+    "lastError" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ApplicationUsage_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "ApplicationUsage_automationJobId_key" ON "ApplicationUsage"("automationJobId");
+CREATE UNIQUE INDEX "ApplicationUsage_organisationId_billableKey_key" ON "ApplicationUsage"("organisationId", "billableKey");
+CREATE INDEX "ApplicationUsage_organisationId_periodMonth_idx" ON "ApplicationUsage"("organisationId", "periodMonth");
+CREATE INDEX "ApplicationUsage_status_createdAt_idx" ON "ApplicationUsage"("status", "createdAt");
+ALTER TABLE "ApplicationUsage" ADD CONSTRAINT "ApplicationUsage_organisationId_fkey"
+    FOREIGN KEY ("organisationId") REFERENCES "Organisation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE TABLE "StripeWebhookEvent" (
     "id" TEXT NOT NULL,

@@ -23,6 +23,6 @@ export const accessRequestReviewSchema = z.object({
 });
 
 export const organisationAccessSchema = z.object({
-  action: z.enum(['comp', 'suspend', 'extend_trial', 'require_payment']),
+  action: z.enum(['comp', 'suspend', 'extend_trial', 'require_payment', 'activate_firm']),
   days: z.coerce.number().int().min(1).max(90).optional(),
 });

@@ -1,7 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { isBillingInterval, isPlanId } from '@/config/plans';
+import { intervalFor, isPlanId, PLANS } from '@/config/plans';
 import { getSessionAuth } from '@/lib/auth/session';
 import { HttpError } from '@/lib/utils/http';
 import { startCheckout } from '@/server/billing/checkout';
@@ -11,9 +11,11 @@ import { startCheckout } from '@/server/billing/checkout';
 export const GET: APIRoute = async (context) => {
   const params = context.url.searchParams;
   const plan = isPlanId(params.get('plan')) ? params.get('plan')! : null;
-  const billing = isBillingInterval(params.get('billing')) ? params.get('billing')! : 'monthly';
   const headers = { 'Cache-Control': 'no-store' };
   if (!plan) return context.redirect('/pricing');
+  // Firm is quoted, so it goes to the demo form rather than checkout.
+  if (!PLANS[plan as keyof typeof PLANS].selfServe) return context.redirect('/demo?interest=firm');
+  const billing = intervalFor(plan as never, params.get('billing'));
 
   const auth = await getSessionAuth(context);
   if (!auth) return context.redirect(`/register?plan=${plan}&billing=${billing}`);

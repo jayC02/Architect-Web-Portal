@@ -30,6 +30,8 @@ function harness(status = 'CLAIMED', expired = false) {
     '@/server/auth/desktop-token': { requireDesktopAuth: async () => ({ id: 'token', organisationId: 'org_a' }), assertDesktopJobAccess: () => {}, assertDesktopTokenActive: async () => {} },
     '@/server/services/desktop-execution.service': { lockOrganisationExecution: async () => {} },
     '@/server/services/automation-lifecycle.service': { assertAutomationJobTransition },
+    '@/server/services/desktop-automation-status.service': { automationJobApplicationId: () => null },
+    '@/server/billing/usage': { recordApplicationUsage: async () => null, reportPendingUsage: async () => ({ reported: 0, failed: 0 }) },
     '@/server/services/prepared-application-review.service': {},
     '@/server/services/automation-state-model.service': { recordAutomationOwnership: async () => {} },
   };

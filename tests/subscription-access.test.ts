@@ -7,7 +7,9 @@ import { encodeStripeForm, signStripePayloadForTest, verifyStripeWebhook } from 
 import { subscriptionDataFromStripe } from '../src/server/billing/subscription-sync';
 import { buildLicenceClaims, signLicence, verifyLicence, LICENCE_TTL_SECONDS } from '../src/server/billing/licence';
 import { postSignupRedirect, subscriptionCreateFor } from '../src/server/billing/onboarding';
-import { planForStripePrice } from '../src/config/plans';
+import { intervalFor, planForStripePrice, PLANS } from '../src/config/plans';
+import { classifyUsage, usagePeriodMonth } from '../src/server/billing/usage';
+import { checkoutLineItems } from '../src/server/billing/checkout';
 import { accessRequestSchema } from '../src/lib/validation/access';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -70,7 +72,9 @@ assert.equal(
 
 // --- Stripe -> entitlement mapping ------------------------------------------
 process.env.STRIPE_PRICE_PRACTICE_ANNUAL = 'price_practice_annual';
-assert.deepEqual(planForStripePrice('price_practice_annual'), { plan: 'practice', interval: 'annual' });
+process.env.STRIPE_PRICE_PRACTICE_USAGE = 'price_practice_usage';
+assert.deepEqual(planForStripePrice('price_practice_annual'), { plan: 'practice', interval: 'annual', usage: false });
+assert.deepEqual(planForStripePrice('price_practice_usage'), { plan: 'practice', interval: null, usage: true });
 assert.equal(planForStripePrice('price_unknown'), null);
 const stripeSub = (status: string, extra: Record<string, unknown> = {}) => ({
   id: 'sub_1', object: 'subscription' as const, customer: 'cus_1', status: status as never, cancel_at_period_end: false,
@@ -80,6 +84,15 @@ const active = subscriptionDataFromStripe(stripeSub('active'), null, now);
 assert.equal(active.status, 'ACTIVE');
 assert.equal(active.plan, 'practice');
 assert.equal(active.agentDeviceLimit, 3);
+assert.equal(active.includedApplications, 10);
+assert.equal(active.userLimit, 3);
+assert.equal(active.billingInterval, 'annual');
+// Base and metered items together still resolve to the base price's plan and interval.
+const twoItems = subscriptionDataFromStripe(stripeSub('active', { items: { data: [
+  { price: { id: 'price_practice_usage' } }, { price: { id: 'price_practice_annual' }, current_period_end: ts + 100 },
+] } }), null, now);
+assert.equal(twoItems.billingInterval, 'annual');
+assert.equal(twoItems.stripePriceId, 'price_practice_annual');
 assert.equal((active.currentPeriodEndsAt as Date).getTime(), (ts + 86_400 * 365) * 1000);
 const pastDue = subscriptionDataFromStripe(stripeSub('past_due'), null, now);
 assert.equal(pastDue.status, 'PAST_DUE');
@@ -98,8 +111,39 @@ assert.equal(trial.agentDeviceLimit, 1, 'evaluation workspaces get one Agent');
 assert.equal(trial.plan, 'studio');
 assert.ok((trial.trialEndsAt as Date).getTime() > Date.now() + 13 * 86_400_000);
 assert.equal(postSignupRedirect(true), '/dashboard');
-assert.equal(postSignupRedirect(false, 'starter', 'annual'), '/subscribe?plan=starter&billing=annual');
+assert.equal(postSignupRedirect(false, 'studio', 'annual'), '/subscribe?plan=studio&billing=annual');
+assert.equal(postSignupRedirect(false, 'payg', 'annual'), '/subscribe?plan=payg&billing=monthly', 'pay as you go has no yearly option');
+assert.equal(postSignupRedirect(false, 'firm'), '/demo?interest=firm', 'firm is quoted');
+assert.equal(postSignupRedirect(false, 'starter'), '/billing', 'retired plan ids are ignored');
 assert.equal(postSignupRedirect(false, 'evil"plan', 'x'), '/billing');
+
+// --- Agreed pricing ---------------------------------------------------------
+assert.deepEqual([PLANS.payg.includedApplications, PLANS.practice.includedApplications, PLANS.studio.includedApplications, PLANS.firm.includedApplications], [0, 10, 30, 100]);
+assert.deepEqual([PLANS.payg.extraApplicationRate, PLANS.practice.extraApplicationRate, PLANS.studio.extraApplicationRate, PLANS.firm.extraApplicationRate], [29, 8, 6, null]);
+assert.deepEqual([PLANS.payg.userLimit, PLANS.practice.userLimit, PLANS.studio.userLimit, PLANS.firm.userLimit], [1, 3, 10, null]);
+assert.equal(intervalFor('payg', 'annual'), 'monthly');
+assert.equal(intervalFor('studio', 'annual'), 'annual');
+assert.throws(() => checkoutLineItems('firm', 'monthly'), /quote/);
+assert.deepEqual(checkoutLineItems('practice', 'annual'), [{ price: 'price_practice_annual', quantity: 1 }, { price: 'price_practice_usage' }]);
+assert.throws(() => checkoutLineItems('payg', 'monthly'), /can't be bought online/, 'payg needs its usage price');
+process.env.STRIPE_PRICE_PAYG_USAGE = 'price_payg_usage';
+assert.deepEqual(checkoutLineItems('payg', 'annual'), [{ price: 'price_payg_usage' }], 'payg is usage only');
+assert.throws(() => checkoutLineItems('studio', 'monthly'), /can't be bought online/);
+
+// --- Per-application metering ------------------------------------------------
+const usageBase = { subscriptionStatus: 'ACTIVE' as const, plan: 'practice', hasStripeCustomer: true, includedApplications: 10, usagePriceConfigured: true };
+assert.equal(classifyUsage({ ...usageBase, usedThisMonth: 0 }), 'INCLUDED');
+assert.equal(classifyUsage({ ...usageBase, usedThisMonth: 9 }), 'INCLUDED', '10th application is still included');
+assert.equal(classifyUsage({ ...usageBase, usedThisMonth: 10 }), 'PENDING', '11th application is charged');
+assert.equal(classifyUsage({ ...usageBase, plan: 'payg', includedApplications: 0, usedThisMonth: 0 }), 'PENDING', 'every payg application is charged');
+assert.equal(classifyUsage({ ...usageBase, subscriptionStatus: 'TRIALING', usedThisMonth: 50 }), 'NOT_BILLED');
+assert.equal(classifyUsage({ ...usageBase, subscriptionStatus: 'COMPLIMENTARY', usedThisMonth: 50 }), 'NOT_BILLED');
+assert.equal(classifyUsage({ ...usageBase, subscriptionStatus: 'PAST_DUE', usedThisMonth: 50 }), 'PENDING');
+assert.equal(classifyUsage({ ...usageBase, plan: 'firm', includedApplications: 100, usagePriceConfigured: false, usedThisMonth: 120 }), 'NOT_BILLED', 'firm overage is agreed per contract');
+assert.equal(usagePeriodMonth(new Date('2026-11-30T23:59:59Z')), '2026-11');
+const jobRoute = read('src/pages/api/desktop/automation-jobs/[id]/index.ts');
+assert.match(jobRoute, /body\.status === AutomationJobStatus\.COMPLETED\) \{\s*\/\/ Per-application billing/);
+assert.match(jobRoute, /recordApplicationUsage\(tx,/, 'usage is recorded inside the completion transaction');
 
 // --- Demo request form contract (matches the marketing /demo form) -----------
 assert.doesNotThrow(() => accessRequestSchema.parse({ name: 'Ann Lee', email: 'Ann@Example.com', practiceName: 'Lee Architects', role: '', practiceSize: '2-5', phone: '', message: 'Hi', interest: 'planning', plan: 'practice' }));

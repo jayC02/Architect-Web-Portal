@@ -11,6 +11,7 @@ import { requireOrganisation } from '@/server/permissions/authz';
 import { startCheckout } from '@/server/billing/checkout';
 
 const checkoutSchema = z.object({ plan: z.enum(PLAN_IDS), billing: z.enum(BILLING_INTERVALS).default('monthly') });
+// startCheckout rejects Firm (quoted) and falls back to monthly where a plan has no yearly option.
 
 export const POST: APIRoute = (context) => withErrorHandling(async () => {
   assertAllowedOrigin(context.request);

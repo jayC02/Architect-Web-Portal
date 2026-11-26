@@ -54,16 +54,36 @@ Logic lives in `src/server/billing/entitlement.ts` (pure, unit tested).
 - `POST /api/billing/webhook` verifies the `Stripe-Signature` HMAC, is idempotent (`StripeWebhookEvent`), and syncs `checkout.session.completed`, `customer.subscription.*` and `invoice.payment_failed` / `invoice.paid` into `OrganisationSubscription`.
 - No Stripe SDK dependency; a small `fetch` client in `src/server/billing/stripe.ts`.
 
+### 4a. Plans and per-application metering
+
+Plans follow the agreed pricing (`src/config/plans.ts`, mirroring `src/lib/marketing/plans.ts`):
+
+| Plan | Fee | Included applications a month | Each extra | Users | Agent computers | Checkout |
+| --- | --- | --- | --- | --- | --- | --- |
+| `payg` Pay as you go | £0 (monthly only) | 0 | £29 | 1 | 1 | Self-serve |
+| `practice` Practice | £79 / £790 a year | 10 | £8 | 3 | 3 | Self-serve |
+| `studio` Studio | £179 / £1,790 a year | 30 | £6 | 10 | 10 | Self-serve |
+| `firm` Firm | from £399, quoted | 100 | agreed | unlimited | 25 | Demo form, then "Activate Firm" in `/admin/access` |
+
+- An **application** is counted the first time the Agent completes it (`AutomationJob` reaches `COMPLETED`). Re-runs of the same application don't count again. Each one becomes an `ApplicationUsage` row inside the same transaction, under the organisation's execution lock.
+- The portal applies the monthly allowance itself (calendar month, UTC). Only applications beyond it are sent to the Stripe meter (`STRIPE_METER_EVENT_NAME`, default `application_submitted`), with an idempotent identifier. Stripe charges the plan's flat per-unit usage price on the next invoice.
+- Trials, complimentary and Firm workspaces are recorded but not metered. Failed reports stay `PENDING` and are retried by the daily `/api/cron/usage-report`.
+- User limits are stored per workspace; there is no team-invite flow yet, so they aren't enforced anywhere.
+
 ### 5. Agent licensing
 
 - **Signed licence**: `POST /api/desktop/licence` (Agent bearer auth) returns an Ed25519-signed JWT: organisation, Agent id, installation id, plan, status, `exp` = 72 hours (never past a trial end), `refreshAfter` = 12 hours. Signed with `LICENCE_SIGNING_PRIVATE_KEY`; the Agent ships the public key.
-- **Device limit** per plan (Starter 1, Practice 3, Studio 10; 14-day evaluation 1; complimentary 10), enforced at enrollment.
+- **Device limit** per plan (Pay as you go 1, Practice 3, Studio 10, Firm 25; 14-day evaluation 1; complimentary 10), enforced at enrollment.
 - **Revocation**: revoking an Agent in Settings, suspending the organisation or the subscription lapsing all stop licence refresh and job access immediately. The offline window is at most 72 hours.
 - **Downloads**: installers are no longer public. They moved from `public/downloads/` to `agent-releases/` (outside `public/`, so never served statically). `/agent/download` requires a signed-in entitled user or an entitled Agent bearer token, then redirects to a **5-minute signed URL** in a private Supabase bucket (or, in local dev, streams from the folder named by `AGENT_RELEASE_LOCAL_DIR`). `vercel.json` redirects the old `/downloads/*` links to it.
 
 ## Owner steps before this goes live
 
-1. **Choose and create the Stripe account** and three products (Starter, Practice, Studio) with monthly and annual prices. Put the six price ids in the `STRIPE_PRICE_*` env vars, plus `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. Point a webhook at `/api/billing/webhook` for the events above. Turn on the Customer Portal.
+1. **Choose and create the Stripe account.** Then:
+   - Create a **meter** with event name `application_submitted`, sum aggregation, customer mapping on `stripe_customer_id`.
+   - Create flat prices: Practice £79 monthly and £790 yearly, Studio £179 monthly and £1,790 yearly (`STRIPE_PRICE_PRACTICE_MONTHLY`, `..._ANNUAL`, `STRIPE_PRICE_STUDIO_MONTHLY`, `..._ANNUAL`).
+   - Create metered per-unit prices on that meter: £29 (`STRIPE_PRICE_PAYG_USAGE`), £8 (`STRIPE_PRICE_PRACTICE_USAGE`), £6 (`STRIPE_PRICE_STUDIO_USAGE`). For yearly plans, use Stripe's flexible billing mode so monthly overage can sit on a yearly subscription, or accept that overage is invoiced at renewal.
+   - Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, point a webhook at `/api/billing/webhook` for the events above, and turn on the Customer Portal.
 2. **Generate the licence key pair** (`node scripts/generate-licence-keys.mjs`), set `LICENCE_SIGNING_PRIVATE_KEY` in Vercel, give the public key to the Agent repo.
 3. **Create a private Supabase bucket** (`AGENT_RELEASE_BUCKET`, default `agent-releases`) and upload the current installer and source zip under the names in `src/config/agent-release.json`.
 4. Set `PLATFORM_ADMIN_EMAILS` (comma-separated) for who can approve demos.
@@ -82,6 +102,7 @@ Logic lives in `src/server/billing/entitlement.ts` (pure, unit tested).
 
 ## Not done yet
 
-- Seat (user) limits: there is no team-invite flow yet to enforce them against.
+- User limits: stored per plan, but there is no team-invite flow yet to enforce them against.
+- Evaluation workspaces have no cap on how many applications they run in 14 days.
 - Daily crons (Gmail, Xero, workflow effects) still process lapsed organisations; they should skip them.
 - Dunning emails beyond what Stripe sends itself.

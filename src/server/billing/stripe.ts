@@ -82,14 +82,14 @@ export type StripeEvent = {
 
 export const createCheckoutSession = (input: {
   organisationId: string;
-  priceId: string;
+  lineItems: Array<{ price: string; quantity?: number }>;
   customerId: string | null;
   customerEmail: string;
   successUrl: string;
   cancelUrl: string;
 }) => stripeRequest<StripeCheckoutSession>('POST', '/checkout/sessions', {
   mode: 'subscription',
-  line_items: [{ price: input.priceId, quantity: 1 }],
+  line_items: input.lineItems,
   client_reference_id: input.organisationId,
   ...(input.customerId ? { customer: input.customerId } : { customer_email: input.customerEmail }),
   success_url: input.successUrl,
@@ -132,3 +132,14 @@ export const verifyStripeWebhook = (
 
 export const signStripePayloadForTest = (payload: string, secret: string, timestamp: number) =>
   `t=${timestamp},v1=${crypto.createHmac('sha256', secret).update(`${timestamp}.${payload}`, 'utf8').digest('hex')}`;
+
+// Usage-based billing: one meter event per application beyond the plan's
+// allowance. `identifier` makes retries idempotent on Stripe's side.
+// https://docs.stripe.com/api/billing/meter-event/create
+export const sendMeterEvent = (input: { eventName: string; customerId: string; identifier: string; timestamp: Date; value?: number }) =>
+  stripeRequest<{ identifier: string }>('POST', '/billing/meter_events', {
+    event_name: input.eventName,
+    identifier: input.identifier,
+    timestamp: Math.floor(input.timestamp.getTime() / 1000),
+    payload: { stripe_customer_id: input.customerId, value: String(input.value ?? 1) },
+  });

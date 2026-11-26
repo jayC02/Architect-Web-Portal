@@ -1,7 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { COMPLIMENTARY_DEVICE_LIMIT } from '@/config/plans';
+import { COMPLIMENTARY_DEVICE_LIMIT, planLimits } from '@/config/plans';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
@@ -35,6 +35,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       }
       case 'require_payment':
         return { status: 'PENDING_PAYMENT' as const };
+      case 'activate_firm':
+        // Quoted Firm contracts: invoiced outside self-serve checkout. If you
+        // later create the subscription in Stripe with metadata.organisationId,
+        // the webhook takes over from here.
+        return { ...planLimits('firm'), status: 'ACTIVE' as const, billingInterval: null, currentPeriodEndsAt: null };
     }
   })();
 

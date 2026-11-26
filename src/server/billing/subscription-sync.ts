@@ -1,6 +1,6 @@
 import type { Prisma, SubscriptionStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { PLANS, planForStripePrice } from '@/config/plans';
+import { planForStripePrice, planLimits } from '@/config/plans';
 import { PAST_DUE_GRACE_MS } from '@/server/billing/entitlement';
 import {
   retrieveSubscription,
@@ -32,9 +32,14 @@ export const subscriptionDataFromStripe = (
   existing: { status: SubscriptionStatus; graceEndsAt: Date | null } | null,
   now = new Date(),
 ): Prisma.OrganisationSubscriptionUpdateInput => {
-  const item = subscription.items?.data?.[0];
+  const items = subscription.items?.data ?? [];
+  // A plan has a flat base price and/or a metered per-application price
+  // (Pay as you go has only the latter). Prefer the base price for the interval.
+  const matches = items.map((entry) => ({ entry, mapped: planForStripePrice(entry.price?.id) })).filter((match) => match.mapped);
+  const primary = matches.find((match) => !match.mapped!.usage) ?? matches[0];
+  const item = primary?.entry ?? items[0];
   const priceId = item?.price?.id ?? null;
-  const mapped = planForStripePrice(priceId);
+  const mapped = primary?.mapped ?? null;
   // API versions from 2025-03 moved the period end onto the subscription item.
   const periodEnd = fromUnix(item?.current_period_end ?? subscription.current_period_end);
   const status = STRIPE_STATUS[subscription.status] ?? 'PAST_DUE';
@@ -51,7 +56,7 @@ export const subscriptionDataFromStripe = (
     trialEndsAt: subscription.status === 'trialing' ? fromUnix(subscription.trial_end) : undefined,
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
     graceEndsAt,
-    ...(mapped ? { plan: mapped.plan, billingInterval: mapped.interval, agentDeviceLimit: PLANS[mapped.plan].agentDeviceLimit } : {}),
+    ...(mapped ? { ...planLimits(mapped.plan), billingInterval: mapped.interval ?? 'monthly' } : {}),
   };
 };
 

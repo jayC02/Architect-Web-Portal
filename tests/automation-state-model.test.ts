@@ -118,6 +118,8 @@ const modules: any = {
   '@/server/auth/desktop-token': { requireDesktopAuth: (context: any) => context.access, assertDesktopJobAccess: (access: any, id: string) => { assert.equal(access.automationJobId, id); } },
   '@/server/services/desktop-execution.service': {},
   '@/server/services/automation-lifecycle.service': {},
+  '@/server/services/desktop-automation-status.service': { automationJobApplicationId: () => null },
+  '@/server/billing/usage': { recordApplicationUsage: async () => null, reportPendingUsage: async () => ({ reported: 0, failed: 0 }) },
   '@/server/services/prepared-application-review.service': {},
   '@/server/services/automation-state-model.service': { recordAutomationOwnership, readExecutionSnapshot, STATE_MODEL_VERSION: 1 },
 };
