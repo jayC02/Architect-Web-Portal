@@ -1,87 +1,126 @@
 import type { PlanId } from './routes';
 
-// PLACEHOLDER PRICING. These figures are first-draft guesses for review, not
-// agreed prices. Prices are per practice, in GBP, excluding VAT.
+// Agreed pricing. Prices are per practice, in GBP, excluding VAT.
+// The pricing page, the plan finder, the features page and the FAQ all read from here.
 
 export interface Plan {
   id: PlanId;
   name: string;
-  summary: string;
+  /** Who the plan is for. */
+  audience: string;
+  /** Monthly price. For Firm this is the starting price. */
   monthly: number;
-  /** Price per month when billed annually. */
-  annualMonthly: number;
-  seats: string;
-  agentSeats: string;
-  applications: string;
+  /** Yearly price (two months free), 'quoted' for Firm, null when there is no yearly plan. */
+  yearly: number | 'quoted' | null;
+  /** Firm is priced from its monthly figure. */
+  fromPrice?: boolean;
+  /** Applications included each month. */
+  included: number;
+  /** Cost per included application, as shown. */
+  perIncluded: string;
+  /** Price of each application beyond those included, or null when agreed per firm. */
+  extraRate: number | null;
+  extraLabel: string;
+  users: string;
+  /** Most users allowed, or null for unlimited. */
+  userLimit: number | null;
+  uValues: string;
+  support: string;
   highlight?: boolean;
-  features: string[];
+  cta: 'subscribe' | 'talk';
 }
 
 export const plans: Plan[] = [
   {
-    id: 'starter',
-    name: 'Starter',
-    summary: 'For sole practitioners running a handful of live projects.',
-    monthly: 59,
-    annualMonthly: 49,
-    seats: '1 user',
-    agentSeats: '1 desktop Agent',
-    applications: 'Up to 10 automated submissions a month',
-    features: [
-      'Projects, clients, sites and deadlines',
-      'Planning, building warrant and completion certificate preparation',
-      'AI document sorting',
-      'Google Calendar sync',
-      'Email support',
-    ],
+    id: 'payg',
+    name: 'Pay as you go',
+    audience: 'For occasional jobs',
+    monthly: 0,
+    yearly: null,
+    included: 0,
+    perIncluded: '£29',
+    extraRate: 29,
+    extraLabel: '£29',
+    users: '1',
+    userLimit: 1,
+    uValues: '£25 per project report',
+    support: 'Email',
+    cta: 'subscribe',
   },
   {
     id: 'practice',
     name: 'Practice',
-    summary: 'For small practices sharing projects across a team.',
-    monthly: 149,
-    annualMonthly: 124,
-    seats: 'Up to 5 users',
-    agentSeats: '3 desktop Agents',
-    applications: 'Up to 40 automated submissions a month',
+    audience: 'For 1–3 person practices',
+    monthly: 79,
+    yearly: 790,
+    included: 10,
+    perIncluded: '£7.90',
+    extraRate: 8,
+    extraLabel: '£8',
+    users: '3',
+    userLimit: 3,
+    uValues: '£19 a month add-on',
+    support: 'Email',
     highlight: true,
-    features: [
-      'Everything in Starter',
-      'Gmail tracking of council and verifier replies',
-      'Xero finance overview',
-      'U-value calculator and reports',
-      'Roles and permissions',
-      'Priority email support',
-    ],
+    cta: 'subscribe',
   },
   {
     id: 'studio',
     name: 'Studio',
-    summary: 'For growing studios with several teams and heavy application volume.',
-    monthly: 349,
-    annualMonthly: 291,
-    seats: 'Up to 15 users',
-    agentSeats: '10 desktop Agents',
-    applications: 'Unlimited automated submissions',
-    features: [
-      'Everything in Practice',
-      'Guided onboarding and data import',
-      'Audit history for every submission',
-      'Phone and video support',
-    ],
+    audience: 'For busy practices',
+    monthly: 179,
+    yearly: 1790,
+    included: 30,
+    perIncluded: '£5.97',
+    extraRate: 6,
+    extraLabel: '£6',
+    users: '10',
+    userLimit: 10,
+    uValues: 'Included',
+    support: 'Priority',
+    cta: 'subscribe',
+  },
+  {
+    id: 'firm',
+    name: 'Firm',
+    audience: 'For 10+ staff',
+    monthly: 399,
+    yearly: 'quoted',
+    fromPrice: true,
+    included: 100,
+    perIncluded: 'Under £4',
+    extraRate: null,
+    extraLabel: 'Agreed',
+    users: 'Unlimited',
+    userLimit: null,
+    uValues: 'Included',
+    support: 'Named contact and onboarding',
+    cta: 'talk',
   },
 ];
 
-export const enterprise = {
-  name: 'Enterprise',
-  summary: 'For multi-office practices that need more seats, SSO or a custom agreement.',
-  features: ['Unlimited users and Agents', 'Single sign-on', 'Data processing agreement', 'Named account manager'],
-};
+/** Every plan includes the full workspace; plans differ in volume, users, U-values and support. */
+export const everyPlanIncludes = [
+  'Projects, clients, sites and deadlines',
+  'AI document sorting',
+  'Planning, building warrant and completion certificate preparation',
+  'A licensed desktop Agent that completes the portal',
+  'Gmail tracking of council and verifier replies',
+  'Google Calendar sync and Xero overview',
+];
 
 export const pricingNotes = [
-  'Prices are per practice, in pounds sterling, excluding VAT.',
-  'Annual billing is charged up front and saves roughly two months.',
+  'All prices are per practice, in pounds sterling, excluding VAT.',
+  'Yearly plans are paid up front and cost the same as ten months, so two months are free.',
   'Statutory planning, building warrant and verifier fees are paid to the authority and are not included.',
 ];
 
-export const formatPrice = (value: number) => `£${value.toLocaleString('en-GB')}`;
+export const formatPrice = (value: number) =>
+  `£${value.toLocaleString('en-GB', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`;
+
+export const yearlySaving = (plan: Plan) => (typeof plan.yearly === 'number' ? plan.monthly * 12 - plan.yearly : 0);
+
+/** Pay as you go price per application, for one-line summaries. */
+export const payAsYouGoRate = plans[0].extraRate ?? 0;
+/** Cheapest paid monthly plan, for one-line summaries. */
+export const lowestPlanMonthly = Math.min(...plans.filter((plan) => plan.monthly > 0).map((plan) => plan.monthly));

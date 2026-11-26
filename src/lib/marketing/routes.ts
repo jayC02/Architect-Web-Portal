@@ -20,10 +20,10 @@ export const marketingRoutes = {
   accessRequestApi: '/api/access-requests',
 } as const;
 
-export type PlanId = 'starter' | 'practice' | 'studio';
+export type PlanId = 'payg' | 'practice' | 'studio' | 'firm';
 export type BillingPeriod = 'monthly' | 'annual';
 
-export const subscribeHref = (plan: PlanId, billing: BillingPeriod = 'annual') =>
+export const subscribeHref = (plan: PlanId, billing: BillingPeriod = 'monthly') =>
   `/subscribe?plan=${plan}&billing=${billing}`;
 
 export const demoHref = (interest?: string) =>

@@ -1,6 +1,8 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import { plans, formatPrice } from '@/lib/marketing/plans';
 import { marketingRoutes } from '@/lib/marketing/routes';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 
@@ -24,7 +26,7 @@ const groups = [
     items: [
       { q: 'Can I sign up and try it for free?', a: ['There is no open free sign-up. Book a demo and, if it suits your practice, we approve a 14-day guided evaluation workspace. You can also start a paid subscription straight away.'] },
       { q: 'Where do I download the desktop Agent?', a: ['From inside your workspace once it is active. The Agent is not publicly downloadable. You pair it to an office PC with a one-time code, and it only runs while your subscription is active.'] },
-      { q: 'How many PCs can run the Agent?', a: ['It depends on your plan: one on Starter, three on Practice and ten on Studio. You can revoke a PC from your workspace and pair a new one at any time.'] },
+      { q: 'How many PCs can run the Agent?', a: ['You pair the Agent to office PCs from inside your workspace. Tell us how many you want to run it on and we will set your workspace up to match. You can revoke a PC and pair a new one at any time.'] },
       { q: 'What happens when an evaluation or subscription ends?', a: ['The workspace locks until a subscription is active again, and paired Agents stop submitting. If you need a copy of your records, contact us for an export.'] },
     ],
   },
@@ -32,9 +34,9 @@ const groups = [
     id: 'billing',
     title: 'Billing',
     items: [
-      { q: 'How do you charge?', a: ['A monthly or annual subscription per practice, paid by card. Annual plans are billed up front and save roughly two months. VAT is added at the standard rate.'] },
+      { q: 'How do you charge?', a: [`Pay as you go at ${formatPrice(plans[0].extraRate ?? 0)} an application, or a monthly or yearly plan per practice with applications included, paid by card. Yearly plans are billed up front and give two months free. VAT is added at the standard rate.`, 'The pricing page shows what each plan includes.'] },
       { q: 'Are council and verifier fees included?', a: ['No. Statutory fees are paid to the authority. Architect Pro calculates the building standards fee for you but never charges it.'] },
-      { q: 'Can I cancel?', a: ['Yes. Monthly plans can be cancelled at any time and run to the end of the paid month. Annual plans run to the end of the year.'] },
+      { q: 'Can I cancel?', a: ['Yes. Monthly plans can be cancelled at any time and run to the end of the paid month. Yearly plans run to the end of the year. Pay as you go has nothing to cancel.'] },
     ],
   },
   {
@@ -68,17 +70,17 @@ const groups = [
       <p class="eyebrow">FAQ</p>
       <h1>Questions, answered.</h1>
       <p class="lede">Something missing? <a class="text-link" href={marketingRoutes.contact}>Ask us</a> and we will reply within one working day.</p>
+      <nav class="faq-chips" aria-label="FAQ sections">
+        {groups.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
+      </nav>
     </div>
   </section>
 
   <section class="section">
-    <div class="wrap faq-layout">
-      <nav class="faq-index" aria-label="FAQ sections">
-        {groups.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
-      </nav>
-      <div>
-        {groups.map((group) => (
-          <section class="faq-group faq" id={group.id} aria-labelledby={`${group.id}-title`} style="scroll-margin-top: 100px;">
+    <div class="wrap">
+      <DrawingBoard scene="street" number="AP-501">
+        {groups.map((group, index) => (
+          <section class="faq-group faq" id={group.id} data-sheet-stage={index + 1} aria-labelledby={`${group.id}-title`}>
             <h2 id={`${group.id}-title`}>{group.title}</h2>
             {group.items.map((item) => (
               <details>
@@ -88,7 +90,7 @@ const groups = [
             ))}
           </section>
         ))}
-      </div>
+      </DrawingBoard>
     </div>
   </section>
 

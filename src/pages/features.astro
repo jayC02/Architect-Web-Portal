@@ -2,6 +2,8 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import LineArt from '@/components/marketing/LineArt.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import { payAsYouGoRate, lowestPlanMonthly, formatPrice } from '@/lib/marketing/plans';
 import { marketingRoutes } from '@/lib/marketing/routes';
 import { MANUAL_MIN, AUTO_MIN } from '@/components/home/scroll-story/story.js';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
@@ -16,6 +18,31 @@ const extras = [
   { title: 'Xero overview', body: 'Read-only invoices and fee positions per project, without leaving the workspace.', icon: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>' },
   { title: 'Roles and permissions', body: 'Owners, architects and assistants see and change only what their role allows.', icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M17 11l2 2 3-4"/>' },
   { title: 'Audit history', body: 'Every prepared draft, submission and reply is recorded with who did it and when.', icon: '<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/>' },
+];
+
+const applicationTypes = [
+  {
+    title: 'Planning permission',
+    body: 'Prepared from the project as soon as the drawings are sorted.',
+    points: ['Applicant, agent and site from the project record', 'Description of development carried through', 'Location plan and drawings attached from sorted documents'],
+  },
+  {
+    title: 'Building warrant',
+    body: 'Prepared with the technical documents the verifier expects.',
+    points: ['Description of works and site reused from planning', 'Drawings, specifications and U-value reports attached', 'Building standards fee calculated for you'],
+  },
+  {
+    title: 'Completion certificate',
+    body: 'Prepared at the end of the job, when nobody wants to start from scratch.',
+    points: ['Supporting certificates and documents attached', 'Reviewed on one page before it goes', 'Tracked by email once it is submitted'],
+  },
+];
+
+const connections = [
+  { title: 'eDevelopment portal', body: 'The Scottish service for planning and building standards. The Agent signs in with your practice’s own account.' },
+  { title: 'Gmail', body: 'Council and verifier emails are matched to the right application and update its status.' },
+  { title: 'Google Calendar', body: 'Determination dates, warrant expiries and follow-ups appear in your calendar.' },
+  { title: 'Xero', body: 'Read-only invoices and fee positions per project, without leaving the workspace.' },
 ];
 ---
 <MarketingLayout
@@ -40,7 +67,8 @@ const extras = [
 
   <section class="section" aria-label="How Architect Pro works">
     <div class="wrap">
-      <article class="chapter reveal">
+      <DrawingBoard scene="elevation" number="AP-101">
+      <article class="chapter" data-sheet-stage="1">
         <div class="chapter-copy">
           <p class="chapter-index"><b>01</b>Projects</p>
           <h2>Start every project in one place.</h2>
@@ -61,7 +89,7 @@ const extras = [
         </div>
       </article>
 
-      <article class="chapter reveal">
+      <article class="chapter" data-sheet-stage="2">
         <div class="chapter-copy">
           <p class="chapter-index"><b>02</b>Documents</p>
           <h2>Drop the drawings in. They sort themselves.</h2>
@@ -83,7 +111,7 @@ const extras = [
         </div>
       </article>
 
-      <article class="chapter reveal">
+      <article class="chapter" data-sheet-stage="3">
         <div class="chapter-copy">
           <p class="chapter-index"><b>03</b>Applications</p>
           <h2>Planning, warrant and completion, prepared from the record.</h2>
@@ -105,7 +133,7 @@ const extras = [
         </div>
       </article>
 
-      <article class="chapter reveal">
+      <article class="chapter" data-sheet-stage="4">
         <div class="chapter-copy">
           <p class="chapter-index"><b>04</b>Desktop Agent</p>
           <h2>The portal, done in the background.</h2>
@@ -129,7 +157,7 @@ const extras = [
         </div>
       </article>
 
-      <article class="chapter reveal">
+      <article class="chapter" data-sheet-stage="5">
         <div class="chapter-copy">
           <p class="chapter-index"><b>05</b>Tracking</p>
           <h2>Then it keeps track.</h2>
@@ -149,6 +177,25 @@ const extras = [
           </div>
         </div>
       </article>
+      </DrawingBoard>
+    </div>
+  </section>
+
+  <section class="section bordered" aria-labelledby="types-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="types-title">Three applications, one record.</h2>
+        <p>Each application is prepared from what the project already holds, so nothing is typed twice between planning, the warrant and completion.</p>
+      </div>
+      <div class="app-types">
+        {applicationTypes.map((type) => (
+          <article class="app-type">
+            <h3>{type.title}</h3>
+            <p>{type.body}</p>
+            <ul class="ticks">{type.points.map((point) => <li>{point}</li>)}</ul>
+          </article>
+        ))}
+      </div>
     </div>
   </section>
 
@@ -170,7 +217,24 @@ const extras = [
     </div>
   </section>
 
-  <section class="section" aria-labelledby="time-title">
+  <section class="section" aria-labelledby="connect-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="connect-title">Works with the accounts you already use.</h2>
+        <p>Connect each one from your workspace settings. Architect Pro asks only for the access each feature needs, and you can disconnect at any time.</p>
+      </div>
+      <div class="connects">
+        {connections.map((item) => (
+          <article class="connect">
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section bordered" aria-labelledby="time-title">
     <div class="wrap">
       <div class="section-head">
         <h2 id="time-title">Time back on every project.</h2>
@@ -182,6 +246,10 @@ const extras = [
         <div class="stat"><b class="num">0</b><span>Fields re-typed from one application to the next.</span></div>
       </div>
       <p class="footnote">Illustrative figures from the homepage story. Actual times vary by project and portal availability. Planning and building standards decisions rest with the relevant authority.</p>
+      <div class="price-band">
+        <p>Pay as you go at <b>{formatPrice(payAsYouGoRate)}</b> an application, or plans with applications included from <b>{formatPrice(lowestPlanMonthly)}</b> a month.</p>
+        <a class="button dark" href={marketingRoutes.pricing}>See pricing</a>
+      </div>
     </div>
   </section>
 
