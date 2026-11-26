@@ -1,7 +1,7 @@
 ---
 // A pen line drawn in the background of a marketing page as the visitor scrolls.
-// It runs down the page behind the text, turning at each section into a new
-// lane, with small drafting marks at its corners: nodes, crosses, dimension
+// It runs down the page behind the content, through clear space only, turning
+// at each section into a new lane, with small drafting marks at its corners: nodes, crosses, dimension
 // ticks and the odd red point. The route is worked out in the browser from the
 // page's own sections, so every page gets its own drawing. Decorative only.
 ---
@@ -49,6 +49,36 @@
       strokes.push({ el, from, to: Math.max(to, from + 1), draw, last: -1 });
     };
 
+    // Anything the line must not cross: words, controls, images and the solid
+    // panels that sit over it. Measured tightly around the text itself.
+    const SOLID = '.card, .plan, .demo, .world, .finder, .feature-index, .access-steps li, .connect, .price-band, .calc-result, .form-card, .mock, .enterprise, .stat, .billing-toggle, .table-scroll, .faq details, .hero-art';
+    const collectObstacles = (origin: DOMRect, clearance: number) => {
+      const boxes: { l: number; r: number; t: number; b: number }[] = [];
+      const push = (rect: DOMRect, padX: number, padY: number) => {
+        if (!rect.width || !rect.height) return;
+        boxes.push({
+          l: rect.left - origin.left - padX,
+          r: rect.right - origin.left + padX,
+          t: rect.top - origin.top - padY,
+          b: rect.bottom - origin.top + padY,
+        });
+      };
+      main.querySelectorAll<HTMLElement>(SOLID).forEach((el) => push(el.getBoundingClientRect(), clearance, 14));
+      const range = document.createRange();
+      for (const el of main.querySelectorAll<HTMLElement>('*')) {
+        if (el.closest('.sketch, .closing')) continue;
+        if (el.matches('img, svg, input, select, textarea, button, video, canvas')) {
+          push(el.getBoundingClientRect(), clearance, 10);
+          continue;
+        }
+        const hasText = [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+        if (!hasText) continue;
+        range.selectNodeContents(el);
+        for (const line of range.getClientRects()) push(line, clearance + 2, 10);
+      }
+      return boxes;
+    };
+
     const build = () => {
       svg.replaceChildren();
       strokes = [];
@@ -63,65 +93,103 @@
       if (!blocks.length) return;
       const random = seeded(location.pathname);
       const narrow = width < 720;
-      const lanes = (narrow ? [0.05, 0.3, 0.7, 0.95] : [0.03, 0.14, 0.36, 0.58, 0.79, 0.96]).map((share) => Math.round(share * width));
+      // Phones have narrow margins, so the line keeps a tighter distance there.
+      const boxes = collectObstacles(main.getBoundingClientRect(), narrow ? 5 : 14);
+      const blocked = (x0: number, x1: number, y0: number, y1: number) =>
+        boxes.some((box) => box.r > Math.min(x0, x1) && box.l < Math.max(x0, x1) && box.b > Math.min(y0, y1) && box.t < Math.max(y0, y1));
+
+      // Every x the line may run down, a few pixels apart, kept off the very edge.
+      const columns: number[] = [];
+      for (let column = 8; column <= width - 8; column += narrow ? 4 : 6) columns.push(column);
+      const freeColumns = (y0: number, y1: number) => columns.filter((column) => !blocked(column - 2, column + 2, y0, y1));
+      const pick = <T,>(items: T[]) => items[Math.floor(random() * items.length)];
 
       // Turning points: every section top, plus extra turns inside long sections.
       const turns: number[] = [];
       blocks.forEach((block, index) => {
         const top = block.offsetTop;
         const bottom = top + block.offsetHeight;
-        if (index > 0) turns.push(top + 36);
-        const spacing = narrow ? 520 : 680;
+        if (index > 0) turns.push(top + 30);
+        const spacing = narrow ? 480 : 620;
         for (let y = top + spacing; y < bottom - spacing * 0.6; y += spacing) turns.push(Math.round(y + (random() - 0.5) * 120));
       });
       const last = blocks.at(-1)!;
-      const end = last.offsetTop + last.offsetHeight - 48;
+      turns.push(last.offsetTop + last.offsetHeight - 40);
 
-      let lane = narrow ? 3 : 4;
-      let x = lanes[lane];
       let y = Math.round(blocks[0].offsetTop + Math.min(blocks[0].offsetHeight * 0.3, 160));
       let pen = y;
+      let x: number | null = null;
 
-      for (const turn of [...turns, end]) {
-        if (turn <= y + 60) continue;
-        // Down the current lane to the turn.
-        add('path', { d: `M${x} ${y}V${turn}` }, pen, turn);
-        y = turn;
-        if (turn === end) {
-          add('circle', { cx: x, cy: y, r: 4 }, y - 10, y + 50, false);
-          break;
+      const startAt = (column: number, at: number) => {
+        // The pen lifts and comes down somewhere clear: mark where it lands.
+        add('circle', { cx: column, cy: at, r: 3.5 }, at - 20, at + 30, false);
+        x = column;
+      };
+
+      turns.forEach((planned, index) => {
+        const nextTurn = turns[index + 1];
+        if (planned <= y + 50) return;
+
+        // Find a clear column to the planned turn, then a clear row to cross on.
+        if (x === null || blocked(x - 2, x + 2, y, planned)) {
+          const open = freeColumns(y, planned);
+          if (!open.length) { x = null; y = planned; pen = planned; return; }
+          startAt(pick(open), y);
+        }
+        const column = x as number;
+
+        // Nudge the turn to a row where a crossing is possible.
+        let turn = planned;
+        let targets: number[] = [];
+        if (nextTurn !== undefined) {
+          for (const shift of [0, 16, -16, 32, -32, 48, 64, 80, 100]) {
+            const candidate = planned + shift;
+            if (candidate <= y + 40 || blocked(column - 2, column + 2, y, candidate)) continue;
+            const reach = freeColumns(candidate, nextTurn).filter((target) =>
+              Math.abs(target - column) > (narrow ? 40 : 120) && !blocked(column, target, candidate - 6, candidate + 6));
+            if (reach.length) { turn = candidate; targets = reach; break; }
+          }
         }
 
-        // Across to a different lane, never straight back.
-        let next = lane;
-        while (next === lane || Math.abs(next - lane) > (narrow ? 2 : 3)) next = Math.floor(random() * lanes.length);
-        const nx = lanes[next];
-        const span = Math.abs(nx - x);
+        add('path', { d: `M${column} ${y}V${turn}` }, pen, turn);
+        y = turn;
+        pen = turn;
+        if (nextTurn === undefined) {
+          add('circle', { cx: column, cy: y, r: 4 }, y - 10, y + 50, false);
+          return;
+        }
+        if (!targets.length) return; // Carry straight on, or lift the pen at the next turn.
+
+        // Prefer a long run across, but not always the longest.
+        const far = targets.filter((target) => Math.abs(target - column) > width * 0.25);
+        const nx = pick(far.length && random() < 0.7 ? far : targets);
+        const span = Math.abs(nx - column);
         const sweep = Math.min(240, Math.max(90, span * 0.45));
         const style = random();
+        const dir = Math.sign(nx - column);
+        const r = 28;
+        const rounded = style < 0.25 && span > r * 2 && !blocked(column, column + dir * r, y, y + r + 6)
+          && !blocked(column, nx, y + r - 6, y + r + 6) && !blocked(nx - 2, nx + 2, y + r, nextTurn);
 
-        if (style < 0.25) {
-          // Rounded corner, like a door swing.
-          const r = 28;
-          const dir = Math.sign(nx - x);
-          add('path', { d: `M${x} ${y}A${r} ${r} 0 0 ${dir > 0 ? 0 : 1} ${x + dir * r} ${y + r}H${nx}` }, y, y + sweep);
+        if (rounded) {
+          add('path', { d: `M${column} ${y}A${r} ${r} 0 0 ${dir > 0 ? 0 : 1} ${column + dir * r} ${y + r}H${nx}` }, y, y + sweep);
           y += r;
         } else {
-          add('path', { d: `M${x} ${y}H${nx}` }, y, y + sweep);
+          add('path', { d: `M${column} ${y}H${nx}` }, y, y + sweep);
         }
 
-        // Drafting marks at the corner and along the run.
+        // Drafting marks at the corner and along the run, only where they fit.
         const markAt = y + sweep * 0.5;
         if (style >= 0.25 && style < 0.55) {
-          add('circle', { cx: x, cy: y, r: 3.5 }, markAt - 30, markAt + 20, false);
-        } else if (style >= 0.55 && style < 0.75) {
-          add('path', { d: `M${x - 7} ${y - 7}L${x + 7} ${y + 7}M${x + 7} ${y - 7}L${x - 7} ${y + 7}`, class: 'thin' }, markAt - 30, markAt + 20, false);
+          add('circle', { cx: column, cy: y, r: 3.5 }, markAt - 30, markAt + 20, false);
+        } else if (style >= 0.55 && style < 0.75 && !blocked(column - 9, column + 9, y - 9, y + 9)) {
+          add('path', { d: `M${column - 7} ${y - 7}L${column + 7} ${y + 7}M${column + 7} ${y - 7}L${column - 7} ${y + 7}`, class: 'thin' }, markAt - 30, markAt + 20, false);
         }
-        if (span > 180 && random() < 0.6) {
+        const left = Math.min(column, nx);
+        const right = Math.max(column, nx);
+        if (span > 180 && random() < 0.6 && !blocked(left - 6, right + 6, y - 34, y - 4)) {
           // A dimension: ticks at both ends and a measured length.
           const dimY = y - 14;
-          const left = Math.min(x, nx);
-          const right = Math.max(x, nx);
           add('path', { d: `M${left} ${dimY}H${right}`, class: 'thin' }, markAt, markAt + 80);
           add('path', { d: `M${left - 5} ${dimY + 5}L${left + 5} ${dimY - 5}M${right - 5} ${dimY + 5}L${right + 5} ${dimY - 5}`, class: 'thin' }, markAt + 40, markAt + 100, false);
           const label = document.createElementNS(NS, 'text');
@@ -139,8 +207,7 @@
 
         pen = y + sweep;
         x = nx;
-        lane = next;
-      }
+      });
     };
 
     const render = () => {
