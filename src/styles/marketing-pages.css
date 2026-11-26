@@ -7,14 +7,42 @@
 .mk main .wrap { position: relative; z-index: 2; }
 .mk .sketch { position: absolute; top: 0; left: 0; width: 100%; z-index: 1; pointer-events: none; overflow: visible; opacity: 0; transition: opacity 0.6s; }
 .mk .sketch.ready { opacity: 1; }
-.mk .sketch .pen { fill: none; stroke: rgba(16, 34, 79, 0.28); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; visibility: hidden; }
-.mk .sketch .pen.thin { stroke: rgba(16, 34, 79, 0.22); stroke-width: 1; }
-.mk .sketch .ink { opacity: 0; fill: none; stroke: rgba(16, 34, 79, 0.32); stroke-width: 1.2; }
+.mk .sketch .pen { fill: none; stroke: rgba(16, 34, 79, 0.45); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; visibility: hidden; }
+.mk .sketch .pen.thin { stroke: rgba(16, 34, 79, 0.3); stroke-width: 1; }
+.mk .sketch .pen.side { stroke: rgba(16, 34, 79, 0.24); stroke-width: 1.1; }
+.mk .sketch .ink { opacity: 0; fill: none; stroke: rgba(16, 34, 79, 0.4); stroke-width: 1.2; }
 .mk .sketch .ink.thin { stroke-width: 1; }
+.mk .sketch .ink.side { stroke: rgba(16, 34, 79, 0.26); }
 .mk .sketch circle.ink { fill: #fbfcfe; }
 .mk .sketch circle.accent { fill: var(--accent); stroke: none; }
-.mk .sketch text.ink { fill: rgba(16, 34, 79, 0.5); stroke: none; font-size: 11px; font-family: inherit; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.mk .sketch text.ink { fill: rgba(16, 34, 79, 0.55); stroke: none; font-size: 11px; font-family: inherit; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+/* Pen tips ride the end of each line while it draws. */
+.mk .sketch .head { visibility: hidden; }
+.mk .sketch .head.on { visibility: visible; }
+.mk .sketch .head .halo { fill: var(--accent); opacity: 0.18; }
+.mk .sketch .head .dot { fill: var(--accent); }
+.mk .sketch .head.side .halo { fill: var(--fg); opacity: 0.1; }
+.mk .sketch .head.side .dot { fill: rgba(16, 34, 79, 0.55); }
 .mk .closing { z-index: 3; }
+
+/* ---------- Small drawings (Doodle.astro) ----------
+   Each stroke draws in turn when the drawing scrolls into view. */
+.mk .doodle { color: var(--fg); width: 104px; }
+.mk .doodle svg { display: block; width: 100%; height: auto; overflow: visible; }
+.mk .doodle .accent { stroke: var(--accent); stroke-width: 2; }
+.mk .doodle.waiting path { stroke-dasharray: 1 1; stroke-dashoffset: 1; transition: stroke-dashoffset 0.9s var(--ease); transition-delay: calc(var(--n) * 0.16s); }
+.mk .doodle.waiting.drawn path { stroke-dashoffset: 0; }
+.mk .head-art { margin-bottom: 22px; }
+.mk .hero.compact .hero-doodle { position: absolute; right: var(--gutter); top: 50%; width: clamp(200px, 24vw, 300px); transform: translateY(-50%); }
+/* The large header drawings keep the same line weight as the small ones. */
+.mk .hero-doodle svg { stroke-width: 0.7; }
+.mk .hero-doodle .accent { stroke-width: 0.9; }
+@media (max-width: 1040px) {
+  .mk .hero.compact .hero-doodle { display: none; }
+}
+@media (max-width: 640px) {
+  .mk .head-art { width: 84px; margin-bottom: 16px; }
+}
 
 /* ---------- Pricing: four plans ---------- */
 .mk .plans.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }

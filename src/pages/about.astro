@@ -2,6 +2,7 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import LineArt from '@/components/marketing/LineArt.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 
 export const prerender = true;
@@ -31,7 +32,10 @@ const principles = [
 
   <section class="section" aria-labelledby="story-title">
     <div class="wrap section-head">
-      <h2 id="story-title">Why we built it.</h2>
+      <div class="head-with-art">
+        <Doodle variant="dividers" class="head-art" />
+        <h2 id="story-title">Why we built it.</h2>
+      </div>
       <div class="body-copy" style="display: grid; gap: 16px;">
         <p>Every application starts with information a practice already holds: the site, the client, the drawings and the description of works. Yet each one is keyed in again, field by field, document by document, into a portal that can time out halfway through.</p>
         <p>We built Architect Pro so that information lives in one project record, applications are prepared from it, and a desktop Agent completes the portal on your behalf. You review, approve and pay. It keeps track of what happens next.</p>
@@ -43,7 +47,10 @@ const principles = [
   <section class="section tint" aria-labelledby="principles-title">
     <div class="wrap">
       <div class="section-head single">
-        <h2 id="principles-title">What we hold to.</h2>
+        <div class="head-with-art">
+          <Doodle variant="north" class="head-art" />
+          <h2 id="principles-title">What we hold to.</h2>
+        </div>
       </div>
       <div class="grid three">
         {principles.map((item, index) => (

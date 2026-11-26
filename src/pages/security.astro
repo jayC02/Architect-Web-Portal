@@ -2,6 +2,7 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import LineArt from '@/components/marketing/LineArt.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import { marketingRoutes, contactDetails } from '@/lib/marketing/routes';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 
@@ -51,7 +52,10 @@ const pillars = [
 
   <section class="section tint" aria-labelledby="data-title">
     <div class="wrap section-head">
-      <h2 id="data-title">Your data stays yours.</h2>
+      <div class="head-with-art">
+        <Doodle variant="shield" class="head-art" />
+        <h2 id="data-title">Your data stays yours.</h2>
+      </div>
       <div class="body-copy" style="display: grid; gap: 16px;">
         <p>We use your information only to run your workspace. AI document sorting sends a document to a model provider only to classify it, and we do not allow it to be used for training.</p>
         <p>Connected Google and Xero accounts use the narrowest permissions each feature needs, and you can disconnect them at any time. If you leave, contact us and we will arrange an export of your records.</p>

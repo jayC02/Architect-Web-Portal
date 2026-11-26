@@ -1,6 +1,7 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import ProjectsDemo from '@/components/marketing/demos/ProjectsDemo.astro';
 import SortDemo from '@/components/marketing/demos/SortDemo.astro';
 import ApplicationDemo from '@/components/marketing/demos/ApplicationDemo.astro';
@@ -133,7 +134,10 @@ const connections = [
   <section class="section tint" aria-labelledby="also-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="also-title">Everything else a practice runs on.</h2>
+        <div class="head-with-art">
+          <Doodle variant="setsquare" class="head-art" />
+          <h2 id="also-title">Everything else a practice runs on.</h2>
+        </div>
         <p>The working tools around the applications, built for how Scottish practices actually run projects.</p>
       </div>
       <div class="grid three">
@@ -151,7 +155,10 @@ const connections = [
   <section class="section" aria-labelledby="connect-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="connect-title">Works with the accounts you already use.</h2>
+        <div class="head-with-art">
+          <Doodle variant="link" class="head-art" />
+          <h2 id="connect-title">Works with the accounts you already use.</h2>
+        </div>
         <p>Connect each one from your workspace settings. Architect Pro asks only for the access each feature needs, and you can disconnect at any time.</p>
       </div>
       <div class="connects">
@@ -168,7 +175,10 @@ const connections = [
   <section class="section bordered" aria-labelledby="time-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="time-title">Time back on every project.</h2>
+        <div class="head-with-art">
+          <Doodle variant="clock" class="head-art" />
+          <h2 id="time-title">Time back on every project.</h2>
+        </div>
         <p>The same three applications, keyed in by hand or prepared and submitted for you.</p>
       </div>
       <div class="stats">

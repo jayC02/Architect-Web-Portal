@@ -1,6 +1,7 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import { marketingRoutes, subscribeHref, demoHref } from '@/lib/marketing/routes';
 import { plans, everyPlanIncludes, pricingNotes, formatPrice, yearlySaving, type Plan } from '@/lib/marketing/plans';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
@@ -77,6 +78,7 @@ const faqs = [
 >
   <section class="hero compact">
     <div class="wrap">
+      <Doodle variant="plan" class="hero-doodle" />
       <p class="eyebrow">Pricing, excluding VAT</p>
       <h1>Pay for the applications you send.</h1>
       <p class="lede">Start pay as you go at {payg.extraLabel} an application, or choose a plan with applications included and a lower rate for every one after. Every plan has the whole workspace and a licensed desktop Agent.</p>
@@ -176,7 +178,10 @@ const faqs = [
   <section class="section tint" aria-labelledby="includes-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="includes-title">Every plan includes the whole workspace.</h2>
+        <div class="head-with-art">
+          <Doodle variant="docs" class="head-art" />
+          <h2 id="includes-title">Every plan includes the whole workspace.</h2>
+        </div>
         <p>Plans differ in how many applications are included, how many people can sign in, U-values and support. Nothing else is held back.</p>
       </div>
       <ul class="includes">
@@ -188,7 +193,10 @@ const faqs = [
   <section class="section" aria-labelledby="access-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="access-title">How access works.</h2>
+        <div class="head-with-art">
+          <Doodle variant="key" class="head-art" />
+          <h2 id="access-title">How access works.</h2>
+        </div>
         <p>Architect Pro is only available to approved practices, on pay as you go or a subscription. That keeps your data, and the portal accounts the Agent uses, in trusted hands.</p>
       </div>
       <ol class="access-steps">

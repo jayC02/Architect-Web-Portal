@@ -1,9 +1,11 @@
 ---
-// A pen line drawn in the background of a marketing page as the visitor scrolls.
-// It runs down the page behind the content, through clear space only, turning
-// at each section into a new lane, with small drafting marks at its corners: nodes, crosses, dimension
-// ticks and the odd red point. The route is worked out in the browser from the
-// page's own sections, so every page gets its own drawing. Decorative only.
+// Pen lines drawn in the background of a marketing page as the visitor scrolls.
+// A main line and two lighter ones run down the page behind the content,
+// through clear space only, turning at each section into a new lane. A pen tip
+// rides the end of each line so it is plain the drawing follows the scroll.
+// Small drafting marks sit at the main line's corners: nodes, crosses,
+// dimensions and the odd red point. Routes are worked out in the browser from
+// the page's own sections, so every page draws differently. Decorative only.
 ---
 <svg class="sketch" aria-hidden="true" focusable="false" data-sketch></svg>
 
@@ -16,10 +18,27 @@
     from: number;
     to: number;
     draw: boolean;
+    lag: number;
     last: number;
   }
 
-  /** Small seeded random generator so a page draws the same route every visit. */
+  interface Segment {
+    el: SVGGeometryElement;
+    from: number;
+    to: number;
+    length: number;
+  }
+
+  interface Strand {
+    side: boolean;
+    lag: number;
+    route: Segment[];
+    head: SVGGElement;
+  }
+
+  interface Box { l: number; r: number; t: number; b: number }
+
+  /** Small seeded random generator so a page draws the same routes every visit. */
   const seeded = (text: string) => {
     let seed = 2166136261;
     for (const char of text) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
@@ -30,43 +49,53 @@
     };
   };
 
+  // Anything a line must not cross: words, controls, images and the solid
+  // panels that sit over it. Text is measured tightly around the words.
+  const SOLID = '.card, .plan, .demo, .world, .finder, .feature-index, .access-steps li, .connect, .price-band, .calc-result, .form-card, .mock, .enterprise, .stat, .billing-toggle, .table-scroll, .faq details, .hero-art';
+
   const svg = document.querySelector<SVGSVGElement>('[data-sketch]');
   const main = svg?.parentElement;
 
   if (svg && main) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let strokes: Stroke[] = [];
+    let strands: Strand[] = [];
     let reached = 0;
     let loadStart = 0;
     let frame = 0;
 
-    const add = (tag: string, attrs: Record<string, string | number>, from: number, to: number, draw = true) => {
-      const el = document.createElementNS(NS, tag) as SVGElement;
+    const element = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, parent: Element = svg) => {
+      const el = document.createElementNS(NS, tag);
       for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
-      if (draw) el.setAttribute('pathLength', '1');
-      el.classList.add(draw ? 'pen' : 'ink');
-      svg.appendChild(el);
-      strokes.push({ el, from, to: Math.max(to, from + 1), draw, last: -1 });
+      parent.appendChild(el);
+      return el;
     };
 
-    // Anything the line must not cross: words, controls, images and the solid
-    // panels that sit over it. Measured tightly around the text itself.
-    const SOLID = '.card, .plan, .demo, .world, .finder, .feature-index, .access-steps li, .connect, .price-band, .calc-result, .form-card, .mock, .enterprise, .stat, .billing-toggle, .table-scroll, .faq details, .hero-art';
     const collectObstacles = (origin: DOMRect, clearance: number) => {
-      const boxes: { l: number; r: number; t: number; b: number }[] = [];
+      const boxes: Box[] = [];
+      // Content that fades up into place (.reveal) is measured where it ends up,
+      // and boxes stretch to cover where it starts, so neither position is crossed.
+      let lift = 0;
       const push = (rect: DOMRect, padX: number, padY: number) => {
         if (!rect.width || !rect.height) return;
         boxes.push({
           l: rect.left - origin.left - padX,
           r: rect.right - origin.left + padX,
-          t: rect.top - origin.top - padY,
+          t: rect.top - origin.top - padY - lift,
           b: rect.bottom - origin.top + padY,
         });
       };
-      main.querySelectorAll<HTMLElement>(SOLID).forEach((el) => push(el.getBoundingClientRect(), clearance, 14));
+      const liftFor = (el: Element) => {
+        const waiting = el.closest('.reveal:not(.in)');
+        if (!waiting) return 0;
+        const shift = new DOMMatrixReadOnly(getComputedStyle(waiting).transform).m42;
+        return Math.max(0, shift);
+      };
+      main.querySelectorAll<HTMLElement>(SOLID).forEach((el) => { lift = liftFor(el); push(el.getBoundingClientRect(), clearance, 14); });
       const range = document.createRange();
       for (const el of main.querySelectorAll<HTMLElement>('*')) {
         if (el.closest('.sketch, .closing')) continue;
+        lift = liftFor(el);
         if (el.matches('img, svg, input, select, textarea, button, video, canvas')) {
           push(el.getBoundingClientRect(), clearance, 10);
           continue;
@@ -82,148 +111,177 @@
     const build = () => {
       svg.replaceChildren();
       strokes = [];
+      strands = [];
       const width = main.clientWidth;
       const height = main.scrollHeight;
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       svg.style.height = `${height}px`;
 
       const blocks = [...main.children].filter(
-        (child): child is HTMLElement => child instanceof HTMLElement && child !== (svg as unknown as Element) && !child.matches('.closing, .no-sketch'),
+        (child): child is HTMLElement => child instanceof HTMLElement && child.offsetHeight > 0 && !child.matches('script, style, template, .closing, .no-sketch'),
       );
       if (!blocks.length) return;
-      const random = seeded(location.pathname);
       const narrow = width < 720;
-      // Phones have narrow margins, so the line keeps a tighter distance there.
+      // Phones have narrow margins, so lines keep a tighter distance there.
       const boxes = collectObstacles(main.getBoundingClientRect(), narrow ? 5 : 14);
       const blocked = (x0: number, x1: number, y0: number, y1: number) =>
         boxes.some((box) => box.r > Math.min(x0, x1) && box.l < Math.max(x0, x1) && box.b > Math.min(y0, y1) && box.t < Math.max(y0, y1));
 
-      // Every x the line may run down, a few pixels apart, kept off the very edge.
+      // Every x a line may run down, a few pixels apart, kept off the very edge.
       const columns: number[] = [];
       for (let column = 8; column <= width - 8; column += narrow ? 4 : 6) columns.push(column);
       const freeColumns = (y0: number, y1: number) => columns.filter((column) => !blocked(column - 2, column + 2, y0, y1));
-      const pick = <T,>(items: T[]) => items[Math.floor(random() * items.length)];
-
-      // Turning points: every section top, plus extra turns inside long sections.
-      const turns: number[] = [];
-      blocks.forEach((block, index) => {
-        const top = block.offsetTop;
-        const bottom = top + block.offsetHeight;
-        if (index > 0) turns.push(top + 30);
-        const spacing = narrow ? 480 : 620;
-        for (let y = top + spacing; y < bottom - spacing * 0.6; y += spacing) turns.push(Math.round(y + (random() - 0.5) * 120));
-      });
       const last = blocks.at(-1)!;
-      turns.push(last.offsetTop + last.offsetHeight - 40);
+      const pageEnd = last.offsetTop + last.offsetHeight - 40;
 
-      let y = Math.round(blocks[0].offsetTop + Math.min(blocks[0].offsetHeight * 0.3, 160));
-      let pen = y;
-      let x: number | null = null;
+      const drawStrand = (options: { seed: string; start: number; end: number; side: boolean; lag: number }) => {
+        const random = seeded(`${location.pathname}:${options.seed}`);
+        const pick = <T,>(items: T[]) => items[Math.floor(random() * items.length)];
+        const strand: Strand = { side: options.side, lag: options.lag, route: [], head: element('g', { class: options.side ? 'head side' : 'head' }) };
+        const cls = options.side ? 'side' : '';
 
-      const startAt = (column: number, at: number) => {
-        // The pen lifts and comes down somewhere clear: mark where it lands.
-        add('circle', { cx: column, cy: at, r: 3.5 }, at - 20, at + 30, false);
-        x = column;
+        const stroke = (tag: 'path' | 'circle', attrs: Record<string, string | number>, from: number, to: number, draw = true, onRoute = false) => {
+          const el = element(tag, attrs);
+          if (draw) el.setAttribute('pathLength', '1');
+          el.classList.add(draw ? 'pen' : 'ink');
+          if (cls) el.classList.add(cls);
+          strokes.push({ el, from, to: Math.max(to, from + 1), draw, lag: options.lag, last: -1 });
+          if (onRoute) strand.route.push({ el: el as SVGGeometryElement, from, to: Math.max(to, from + 1), length: 0 });
+          return el;
+        };
+
+        // Turning points: every section top, plus extra turns inside long sections.
+        const turns: number[] = [];
+        blocks.forEach((block, index) => {
+          const top = block.offsetTop;
+          const bottom = top + block.offsetHeight;
+          if (index > 0) turns.push(top + 30 + Math.round(random() * (options.side ? 60 : 0)));
+          const spacing = (narrow ? 480 : 620) * (options.side ? 0.8 : 1);
+          for (let y = top + spacing; y < bottom - spacing * 0.6; y += spacing) turns.push(Math.round(y + (random() - 0.5) * 120));
+        });
+        const path = turns.filter((turn) => turn > options.start + 50 && turn < options.end).concat(options.end).sort((a, b) => a - b);
+
+        let y = options.start;
+        let pen = y;
+        let x: number | null = null;
+
+        path.forEach((planned, index) => {
+          const nextTurn = path[index + 1];
+          if (planned <= y + 50) return;
+
+          // Find a clear column to the planned turn; lift the pen if this one is blocked.
+          if (x === null || blocked(x - 2, x + 2, y, planned)) {
+            const open = freeColumns(y, planned);
+            if (!open.length) { x = null; y = planned; pen = planned; return; }
+            x = pick(open);
+            stroke('circle', { cx: x, cy: y, r: options.side ? 2.5 : 3.5 }, pen - 20, pen + 30, false);
+          }
+          const column = x as number;
+
+          // Nudge the turn to a row where a crossing is possible.
+          let turn = planned;
+          let targets: number[] = [];
+          if (nextTurn !== undefined) {
+            for (const shift of [0, 16, -16, 32, -32, 48, 64, 80, 100]) {
+              const candidate = planned + shift;
+              if (candidate <= y + 40 || blocked(column - 2, column + 2, y, candidate)) continue;
+              const reach = freeColumns(candidate, nextTurn).filter((target) =>
+                Math.abs(target - column) > (narrow ? 40 : 120) && !blocked(column, target, candidate - 6, candidate + 6));
+              if (reach.length) { turn = candidate; targets = reach; break; }
+            }
+          }
+
+          stroke('path', { d: `M${column} ${y}V${turn}` }, pen, turn, true, true);
+          y = turn;
+          pen = turn;
+          if (nextTurn === undefined) {
+            stroke('circle', { cx: column, cy: y, r: options.side ? 3 : 4 }, y - 10, y + 50, false);
+            return;
+          }
+          if (!targets.length) return; // Carry straight on, or lift the pen at the next turn.
+
+          // Prefer a long run across, but not always the longest.
+          const far = targets.filter((target) => Math.abs(target - column) > width * 0.25);
+          const nx = pick(far.length && random() < 0.7 ? far : targets);
+          const span = Math.abs(nx - column);
+          const sweep = Math.min(240, Math.max(90, span * 0.45));
+          const style = random();
+          const dir = Math.sign(nx - column);
+          const r = 28;
+          const rounded = style < 0.25 && span > r * 2 && !blocked(column, column + dir * r, y, y + r + 6)
+            && !blocked(column, nx, y + r - 6, y + r + 6) && !blocked(nx - 2, nx + 2, y + r, nextTurn);
+
+          if (rounded) {
+            stroke('path', { d: `M${column} ${y}A${r} ${r} 0 0 ${dir > 0 ? 0 : 1} ${column + dir * r} ${y + r}H${nx}` }, y, y + sweep, true, true);
+            y += r;
+          } else {
+            stroke('path', { d: `M${column} ${y}H${nx}` }, y, y + sweep, true, true);
+          }
+
+          // Drafting marks, on the main line only and only where they fit.
+          const markAt = y + sweep * 0.5;
+          if (!options.side) {
+            if (style >= 0.25 && style < 0.55) {
+              stroke('circle', { cx: column, cy: y, r: 3.5 }, markAt - 30, markAt + 20, false);
+            } else if (style >= 0.55 && style < 0.75 && !blocked(column - 9, column + 9, y - 9, y + 9)) {
+              stroke('path', { d: `M${column - 7} ${y - 7}L${column + 7} ${y + 7}M${column + 7} ${y - 7}L${column - 7} ${y + 7}`, class: 'thin' }, markAt - 30, markAt + 20, false);
+            }
+            const left = Math.min(column, nx);
+            const right = Math.max(column, nx);
+            if (span > 180 && random() < 0.6 && !blocked(left - 6, right + 6, y - 34, y - 4)) {
+              const dimY = y - 14;
+              stroke('path', { d: `M${left} ${dimY}H${right}`, class: 'thin' }, markAt, markAt + 80);
+              stroke('path', { d: `M${left - 5} ${dimY + 5}L${left + 5} ${dimY - 5}M${right - 5} ${dimY + 5}L${right + 5} ${dimY - 5}`, class: 'thin' }, markAt + 40, markAt + 100, false);
+              const label = element('text', { x: (left + right) / 2, y: dimY - 6, 'text-anchor': 'middle', class: 'ink' });
+              label.textContent = String(Math.round((span * 8) / 50) * 50);
+              strokes.push({ el: label, from: markAt + 50, to: markAt + 120, draw: false, lag: 0, last: -1 });
+            }
+            if (random() < 0.3) stroke('circle', { cx: nx, cy: y, r: 5, class: 'accent' }, y + sweep - 20, y + sweep + 40, false);
+          }
+
+          pen = y + sweep;
+          x = nx;
+        });
+
+        // Keep later lines away from this one: its route becomes an obstacle.
+        for (const segment of strand.route) {
+          const box = segment.el.getBBox();
+          boxes.push({ l: box.x - 36, r: box.x + box.width + 36, t: box.y - 28, b: box.y + box.height + 28 });
+          segment.length = segment.el.getTotalLength();
+        }
+
+        // The pen tip: a dot with a soft ring, moved along the line as it draws.
+        element('circle', { class: 'halo', r: options.side ? 6 : 10 }, strand.head);
+        element('circle', { class: 'dot', r: options.side ? 2.5 : 4.5 }, strand.head);
+        svg.appendChild(strand.head);
+        strands.push(strand);
       };
 
-      turns.forEach((planned, index) => {
-        const nextTurn = turns[index + 1];
-        if (planned <= y + 50) return;
-
-        // Find a clear column to the planned turn, then a clear row to cross on.
-        if (x === null || blocked(x - 2, x + 2, y, planned)) {
-          const open = freeColumns(y, planned);
-          if (!open.length) { x = null; y = planned; pen = planned; return; }
-          startAt(pick(open), y);
-        }
-        const column = x as number;
-
-        // Nudge the turn to a row where a crossing is possible.
-        let turn = planned;
-        let targets: number[] = [];
-        if (nextTurn !== undefined) {
-          for (const shift of [0, 16, -16, 32, -32, 48, 64, 80, 100]) {
-            const candidate = planned + shift;
-            if (candidate <= y + 40 || blocked(column - 2, column + 2, y, candidate)) continue;
-            const reach = freeColumns(candidate, nextTurn).filter((target) =>
-              Math.abs(target - column) > (narrow ? 40 : 120) && !blocked(column, target, candidate - 6, candidate + 6));
-            if (reach.length) { turn = candidate; targets = reach; break; }
-          }
-        }
-
-        add('path', { d: `M${column} ${y}V${turn}` }, pen, turn);
-        y = turn;
-        pen = turn;
-        if (nextTurn === undefined) {
-          add('circle', { cx: column, cy: y, r: 4 }, y - 10, y + 50, false);
-          return;
-        }
-        if (!targets.length) return; // Carry straight on, or lift the pen at the next turn.
-
-        // Prefer a long run across, but not always the longest.
-        const far = targets.filter((target) => Math.abs(target - column) > width * 0.25);
-        const nx = pick(far.length && random() < 0.7 ? far : targets);
-        const span = Math.abs(nx - column);
-        const sweep = Math.min(240, Math.max(90, span * 0.45));
-        const style = random();
-        const dir = Math.sign(nx - column);
-        const r = 28;
-        const rounded = style < 0.25 && span > r * 2 && !blocked(column, column + dir * r, y, y + r + 6)
-          && !blocked(column, nx, y + r - 6, y + r + 6) && !blocked(nx - 2, nx + 2, y + r, nextTurn);
-
-        if (rounded) {
-          add('path', { d: `M${column} ${y}A${r} ${r} 0 0 ${dir > 0 ? 0 : 1} ${column + dir * r} ${y + r}H${nx}` }, y, y + sweep);
-          y += r;
-        } else {
-          add('path', { d: `M${column} ${y}H${nx}` }, y, y + sweep);
-        }
-
-        // Drafting marks at the corner and along the run, only where they fit.
-        const markAt = y + sweep * 0.5;
-        if (style >= 0.25 && style < 0.55) {
-          add('circle', { cx: column, cy: y, r: 3.5 }, markAt - 30, markAt + 20, false);
-        } else if (style >= 0.55 && style < 0.75 && !blocked(column - 9, column + 9, y - 9, y + 9)) {
-          add('path', { d: `M${column - 7} ${y - 7}L${column + 7} ${y + 7}M${column + 7} ${y - 7}L${column - 7} ${y + 7}`, class: 'thin' }, markAt - 30, markAt + 20, false);
-        }
-        const left = Math.min(column, nx);
-        const right = Math.max(column, nx);
-        if (span > 180 && random() < 0.6 && !blocked(left - 6, right + 6, y - 34, y - 4)) {
-          // A dimension: ticks at both ends and a measured length.
-          const dimY = y - 14;
-          add('path', { d: `M${left} ${dimY}H${right}`, class: 'thin' }, markAt, markAt + 80);
-          add('path', { d: `M${left - 5} ${dimY + 5}L${left + 5} ${dimY - 5}M${right - 5} ${dimY + 5}L${right + 5} ${dimY - 5}`, class: 'thin' }, markAt + 40, markAt + 100, false);
-          const label = document.createElementNS(NS, 'text');
-          label.textContent = String(Math.round((span * 8) / 50) * 50);
-          label.setAttribute('x', String((left + right) / 2));
-          label.setAttribute('y', String(dimY - 6));
-          label.setAttribute('text-anchor', 'middle');
-          label.classList.add('ink');
-          svg.appendChild(label);
-          strokes.push({ el: label, from: markAt + 50, to: markAt + 120, draw: false, last: -1 });
-        }
-        if (random() < 0.3) {
-          add('circle', { cx: nx, cy: y, r: 5, class: 'accent' }, y + sweep - 20, y + sweep + 40, false);
-        }
-
-        pen = y + sweep;
-        x = nx;
-      });
+      const startY = Math.round(blocks[0].offsetTop + Math.min(blocks[0].offsetHeight * 0.3, 160));
+      drawStrand({ seed: 'main', start: startY, end: pageEnd, side: false, lag: 0 });
+      // Two lighter lines start a little later and finish a little earlier.
+      if (blocks.length > 1) {
+        drawStrand({ seed: 'second', start: blocks[1].offsetTop + 60, end: pageEnd - 120, side: true, lag: 90 });
+      }
+      const third = blocks[Math.min(2, blocks.length - 1)];
+      drawStrand({ seed: 'third', start: Math.max(startY + 200, third.offsetTop - 120), end: pageEnd - 60, side: true, lag: 180 });
     };
 
     const render = () => {
       frame = 0;
       const top = main.getBoundingClientRect().top + window.scrollY;
-      let target = window.scrollY + window.innerHeight * 0.72 - top;
+      let target = window.scrollY + window.innerHeight * 0.68 - top;
       if (loadStart) {
-        // On arrival the pen catches up over a moment instead of appearing all at once.
-        const t = Math.min(1, (performance.now() - loadStart) / 1400);
-        target = Math.min(target, target * (1 - Math.pow(1 - t, 3)));
+        // On arrival the pens catch up over a moment instead of appearing all at once.
+        const t = Math.min(1, (performance.now() - loadStart) / 1600);
+        target *= 1 - Math.pow(1 - t, 3);
         if (t >= 1) loadStart = 0;
       }
       reached = Math.max(reached, target);
+
       for (const stroke of strokes) {
-        const t = clamp((reached - stroke.from) / (stroke.to - stroke.from));
-        if (Math.abs(t - stroke.last) < 0.003) continue;
+        const t = clamp((reached - stroke.lag - stroke.from) / (stroke.to - stroke.from));
+        if (Math.abs(t - stroke.last) < 0.002) continue;
         stroke.last = t;
         if (stroke.draw) {
           stroke.el.style.strokeDashoffset = String(1 - t);
@@ -232,6 +290,22 @@
           stroke.el.style.opacity = String(t);
         }
       }
+
+      for (const strand of strands) {
+        const reach = reached - strand.lag;
+        const finished = strand.route.length > 0 && reach >= strand.route.at(-1)!.to;
+        let active: Segment | undefined;
+        for (const segment of strand.route) if (reach > segment.from) active = segment;
+        if (!active || finished || reduced) {
+          strand.head.classList.remove('on');
+          continue;
+        }
+        const t = clamp((reach - active.from) / (active.to - active.from));
+        const point = active.el.getPointAtLength(t * active.length);
+        strand.head.setAttribute('transform', `translate(${point.x} ${point.y})`);
+        strand.head.classList.add('on');
+      }
+
       if (loadStart) schedule();
     };
 
@@ -239,14 +313,15 @@
 
     const rebuild = () => {
       build();
-      if (reduced) {
-        reached = Number.POSITIVE_INFINITY;
-      }
+      if (reduced) reached = Number.POSITIVE_INFINITY;
       render();
     };
 
     if (!reduced) loadStart = performance.now();
     rebuild();
+    // Web fonts change text widths without always changing the page size.
+    document.fonts?.ready.then(rebuild);
+    window.addEventListener('load', rebuild, { once: true });
     svg.classList.add('ready');
     window.addEventListener('scroll', schedule, { passive: true });
 
