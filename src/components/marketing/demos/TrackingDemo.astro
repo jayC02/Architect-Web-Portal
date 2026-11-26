@@ -1,0 +1,80 @@
+---
+// Interactive tracking: click an email and see it matched to the right
+// application, which updates its status. Illustrative emails only.
+const emails = [
+  { id: 'validated', from: 'Planning authority', subject: 'Your application has been validated', target: 'planning', status: 'Validated', rank: 1, tone: 'ok' },
+  { id: 'info', from: 'Building standards', subject: 'Further information requested', target: 'warrant', status: 'Reply by 4 Dec', rank: 1, tone: 'wait', calendar: 'Reply to verifier, 4 Dec' },
+  { id: 'decision', from: 'Planning authority', subject: 'Decision notice: permission granted', target: 'planning', status: 'Granted', rank: 2, tone: 'ok' },
+];
+const applications = [
+  { id: 'planning', label: 'Planning permission' },
+  { id: 'warrant', label: 'Building warrant' },
+];
+---
+<div class="demo" data-demo="tracking" data-emails={JSON.stringify(emails)}>
+  <div class="demo-bar">
+    <span class="demo-title">Gmail, connected</span>
+    <span class="demo-hint">Click an email</span>
+  </div>
+  <div class="td">
+    <ul class="td-inbox" aria-label="Inbox">
+      {emails.map((email) => (
+        <li>
+          <button type="button" data-email={email.id}>
+            <span class="td-from">{email.from}</span>
+            <span class="td-subject">{email.subject}</span>
+            <span class="td-match">Unread</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+    <div class="td-project">
+      <p class="td-name">14 Harbour Lane</p>
+      <ul class="td-apps">
+        {applications.map((application) => (
+          <li data-app={application.id}><span>{application.label}</span><span class="tag">Submitted</span></li>
+        ))}
+      </ul>
+      <p class="td-calendar"><span>Calendar</span><b data-calendar>Nothing due</b></p>
+    </div>
+  </div>
+  <p class="demo-status" aria-live="polite">3 new emails from the authorities.</p>
+</div>
+
+<script>
+  interface Email { id: string; from: string; subject: string; target: string; status: string; rank: number; tone: string; calendar?: string }
+
+  document.querySelectorAll<HTMLElement>('[data-demo="tracking"]').forEach((demo) => {
+    const emails = JSON.parse(demo.dataset.emails ?? '[]') as Email[];
+    const status = demo.querySelector<HTMLElement>('.demo-status')!;
+    const calendar = demo.querySelector<HTMLElement>('[data-calendar]')!;
+    const ranks: Record<string, number> = {};
+    let matched = 0;
+
+    demo.querySelectorAll<HTMLButtonElement>('[data-email]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.classList.contains('matched')) return;
+        const email = emails.find((candidate) => candidate.id === button.dataset.email)!;
+        const row = demo.querySelector<HTMLElement>(`[data-app="${email.target}"]`)!;
+        const label = row.querySelector('span')!.textContent;
+        button.classList.add('matched');
+        button.querySelector('.td-match')!.textContent = `Matched to ${label}`;
+        // A later letter never moves an application backwards.
+        if ((ranks[email.target] ?? 0) <= email.rank) {
+          ranks[email.target] = email.rank;
+          const tag = row.querySelector<HTMLElement>('.tag')!;
+          tag.className = `tag ${email.tone}`;
+          tag.textContent = email.status;
+          row.classList.remove('flash');
+          void row.offsetWidth;
+          row.classList.add('flash');
+        }
+        if (email.calendar) calendar.textContent = email.calendar;
+        matched += 1;
+        status.textContent = matched === emails.length
+          ? 'All 3 emails matched. Nothing left in the inbox to sort.'
+          : `${email.from} email matched to ${label}.`;
+      });
+    });
+  });
+</script>

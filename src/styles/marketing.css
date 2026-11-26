@@ -94,7 +94,7 @@
 
 /* ---------- Hero ---------- */
 .mk .hero { background: var(--wash); padding: clamp(48px, 8vw, 112px) 0 clamp(56px, 8vw, 104px); position: relative; overflow: hidden; }
-.mk .hero .wrap { position: relative; z-index: 1; }
+.mk .hero .wrap { position: relative; z-index: 2; }
 .mk .hero-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
 .mk .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; color: var(--muted); margin-bottom: 20px; }
 .mk .eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
@@ -215,7 +215,7 @@
 .mk .compare { width: 100%; border-collapse: collapse; font-size: 14px; }
 .mk .compare caption { text-align: left; }
 .mk .compare th, .mk .compare td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-.mk .compare thead th { font-weight: 500; font-size: 15px; position: sticky; top: 76px; background: #fbfcfe; }
+.mk .compare thead th { font-weight: 500; font-size: 15px; border-bottom-color: var(--line-strong); }
 .mk .compare tbody th { font-weight: 400; color: var(--muted); width: 34%; }
 .mk .compare .group th { padding-top: 28px; color: var(--fg); font-weight: 500; }
 .mk .table-scroll { overflow-x: auto; }

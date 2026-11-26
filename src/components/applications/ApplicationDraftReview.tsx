@@ -1,4 +1,5 @@
 import ClientApplicantReview from './ClientApplicantReview';
+import { PAPER_SIZES } from '@/lib/document-paper-size';
 import { WarrantConfirmationQuestions } from './WarrantDraftQuestions';
 import { permitsSTAS } from '@/lib/building-warrant-branches';
 import { resolveLocationPlans } from '@/lib/location-plan';
@@ -885,6 +886,7 @@ export default function ApplicationDraftReview({
       .filter((document) =>
         document.documentStatus === 'IN_REVIEW'
         || document.documentStatus === 'DRAFT'
+        || (document.paperSizeNeedsReview && !document.paperSize)
         || (locationPlanCount > 1 && String(document.documentType) === 'LOCATION_PLAN'))
       .map((document) => document.id),
   );
@@ -1358,7 +1360,7 @@ export default function ApplicationDraftReview({
             <Field label="First name" value={review.agent.firstName} onChange={(value) => updateAgent('firstName', value)} issue={issueFor('agent.firstName')} required />
             <Field label="Last name" value={review.agent.lastName} onChange={(value) => updateAgent('lastName', value)} issue={issueFor('agent.lastName')} required />
             <Field label="Email" type="email" value={review.agent.email} onChange={(value) => updateAgent('email', value)} issue={issueFor('agent.email')} required />
-            <Field label="Phone" type="tel" value={review.agent.phone} onChange={(value) => updateAgent('phone', value)} />
+            <Field label="Phone" type="tel" value={review.agent.phone} onChange={(value) => updateAgent('phone', value)} issue={issueFor('agent.phone')} required />
             <Field label="Building number" value={review.agent.buildingNumber} onChange={(value) => updateAgent('buildingNumber', value)} issue={issueFor('agent.buildingNumber')} required />
             <Field label="Address line 1" value={review.agent.addressLine1} onChange={(value) => updateAgent('addressLine1', value)} issue={issueFor('agent.addressLine1')} required />
             <Field label="Address line 2" value={review.agent.addressLine2} onChange={(value) => updateAgent('addressLine2', value)} />
@@ -1411,10 +1413,11 @@ export default function ApplicationDraftReview({
             {visibleDocuments.map((document) => {
               const source = draftDocumentsById.get(document.id);
               const needsReview = document.documentStatus === 'IN_REVIEW' || document.documentStatus === 'DRAFT';
+              const paperNeedsReview = document.paperSizeNeedsReview && !document.paperSize;
               const locationConflict = locationPlanConflict && String(document.documentType) === 'LOCATION_PLAN';
               const category = documentTypes.find((option) => option.value === document.documentType)?.label ?? document.documentType;
               return (
-                <div key={document.id} className={`border-b border-stone-100 p-4 last:border-b-0 ${needsReview || locationConflict ? 'bg-amber-50/50' : ''}`}>
+                <div key={document.id} className={`border-b border-stone-100 p-4 last:border-b-0 ${needsReview || paperNeedsReview || locationConflict ? 'bg-amber-50/50' : ''}`}>
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.9fr)_auto] lg:items-center">
                     <div className="flex min-w-0 items-start gap-3">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-stone-200 bg-stone-50 text-stone-500">
@@ -1514,6 +1517,14 @@ export default function ApplicationDraftReview({
                       <p className="mt-3 text-xs text-amber-800">Suggested using the deterministic fallback. Check this classification manually.</p>
                     ) : null}
                   </details>
+                  <label className="mt-3 block text-sm">
+                    <span id={`paper-size-label-${document.id}`} className="label">Paper size{paperNeedsReview ? ' — confirm before continuing' : ''}</span>
+                    <select className="field" aria-labelledby={`paper-size-label-${document.id}`} aria-describedby={source?.paperSizeAnalysis?.evidence ? `paper-size-evidence-${document.id}` : undefined} value={document.paperSize ?? ''} onChange={(event) => updateDocument(document.id, 'paperSize', event.target.value || null)}>
+                      <option value="">Choose paper size</option>
+                      {PAPER_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                    {source?.paperSizeAnalysis?.evidence && <span id={`paper-size-evidence-${document.id}`} className="mt-1 block text-xs text-stone-600">{source.paperSizeAnalysis.evidence}</span>}
+                  </label>
                   {source && source.uploadStatus !== 'READY' ? (
                     <p role="alert" className="mt-3 text-sm text-red-700">
                       {source.uploadError || 'This document has not finished uploading.'} Add this PDF again to retry, or remove it before continuing.

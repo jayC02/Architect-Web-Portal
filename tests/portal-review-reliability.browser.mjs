@@ -9,6 +9,7 @@ import tailwind from 'tailwindcss';
 import tailwindConfig from '../tailwind.config.mjs';
 import {chromium} from 'playwright';
 import {clientReviewFixture} from './fixtures/client-applicant-review.ts';
+import {evaluateClientApplicationDraftReadiness} from '../src/lib/application-draft-readiness.ts';
 
 // Real portal components; isolated HTTP/API doubles; no customer data or government writes.
 const output=path.resolve('output/portal-review-reliability');
@@ -43,7 +44,7 @@ await page.route('**/api/**',async route=>{
    const review=request.postDataJSON().review;
    const ids=new Set(draft.documents.map(document=>document.id));
    if(review.documents.length!==ids.size||review.documents.some(document=>!ids.has(document.id)))return reply(400,{error:'Review every document in this application draft.'});
-   draft.review=review;actions.push('save');return reply(200,{draft,issues:[]});
+   draft.review=review;draft.issues=evaluateClientApplicationDraftReadiness(review);actions.push('save');return reply(200,{draft,issues:draft.issues});
   }
   return reply(200,{draft});
  }
@@ -51,6 +52,7 @@ await page.route('**/api/**',async route=>{
   actions.push(`analyse:${draft.review.client.email}`);
   return failAnalyse?reply(503,{error:'Analysis temporarily unavailable'}):reply(200,{draft});
  }
+ if(url.pathname.endsWith('/commit')){actions.push('commit');return reply(409,{error:'Fixture stopped after commit request.'});}
  if(url.pathname.endsWith('/upload-intent')){
   const input=request.postDataJSON();intents.push(input);actions.push('upload');
   if(transientUploads-->0)return reply(503,{error:'Temporary storage failure'});
@@ -86,14 +88,32 @@ const open=async(scenario='')=>{
  if(scenario==='site-plan'){
   draft.documents[0].documentType='SITE_PLAN';draft.review.documents[0].documentType='SITE_PLAN';
  }
+ if(scenario==='paper-size'){
+  draft.review.documents[0].paperSize=null;draft.review.documents[0].paperSizeNeedsReview=true;
+ }
+ if(scenario==='missing-agent-phone')draft.review.agent.phone=null;
  await page.goto(`http://127.0.0.1:${server.address().port}${scenario?'?state='+scenario:''}`);await email().waitFor();
  await page.waitForTimeout(750);
- await page.locator('summary').filter({hasText:'Documents'}).click();
+ if(!await page.getByRole('checkbox',{name:'Show all documents',exact:true}).isVisible())await page.locator('summary').filter({hasText:'Documents'}).click();
  await page.getByRole('checkbox',{name:'Show all documents',exact:true}).check();
  actions=[];
 };
 const check=(label,result)=>{assert.ok(result,label);checks.push(label);};
 try{
+ await open('missing-agent-phone');
+ const agentSection=page.locator('details').filter({has:page.locator('summary').filter({hasText:'Agent and organisation'})});
+ if(await agentSection.getAttribute('open')===null)await agentSection.locator('summary').click();
+ const agentPhone=agentSection.getByRole('textbox',{name:/^Phone/});
+ check('Missing agent phone is highlighted on review',await agentPhone.getAttribute('aria-invalid')==='true');
+ check('Agent phone shows the required marker',(await agentPhone.locator('..').innerText()).includes('*'));
+ await page.getByRole('button',{name:'Create Project',exact:true}).click();
+ await page.getByText('Review 1 remaining detail before creating the application.',{exact:true}).waitFor();
+ check('Missing agent phone prevents project commit',!actions.includes('commit'));
+ await page.screenshot({path:path.join(output,'missing-agent-phone.png'),fullPage:true});
+ await agentPhone.fill('01410000000');
+ await waitFor(()=>draft.review.agent.phone==='01410000000','agent phone correction was not saved');
+ await waitFor(async()=>await agentPhone.getAttribute('aria-invalid')==='false','agent phone error did not clear');
+ check('Correcting agent phone clears its review error',await agentPhone.getAttribute('aria-invalid')==='false');
  await open('site-plan');
  check('A reviewed site/block plan clears the missing-location review count',!(await page.locator('summary').filter({hasText:'Documents'}).innerText()).includes('1 to review'));
  check('A reviewed site/block plan enables project creation',await page.getByRole('button',{name:'Create Project',exact:true}).isEnabled());
@@ -210,9 +230,23 @@ try{
  ]);
  await page.getByText('This PDF was incomplete. Add it again.',{exact:true}).waitFor();
  await waitFor(async()=>await email().isEnabled(),'partial upload did not finish');
+ await waitFor(async()=>await page.getByRole('link',{name:'Good.pdf',exact:true}).isVisible()&&await page.getByRole('link',{name:'Broken.pdf',exact:true}).isVisible(),'partial upload document list did not reconcile');
  check('A partial upload reconciles completed and unfinished files on screen',await page.getByRole('link',{name:'Good.pdf',exact:true}).isVisible()&&await page.getByRole('link',{name:'Broken.pdf',exact:true}).isVisible());
  check('Incomplete uploads block project creation',await page.getByRole('button',{name:'Create Project',exact:true}).isDisabled());
  check('Partial upload failure preserves the latest client details',await email().inputValue()==='partial-package@example.test');
+
+ await open('paper-size');
+ const paperSize=page.getByRole('combobox',{name:'Paper size — confirm before continuing',exact:true});
+ await paperSize.waitFor();await paperSize.focus();
+ check('Paper-size review is keyboard accessible',await paperSize.evaluate(el=>el===document.activeElement));
+ await paperSize.selectOption('A3');
+ await waitFor(()=>draft.review.documents[0].paperSize==='A3','paper size did not persist');
+ check('A conflicting AI paper size can be confirmed and autosaved',draft.review.documents[0].paperSize==='A3');
+ await page.screenshot({path:path.join(output,'paper-size-review-desktop.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ check('Paper-size review fits a phone viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:path.join(output,'paper-size-review-mobile.png'),fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
 
  const remote={id:'other-device',machineName:'Other computer',agentVersion:'4.2.7',connected:true,usable:true,revokedAt:null,lastSeenAt:null,operatingState:'READY'};
  setupAgents=[remote];setupPolls=0;
@@ -232,5 +266,19 @@ try{
  setupAgents.push({...remote,id:'replacement-device',machineName:'Replacement computer'});
  await page.getByText('Connected and ready',{exact:true}).waitFor();
  check('A replacement computer can connect when the previous Agent is offline',await page.getByText(/Replacement computer · Agent/).isVisible());
+ await page.goto(`http://127.0.0.1:${server.address().port}?state=agent-defaults`);
+ const requiredPhone=page.locator('input[name="agentPhone"]');
+ await requiredPhone.waitFor();
+ await page.evaluate(()=>{document.body.dataset.qaAgentSubmits='0';document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();document.body.dataset.qaAgentSubmits=String(Number(document.body.dataset.qaAgentSubmits)+1);});});
+ check('Web agent settings mark phone as required',await requiredPhone.getAttribute('required')!==null);
+ await page.getByRole('button',{name:'Save and resume application',exact:true}).click();
+ check('Blank phone prevents saving agent details',await page.evaluate(()=>document.body.dataset.qaAgentSubmits==='0'));
+ await requiredPhone.fill('invalid');
+ await page.getByRole('button',{name:'Save and resume application',exact:true}).click();
+ check('Invalid phone prevents saving agent details',await page.evaluate(()=>document.body.dataset.qaAgentSubmits==='0'));
+ await page.screenshot({path:path.join(output,'web-agent-phone-required.png'),fullPage:true});
+ await requiredPhone.fill('01410000000');
+ await page.getByRole('button',{name:'Save and resume application',exact:true}).click();
+ check('Valid phone permits saving agent details',await page.evaluate(()=>document.body.dataset.qaAgentSubmits==='1'));
  assert.deepEqual(errors,[]);console.log(JSON.stringify({checks:checks.length,passed:checks,browserErrors:errors},null,2));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

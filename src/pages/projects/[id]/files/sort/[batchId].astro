@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 import { documentGroupType, documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { classificationDetailsFromAudit } from '@/server/services/pdf-classification.service';
+import { PAPER_SIZES } from '@/lib/document-paper-size';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -40,6 +41,7 @@ const itemView = batch.items.map((item) => {
   const needsAttention = Boolean(
     fallbackUsed ||
     details?.manualReviewRequired ||
+    details?.paperSize?.reviewRequired ||
     details?.categoryKey === 'unsure' ||
     item.confidence < 0.55,
   );
@@ -148,6 +150,13 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
               </label>
 
               <p class={`text-sm font-medium ${statusClass}`}>{statusLabel}</p>
+              <label class="col-span-full block max-w-xs"><span class="label">Paper size</span>
+                <select data-paper-size class="field py-2 text-sm" disabled={isAccepted || isProcessing}>
+                  <option value="">Choose paper size</option>
+                  {PAPER_SIZES.map(size => <option value={size} selected={details?.paperSize?.value === size}>{size}</option>)}
+                </select>
+                {details?.paperSize?.reviewRequired && <span class="text-xs text-amber-800">Confirm the sheet size before uploading.</span>}
+              </label>
 
               <button
                 type="button"
@@ -275,6 +284,7 @@ const attentionCount = itemView.filter((entry) => entry.needsAttention).length;
         const documentTypeField = row.querySelector('[data-document-type]');
         return {
           itemId: row.dataset.itemId || '',
+          paperSize: (row.querySelector('[data-paper-size]') as HTMLSelectElement | null)?.value || undefined,
           documentType: documentTypeField instanceof HTMLSelectElement ? documentTypeField.value : '',
           revision: row.dataset.revision || '',
           status: row.dataset.status || 'APPROVED',

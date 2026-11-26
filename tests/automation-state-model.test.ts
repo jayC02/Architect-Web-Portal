@@ -24,6 +24,7 @@ function fixture(type = 'HOUSEHOLDER_PLANNING') {
     claimedDeviceId: null, claimedByAgentId: null, claimedAt: null, agentRunId: null, updatedAt: new Date(),
     lastCheckpoint: null, resultData: null,
     dataSnapshot: { snapshotVersion: 2, metadata: { jobId: 'job-legacy-a', projectId: 'project-a', organisationId: 'org-a', applicationType: type },
+      organisation: { agent: { phone: '01410000000' } },
       planning: isWarrant ? null : { recordId: application.id, description: 'Original work' },
       buildingWarrant: isWarrant ? { recordId: application.id, description: 'Original work' } : null },
     documentSnapshot: { documents: [{ id: 'document-a', revision: 'A' }] },
@@ -160,3 +161,23 @@ assert.equal((await (await exported.PATCH({...context,request:finished})).json()
 assert.equal(apiFixture.events.length,afterCallback);
 await assert.rejects(exported.PATCH({...context,access:{...context.access,id:'credential-b'},request:finished}), /not claimed/);
 console.log('Desktop PATCH compatibility passed: start/result, browser binding, duplicate delivery and stale-owner rejection.');
+
+for (const type of ['BUILDING_WARRANT', 'HOUSEHOLDER_PLANNING', 'PLANNING_APPLICATION']) {
+  for (const phone of [null, undefined, '', '   ', 'invalid']) {
+    const f = fixture(type);
+    f.job.dataSnapshot.organisation.agent.phone = phone;
+    await assert.rejects(authoriseAutomationJobRun({ ...f.scope, database: f.database }), /agent telephone/);
+    assert.equal(f.job.executionAuthorisedAt, null, 'an older READY job cannot be queued without agent phone');
+    assert.equal(f.events.length, 0, 'no execution snapshot is authorised');
+  }
+}
+const changed = fixture();
+changed.database.$transaction = async (fn: any) => {
+  changed.job.snapshotHash = 'replacement-with-no-phone';
+  changed.job.dataSnapshot.organisation.agent.phone = null;
+  return fn(changed.database);
+};
+await assert.rejects(authoriseAutomationJobRun({ ...changed.scope, database: changed.database }), /changed before it could be authorised/);
+assert.equal(changed.job.executionAuthorisedAt, null);
+assert.equal(changed.events.length, 0);
+console.log('Web Run requires agent phone and cannot authorise a concurrently replaced snapshot.');

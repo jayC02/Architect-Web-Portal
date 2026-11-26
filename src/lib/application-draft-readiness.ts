@@ -1,5 +1,6 @@
 import type { ApplicationDraftReview } from '@/lib/validation/application-draft';
 import { resolveLocationPlans } from '@/lib/location-plan';
+import { agentPhoneError } from '@/lib/validation/client-contact';
 
 export type ClientReadinessIssue = {
   key: string;
@@ -69,6 +70,8 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   for (const [key, label] of [['practiceName', 'Organisation name'], ['firstName', 'Agent first name'], ['lastName', 'Agent last name'], ['email', 'Agent email'], ['buildingNumber', 'Agent building number'], ['addressLine1', 'Agent address'], ['townCity', 'Agent town or city'], ['postcode', 'Agent postcode']] as const) {
     addMissing(issues, 'agent', `agent.${key}`, label, review.agent[key], `Confirm the ${label.toLowerCase()}.`);
   }
+  const phoneError = agentPhoneError(review.agent.phone);
+  if (phoneError) issues.push({ key: 'agent.phone', section: 'agent', label: 'Agent phone', message: phoneError });
   addMissing(issues, 'application', 'application.description', 'Description of work', review.application.description?.trim(), 'Enter a description of the proposed work.');
   if (route === 'BUILDING_WARRANT') {
     addMissing(issues, 'application', 'application.currentUse', 'Current use', review.application.currentUse, 'Confirm the current use.');
@@ -89,5 +92,6 @@ export const evaluateClientApplicationDraftReadiness = (review: ApplicationDraft
   const locationPlans = resolveLocationPlans(review.documents, (document) => String(document.documentType));
   if (locationPlans.length !== 1) issues.push({ key: 'documents.locationPlan', section: 'documents', label: 'Location Plan', message: locationPlans.length ? 'Keep exactly one current Location Plan.' : 'Choose one Location Plan.' });
   for (const document of review.documents) if (String(document.documentStatus) === 'IN_REVIEW' || String(document.documentStatus) === 'DRAFT') issues.push({ key: `documents.${document.id}`, section: 'documents', label: 'Document review', message: 'Review this document classification before creating the application.' });
+  for (const document of review.documents) if (document.paperSizeNeedsReview && !document.paperSize) issues.push({ key: `documents.${document.id}.paperSize`, section: 'documents', label: 'Paper size', message: 'Confirm the paper size for this document.' });
   return [...new Map(issues.map((issue) => [issue.key, issue])).values()];
 };

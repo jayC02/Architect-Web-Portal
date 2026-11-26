@@ -1,5 +1,7 @@
 import * as draftAnswers from '../src/lib/building-warrant-draft-answers';
 import * as draftScreener from '../src/lib/projects/draft-screener';
+import * as paperSize from '../src/lib/document-paper-size';
+import * as contactValidation from '../src/lib/validation/client-contact';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -41,6 +43,8 @@ function harness(commit=false){
   $transaction:async(fn:any)=>fn(db),
  };
  const modules:any={
+  '@/lib/validation/client-contact':contactValidation,
+  '@/lib/document-paper-size':paperSize,
   '@/lib/projects/draft-screener':draftScreener,
   '@/lib/building-warrant-draft-answers':draftAnswers,
   'node:crypto':{randomUUID},'@prisma/client':enums,'@/lib/db/prisma':{prisma:db},
@@ -100,7 +104,7 @@ test('a duplicate analysis request cannot mark the active analysis as failed',as
 test('saving a client edit before analysing a newly added PDF does not freeze its placeholder category',async()=>{
  const h=harness();
  h.review.client.email='corrected@example.test';
- Object.assign(h.review.documents[0],{documentType:'OTHER',documentStatus:'IN_REVIEW',revision:'C',drawingNumber:'Architect-12'});
+ Object.assign(h.review.documents[0],{documentType:'OTHER',documentStatus:'IN_REVIEW',revision:'C',drawingNumber:'Architect-12',paperSize:'A3'});
  Object.assign(h.state.documents[0],{documentType:'OTHER',analysisStatus:'PENDING'});
  await h.api.saveApplicationDraftReview('draft','org',h.review);
  // The classifier has now recognised the newly added PDF; synthesis must use it.
@@ -112,6 +116,7 @@ test('saving a client edit before analysing a newly added PDF does not freeze it
  assert.equal(result.review.documents[0].drawingTitle,'Detected location plan');
  assert.equal(result.review.documents[0].revision,'C');
  assert.equal(result.review.documents[0].drawingNumber,'Architect-12');
+ assert.equal(result.review.documents[0].paperSize,'A3');
 });
 
 test('reanalysis preserves an explicitly accepted Other category and drawing edits',async()=>{

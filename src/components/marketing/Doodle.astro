@@ -1,0 +1,124 @@
+---
+// Small architectural line drawings dotted around the marketing pages. Each one
+// draws itself, stroke after stroke, when it scrolls into view. One red stroke
+// per drawing, as in the homepage linework. Decorative only.
+export type DoodleVariant = 'stack' | 'plan' | 'setsquare' | 'dividers' | 'docs' | 'key' | 'link' | 'clock' | 'shield' | 'north' | 'envelope' | 'house';
+
+interface Props {
+  variant: DoodleVariant;
+  class?: string;
+}
+
+const { variant, class: className } = Astro.props;
+
+// Each drawing is a list of single strokes, drawn in order. `a` marks the red one.
+const drawings: Record<DoodleVariant, { d: string; a?: boolean }[]> = {
+  stack: [
+    { d: 'M20 66 60 80l40-14-40-14z' },
+    { d: 'M20 50 60 64l40-14-40-14z' },
+    { d: 'M20 34 60 48l40-14-40-14z', a: true },
+    { d: 'M60 20V4' },
+    { d: 'M52 12l8-8 8 8' },
+  ],
+  plan: [
+    { d: 'M14 14h92v62H14z' },
+    { d: 'M54 14v26' },
+    { d: 'M54 56v20' },
+    { d: 'M54 40a16 16 0 0 1 16 16' },
+    { d: 'M14 48h40' },
+    { d: 'M78 14v62', a: true },
+    { d: 'M14 84h92' },
+  ],
+  setsquare: [
+    { d: 'M16 78V14l64 64z' },
+    { d: 'M28 66V42l24 24z' },
+    { d: 'M6 86h108', a: true },
+    { d: 'M86 22l20 20-38 38-20-20z' },
+  ],
+  dividers: [
+    { d: 'M60 6a6 6 0 1 1 0 12a6 6 0 1 1 0-12' },
+    { d: 'M57 18 34 80' },
+    { d: 'M63 18l23 62' },
+    { d: 'M42 58c12 6 24 6 36 0' },
+    { d: 'M20 84a52 52 0 0 1 80 0', a: true },
+  ],
+  docs: [
+    { d: 'M34 10h40l14 14v56H34z' },
+    { d: 'M74 10v14h14' },
+    { d: 'M42 40h36' },
+    { d: 'M42 52h36' },
+    { d: 'M42 64h24', a: true },
+    { d: 'M26 18v70h52' },
+  ],
+  key: [
+    { d: 'M34 30a14 14 0 1 1 0 28a14 14 0 1 1 0-28' },
+    { d: 'M48 44h52' },
+    { d: 'M86 44v12' },
+    { d: 'M98 44v8' },
+    { d: 'M30 44h8', a: true },
+  ],
+  link: [
+    { d: 'M42 30h-12a14 14 0 0 0 0 28h12' },
+    { d: 'M78 30h12a14 14 0 0 1 0 28H78' },
+    { d: 'M44 44h32', a: true },
+    { d: 'M20 76h80' },
+  ],
+  clock: [
+    { d: 'M60 18a32 32 0 1 1 0 64a32 32 0 1 1 0-64' },
+    { d: 'M52 8h16' },
+    { d: 'M60 8v10' },
+    { d: 'M60 50V30' },
+    { d: 'M60 50l14 10', a: true },
+  ],
+  shield: [
+    { d: 'M60 8 28 20v24c0 18 14 32 32 40 18-8 32-22 32-40V20z' },
+    { d: 'M48 46h24v18H48z' },
+    { d: 'M52 46v-6a8 8 0 0 1 16 0v6' },
+    { d: 'M60 52v6', a: true },
+  ],
+  north: [
+    { d: 'M60 14a34 34 0 1 1 0 68a34 34 0 1 1 0-68' },
+    { d: 'M60 4v88' },
+    { d: 'M16 48h88' },
+    { d: 'M60 14l-10 26h20z', a: true },
+  ],
+  envelope: [
+    { d: 'M16 24h76v50H16z' },
+    { d: 'M16 24l38 30 38-30' },
+    { d: 'M86 14a14 14 0 1 1 0 28a14 14 0 1 1 0-28', a: true },
+    { d: 'M80 28l5 5 9-10' },
+  ],
+  house: [
+    { d: 'M10 82h100' },
+    { d: 'M22 82V44l38-26 38 26v38' },
+    { d: 'M14 48l46-32 46 32', a: true },
+    { d: 'M52 82V60h16v22' },
+    { d: 'M32 52h14v12H32z' },
+    { d: 'M74 52h14v12H74z' },
+  ],
+};
+---
+<div class:list={['doodle', className]} aria-hidden="true" data-doodle>
+  <svg viewBox="0 0 120 92" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    {drawings[variant].map((stroke, index) => (
+      <path d={stroke.d} pathLength="1" class:list={{ accent: stroke.a }} style={`--n: ${index}`} />
+    ))}
+  </svg>
+</div>
+
+<script>
+  const doodles = document.querySelectorAll<HTMLElement>('[data-doodle]');
+  const draw = (el: Element) => el.classList.add('drawn');
+  if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        draw(entry.target);
+        observer.unobserve(entry.target);
+      }
+    }, { rootMargin: '0px 0px -18% 0px' });
+    doodles.forEach((doodle) => { doodle.classList.add('waiting'); observer.observe(doodle); });
+  } else {
+    doodles.forEach(draw);
+  }
+</script>

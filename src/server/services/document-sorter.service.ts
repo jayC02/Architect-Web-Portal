@@ -1,5 +1,6 @@
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
+import type { PaperSizeAnalysis } from '@/lib/document-paper-size';
 
 export type SortInput = {
   filename: string;
@@ -37,6 +38,7 @@ export type DocumentSortSuggestion = {
     providerHttpStatus?: number;
     providerStatus?: string;
     pageCount?: number;
+    paperSize?: PaperSizeAnalysis;
     existingOrProposed?: 'existing' | 'proposed' | 'mixed' | 'unknown';
     extractedFacts?: Array<{
       fieldKey: string;
@@ -199,7 +201,7 @@ const extractFirstPageText = async (input: SortInput) => {
 
   try {
     const buffer = Buffer.isBuffer(input.bytes) ? input.bytes : Buffer.from(input.bytes);
-    const parsed = await pdfParse(buffer, { max: 1 });
+    const parsed = await pdfParse(new Uint8Array(buffer), { max: 1 });
     return parsed.text ?? '';
   } catch {
     return '';

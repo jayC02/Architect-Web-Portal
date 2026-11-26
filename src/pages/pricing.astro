@@ -1,7 +1,7 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
-import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import { marketingRoutes, subscribeHref, demoHref } from '@/lib/marketing/routes';
 import { plans, everyPlanIncludes, pricingNotes, formatPrice, yearlySaving, type Plan } from '@/lib/marketing/plans';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
@@ -12,6 +12,8 @@ setAstroCache(Astro, publicPageShort);
 const yearlyLabel = (plan: Plan) =>
   plan.yearly === null ? 'n/a' : plan.yearly === 'quoted' ? 'Quoted' : formatPrice(plan.yearly);
 const monthlyLabel = (plan: Plan) => `${plan.fromPrice ? 'from ' : ''}${formatPrice(plan.monthly)}`;
+/** Where a scale label sits along a range slider, as a percentage. */
+const scaleAt = (value: number, min: number, max: number) => ((value - min) / (max - min)) * 100;
 const sentenceCase = (text: string) => text.replace(/^For /, '').replace(/^\w/, (letter) => letter.toUpperCase());
 
 const comparison: [string, (plan: Plan) => string][] = [
@@ -76,6 +78,7 @@ const faqs = [
 >
   <section class="hero compact">
     <div class="wrap">
+      <Doodle variant="plan" class="hero-doodle" />
       <p class="eyebrow">Pricing, excluding VAT</p>
       <h1>Pay for the applications you send.</h1>
       <p class="lede">Start pay as you go at {payg.extraLabel} an application, or choose a plan with applications included and a lower rate for every one after. Every plan has the whole workspace and a licensed desktop Agent.</p>
@@ -132,24 +135,26 @@ const faqs = [
     </div>
   </section>
 
-  <section class="section bordered" aria-label="Choosing a plan">
+  <section class="section bordered" aria-labelledby="calc-title">
     <div class="wrap">
-      <DrawingBoard scene="plan" number="AP-201">
-        <div class="board-block calc" data-sheet-stage="1" data-plans={finderData} role="group" aria-labelledby="calc-title">
+      <div class="finder" data-plans={finderData}>
+        <div class="finder-inputs">
           <h2 id="calc-title">Find the plan that fits.</h2>
           <p>Set a typical month for your practice. We work out what each plan would cost and suggest the cheapest one that covers your team.</p>
           <div class="calc-inputs">
             <div class="calc-field">
               <label for="calc-apps">Applications a month <output for="calc-apps" data-out="apps">8</output></label>
               <input id="calc-apps" type="range" min="0" max="120" step="1" value="8" />
-              <div class="scale" aria-hidden="true"><span>0</span><span>30</span><span>60</span><span>90</span><span>120</span></div>
+              <div class="scale" aria-hidden="true">{[0, 30, 60, 90, 120].map((value) => <span style={`--at: ${scaleAt(value, 0, 120)}`}>{value}</span>)}</div>
             </div>
             <div class="calc-field">
               <label for="calc-users">People who need access <output for="calc-users" data-out="users">2</output></label>
               <input id="calc-users" type="range" min="1" max="25" step="1" value="2" />
-              <div class="scale" aria-hidden="true"><span>1</span><span>10</span><span>25</span></div>
+              <div class="scale" aria-hidden="true">{[1, 5, 10, 15, 20, 25].map((value) => <span style={`--at: ${scaleAt(value, 1, 25)}`}>{value}</span>)}</div>
             </div>
           </div>
+        </div>
+        <div class="finder-result">
           <div class="calc-result" aria-live="polite">
             <span class="calc-label">Best fit</span>
             <div class="best"><b data-result="name">Practice</b><span data-result="cost">£79 a month</span></div>
@@ -166,26 +171,40 @@ const faqs = [
           </div>
           <p class="footnote">Estimates exclude VAT, U-value add-ons and statutory fees.</p>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <div class="board-block" data-sheet-stage="2" aria-labelledby="includes-title">
+  <section class="section tint" aria-labelledby="includes-title">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="head-with-art">
+          <Doodle variant="docs" class="head-art" />
           <h2 id="includes-title">Every plan includes the whole workspace.</h2>
-          <p class="body-copy">Plans differ in how many applications are included, how many people can sign in, U-values and support. Nothing else is held back.</p>
-          <ul class="includes">
-            {everyPlanIncludes.map((item) => <li>{item}</li>)}
-          </ul>
         </div>
+        <p>Plans differ in how many applications are included, how many people can sign in, U-values and support. Nothing else is held back.</p>
+      </div>
+      <ul class="includes">
+        {everyPlanIncludes.map((item) => <li>{item}</li>)}
+      </ul>
+    </div>
+  </section>
 
-        <div class="board-block" data-sheet-stage="3" aria-labelledby="access-title">
+  <section class="section" aria-labelledby="access-title">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="head-with-art">
+          <Doodle variant="key" class="head-art" />
           <h2 id="access-title">How access works.</h2>
-          <p class="body-copy">Architect Pro is only available to approved practices, on pay as you go or a subscription. That keeps your data, and the portal accounts the Agent uses, in trusted hands.</p>
-          <ol class="access-steps">
-            <li><h3>Book a demo or choose a plan</h3><p>Walk through a real project with us, or go straight to checkout if you already know.</p></li>
-            <li><h3>We approve your practice</h3><p>Demo practices are approved for a guided evaluation. Paid accounts open as soon as payment clears.</p></li>
-            <li data-sheet-stage="4"><h3>Your workspace opens</h3><p>Invite your team. Users follow your plan and the owner controls who has access.</p></li>
-            <li><h3>Licence your Agent</h3><p>Download the Agent from inside your workspace and pair it to an office PC with a one-time code.</p></li>
-          </ol>
         </div>
-      </DrawingBoard>
+        <p>Architect Pro is only available to approved practices, on pay as you go or a subscription. That keeps your data, and the portal accounts the Agent uses, in trusted hands.</p>
+      </div>
+      <ol class="access-steps">
+        <li><h3>Book a demo or choose a plan</h3><p>Walk through a real project with us, or go straight to checkout if you already know.</p></li>
+        <li><h3>We approve your practice</h3><p>Demo practices are approved for a guided evaluation. Paid accounts open as soon as payment clears.</p></li>
+        <li><h3>Your workspace opens</h3><p>Invite your team. Users follow your plan and the owner controls who has access.</p></li>
+        <li><h3>Licence your Agent</h3><p>Download the Agent from inside your workspace and pair it to an office PC with a one-time code.</p></li>
+      </ol>
     </div>
   </section>
 
@@ -260,10 +279,9 @@ const faqs = [
       action: string;
     }
 
-    const finder = document.querySelector<HTMLElement>('.calc[data-plans]');
+    const finder = document.querySelector<HTMLElement>('.finder[data-plans]');
     if (finder) {
       const plans = JSON.parse(finder.dataset.plans ?? '[]') as FinderPlan[];
-      const board = finder.closest<HTMLElement>('[data-board]');
       const apps = finder.querySelector<HTMLInputElement>('#calc-apps')!;
       const users = finder.querySelector<HTMLInputElement>('#calc-users')!;
       const out = (name: string) => finder.querySelector<HTMLElement>(`[data-out="${name}"]`)!;
@@ -331,7 +349,6 @@ const faqs = [
         const action = result('action') as HTMLAnchorElement;
         action.textContent = plan.action;
         action.href = plan.href;
-        if (board) board.dataset.highlight = plan.id;
       };
 
       apps.addEventListener('input', update);

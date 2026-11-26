@@ -1,0 +1,88 @@
+---
+// Interactive application draft: switch between the three application types and
+// see every field filled from the project record, with where each one came from.
+// Illustrative values only.
+const applications = {
+  planning: {
+    label: 'Planning permission',
+    fields: [
+      ['Applicant', 'Fraser family', 'Client record'],
+      ['Agent', 'Your practice', 'Workspace'],
+      ['Site address', '14 Harbour Lane', 'Project'],
+      ['Proposal', 'Single-storey rear extension', 'Project'],
+      ['Documents', 'Location plan and 3 drawings', 'Sorted documents'],
+    ],
+  },
+  warrant: {
+    label: 'Building warrant',
+    fields: [
+      ['Applicant', 'Fraser family', 'Client record'],
+      ['Site address', '14 Harbour Lane', 'Project'],
+      ['Description of works', 'Single-storey rear extension', 'Reused from planning'],
+      ['Documents', '7 drawings, specification, U-value report', 'Sorted documents'],
+      ['Building standards fee', '£1,224', 'Calculated'],
+    ],
+  },
+  completion: {
+    label: 'Completion certificate',
+    fields: [
+      ['Applicant', 'Fraser family', 'Client record'],
+      ['Site address', '14 Harbour Lane', 'Project'],
+      ['Building warrant', 'Approved warrant on this project', 'Project'],
+      ['Certificates', 'Electrical and drainage, 2 attached', 'Sorted documents'],
+      ['Declaration', 'Ready for you to sign', 'Prepared'],
+    ],
+  },
+};
+type Kind = keyof typeof applications;
+const kinds = Object.keys(applications) as Kind[];
+const first = applications.planning;
+---
+<div class="demo" data-demo="application" data-applications={JSON.stringify(applications)}>
+  <div class="demo-bar">
+    <span class="demo-title">Draft for 14 Harbour Lane</span>
+    <span class="demo-hint">Switch application</span>
+  </div>
+  <div class="ad-tabs" role="group" aria-label="Application type">
+    {kinds.map((kind, index) => (
+      <button type="button" data-kind={kind} aria-pressed={index === 0 ? 'true' : 'false'}>{applications[kind].label}</button>
+    ))}
+  </div>
+  <dl class="ad-fields" aria-live="polite">
+    {first.fields.map(([label, value, source], index) => (
+      <div style={`--i: ${index}`}><dt>{label}</dt><dd><span>{value}</span><small>{source}</small></dd></div>
+    ))}
+  </dl>
+  <div class="demo-foot">
+    <p class="demo-status"><b>0</b> fields typed by you</p>
+    <span class="tag live">Ready to review</span>
+  </div>
+</div>
+
+<script>
+  type Field = [string, string, string];
+
+  document.querySelectorAll<HTMLElement>('[data-demo="application"]').forEach((demo) => {
+    const applications = JSON.parse(demo.dataset.applications ?? '{}') as Record<string, { label: string; fields: Field[] }>;
+    const list = demo.querySelector<HTMLElement>('.ad-fields')!;
+    const tabs = [...demo.querySelectorAll<HTMLButtonElement>('.ad-tabs button')];
+
+    const show = (kind: string) => {
+      tabs.forEach((tab) => tab.setAttribute('aria-pressed', String(tab.dataset.kind === kind)));
+      list.replaceChildren(...applications[kind].fields.map(([label, value, source], index) => {
+        const row = document.createElement('div');
+        row.style.setProperty('--i', String(index));
+        row.innerHTML = '<dt></dt><dd><span></span><small></small></dd>';
+        row.querySelector('dt')!.textContent = label;
+        row.querySelector('dd span')!.textContent = value;
+        row.querySelector('dd small')!.textContent = source;
+        return row;
+      }));
+      list.classList.remove('fill');
+      void list.offsetWidth;
+      list.classList.add('fill');
+    };
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => show(tab.dataset.kind!)));
+  });
+</script>

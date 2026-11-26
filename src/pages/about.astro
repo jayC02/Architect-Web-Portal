@@ -2,7 +2,7 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import LineArt from '@/components/marketing/LineArt.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
-import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import Doodle from '@/components/marketing/Doodle.astro';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 
 export const prerender = true;
@@ -30,31 +30,37 @@ const principles = [
     </div>
   </section>
 
-  <section class="section" aria-label="Our story">
-    <div class="wrap">
-      <DrawingBoard scene="street" number="AP-401">
-        <div class="board-block" aria-labelledby="story-title">
-          <h2 id="story-title">Why we built it.</h2>
-          <div class="body-copy" style="display: grid; gap: 16px; margin-top: 16px;">
-            <p>Every application starts with information a practice already holds: the site, the client, the drawings and the description of works. Yet each one is keyed in again, field by field, document by document, into a portal that can time out halfway through.</p>
-            <p data-sheet-stage="1">We built Architect Pro so that information lives in one project record, applications are prepared from it, and a desktop Agent completes the portal on your behalf. You review, approve and pay. It keeps track of what happens next.</p>
-            <p>We are a small team working directly with practices across Scotland. If you book a demo, you will speak to the people who build the product.</p>
-          </div>
-        </div>
+  <section class="section" aria-labelledby="story-title">
+    <div class="wrap section-head">
+      <div class="head-with-art">
+        <Doodle variant="dividers" class="head-art" />
+        <h2 id="story-title">Why we built it.</h2>
+      </div>
+      <div class="body-copy" style="display: grid; gap: 16px;">
+        <p>Every application starts with information a practice already holds: the site, the client, the drawings and the description of works. Yet each one is keyed in again, field by field, document by document, into a portal that can time out halfway through.</p>
+        <p>We built Architect Pro so that information lives in one project record, applications are prepared from it, and a desktop Agent completes the portal on your behalf. You review, approve and pay. It keeps track of what happens next.</p>
+        <p>We are a small team working directly with practices across Scotland. If you book a demo, you will speak to the people who build the product.</p>
+      </div>
+    </div>
+  </section>
 
-        <div class="board-block" aria-labelledby="principles-title">
-          <h2 id="principles-title" data-sheet-stage="2">What we hold to.</h2>
-          <div class="grid" style="margin-top: 28px;">
-            {principles.map((item, index) => (
-              <article class="card" data-sheet-stage={index > 0 ? index + 2 : undefined}>
-                <span class="icon num" style="font-size: 14px;">{String(index + 1).padStart(2, '0')}</span>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </article>
-            ))}
-          </div>
+  <section class="section tint" aria-labelledby="principles-title">
+    <div class="wrap">
+      <div class="section-head single">
+        <div class="head-with-art">
+          <Doodle variant="north" class="head-art" />
+          <h2 id="principles-title">What we hold to.</h2>
         </div>
-      </DrawingBoard>
+      </div>
+      <div class="grid three">
+        {principles.map((item, index) => (
+          <article class="card reveal">
+            <span class="icon num" style="font-size: 14px;">{String(index + 1).padStart(2, '0')}</span>
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
     </div>
   </section>
 

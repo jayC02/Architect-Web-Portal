@@ -1,0 +1,97 @@
+---
+// Interactive project register: pick a project to open its record.
+// Illustrative projects only.
+const stages = ['Lead', 'Planning', 'Building warrant', 'On site', 'Completion'];
+const projects = [
+  {
+    name: '14 Harbour Lane',
+    work: 'Rear extension',
+    client: 'Fraser family',
+    authority: 'Fife Council',
+    stage: 1,
+    next: 'Planning is validated. Prepare the building warrant next.',
+    due: 'Decision due 18 Jan',
+  },
+  {
+    name: 'Glebe Cottage',
+    work: 'Alterations and loft',
+    client: 'Mr and Mrs Kerr',
+    authority: 'Perth and Kinross Council',
+    stage: 2,
+    next: 'The verifier asked for a revised section. Reply by 4 Dec.',
+    due: 'Reply due 4 Dec',
+  },
+  {
+    name: 'Mill Wynd',
+    work: 'New house',
+    client: 'Wynd Homes',
+    authority: 'Scottish Borders Council',
+    stage: 4,
+    next: 'Works are finished. Submit the completion certificate.',
+    due: 'Warrant expires 2 Mar',
+  },
+];
+---
+<div class="demo" data-demo="projects" data-projects={JSON.stringify(projects)} data-stages={JSON.stringify(stages)}>
+  <div class="demo-bar">
+    <span class="demo-title">Project register</span>
+    <span class="demo-hint">Pick a project</span>
+  </div>
+  <div class="pd">
+    <ul class="pd-list">
+      {projects.map((project, index) => (
+        <li>
+          <button type="button" data-index={index} aria-pressed={index === 0 ? 'true' : 'false'}>
+            <b>{project.name}</b>
+            <span>{project.work}</span>
+            <span class="pd-stage">{stages[project.stage]}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+    <div class="pd-record" aria-live="polite">
+      <p class="pd-name" data-f="name">{projects[0].name}</p>
+      <p class="pd-work" data-f="work">{projects[0].work}</p>
+      <ol class="pd-stages" aria-label="Project stage">
+        {stages.map((stage, index) => (
+          <li class:list={{ done: index < projects[0].stage, current: index === projects[0].stage }}><span>{stage}</span></li>
+        ))}
+      </ol>
+      <dl class="pd-facts">
+        <div><dt>Client</dt><dd data-f="client">{projects[0].client}</dd></div>
+        <div><dt>Local authority</dt><dd data-f="authority">{projects[0].authority}</dd></div>
+        <div><dt>Deadline</dt><dd data-f="due">{projects[0].due}</dd></div>
+      </dl>
+      <p class="pd-next"><b>Next action</b><span data-f="next">{projects[0].next}</span></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  interface Project { name: string; work: string; client: string; authority: string; stage: number; next: string; due: string }
+
+  document.querySelectorAll<HTMLElement>('[data-demo="projects"]').forEach((demo) => {
+    const projects = JSON.parse(demo.dataset.projects ?? '[]') as Project[];
+    const record = demo.querySelector<HTMLElement>('.pd-record')!;
+    const stageItems = [...demo.querySelectorAll<HTMLElement>('.pd-stages li')];
+    const buttons = [...demo.querySelectorAll<HTMLButtonElement>('.pd-list button')];
+
+    const show = (index: number) => {
+      const project = projects[index];
+      buttons.forEach((button) => button.setAttribute('aria-pressed', String(Number(button.dataset.index) === index)));
+      for (const key of ['name', 'work', 'client', 'authority', 'due', 'next'] as const) {
+        const field = record.querySelector<HTMLElement>(`[data-f="${key}"]`);
+        if (field) field.textContent = project[key];
+      }
+      stageItems.forEach((item, stage) => {
+        item.classList.toggle('done', stage < project.stage);
+        item.classList.toggle('current', stage === project.stage);
+      });
+      record.classList.remove('swap');
+      void record.offsetWidth;
+      record.classList.add('swap');
+    };
+
+    buttons.forEach((button) => button.addEventListener('click', () => show(Number(button.dataset.index))));
+  });
+</script>

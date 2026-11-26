@@ -1,3 +1,5 @@
+import { paperSizeFromAudit } from '@/lib/document-paper-size';
+import { agentPhoneError } from '@/lib/validation/client-contact';
 import { normaliseUkAddress } from '@/lib/addresses/uk-address';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { normaliseDraftAddresses } from '@/lib/addresses/draft-address';
@@ -760,7 +762,10 @@ const buildInitialReview = (
     // default Other/IN_REVIEW entry is not an accepted category decision.
     const placeholder = previous?.documentType === DocumentType.OTHER
       && previous.documentStatus === DocumentStatus.IN_REVIEW;
-    if (previous && !placeholder) return previous;
+    if (previous && !placeholder) return { ...previous,
+      paperSize: previous.paperSize ?? paperSizeFromAudit(document.analysisResult)?.value ?? null,
+      paperSizeNeedsReview: paperSizeFromAudit(document.analysisResult)?.reviewRequired ?? false,
+    };
     return {
       id: document.id,
       documentType: document.documentType,
@@ -768,6 +773,8 @@ const buildInitialReview = (
       revision: previous?.revision ?? document.revision,
       drawingNumber: previous?.drawingNumber ?? document.drawingNumber,
       drawingTitle: previous?.drawingTitle ?? document.drawingTitle,
+      paperSize: previous?.paperSize ?? paperSizeFromAudit(document.analysisResult)?.value ?? null,
+      paperSizeNeedsReview: paperSizeFromAudit(document.analysisResult)?.reviewRequired ?? false,
     };
   });
 
@@ -908,6 +915,8 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
   addMissing(issues, 'agent', 'agent.firstName', 'Agent first name', review.agent.firstName, 'Confirm the agent first name.');
   addMissing(issues, 'agent', 'agent.lastName', 'Agent last name', review.agent.lastName, 'Confirm the agent last name.');
   addMissing(issues, 'agent', 'agent.email', 'Agent email', review.agent.email, 'Confirm the agent email.');
+  const phoneError = agentPhoneError(review.agent.phone);
+  if (phoneError) issues.push({ key: 'agent.phone', section: 'agent', label: 'Agent phone', message: phoneError });
   addMissing(issues, 'agent', 'agent.buildingNumber', 'Agent building number', review.agent.buildingNumber, 'Enter the agent building number.');
   addMissing(issues, 'agent', 'agent.addressLine1', 'Agent address', review.agent.addressLine1, 'Confirm the agent address.');
   addMissing(issues, 'agent', 'agent.townCity', 'Agent town or city', review.agent.townCity, 'Confirm the agent town or city.');
@@ -980,6 +989,9 @@ export const evaluateApplicationDraftReadiness = (review: ApplicationDraftReview
     });
   }
   for (const document of review.documents) {
+    if (document.paperSizeNeedsReview && !document.paperSize) issues.push({
+      key: `documents.${document.id}.paperSize`, section: 'documents', label: 'Paper size', message: 'Confirm the paper size for this document.',
+    });
     if (document.documentStatus === DocumentStatus.IN_REVIEW || document.documentStatus === DocumentStatus.DRAFT) {
       issues.push({
         key: `documents.${document.id}`,
@@ -1383,6 +1395,9 @@ export const saveApplicationDraftReview = async (
   const draft = await getApplicationDraftForOrganisation(draftId, organisationId);
   assertDraftCanChange(draft);
   review = normaliseDraftAddresses(review);
+  review = { ...review, documents: review.documents.map(document => ({ ...document,
+    paperSizeNeedsReview: paperSizeFromAudit(draft.documents.find(source => source.id === document.id)?.analysisResult)?.reviewRequired ?? false,
+  })) };
   if (review.projectMode === 'existing' && review.existingProjectId) {
     const project = await prisma.project.findFirst({ where: { id: review.existingProjectId, organisationId } });
     if (!project) throw new HttpError(404, 'The selected project is not available.');

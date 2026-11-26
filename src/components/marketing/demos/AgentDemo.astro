@@ -1,0 +1,94 @@
+---
+// Interactive desktop Agent run: press Send and watch it complete the portal,
+// then stop for the visitor to approve payment. Timing is sped up.
+const steps = [
+  'Sign in with your practice account',
+  'Start the application',
+  'Enter applicant and agent',
+  'Enter site and description',
+  'Upload 9 documents',
+  'Answer fee and declaration questions',
+  'Stop for your payment approval',
+];
+---
+<div class="demo" data-demo="agent" data-steps={JSON.stringify(steps)}>
+  <div class="demo-bar">
+    <span class="demo-title">Agent on Office PC <span class="tag ok">Licensed</span></span>
+    <span class="demo-hint">Press Send</span>
+  </div>
+  <ol class="ag-steps">
+    {steps.map((step) => <li><span class="ag-mark" aria-hidden="true"></span><span class="ag-label">{step}</span><span class="ag-state"></span></li>)}
+  </ol>
+  <div class="ag-progress">
+    <div class="bar" aria-hidden="true"><span style="width: 0%"></span></div>
+    <p class="demo-status" aria-live="polite">Building warrant for 14 Harbour Lane, approved and ready to send.</p>
+  </div>
+  <div class="demo-foot">
+    <p class="demo-note">Illustrative and sped up. A real run takes a few minutes.</p>
+    <button type="button" class="button primary small" data-action="run">Send to portal</button>
+  </div>
+</div>
+
+<script>
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  document.querySelectorAll<HTMLElement>('[data-demo="agent"]').forEach((demo) => {
+    const items = [...demo.querySelectorAll<HTMLElement>('.ag-steps li')];
+    const bar = demo.querySelector<HTMLElement>('.bar span')!;
+    const status = demo.querySelector<HTMLElement>('.demo-status')!;
+    const action = demo.querySelector<HTMLButtonElement>('[data-action="run"]')!;
+    let phase: 'ready' | 'running' | 'approve' | 'done' = 'ready';
+    const total = items.length - 1;
+
+    const set = (item: HTMLElement, state: 'live' | 'done' | '', text = '') => {
+      item.classList.toggle('live', state === 'live');
+      item.classList.toggle('done', state === 'done');
+      item.querySelector('.ag-state')!.textContent = text;
+    };
+
+    const reset = () => {
+      items.forEach((item) => set(item, ''));
+      bar.style.width = '0%';
+      status.textContent = 'Building warrant for 14 Harbour Lane, approved and ready to send.';
+      action.textContent = 'Send to portal';
+      phase = 'ready';
+    };
+
+    const run = async () => {
+      phase = 'running';
+      action.disabled = true;
+      for (let index = 0; index < total; index += 1) {
+        const item = items[index];
+        set(item, 'live');
+        const left = Math.max(1, Math.round((total - index) * 0.6));
+        status.textContent = `${item.querySelector('.ag-label')!.textContent}. About ${left} min left.`;
+        if (index === 4) {
+          for (let doc = 1; doc <= 9; doc += 1) {
+            item.querySelector('.ag-state')!.textContent = `${doc} of 9`;
+            bar.style.width = `${((index + doc / 9) / total) * 100}%`;
+            await wait(150);
+          }
+        } else {
+          await wait(650);
+        }
+        set(item, 'done', 'Done');
+        bar.style.width = `${((index + 1) / total) * 100}%`;
+      }
+      set(items[total], 'live', 'Waiting for you');
+      status.textContent = 'Everything is entered. The Agent has stopped before payment.';
+      action.textContent = 'Approve and pay';
+      action.disabled = false;
+      phase = 'approve';
+    };
+
+    action.addEventListener('click', async () => {
+      if (phase === 'ready') await run();
+      else if (phase === 'approve') {
+        set(items[total], 'done', 'Approved');
+        status.textContent = 'Submitted. The portal reference is saved to the project.';
+        action.textContent = 'Start again';
+        phase = 'done';
+      } else if (phase === 'done') reset();
+    });
+  });
+</script>
