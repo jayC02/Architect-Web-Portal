@@ -561,6 +561,8 @@ html:has(#scroll-home), body:has(#scroll-home) { overscroll-behavior-y: none; }
   .scroll-home .aw-status { padding: 6px 8px 7px; }
   .scroll-home .aw-layers li { padding: 2px 0; }
   .scroll-home .aw-result b { font-size: 22px; }
+  /* between applications the window shrinks to its title, leaving the scene clear */
+  .scroll-home .aw[data-kind="record"] .aw-section, .scroll-home .aw[data-kind="record"] .aw-block { display: none; }
   /* the ledger becomes one quiet strip above the chapter dock */
   .scroll-home .ledger { left: var(--gutter); right: var(--gutter); bottom: 84px; width: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 6px 10px; font-size: 11.5px; }
   .scroll-home .lg-row { grid-template-columns: auto 1fr auto; gap: 6px; padding: 0; }

@@ -4,6 +4,7 @@ import { createTextures, disposeTextures } from "./textures.js";
 import { createSite } from "./site.js";
 import { createBuilding } from "./building.js";
 import { createDocuments } from "./documents.js";
+import { createSection } from "./section.js";
 import { createCameraRig } from "./camera.js";
 import { anchorFromRect, worldAtNdc } from "./anchor.js";
 
@@ -14,12 +15,6 @@ const stops = worlds.map((w) => ({ at: w.at, ...Object.fromEntries(keys.map((k) 
 function legacyPose(pose) {
   return {
     ...pose,
-    walls: [1, 1, pose.studio.walls],
-    slabs: [1, pose.studio.slab],
-    roof: pose.studio.roof,
-    glazing: 1,
-    ai: 0,
-    scan: 0,
     manual: 0,
     collapse: 0,
     ringHide: 0,
@@ -46,6 +41,8 @@ function colorsAt(p, out) {
  */
 export function createExperience(host, { mobile, onFrame, onContextLost, getAnchorRect }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: mobile ? "default" : "high-performance", alpha: false });
+  // the building warrant section cuts the studio open
+  renderer.localClippingEnabled = true;
   const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
   renderer.setPixelRatio(dpr);
   renderer.shadowMap.enabled = true;
@@ -84,6 +81,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
   const site = createSite(scene, { mobile });
   const building = createBuilding(scene, { mobile });
   const documents = createDocuments(scene, textures, { mobile });
+  const section = createSection(scene, building, { mobile });
   const rig = createCameraRig(camera);
 
   // Where the Architect Pro window is, as points in the scene a fixed distance from the lens.
@@ -156,9 +154,11 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     rig.update(progress, width, height, dt);
     site.update(pose, colors, camera.position, rig.target, dt);
     building.update(pose, colors, time);
-    // only measured while sheets are in the air
-    if (pose.sheets.some((g) => g.t > 0 && g.t < 1)) measureAnchor();
+    // only measured while something is flying to the window
+    const flying = pose.sheets.some((g) => g.t > 0 && g.t < 1) || (pose.section.explode > 0 && pose.section.uvalue < 1);
+    if (flying) measureAnchor();
     documents.update(pose, colors, time, dpr, anchor, camera);
+    section.update(pose, colors, time, anchor, camera);
 
     renderer.render(scene, camera);
     onFrame?.(pose);
@@ -198,6 +198,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
       site.dispose();
       building.dispose();
       documents.dispose();
+      section.dispose();
       disposeTextures(textures);
       sun.shadow.dispose();
       renderer.dispose();

@@ -1,26 +1,29 @@
 import * as THREE from "three";
-import { clamp, win } from "../story.js";
+import { clamp, mix, win } from "../story.js";
 
 // One continuous camera rail. Columns:
 // progress, position xyz, target xyz, vertical FOV, roll (degrees)
 const rail = [
-  // site: top-down plan
-  [0.0, 2, 40, 7, 0, 0, 0.5, 38, -14],
-  [0.06, 5, 33, 13, 0, 0, 0.5, 38, -6],
-  [0.13, 13, 20, 19, 0, 1, 0, 38, 0],
-  // design: low hero angles as the walls rise
-  [0.19, 17, 5, 12, 0, 3.4, 0, 36, 4],
-  [0.25, 7, 4.6, 23, 0, 4.4, 0, 36, 0],
-  // the portal: tilted orbit through the storm, face to face with the portal, then up to see the 60-minute ring
-  [0.31, -16, 9, 13, 0, 4.8, 0, 36, -3],
-  [0.35, -9, 6.5, 11, 0, 6.5, 0, 52, -12],
-  [0.395, 5, 12.8, 18.5, 0, 13.4, 2.8, 42, -5],
-  [0.435, 6, 30, 22, 0, 2, 0, 44, 4],
-  // automation: the ring collapses, the scan runs, documents sort into two boards
-  [0.48, -4, 27, 26, 0, 4, 0, 44, 0],
-  [0.525, 0, 11, 29, 0, 10, -2, 44, 0],
-  [0.565, 15, 6.5, 16, 0, 5, 0, 38, -5],
-  [0.6, -6, 13, 21, 0, 15.5, -10, 46, 3],
+  // opening: straight down on the paper, the house below and the minute ring around it
+  [0.0, 2, 44, 8, 0, 0, 0.5, 38, -14],
+  // planning: the red line drawn top-down, then the studio plan inked onto the roof
+  [0.04, 4, 36, 13, 0, 1, 0.5, 38, -8],
+  [0.075, 9, 25, 17, 1, 6, 0, 36, -3],
+  // the studio rises: a low hero angle, then three-quarters on the street front
+  [0.105, 15, 12, 17, 1.5, 7, 0, 36, 2],
+  [0.13, -7, 10, 21, 1, 5.5, 0, 38, 0],
+  // drawings peel off and fly to the window
+  [0.17, -3, 12, 23, 1, 5.5, 0, 40, 0],
+  [0.215, -9, 13, 21, 0.5, 5, 0, 40, 0],
+  [0.25, -2, 10, 25, 0.5, 4.8, 0, 42, 0],
+  // building warrant: square on to the section, then close on the wall build-up
+  [0.29, 2, 9.5, 25, 2, 7, 0, 30, 0],
+  [0.315, 3, 9, 21, 2.4, 7.3, 0.6, 30, 0],
+  [0.355, 6, 9.2, 18, 3.2, 7.4, 1, 32, 0],
+  // the warrant documents come together
+  [0.395, -5, 12, 22, 1, 5.5, 0, 40, 0],
+  [0.45, -9, 13, 20, 1, 5, 0, 40, 0],
+  [0.49, -5, 20, 27, 0, 3, 0, 42, 0],
   // tracking: two stacks, beams up, the project record fills in
   [0.645, 0, 13.5, 14, 0, 13.6, -4, 46, 0],
   [0.69, 9, 19, 13, 0, 14, -4, 44, -4],
@@ -68,13 +71,15 @@ export function createCameraRig(camera) {
       if (portrait) {
         // Phones: the copy fills the lower part of the screen, so frame the model in the
         // space above it. Acts with a status panel at the top keep it a little lower.
-        const panel = win(p, 0.3, 0.33) * (1 - win(p, 0.765, 0.79));
-        shiftY = 0.17 - 0.07 * panel;
+        const panel = win(p, 0.1, 0.12) * (1 - win(p, 0.88, 0.9));
+        shiftY = 0.17 - 0.15 * panel;
       } else {
         // On wide screens, acts without a side panel set the model to the right of the copy.
         const wide = Math.max(0, aspect - 1.25);
         // the closing headline needs a little more room still
-        shiftX = (1 - win(p, 0.29, 0.33) + win(p, 0.775, 0.81)) * Math.min(0.13, wide * 0.4) + win(p, 0.945, 0.975) * Math.min(0.09, wide * 0.3);
+        // with the window on the right, the subject sits between the copy and the window
+        const panel = win(p, 0.1, 0.12) * (1 - win(p, 0.88, 0.9));
+        shiftX = mix(Math.min(0.13, wide * 0.4), Math.min(0.07, wide * 0.25), panel) + win(p, 0.945, 0.975) * Math.min(0.09, wide * 0.3);
       }
       if (shiftX > 0.001 || shiftY > 0.001) camera.setViewOffset(width, height, -width * shiftX, height * shiftY, width, height);
       else if (camera.view) camera.clearViewOffset();

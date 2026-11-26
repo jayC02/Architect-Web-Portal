@@ -3,7 +3,8 @@ import { ribbon, ribbonMaterial, arcSegments } from "./lines.js";
 import { inkMaterial, inkLines, inkEdges, mergedBoxes } from "./ink.js";
 import { clamp, mix, smooth } from "../story.js";
 
-// 14 Harbour Lane: a fictional three-storey house. Units are metres.
+// 14 Harbour Lane: a fictional two-storey house (storeys 0 and 1, existing) gaining a
+// second-floor timber studio with a roof terrace (storey 2, the proposal). Units are metres.
 const T = 0.3; // wall thickness
 const H = 3; // storey height
 const A = { x0: -5, x1: 5, z0: -3.25, z1: 3.25 }; // ground + first floor
@@ -89,11 +90,11 @@ function wallPieces(wall) {
   return { pieces, panes };
 }
 
-/** The ground-floor plan as drawable ribbons: walls, glazing, door swings, dimensions. */
+/** The proposed studio plan as drawable ribbons: walls, glazing, dimensions. */
 function planSegments() {
   const walls = [],
     details = [];
-  storeys[0].walls.forEach((wall) => {
+  storeys[2].walls.forEach((wall) => {
     const half = wall.inner ? T * 0.33 : T / 2;
     const open = [...wall.open].sort((p, q) => p.a - q.a);
     const spans = [];
@@ -128,13 +129,12 @@ function planSegments() {
       }
     });
   });
-  // dimension line along the front
-  const dz = A.z1 + 1.4;
-  details.push([A.x0, dz, A.x1, dz], [A.x0, dz - 0.3, A.x0, dz + 0.3], [A.x1, dz - 0.3, A.x1, dz + 0.3], [0, dz - 0.2, 0, dz + 0.2]);
-  const dx = A.x1 + 1.4;
-  details.push([dx, A.z0, dx, A.z1], [dx - 0.3, A.z0, dx + 0.3, A.z0], [dx - 0.3, A.z1, dx + 0.3, A.z1]);
-  // north point
-  details.push([7, -5.6, 7.5, -4.2], [7.5, -4.2, 8, -5.6], [7.5, -4.2, 7.5, -6.2]);
+  // dimension lines, and the terrace outline in front of the studio
+  const dz = B.z1 + 0.9;
+  details.push([B.x0, dz, B.x1, dz], [B.x0, dz - 0.25, B.x0, dz + 0.25], [B.x1, dz - 0.25, B.x1, dz + 0.25]);
+  const dx = B.x1 + 0.9;
+  details.push([dx, B.z0, dx, B.z1], [dx - 0.25, B.z0, dx + 0.25, B.z0], [dx - 0.25, B.z1, dx + 0.25, B.z1]);
+  details.push([A.x0 + 0.1, A.z0 + 0.1, A.x0 + 0.1, A.z1 - 0.1], [A.x0 + 0.1, A.z1 - 0.1, B.x0, A.z1 - 0.1], [A.x0 + 0.1, A.z0 + 0.1, B.x0, A.z0 + 0.1]);
   return { walls, details };
 }
 
@@ -223,62 +223,73 @@ export function createBuilding(scene) {
   const root = new THREE.Group();
   scene.add(root);
 
-  // --- Pens
+  // The section cut through the studio: everything in front of it (towards the street) is clipped away.
+  const cut = new THREE.Plane(new THREE.Vector3(0, 0, -1), 10);
+  const clippingPlanes = [cut];
+
+  // --- Pens. The existing house is drawn in a quieter pen; the proposal in full ink.
+  const inkOld = own(inkMaterial(1.4, 0.85));
+  const inkOldFaint = own(inkMaterial(1, 0.2));
   const ink = own(inkMaterial(1.7, 1));
   const inkFaint = own(inkMaterial(1, 0.26));
+  ink.clippingPlanes = inkFaint.clippingPlanes = clippingPlanes;
   const child = (lines) => (owned.push(lines.geometry), lines);
 
-  // --- Plan drawing on the ground
+  // --- The proposed studio plan, inked onto the existing flat roof
   const plan = planSegments();
-  const planWalls = new THREE.Mesh(own(ribbon(plan.walls, 0.075, 0.035)), own(ribbonMaterial("#1d3f9e", 1)));
-  const planDetail = new THREE.Mesh(own(ribbon(plan.details, 0.04, 0.035)), own(ribbonMaterial("#1d3f9e", 0.9)));
+  const PLAN_Y = H * 2 + 0.17;
+  const planWalls = new THREE.Mesh(own(ribbon(plan.walls, 0.075, PLAN_Y)), own(ribbonMaterial("#1d3f9e", 1)));
+  const planDetail = new THREE.Mesh(own(ribbon(plan.details, 0.04, PLAN_Y)), own(ribbonMaterial("#1d3f9e", 0.9)));
   root.add(planWalls, planDetail);
 
   // --- Model surfaces. Pushed back a hair in depth so the ink always wins.
   const surface = (extra = {}) => own(new THREE.MeshLambertMaterial({ color: "#ffffff", polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, ...extra }));
   const lowerMat = surface();
-  const upperMat = surface();
+  const upperMat = surface({ clippingPlanes, side: THREE.DoubleSide });
   const slabMat = surface();
-  const roofMat = surface({ transparent: true });
-  const frameMat = surface({ transparent: true });
-  const doorMat = surface({ transparent: true });
-  const glassMat = own(new THREE.MeshBasicMaterial({ color: "#a9c6e6", transparent: true, opacity: 0, depthWrite: false }));
+  const roofMat = surface({ transparent: true, clippingPlanes, side: THREE.DoubleSide });
+  const frameMat = surface();
+  const frameNewMat = surface({ transparent: true, clippingPlanes });
+  const doorMat = surface();
+  const glassMat = own(new THREE.MeshBasicMaterial({ color: "#a9c6e6", transparent: true, opacity: 0.6, depthWrite: false }));
+  const glassNewMat = own(new THREE.MeshBasicMaterial({ color: "#a9c6e6", transparent: true, opacity: 0, depthWrite: false, clippingPlanes }));
   const unitBox = own(new THREE.BoxGeometry(1, 1, 1));
   const shadowed = (mesh) => ((mesh.castShadow = mesh.receiveShadow = true), mesh);
 
-  const wallGroups = []; // [{group, storey, order}]
-  const glazing = [[], [], []]; // per storey: things that appear with the windows
+  const wallGroups = []; // the studio walls: [{group, order}]
+  const glazing = []; // the studio windows, frames and terrace glass
   storeys.forEach((storey, s) => {
+    const proposed = s === 2;
     const joinery = [];
     storey.walls.forEach((wall, w) => {
       const group = new THREE.Group();
       group.position.y = storey.y;
       const { pieces, panes } = wallPieces(wall);
       pieces.forEach((p) => {
-        const mesh = shadowed(new THREE.Mesh(unitBox, s === 2 ? upperMat : lowerMat));
+        const mesh = shadowed(new THREE.Mesh(unitBox, proposed ? upperMat : lowerMat));
         mesh.scale.set(p.len, p.h, wall.inner ? T * 0.66 : T);
         mesh.position.set(p.x, p.y, p.z);
         mesh.rotation.y = p.rot;
         group.add(mesh);
       });
       const lines = wallInk(wall, s);
-      if (lines.strong.length) group.add(child(inkLines(lines.strong, ink)), child(inkLines(lines.faint, inkFaint)));
+      if (lines.strong.length) group.add(child(inkLines(lines.strong, proposed ? ink : inkOld)), child(inkLines(lines.faint, proposed ? inkFaint : inkOldFaint)));
       panes.forEach((p) => {
-        const pane = new THREE.Mesh(unitBox, glassMat);
+        const pane = new THREE.Mesh(unitBox, proposed ? glassNewMat : glassMat);
         pane.scale.set(p.len - 0.1, p.h - 0.1, 0.03);
         pane.position.set(p.x, storey.y + p.y, p.z);
         pane.rotation.y = p.rot;
         pane.renderOrder = 2;
         root.add(pane);
-        glazing[s].push(pane);
+        if (proposed) glazing.push(pane);
       });
       joinery.push(...wallJoinery(wall, storey.y));
       root.add(group);
-      wallGroups.push({ group, storey: s, order: w / storey.walls.length });
+      if (proposed) wallGroups.push({ group, order: w / storey.walls.length });
     });
-    const frames = shadowed(new THREE.Mesh(own(mergedBoxes(joinery)), frameMat));
+    const frames = shadowed(new THREE.Mesh(own(mergedBoxes(joinery)), proposed ? frameNewMat : frameMat));
     root.add(frames);
-    glazing[s].push(frames);
+    if (proposed) glazing.push(frames);
   });
 
   // Front door, canopy and step
@@ -294,7 +305,7 @@ export function createBuilding(scene) {
         ...[-0.22, 0.22].flatMap((dx) => [dx - 0.15, 0.3, 0, dx - 0.15, -0.36, 0, dx + 0.15, 0.3, 0, dx + 0.15, -0.36, 0, dx - 0.15, 0.3, 0, dx + 0.15, 0.3, 0, dx - 0.15, -0.36, 0, dx + 0.15, -0.36, 0]),
         0.4, -0.02, 0, 0.4, -0.12, 0,
       ].map((v, i) => (i % 3 === 2 ? 0.52 : v)),
-      ink,
+      inkOld,
     ),
   );
   door.add(doorInk);
@@ -304,14 +315,14 @@ export function createBuilding(scene) {
   const step = shadowed(new THREE.Mesh(unitBox, slabMat));
   step.scale.set(1.7, 0.14, 0.7);
   step.position.set(doorMid, 0.07, A.z1 + 0.35);
-  [canopy, step].forEach((m) => m.add(child(inkEdges(unitBox, ink))));
+  [canopy, step].forEach((m) => m.add(child(inkEdges(unitBox, inkOld))));
   root.add(door, canopy, step);
-  glazing[0].push(door, canopy, step);
 
   // Plinth
   const plinth = shadowed(new THREE.Mesh(unitBox, slabMat));
   plinth.scale.set(A.x1 - A.x0 + 0.24, 0.16, A.z1 - A.z0 + 0.24);
-  plinth.add(child(inkEdges(unitBox, ink)));
+  plinth.position.y = 0.08;
+  plinth.add(child(inkEdges(unitBox, inkOld)));
   root.add(plinth);
 
   // Floor slabs
@@ -322,9 +333,9 @@ export function createBuilding(scene) {
     const mesh = shadowed(new THREE.Mesh(unitBox, slabMat));
     mesh.scale.set(f.x1 - f.x0 + 0.3, 0.3, f.z1 - f.z0 + 0.3);
     mesh.position.set((f.x0 + f.x1) / 2, y, 0);
-    mesh.add(child(inkEdges(unitBox, ink)));
+    mesh.add(child(inkEdges(unitBox, inkOld)));
     root.add(mesh);
-    return { mesh, y };
+    return mesh;
   });
 
   // Pitched zinc roof over the studio, with standing seams
@@ -354,7 +365,7 @@ export function createBuilding(scene) {
     [A.x0, B.x0, A.z0 + 0.1, 0],
     [A.z0, A.z1, A.x0 + 0.1, 1],
   ].forEach(([a, b, at, axis]) => {
-    const pane = new THREE.Mesh(unitBox, glassMat);
+    const pane = new THREE.Mesh(unitBox, glassNewMat);
     pane.scale.set(b - a, 1.05, 0.04);
     pane.position.set(axis ? at : (a + b) / 2, H * 2 + 0.68, axis ? (a + b) / 2 : at);
     pane.rotation.y = axis ? Math.PI / 2 : 0;
@@ -368,61 +379,8 @@ export function createBuilding(scene) {
   const decking = child(inkLines(boards, inkFaint));
   root.add(decking);
 
-  // --- Automation layer: a scan plane and the section it is reading
-  const scanMat = own(
-    new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      uniforms: { uAmount: { value: 0 }, uColor: { value: new THREE.Color("#5a3df0") }, uTime: { value: 0 } },
-      vertexShader: /* glsl */ `
-        varying vec2 vUv;
-        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        uniform float uAmount; uniform vec3 uColor; uniform float uTime;
-        varying vec2 vUv;
-        void main() {
-          vec2 p = (vUv - 0.5) * 2.0;
-          float r = length(p);
-          float fade = smoothstep(1.0, 0.2, r);
-          vec2 g = abs(fract(p * 14.0) - 0.5);
-          float grid = smoothstep(0.47, 0.5, max(g.x, g.y));
-          float ring = smoothstep(0.03, 0.0, abs(fract(r * 3.0 - uTime * 0.4) - 0.5) - 0.46);
-          float a = fade * (0.06 + grid * 0.3 + ring * 0.22) * uAmount;
-          gl_FragColor = vec4(uColor, a);
-          #include <colorspace_fragment>
-        }`,
-    }),
-  );
-  const scan = new THREE.Mesh(own(new THREE.PlaneGeometry(34, 34)), scanMat);
-  scan.rotation.x = -Math.PI / 2;
-  scan.renderOrder = 4;
-  root.add(scan);
-
-  const contourMat = own(new THREE.MeshBasicMaterial({ color: "#5a3df0", transparent: true, opacity: 0, depthWrite: false }));
-  const contour = new THREE.Group();
-  const bar = own(new THREE.BoxGeometry(1, 0.07, 0.07));
-  const bars = [0, 1, 2, 3].map(() => {
-    const m = new THREE.Mesh(bar, contourMat);
-    contour.add(m);
-    return m;
-  });
-  contour.renderOrder = 5;
-  root.add(contour);
-  const setContour = (f) => {
-    const w = f.x1 - f.x0 + 0.5,
-      d = f.z1 - f.z0 + 0.5,
-      cx = (f.x0 + f.x1) / 2;
-    bars[0].scale.x = bars[1].scale.x = w;
-    bars[2].scale.x = bars[3].scale.x = d;
-    bars[0].position.set(cx, 0, f.z1 + 0.25);
-    bars[1].position.set(cx, 0, f.z0 - 0.25);
-    bars[2].position.set(f.x0 - 0.25, 0, 0);
-    bars[3].position.set(f.x1 + 0.25, 0, 0);
-    bars[2].rotation.y = bars[3].rotation.y = Math.PI / 2;
-  };
-
-  // The finished house: pale render, timber studio, zinc roof, a blue front door.
+  // The existing house wears its finished render from the start. The studio is a white
+  // presentation model until it is built.
   const finish = {
     lower: new THREE.Color("#f6f1e7"),
     upper: new THREE.Color("#c99d6f"),
@@ -431,79 +389,73 @@ export function createBuilding(scene) {
     frame: new THREE.Color("#2c3444"),
     door: new THREE.Color("#2747a8"),
   };
+  const grey = new THREE.Color("#8b93a3");
   const glassDay = new THREE.Color("#a9c6e6"),
-    glassScan = new THREE.Color("#b7a9ff"),
     glassLit = new THREE.Color("#ffd27a");
+  const CUT_FAR = 10,
+    CUT_AT = 0.35;
 
-  function update(pose, colors, time) {
+  function update(pose, colors) {
+    const studio = pose.studio;
+    const built = pose.built;
+    // pens: the existing house in a quieter tone until the whole house is one again
     ink.color.copy(colors.ink);
     inkFaint.color.copy(colors.ink);
+    inkOld.color.copy(colors.ink).lerp(grey, 0.55 * (1 - built));
+    inkOldFaint.color.copy(inkOld.color);
 
+    // the studio plan inks itself onto the roof, then fades as the walls go up
     planWalls.material.uniforms.uReveal.value = pose.plan;
     planDetail.material.uniforms.uReveal.value = clamp(pose.plan * 1.3 - 0.3);
-    const planFade = 1 - clamp(pose.walls[0] * 1.2);
-    planWalls.material.uniforms.uOpacity.value = 0.2 + 0.8 * planFade;
-    planDetail.material.uniforms.uOpacity.value = 0.7 * planFade;
+    const planFade = 1 - clamp(studio.walls * 1.4);
+    planWalls.material.uniforms.uOpacity.value = planFade;
+    planDetail.material.uniforms.uOpacity.value = 0.75 * planFade;
     planWalls.material.uniforms.uColor.value.copy(colors.ink);
     planDetail.material.uniforms.uColor.value.copy(colors.ink);
-    planDetail.visible = planFade > 0.01;
-    planWalls.visible = pose.built < 0.5;
+    planWalls.visible = planDetail.visible = pose.plan > 0.001 && planFade > 0.01;
 
-    wallGroups.forEach(({ group, storey, order }) => {
-      const rise = clamp(pose.walls[storey] * 1.5 - order * 0.5);
+    wallGroups.forEach(({ group, order }) => {
+      const rise = clamp(studio.walls * 1.5 - order * 0.5);
       group.scale.y = Math.max(0.0001, rise);
       group.visible = rise > 0.0005;
     });
-    const base = clamp(pose.walls[0] * 4);
-    plinth.scale.y = Math.max(0.0001, 0.16 * base);
-    plinth.position.y = 0.08 * base;
-    plinth.visible = base > 0.001;
-    slabs.forEach(({ mesh, y }, i) => {
-      const s = pose.slabs[i];
-      // grows out from the tops of the walls, rather than dropping in past the camera
-      mesh.position.y = y + (1 - s) * 0.6;
-      mesh.visible = s > 0.001;
-      mesh.scale.x = mix(0.4, A.x1 - A.x0 + 0.3, smooth(s));
-      mesh.scale.z = mix(0.4, A.z1 - A.z0 + 0.3, smooth(s));
-    });
-    roof.position.y = H * 3 + (1 - pose.roof) * 6;
-    roof.visible = pose.roof > 0.001;
-    roofMat.opacity = clamp(pose.roof * 2);
-    decking.visible = pose.slabs[1] > 0.98;
+    // the roof grows up from the wall tops, like the walls
+    roof.position.y = H * 3;
+    roof.scale.y = Math.max(0.0001, studio.roof);
+    roof.visible = studio.roof > 0.001;
+    roofMat.opacity = clamp(studio.roof * 2);
+    decking.visible = studio.terrace > 0.5;
+    rail.forEach((p) => (p.visible = studio.terrace > 0.05));
 
-    // white model → finished materials
-    const f = pose.built;
-    lowerMat.color.copy(colors.model).lerp(finish.lower, f);
-    upperMat.color.copy(colors.model).lerp(finish.upper, f);
-    slabMat.color.copy(colors.model).lerp(finish.slab, f);
-    roofMat.color.copy(colors.model).lerp(finish.roof, f);
-    frameMat.color.copy(colors.model).lerp(colors.ink, 0.55).lerp(finish.frame, f);
-    doorMat.color.copy(colors.model).lerp(finish.door, f);
-    inkFaint.opacity = mix(0.26, 0.4, f);
+    // materials: existing finished, studio white → timber and zinc once built
+    lowerMat.color.copy(colors.model).lerp(finish.lower, 0.9);
+    slabMat.color.copy(colors.model).lerp(finish.slab, 0.75);
+    frameMat.color.copy(finish.frame);
+    doorMat.color.copy(finish.door);
+    upperMat.color.copy(colors.model).lerp(finish.upper, built);
+    roofMat.color.copy(colors.model).lerp(finish.roof, built);
+    frameNewMat.color.copy(colors.model).lerp(colors.ink, 0.55).lerp(finish.frame, built);
+    inkFaint.opacity = mix(0.26, 0.4, built);
 
-    // windows go in, then light up as the day ends
-    const g = pose.glazing;
-    frameMat.opacity = doorMat.opacity = g;
-    glassMat.color.copy(glassDay).lerp(glassScan, pose.ai).lerp(glassLit, pose.dusk);
-    glassMat.opacity = g * mix(0.55, 0.92, Math.max(f * 0.4, pose.dusk));
-    glazing.forEach((items, s) => items.forEach((item) => (item.visible = pose.walls[s] > 0.95 && g > 0.001)));
-    rail.forEach((p) => (p.visible = pose.slabs[1] > 0.95 && g > 0.001));
+    // windows: the studio glazing goes in with the design; every window warms at dusk
+    const g = studio.glazing;
+    frameNewMat.opacity = g;
+    glassNewMat.color.copy(glassDay).lerp(glassLit, pose.dusk);
+    glassMat.color.copy(glassDay).lerp(glassLit, pose.dusk);
+    glassNewMat.opacity = g * mix(0.55, 0.92, Math.max(built * 0.4, pose.dusk));
+    glassMat.opacity = mix(0.6, 0.92, Math.max(0.3, pose.dusk));
+    glazing.forEach((item) => (item.visible = studio.walls > 0.95 && g > 0.001));
 
-    // the scan
-    const ai = pose.ai;
-    const y = mix(0.2, 11.2, pose.scan);
-    scan.position.y = y;
-    scanMat.uniforms.uAmount.value = ai * (1 - Math.max(0, pose.scan - 0.96) * 25);
-    scanMat.uniforms.uTime.value = time;
-    scan.visible = ai > 0.01 && pose.scan < 0.999;
-    contour.position.y = y;
-    setContour(y > H * 2 + 0.2 ? B : A);
-    contourMat.opacity = ai * (y < 9.2 ? 1 : 0);
-    contour.visible = scan.visible;
+    // the section: the cut slides in from the street to the middle of the studio
+    cut.constant = mix(CUT_FAR, CUT_AT, smooth(pose.section.cut));
   }
 
   return {
     update,
+    clippingPlanes,
+    studioBounds: new THREE.Box3(new THREE.Vector3(B.x0, H * 2, B.z0), new THREE.Vector3(B.x1, H * 3 + ridge, B.z1)),
+    dims: { A, B, H, T, ridge, eave },
+    pens: { ink, inkOld },
     dispose() {
       owned.forEach((o) => o.dispose());
       scene.remove(root);
