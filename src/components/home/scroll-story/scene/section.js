@@ -49,7 +49,9 @@ export function createSection(scene, building, { mobile }) {
   const blade = new THREE.Mesh(capGeo, bladeMat);
   blade.scale.set(B.x1 - B.x0 + 1.6, H + 2.6, 1);
   blade.position.set((B.x0 + B.x1) / 2, H * 2 + H / 2 + 0.7, 0);
-  const bladeEdge = inkEdges(capGeo, pen, 1);
+  // its own pen: it fades on its own, while the caps and layers stay inked
+  const bladePen = own(inkMaterial(1.6, 0));
+  const bladeEdge = inkEdges(capGeo, bladePen, 1);
   owned.push(bladeEdge.geometry);
   blade.add(bladeEdge);
   blade.renderOrder = 4;
@@ -93,7 +95,8 @@ export function createSection(scene, building, { mobile }) {
     blade.position.z = building.clippingPlanes[0].constant;
     bladeMat.opacity = 0.18 * slicing;
     blade.visible = slicing > 0.01;
-    bladeEdge.material.opacity = slicing;
+    bladePen.opacity = slicing;
+    bladePen.color.copy(colors.ink);
     pen.color.copy(colors.ink);
 
     // each layer flies when the calculator lists it
