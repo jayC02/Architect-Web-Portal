@@ -6,6 +6,7 @@ import { createBuilding } from "./building.js";
 import { createDocuments } from "./documents.js";
 import { createSection } from "./section.js";
 import { createConstruction } from "./construction.js";
+import { createInspection } from "./inspection.js";
 import { createCameraRig } from "./camera.js";
 import { anchorFromRect, worldAtNdc } from "./anchor.js";
 
@@ -84,6 +85,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
   const documents = createDocuments(scene, textures, { mobile });
   const section = createSection(scene, building, { mobile });
   const construction = createConstruction(scene, building, { mobile });
+  const inspection = createInspection(scene, textures, { mobile });
   const rig = createCameraRig(camera);
 
   // Where the Architect Pro window is, as points in the scene a fixed distance from the lens.
@@ -162,6 +164,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     documents.update(pose, colors, time, dpr, anchor, camera);
     section.update(pose, colors, time, anchor, camera);
     construction.update(pose, colors);
+    inspection.update(pose, colors);
 
     renderer.render(scene, camera);
     onFrame?.(pose);
@@ -203,6 +206,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
       documents.dispose();
       section.dispose();
       construction.dispose();
+      inspection.dispose();
       disposeTextures(textures);
       sun.shadow.dispose();
       renderer.dispose();

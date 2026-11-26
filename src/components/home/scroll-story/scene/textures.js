@@ -237,15 +237,68 @@ function tickTexture() {
   });
 }
 
+/** Line icons for the completion checks, in ink on a white disc with a green rim. */
+function checkpointTexture(kind) {
+  return canvasTexture(256, 256, (ctx) => {
+    ctx.beginPath();
+    ctx.arc(128, 128, 112, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.lineWidth = 12;
+    ctx.strokeStyle = "#7c9d70";
+    ctx.stroke();
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = INK;
+    ctx.lineWidth = 12;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    if (kind === "fire") {
+      ctx.moveTo(128, 60);
+      ctx.bezierCurveTo(170, 110, 182, 140, 170, 168);
+      ctx.bezierCurveTo(158, 196, 98, 196, 86, 168);
+      ctx.bezierCurveTo(76, 142, 98, 124, 108, 104);
+      ctx.bezierCurveTo(118, 124, 128, 128, 128, 60);
+    } else if (kind === "energy") {
+      ctx.moveTo(140, 58);
+      ctx.lineTo(96, 136);
+      ctx.lineTo(132, 136);
+      ctx.lineTo(116, 198);
+      ctx.lineTo(162, 116);
+      ctx.lineTo(126, 116);
+      ctx.closePath();
+    } else if (kind === "drainage") {
+      ctx.moveTo(128, 58);
+      ctx.bezierCurveTo(158, 104, 178, 128, 178, 156);
+      ctx.arc(128, 156, 50, 0, Math.PI);
+      ctx.bezierCurveTo(78, 128, 98, 104, 128, 58);
+    } else {
+      ctx.moveTo(104, 64);
+      ctx.lineTo(104, 100);
+      ctx.moveTo(152, 64);
+      ctx.lineTo(152, 100);
+      ctx.moveTo(84, 100);
+      ctx.lineTo(172, 100);
+      ctx.lineTo(166, 146);
+      ctx.quadraticCurveTo(128, 176, 90, 146);
+      ctx.closePath();
+      ctx.moveTo(128, 162);
+      ctx.lineTo(128, 200);
+    }
+    ctx.stroke();
+  });
+}
+
 export function createTextures({ mobile = false } = {}) {
   SCALE = mobile ? 0.6 : 1;
   return {
     docs: docSpecs.map(documentTexture),
     docSpecs: docSpecs.map(([group, title, sub, kind, from]) => ({ group: GROUP[group], title, sub, kind, from })),
     tick: tickTexture(),
+    checkpoints: ["fire", "energy", "drainage", "electrical"].map(checkpointTexture),
   };
 }
 
 export function disposeTextures(t) {
-  [...t.docs, t.tick].forEach((m) => m.dispose());
+  [...t.docs, t.tick, ...t.checkpoints].forEach((m) => m.dispose());
 }

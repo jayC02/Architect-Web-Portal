@@ -333,7 +333,7 @@ export function createSite(scene, { mobile }) {
     }
 
     const context = clamp(pose.city * 3.4 - 0.25),
-      planted = pose.built;
+      planted = pose.landscape;
     if (sightChanged || Math.abs(context + planted * 10 - lastTrees) > 1e-4) {
       lastTrees = context + planted * 10;
       trees.forEach((t, i) => {
