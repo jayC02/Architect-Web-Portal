@@ -66,7 +66,7 @@ export function createSection(scene, building, { mobile }) {
     );
     const mesh = new THREE.Mesh(unitBox, mat);
     mesh.castShadow = !mobile && !spec.void;
-    mesh.scale.set(spec.depth, 2.4, 1.8);
+    mesh.scale.set(spec.depth, 2.9, 2.2);
     const edges = inkEdges(unitBox, pen);
     owned.push(edges.geometry);
     mesh.add(edges);
@@ -126,8 +126,8 @@ export function createSection(scene, building, { mobile }) {
       }
       mesh.position.copy(pos);
       mesh.quaternion.copy(q);
-      const shrink = mix(1, (anchor.unit * 0.05) / 2.4, fly);
-      mesh.scale.set(spec.depth * shrink, 2.4 * shrink, 1.8 * shrink);
+      const shrink = mix(1, (anchor.unit * 0.05) / 2.9, fly);
+      mesh.scale.set(spec.depth * shrink, 2.9 * shrink, 2.2 * shrink);
       const fade = 1 - smooth(clamp((fly - 0.75) * 4));
       mat.opacity = (spec.void ? 0.25 : 1) * fade * clamp(out * 3);
       mesh.renderOrder = fly > 0.6 ? 30 : 0;

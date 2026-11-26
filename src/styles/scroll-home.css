@@ -447,7 +447,7 @@ html:has(#scroll-home), body:has(#scroll-home) { overscroll-behavior-y: none; }
 .scroll-home .aw-fields dt { font-size: 11.5px; color: var(--muted); }
 .scroll-home .aw-fields dd { display: grid; gap: 1px; margin: 0; }
 .scroll-home .aw-value { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; clip-path: inset(0 100% 0 0); transition: clip-path 0.7s steps(26, end); }
-.scroll-home .aw-fields small { font-size: 11px; color: color-mix(in srgb, var(--app) 72%, var(--fg)); opacity: 0; transition: opacity 0.3s 0.55s; }
+.scroll-home .aw-fields small { font-size: 11px; color: color-mix(in srgb, var(--app) 58%, var(--fg)); opacity: 0; transition: opacity 0.3s 0.55s; }
 .scroll-home .aw-fields .filled .aw-value { clip-path: inset(0 0 0 0); }
 .scroll-home .aw-fields .filled small { opacity: 1; }
 
@@ -502,7 +502,7 @@ html:has(#scroll-home), body:has(#scroll-home) { overscroll-behavior-y: none; }
 .scroll-home .aw-status span::before { content: ""; width: 10px; height: 3px; border-radius: 2px; background: var(--app); }
 .scroll-home .aw-status b { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .scroll-home .aw-status[data-state="not-started"] b { color: var(--muted); font-weight: 500; }
-.scroll-home .aw-status[data-state="in-progress"] b { color: color-mix(in srgb, var(--app) 70%, var(--fg)); }
+.scroll-home .aw-status[data-state="in-progress"] b { color: color-mix(in srgb, var(--app) 58%, var(--fg)); }
 .scroll-home .aw-status[data-state="submitted"] b { color: #946000; }
 .scroll-home .aw-status[data-state="approved"] b, .scroll-home .aw-status[data-state="accepted"] b { color: #1d7a50; }
 
