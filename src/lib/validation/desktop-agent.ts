@@ -18,6 +18,7 @@ export const agentCapabilitiesSchema = z.object({
   completionContractVersions: z.array(z.number().int().min(1).max(20)).max(10).optional(),
   // 1: a resume run (metadata.resumeOfJobId) reopens the proposal its failed run created.
   resumeContractVersions: z.array(z.number().int().min(1).max(20)).max(10).optional(),
+  documentUploadContractVersions: z.array(z.number().int().min(1).max(20)).max(10).optional(),
 }).strict();
 
 export const legacyAgentEnrollmentExchangeSchema = z.object({

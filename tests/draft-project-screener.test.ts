@@ -14,7 +14,9 @@ import { normaliseUkAddress } from '../src/lib/addresses/uk-address';
 import { resolveLocationPlans } from '../src/lib/location-plan';
 import { HttpError } from '../src/lib/utils/http';
 import { evaluateApplicationDraftReadiness } from '../src/server/services/application-draft.service';
+import * as paperSize from '../src/lib/document-paper-size';
 import { evaluateClientApplicationDraftReadiness } from '../src/lib/application-draft-readiness';
+import * as contactValidation from '../src/lib/validation/client-contact';
 import { saveDraftClientCorrections } from '../src/server/services/application-draft-client.service';
 import { clientReviewFixture } from './fixtures/client-applicant-review';
 
@@ -47,6 +49,8 @@ function harness(kind: 'save' | 'commit', existingProject?: Record<string, unkno
     $transaction: async (fn: (tx: any) => unknown) => fn(db),
   };
   const modules: Record<string, any> = {
+    '@/lib/validation/client-contact': contactValidation,
+    '@/lib/document-paper-size': paperSize,
     'node:crypto': { randomUUID }, '@prisma/client': enums, '@/lib/db/prisma': { prisma: db },
     '@/lib/projects/draft-screener': draftScreener,
     '@/lib/building-warrant-draft-answers': draftAnswers,

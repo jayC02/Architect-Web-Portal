@@ -1,3 +1,4 @@
+import { paperSizeValueSchema } from '@/lib/document-paper-size';
 import { projectScreenerFields, projectScreenerOptionalFields } from '@/lib/projects/screener';
 import { warrantBranchFormFields } from '@/lib/building-warrant-branches';
 import {
@@ -307,8 +308,8 @@ export const organisationDefaultsSchema = z.object({
     z.string().trim().max(160).email('Enter a valid agent email address.').transform((value) => value.toLowerCase()).optional(),
   ),
   agentPhone: z.preprocess(
-    blankContactToUndefined,
-    z.string().trim().max(30).refine(isValidUkPhone, 'Enter a valid agent phone number.').optional(),
+    (value) => value == null ? '' : value,
+    z.string().trim().min(1, 'Enter the agent telephone number required by eDevelopment.').max(30).refine(isValidUkPhone, 'Enter a valid agent phone number.'),
   ),
   agentBuildingNumber: optionalText(40),
   agentAddressLine1: optionalText(160),
@@ -332,15 +333,19 @@ export const certifierPresetSchema = z.object({
 });
 
 export const documentMetadataSchema = z.object({
+  paperSize: z.preprocess(value => value === '' ? undefined : value, paperSizeValueSchema.optional()),
   type: z.nativeEnum(DocumentType).default(DocumentType.OTHER),
   revision: optionalText(40),
   status: z.nativeEnum(DocumentStatus).default(DocumentStatus.DRAFT),
   notes: optionalText(2000),
 });
 
+export const documentMetadataPatchSchema = documentMetadataSchema.partial();
+
 export const documentSortBatchAcceptSchema = z.object({
   items: z.array(z.object({
     itemId: z.string().min(1),
+    paperSize: z.preprocess(value => value === '' ? undefined : value, paperSizeValueSchema.optional()),
     documentType: z.nativeEnum(DocumentType),
     revision: optionalText(40),
     status: z.nativeEnum(DocumentStatus).default(DocumentStatus.IN_REVIEW),

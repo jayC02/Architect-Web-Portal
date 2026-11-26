@@ -6,6 +6,7 @@ import * as prismaTypes from '@prisma/client';
 import { recordAuthorisedSnapshot } from '../src/server/services/automation-state-model.service';
 import { HttpError } from '../src/lib/utils/http';
 import { readAutomationFailureMetadata } from '../src/lib/automation/failure-recovery';
+import { agentPhoneError } from '../src/lib/validation/client-contact';
 
 // Execute the production transaction service with a rollback-capable in-memory
 // boundary. This tests orchestration, not PostgreSQL's locking implementation.
@@ -55,6 +56,7 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
     agentRegistration: { findMany: async () => [] },
   };
   const modules: any = {
+    '@/lib/validation/client-contact': { agentPhoneError },
     '@/server/services/automation-state-model.service': { recordAuthorisedSnapshot },
     '@prisma/client': prismaTypes, '@/lib/db/prisma': { prisma: database }, '@/lib/utils/http': { HttpError },
     '@/lib/automation/failure-recovery': { readAutomationFailureMetadata },
@@ -66,7 +68,7 @@ function harness(options: { active?: boolean; stale?: boolean; preflight?: boole
     '@/server/services/automation-jobs.service': { buildFreshAutomationJob: async (input: any, passed: any) => {
       assert.equal(passed, tx, 'fresh snapshot reads through the same transaction');
       assert.equal(input.planningApplicationId, 'planning_a'); builds++;
-      return { jobId: `fresh_${builds}`, createdAt: new Date(), snapshot: { preflight: { status: options.preflight ? 'NEEDS_INPUT' : 'READY' }, dataSnapshot: { postcode: state.postcode }, documentSnapshot: { current: true }, sourceType: 'PROJECT' } };
+      return { jobId: `fresh_${builds}`, createdAt: new Date(), snapshot: { preflight: { status: options.preflight ? 'NEEDS_INPUT' : 'READY' }, dataSnapshot: { postcode: state.postcode, organisation: { agent: { phone: '01410000000' } } }, documentSnapshot: { current: true }, sourceType: 'PROJECT' } };
     } },
   };
   const exports: any = {};

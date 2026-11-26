@@ -22,7 +22,7 @@ export const clientReviewFixture = (): ApplicationDraftResponse => {
       site: { buildingNumber: '24', addressLine1: 'Victoria Crescent Road', addressLine2: null, townCity: 'Glasgow', postcode: 'G12 9DD', country: 'United Kingdom', localAuthority: 'Glasgow City Council' },
       clientMode: 'create', existingClientId: null, client: person, clientAddressSameAsSite: false,
       applicantDifferentFromClient: false, applicant: { ...person },
-      agent: { practiceName: 'Example Architecture', firstName: 'Alex', lastName: 'Reid', email: 'alex@example.test', phone: null,
+      agent: { practiceName: 'Example Architecture', firstName: 'Alex', lastName: 'Reid', email: 'alex@example.test', phone: '01410000000',
         buildingNumber: '8', addressLine1: 'Park Circus', addressLine2: null, townCity: 'Glasgow', postcode: 'G3 6AX', country: 'United Kingdom', saveAsOrganisationDefault: false },
       application: { description: 'Single-storey rear extension.', currentUse: null, proposedUse: null, estimatedValue: null, presetKey: 'domestic_alteration_extension', typeOfWorkKeys: ['domestic_alteration_extension'], selectedCertifierPresetId: null },
       confirmations: { applicationFee: 325.5, soleOwner: true, agriculturalHolding: false },

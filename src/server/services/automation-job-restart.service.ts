@@ -8,6 +8,7 @@ import {
 import { prisma } from '@/lib/db/prisma';
 import { readAutomationFailureMetadata } from '@/lib/automation/failure-recovery';
 import { HttpError } from '@/lib/utils/http';
+import { agentPhoneError } from '@/lib/validation/client-contact';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { assertDesktopTokenActive } from '@/server/auth/desktop-token';
 import { lockOrganisationExecution } from '@/server/services/desktop-execution.service';
@@ -80,6 +81,11 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
       select: retryJobSelect,
     });
     if (!successor) throw new HttpError(409, 'The recorded retry is no longer available. Review the application in Architect Pro.');
+    if (successor.status === AutomationJobStatus.READY) {
+      const phone = (successor.dataSnapshot as { organisation?: { agent?: { phone?: unknown } } } | null)?.organisation?.agent?.phone;
+      const phoneError = agentPhoneError(typeof phone === 'string' ? phone : null);
+      if (phoneError) throw new HttpError(409, `${phoneError} Complete the agent details in the web portal before resuming.`);
+    }
     return successor;
   }
   const recovery = readAutomationFailureMetadata(oldJob.resultData, oldJob.status, oldJob.progressStage, oldJob);
@@ -146,7 +152,10 @@ export const restartFailedAutomationJobInTransaction = async (transaction: Prism
   }, transaction);
   const { jobId: newJobId, snapshot } = freshJob;
   if (snapshot.preflight.status !== 'READY') {
-    throw new HttpError(409, 'Application details changed and need review before the automation can be retried.');
+    const phoneIssue = snapshot.preflight.missing?.find(issue => issue.field === 'organisation.agent.phone');
+    throw new HttpError(409, phoneIssue
+      ? `${phoneIssue.message} Complete the agent details in the web portal before resuming.`
+      : 'Application details changed and need review before the automation can be retried.');
   }
   const authorisedAt = new Date();
 

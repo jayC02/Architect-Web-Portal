@@ -2,6 +2,8 @@ export const prerender = false;
 
 import { DocumentSortBatchStatus, DocumentSortSource, DocumentStatus } from '@prisma/client';
 import type { APIRoute } from 'astro';
+import { paperSizeFromAudit, withManualPaperSize } from '@/lib/document-paper-size';
+import type { Prisma } from '@prisma/client';
 import type { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -48,6 +50,7 @@ export const POST: APIRoute = (context) =>
       const item = itemsById.get(submitted.itemId);
       if (!item) throw new HttpError(400, 'One or more sort items do not belong to this batch.');
       if (!item.documentId) throw new HttpError(400, 'One or more sort items are missing their uploaded document.');
+      if (paperSizeFromAudit(item.matchedRules)?.reviewRequired && !submitted.paperSize) throw new HttpError(400, `Confirm the paper size for ${item.originalFilename}.`);
       const source = submitted.documentType === item.suggestedDocumentType ? item.source : DocumentSortSource.MANUAL;
 
       updates.push(prisma.projectDocument.updateMany({
@@ -62,6 +65,7 @@ export const POST: APIRoute = (context) =>
           sortSource: source,
           sortConfidence: item.confidence,
           sortReason: item.reason,
+          ...(submitted.paperSize ? { analysisResult: withManualPaperSize(item.matchedRules, submitted.paperSize) as Prisma.InputJsonValue } : {}),
         },
       }));
 
@@ -71,6 +75,7 @@ export const POST: APIRoute = (context) =>
           finalDocumentType: submitted.documentType,
           revision: submitted.revision,
           source,
+          ...(submitted.paperSize ? { matchedRules: withManualPaperSize(item.matchedRules, submitted.paperSize) as Prisma.InputJsonValue } : {}),
         },
       }));
     }

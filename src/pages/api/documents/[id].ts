@@ -1,12 +1,14 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
+import { withManualPaperSize } from '@/lib/document-paper-size';
+import type { Prisma } from '@prisma/client';
 import { documentContentDisposition } from '@/lib/server/content-disposition';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { readStoredDocumentBytes } from '@/lib/server/upload-storage';
-import { documentMetadataSchema } from '@/lib/validation/domain';
+import { documentMetadataPatchSchema } from '@/lib/validation/domain';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
@@ -41,12 +43,17 @@ export const PATCH: APIRoute = (context) =>
     const { organisation } = await requireOrganisation(context);
     const id = context.params.id;
     if (!id) throw new HttpError(400, 'Document id is required.');
-    const body = await parseBody(context.request, documentMetadataSchema);
+    const body = await parseBody(context.request, documentMetadataPatchSchema);
+    const { paperSize, ...metadata } = body;
+    const current = paperSize ? await prisma.projectDocument.findFirst({
+      where: { id, organisationId: organisation.id }, select: { analysisResult: true, updatedAt: true },
+    }) : null;
+    if (paperSize && !current) throw new HttpError(404, 'Document not found.');
     const result = await prisma.projectDocument.updateMany({
-      where: { id, organisationId: organisation.id },
-      data: body,
+      where: { id, organisationId: organisation.id, ...(current ? { updatedAt: current.updatedAt } : {}) },
+      data: { ...metadata, ...(paperSize ? { analysisResult: withManualPaperSize(current!.analysisResult, paperSize) as Prisma.InputJsonValue } : {}) },
     });
-    if (!result.count) throw new HttpError(404, 'Document not found.');
+    if (!result.count) throw new HttpError(current ? 409 : 404, current ? 'The document changed. Reload it before saving.' : 'Document not found.');
     return jsonResponse(200, { ok: true });
   }, context);
 export const DELETE: APIRoute = (context) =>

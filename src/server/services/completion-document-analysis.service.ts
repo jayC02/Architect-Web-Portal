@@ -177,7 +177,7 @@ export const createConfiguredCompletionDocumentReader = (): CompletionDocumentRe
 
 const readFirstPageText = async (bytes: Buffer) => {
   try {
-    return (await pdfParse(bytes, { max: 1 })).text ?? '';
+    return (await pdfParse(new Uint8Array(bytes), { max: 1 })).text ?? '';
   } catch {
     return '';
   }

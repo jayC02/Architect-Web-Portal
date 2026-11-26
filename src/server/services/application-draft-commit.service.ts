@@ -1,3 +1,4 @@
+import { withManualPaperSize } from '@/lib/document-paper-size';
 import { randomUUID } from 'node:crypto';
 import {
   ApplicationDraftStatus,
@@ -440,7 +441,7 @@ export const commitApplicationDraft = async (
           analysisPromptVersion: document.analysisPromptVersion,
           analysisSchemaVersion: document.analysisSchemaVersion,
           analysisStatus: document.analysisStatus,
-          analysisResult: document.analysisResult ?? Prisma.JsonNull,
+          analysisResult: reviewed.paperSize ? withManualPaperSize(document.analysisResult, reviewed.paperSize) as Prisma.InputJsonValue : document.analysisResult ?? Prisma.JsonNull,
           analysedAt: document.analysisResult ? document.updatedAt : null,
         },
         select: { id: true },

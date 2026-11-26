@@ -61,7 +61,7 @@ const project = {
 };
 const defaults = {
   practiceName: review.agent.practiceName, agentFirstName: review.agent.firstName, agentLastName: review.agent.lastName,
-  agentEmail: review.agent.email, agentBuildingNumber: review.agent.buildingNumber,
+  agentEmail: review.agent.email, agentPhone: review.agent.phone, agentBuildingNumber: review.agent.buildingNumber,
   agentAddressLine1: review.agent.addressLine1, agentTownCity: review.agent.townCity, agentPostcode: review.agent.postcode, updatedAt: now,
 };
 const planning = { id: 'planning', description: 'Proposed extension.', status: 'DRAFTING', updatedAt: now, preparationData: { soleOwner: true, agriculturalHolding: false, applicationFee: 350 } };
@@ -85,6 +85,12 @@ for (const type of [DocumentType.SITE_PLAN, DocumentType.BLOCK_PLAN]) {
 }
 documents = [makeDocument('site', DocumentType.SITE_PLAN), makeDocument('explicit', DocumentType.LOCATION_PLAN)];
 const explicit = await buildAutomationJobSnapshot({ organisationId: 'org', organisationName: 'Test', projectId: project.id, type: AutomationJobType.HOUSEHOLDER_PLANNING, createdBy: { id: 'user', name: 'Tester', email: 'tester@example.test' } }, database);
+const savedPhone = defaults.agentPhone;
+defaults.agentPhone = null;
+const missingPhoneSnapshot = await buildAutomationJobSnapshot({ organisationId: 'org', organisationName: 'Test', projectId: project.id, type: AutomationJobType.HOUSEHOLDER_PLANNING, createdBy: { id: 'user', name: 'Tester', email: 'tester@example.test' } }, database);
+assert.equal(missingPhoneSnapshot.preflight.status, 'NEEDS_INPUT', 'real snapshot preparation must not release a job without agent phone');
+assert.ok(missingPhoneSnapshot.preflight.missing.some(issue => issue.field === 'organisation.agent.phone'));
+defaults.agentPhone = savedPhone;
 assert.deepEqual(explicit.dataSnapshot.documents.filter(doc => doc.required).map(doc => doc.id), ['explicit']);
 
 // Reset identity must survive actual snapshot construction and later refreshes,

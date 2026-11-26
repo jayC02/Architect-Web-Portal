@@ -1,4 +1,6 @@
 export const prerender = false;
+import { withManualPaperSize } from '@/lib/document-paper-size';
+import type { Prisma } from '@prisma/client';
 
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
@@ -36,7 +38,7 @@ export const POST: APIRoute = (context) =>
     const form = await context.request.formData();
     const file = form.get('file');
     if (!(file instanceof File)) throw new HttpError(400, 'Document file is required.');
-    const metadata = documentMetadataSchema.parse(Object.fromEntries(form.entries()));
+    const { paperSize, ...metadata } = documentMetadataSchema.parse(Object.fromEntries(form.entries()));
     const saved = await saveUploadedDocument(file, {
       folder: `organisations/${organisation.id}/projects/${projectId}`,
       label: 'document',
@@ -50,6 +52,7 @@ export const POST: APIRoute = (context) =>
         originalName: file.name || saved.fileName,
         ...saved,
         ...metadata,
+        ...(paperSize ? { analysisResult: withManualPaperSize(null, paperSize) as Prisma.InputJsonValue } : {}),
       },
     });
 

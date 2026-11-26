@@ -1,3 +1,4 @@
+import { paperSizeFromAudit } from '@/lib/document-paper-size';
 import type { Prisma } from '@prisma/client';
 import {
   applicationDraftAnalysisSummary,
@@ -44,6 +45,8 @@ export const applicationDraftResponse = (draft: DraftWithDocuments) => {
       revision: document.revision,
       drawingNumber: document.drawingNumber,
       drawingTitle: document.drawingTitle,
+      paperSize: paperSizeFromAudit(document.analysisResult)?.value ?? null,
+      paperSizeNeedsReview: paperSizeFromAudit(document.analysisResult)?.reviewRequired ?? false,
     })),
   } : null;
   const documentListChanged = review && JSON.stringify(review.documents) !== JSON.stringify(savedReview?.documents);
@@ -82,6 +85,7 @@ export const applicationDraftResponse = (draft: DraftWithDocuments) => {
       drawingNumber: document.drawingNumber,
       drawingTitle: document.drawingTitle,
       classificationSource: document.classificationSource,
+      ...(paperSizeFromAudit(document.analysisResult) ? { paperSizeAnalysis: paperSizeFromAudit(document.analysisResult)! } : {}),
       classificationReason: document.classificationReason,
       needsManualReview:
         document.analysisStatus === 'FALLBACK'

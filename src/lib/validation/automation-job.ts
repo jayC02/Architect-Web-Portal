@@ -1,3 +1,4 @@
+import { paperSizeAnalysisSchema } from '@/lib/document-paper-size';
 import { warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import {
   AutomationJobSourceType,
@@ -241,6 +242,7 @@ export const automationJobSnapshotV2Schema = z.object({
       portalDraftKey: z.string().uuid().optional(),
     // A resume run reopens the proposal this failed run created.
     resumeOfJobId: z.string().min(1).max(100).optional(),
+    documentUploadContractVersion: z.literal(1).optional(),
   }),
   organisation: z.object({
     id: z.string().min(1),
@@ -401,6 +403,8 @@ export const automationJobSnapshotV2Schema = z.object({
     filename: z.string().min(1),
     mimeType: z.string().min(1),
     sizeBytes: z.number().int().nonnegative(),
+    fileHash: z.string().regex(/^[a-f0-9]{64}$/).nullable().optional(),
+    paperSize: paperSizeAnalysisSchema.nullable().optional(),
     categoryKey: z.nativeEnum(DocumentType),
     categoryLabel: z.string().min(1),
     drawingTitle: nullableText,

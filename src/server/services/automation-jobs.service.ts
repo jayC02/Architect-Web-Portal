@@ -1,6 +1,7 @@
 import { designCertificateProvided, designCertificateTiming, permitsSTAS, warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import { readProjectScreener } from '@/lib/projects/screener';
 import { z } from 'zod';
+import { paperSizeFromAudit } from '@/lib/document-paper-size';
 import { resolveWarrantOwner } from '@/lib/building-warrant-owner';
 import { warrantSustainabilitySchema } from '@/lib/building-warrant-follow-ups';
 import { createHash, randomUUID } from 'node:crypto';
@@ -206,6 +207,8 @@ export const mapDocument = (document: ProjectDocument, locationPlanId?: string) 
   filename: document.originalName || document.fileName,
   mimeType: document.mimeType,
   sizeBytes: document.sizeBytes,
+  fileHash: document.fileHash,
+  paperSize: paperSizeFromAudit(document.analysisResult),
   categoryKey: document.type,
   categoryLabel: human(document.type),
   drawingTitle: document.drawingTitle,
@@ -492,6 +495,7 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
       createdBy: input.createdBy,
       sourceUpdatedAt: sourceUpdatedAt.toISOString(),
       presetVersion: warrant?.presetVersion ?? 1,
+      documentUploadContractVersion: 1 as const,
       integrity: null,
       ...(nullableString((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey)
         ? { portalDraftKey: String((input.type === AutomationJobType.BUILDING_WARRANT ? warrantPreparation : planningPreparation).portalDraftKey) } : {}),

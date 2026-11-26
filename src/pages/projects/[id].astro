@@ -1,4 +1,5 @@
 ﻿---
+import { PAPER_SIZES, paperSizeFromAudit } from '@/lib/document-paper-size';
 import {
   AutomationJobType,
   DeadlineStatus,
@@ -512,7 +513,8 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
               <form data-document-editor-row data-api-form data-action={`/api/documents/${document.id}`} data-method="PATCH" data-redirect="reload" class="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(180px,1.6fr)_minmax(150px,1fr)_100px_145px_minmax(160px,1.2fr)_90px] lg:items-end">
                 <div class="min-w-0 self-center"><a href={`/api/documents/${document.id}`} target="_blank" rel="noreferrer" class="block truncate text-sm font-semibold text-ink hover:underline">{document.originalName}</a><p class="mt-1 text-xs text-stone-500">{formatBytes(document.sizeBytes)}</p></div>
                 <label class="block"><span class="label lg:sr-only">Document type</span><select name="type" class="field">{preferredDocumentTypes.map((type) => <option value={type} selected={type === document.type}>{documentTypeLabel(type)}</option>)}</select></label>
-                <label class="block"><span class="label lg:sr-only">Version</span><input name="revision" value={document.revision ?? ''} class="field" placeholder="None" /></label>
+                <div class="grid gap-2"><label class="block"><span class="label lg:sr-only">Version</span><input name="revision" value={document.revision ?? ''} class="field" placeholder="None" /></label>
+<label class="block"><span class="label">Paper size</span><select name="paperSize" class="field"><option value="">Choose size</option>{PAPER_SIZES.map(size => <option value={size} selected={paperSizeFromAudit(document.analysisResult)?.value === size}>{size}</option>)}</select></label></div>
                 <label class="block"><span class="label lg:sr-only">Status</span><select name="status" class="field">{Object.values(DocumentStatus).map((status) => <option value={status} selected={status === document.status}>{humanizeEnum(status)}</option>)}</select></label>
                 <label class="block"><span class="label lg:sr-only">Notes</span><input name="notes" value={document.notes ?? ''} class="field" placeholder="Optional" /></label>
                 <div class="flex items-center gap-2 lg:flex-col lg:items-stretch"><button type="submit" class="btn btn-secondary justify-center px-3 py-2 text-sm">Save</button><span data-form-status class="text-xs text-stone-500" aria-live="polite"></span></div>

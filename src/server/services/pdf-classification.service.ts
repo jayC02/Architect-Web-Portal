@@ -1,6 +1,8 @@
 import { DocumentSortSource, DocumentType } from '@prisma/client';
 import { z } from 'zod';
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
+import { aiPaperSizeSchema, PAPER_SIZES, reconcilePaperSize } from '@/lib/document-paper-size';
+import { physicalPdfPaperSizes } from '@/server/services/pdf-paper-size.service';
 import {
   documentFactSchema,
   documentFactFieldKeys,
@@ -38,6 +40,7 @@ export const pdfClassificationResultSchema = z.object({
   drawingNumber: z.string().trim().max(120).optional(),
   revision: z.string().trim().max(40).optional(),
   pageCount: z.number().int().positive().optional(),
+  paperSize: aiPaperSizeSchema.nullable().optional(),
   existingOrProposed: z.enum(['existing', 'proposed', 'mixed', 'unknown']).default('unknown'),
   extractedFacts: z.array(documentFactSchema).max(60).default([]),
   evidence: z.string().trim().max(500).optional(),
@@ -74,8 +77,8 @@ export interface PdfClassificationProvider {
 export type ProjectClassificationContext = PdfClassificationInput['projectContext'];
 
 export const DOCUMENT_ANALYSIS_VERSION = 'document-intelligence-v2';
-export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v4';
-export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v5';
+export const DOCUMENT_ANALYSIS_SCHEMA_VERSION = 'document-intelligence-schema-v5';
+export const DOCUMENT_ANALYSIS_PROMPT_VERSION = 'document-intelligence-prompt-v6';
 const MAX_AI_FILE_BYTES = APPLICATION_UPLOAD_LIMITS.maxFileBytes;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
@@ -158,6 +161,7 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
     'drawingNumber',
     'revision',
     'pageCount',
+    'paperSize',
     'existingOrProposed',
     'extractedFacts',
     'evidence',
@@ -172,6 +176,15 @@ export const GEMINI_DOCUMENT_RESPONSE_SCHEMA = {
     drawingNumber: { type: ['string', 'null'] },
     revision: { type: ['string', 'null'] },
     pageCount: { type: ['integer', 'null'] },
+    paperSize: {
+      type: ['object', 'null'],
+      required: ['value', 'certainty', 'evidence', 'page', 'mixedSizes'],
+      properties: {
+        value: { type: ['string', 'null'], enum: [...PAPER_SIZES, null] },
+        certainty: { type: 'string', enum: ['high', 'medium', 'low'] },
+        evidence: { type: 'string' }, page: { type: ['integer', 'null'] }, mixedSizes: { type: 'boolean' },
+      },
+    },
     existingOrProposed: { type: 'string', enum: ['existing', 'proposed', 'mixed', 'unknown'] },
     extractedFacts: {
       type: 'array',
@@ -200,6 +213,7 @@ const geminiDocumentResultSchema = z.object({
   drawingNumber: z.string().trim().max(120).nullable(),
   revision: z.string().trim().max(40).nullable(),
   pageCount: z.number().int().positive().nullable(),
+  paperSize: aiPaperSizeSchema.nullable().optional(),
   existingOrProposed: z.enum(['existing', 'proposed', 'mixed', 'unknown']),
   extractedFacts: z.array(z.object({
     key: z.enum(documentFactFieldKeys),
@@ -313,6 +327,7 @@ Rules:
 - Keep calculations separate from specifications.
 - If the PDF contains mixed document types, choose the best overall category, require manual review, and add a warning.
 - Do not invent a title, drawing number, or revision.
+- Read paper size visually from each page's title block or explicit sheet-size label. Return paperSize with the supported A0-A6 value, short visible evidence, page number and certainty. Drawing references such as GA100 are not paper sizes. Inspect all pages; set mixedSizes when sheets differ. Use null when unclear. A label listing both original and reduced print sizes needs review unless the actual sheet size is clear. Never infer paper size from the filename.
 - Keep evidence to one short, human-readable sentence.
 - Record only what is visible, but record all of it. Title blocks usually give the project title, the client and the architect's practice details; record each under its own keys.
 - Split site and applicant addresses into buildingNumber, addressLine1 (street without the number), addressLine2, townCity and postcode. Preserve flat identifiers and building names.
@@ -816,6 +831,8 @@ const classifyOne = async (
     }));
     const documentType = CATEGORY_TO_DOCUMENT_TYPE[result.categoryKey];
     const warnings = [...result.warnings];
+    const paperSize = reconcilePaperSize(result.paperSize, await physicalPdfPaperSizes(bytes));
+    if (paperSize.reviewRequired) warnings.push(paperSize.evidence);
     const rulesStronglyDisagree = fallback.confidence >= 0.8 && fallback.suggestedDocumentType !== documentType;
     if (rulesStronglyDisagree) warnings.push('The filename or extracted text suggests a different document type.');
 
@@ -846,6 +863,7 @@ const classifyOne = async (
         model: provider.model,
         promptVersion: DOCUMENT_ANALYSIS_PROMPT_VERSION,
         pageCount: result.pageCount,
+        paperSize,
         existingOrProposed: result.existingOrProposed,
         extractedFacts: result.extractedFacts,
         mixedDocumentDetected: result.mixedDocumentDetected,
@@ -933,6 +951,7 @@ export const classificationAuditForSuggestion = (suggestion: DocumentSortSuggest
         ...(suggestion.classificationDetails.model ? { model: suggestion.classificationDetails.model } : {}),
         promptVersion: suggestion.classificationDetails.promptVersion,
         ...(suggestion.classificationDetails.pageCount ? { pageCount: suggestion.classificationDetails.pageCount } : {}),
+        ...(suggestion.classificationDetails.paperSize ? { paperSize: suggestion.classificationDetails.paperSize } : {}),
         ...(suggestion.classificationDetails.existingOrProposed ? { existingOrProposed: suggestion.classificationDetails.existingOrProposed } : {}),
         extractedFacts: suggestion.classificationDetails.extractedFacts ?? [],
         mixedDocumentDetected: suggestion.classificationDetails.mixedDocumentDetected ?? false,

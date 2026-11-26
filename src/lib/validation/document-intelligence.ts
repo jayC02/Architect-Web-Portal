@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paperSizeAnalysisSchema } from '@/lib/document-paper-size';
 
 export const DOCUMENT_INTELLIGENCE_CATEGORY_KEYS = [
   'location_plan',
@@ -89,6 +90,7 @@ export const documentIntelligenceResultSchema = z.object({
     drawingNumber: z.string().trim().max(120).optional(),
     revision: z.string().trim().max(40).optional(),
     pageCount: z.number().int().positive().optional(),
+    paperSize: paperSizeAnalysisSchema.nullable().optional(),
     existingOrProposed: z.enum(['existing', 'proposed', 'mixed', 'unknown']).default('unknown'),
   }).strict(),
   extractedFacts: z.array(documentFactSchema).max(60),

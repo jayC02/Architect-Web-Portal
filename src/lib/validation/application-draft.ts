@@ -1,3 +1,4 @@
+import { paperSizeValueSchema } from '@/lib/document-paper-size';
 import { ApplicationDraftType, DocumentStatus, DocumentType } from '@prisma/client';
 import { z } from 'zod';
 import { APPLICATION_UPLOAD_LIMITS } from '@/lib/application-upload-limits';
@@ -121,6 +122,8 @@ export const draftDocumentReviewSchema = z.object({
   revision: nullableText(40),
   drawingNumber: nullableText(120),
   drawingTitle: nullableText(240),
+  paperSize: paperSizeValueSchema.nullable().optional(),
+  paperSizeNeedsReview: z.boolean().optional(),
 }).strict();
 
 export const applicationDraftReviewSchema = z.object({

@@ -4,6 +4,7 @@ import { missingOwnerDetails, type WarrantOwnerDetails } from '@/lib/building-wa
 import { missingSustainabilityAnswers, type WarrantSustainability } from '@/lib/building-warrant-follow-ups';
 import { AutomationJobType, DocumentStatus, DocumentType } from '@prisma/client';
 import { resolveLocationPlans } from '@/lib/location-plan';
+import { agentPhoneError } from '@/lib/validation/client-contact';
 
 type Issue = {
   code: string;
@@ -19,6 +20,7 @@ type SnapshotInput = {
       firstName: string | null;
       lastName: string | null;
       email: string | null;
+      phone: string | null;
       buildingNumber: string | null;
       address: { addressLine1: string | null; townCity: string | null; postcode: string | null };
     };
@@ -79,7 +81,7 @@ type SnapshotInput = {
       explanation: string[];
     };
   } | null;
-  documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus }>;
+  documents: Array<{ categoryKey: DocumentType; reviewState: DocumentStatus; originalFilename?: string; paperSize?: { reviewRequired: boolean } | null }>;
 };
 
 const meaningfulDescription = (value: string | null) =>
@@ -97,6 +99,11 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   requireValue('organisation.agent.firstName', snapshot.organisation.agent.firstName, 'Add the normal agent first name in Organisation settings.');
   requireValue('organisation.agent.lastName', snapshot.organisation.agent.lastName, 'Add the normal agent last name in Organisation settings.');
   requireValue('organisation.agent.email', snapshot.organisation.agent.email, 'Add the normal agent email in Organisation settings.');
+  const phoneError = agentPhoneError(snapshot.organisation.agent.phone);
+  if (phoneError) missing.push({
+    code: snapshot.organisation.agent.phone?.trim() ? 'invalid_organisation_agent_phone' : 'missing_organisation_agent_phone',
+    field: 'organisation.agent.phone', message: phoneError, severity: 'error',
+  });
   requireValue('organisation.agent.buildingNumber', snapshot.organisation.agent.buildingNumber, 'Add the required agent building number.');
   requireValue('organisation.agent.address.addressLine1', snapshot.organisation.agent.address.addressLine1, 'Add the agent address in Organisation settings.');
   requireValue('organisation.agent.address.townCity', snapshot.organisation.agent.address.townCity, 'Add the agent town or city in Organisation settings.');
@@ -116,6 +123,10 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
   requireValue('applicant.address.postcode', snapshot.applicant.address.postcode, 'Add the applicant postcode.');
 
   const locationPlans = resolveLocationPlans(snapshot.documents, (document) => document.categoryKey);
+  for (const [index, document] of snapshot.documents.entries()) if (document.paperSize?.reviewRequired) missing.push({
+    code: 'paper_size_needs_review', field: `documents.${index}.paperSize`,
+    message: `Confirm the paper size for ${document.originalFilename || 'this document'} before preparing the application.`, severity: 'error',
+  });
   const locationPlanStatus = locationPlans.some((document) => document.reviewState !== DocumentStatus.DRAFT)
     ? 'REVIEWED'
     : locationPlans.length
