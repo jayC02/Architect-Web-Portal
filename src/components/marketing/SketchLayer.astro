@@ -1,0 +1,197 @@
+---
+// A pen line drawn in the background of a marketing page as the visitor scrolls.
+// It runs down the page behind the text, turning at each section into a new
+// lane, with small drafting marks at its corners: nodes, crosses, dimension
+// ticks and the odd red point. The route is worked out in the browser from the
+// page's own sections, so every page gets its own drawing. Decorative only.
+---
+<svg class="sketch" aria-hidden="true" focusable="false" data-sketch></svg>
+
+<script>
+  const NS = 'http://www.w3.org/2000/svg';
+  const clamp = (value: number) => Math.min(1, Math.max(0, value));
+
+  interface Stroke {
+    el: SVGElement;
+    from: number;
+    to: number;
+    draw: boolean;
+    last: number;
+  }
+
+  /** Small seeded random generator so a page draws the same route every visit. */
+  const seeded = (text: string) => {
+    let seed = 2166136261;
+    for (const char of text) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
+    return () => {
+      seed = Math.imul(seed ^ (seed >>> 15), 2246822507);
+      seed = Math.imul(seed ^ (seed >>> 13), 3266489909);
+      return ((seed ^= seed >>> 16) >>> 0) / 4294967296;
+    };
+  };
+
+  const svg = document.querySelector<SVGSVGElement>('[data-sketch]');
+  const main = svg?.parentElement;
+
+  if (svg && main) {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let strokes: Stroke[] = [];
+    let reached = 0;
+    let loadStart = 0;
+    let frame = 0;
+
+    const add = (tag: string, attrs: Record<string, string | number>, from: number, to: number, draw = true) => {
+      const el = document.createElementNS(NS, tag) as SVGElement;
+      for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+      if (draw) el.setAttribute('pathLength', '1');
+      el.classList.add(draw ? 'pen' : 'ink');
+      svg.appendChild(el);
+      strokes.push({ el, from, to: Math.max(to, from + 1), draw, last: -1 });
+    };
+
+    const build = () => {
+      svg.replaceChildren();
+      strokes = [];
+      const width = main.clientWidth;
+      const height = main.scrollHeight;
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.style.height = `${height}px`;
+
+      const blocks = [...main.children].filter(
+        (child): child is HTMLElement => child instanceof HTMLElement && child !== (svg as unknown as Element) && !child.matches('.closing, .no-sketch'),
+      );
+      if (!blocks.length) return;
+      const random = seeded(location.pathname);
+      const narrow = width < 720;
+      const lanes = (narrow ? [0.05, 0.3, 0.7, 0.95] : [0.03, 0.14, 0.36, 0.58, 0.79, 0.96]).map((share) => Math.round(share * width));
+
+      // Turning points: every section top, plus extra turns inside long sections.
+      const turns: number[] = [];
+      blocks.forEach((block, index) => {
+        const top = block.offsetTop;
+        const bottom = top + block.offsetHeight;
+        if (index > 0) turns.push(top + 36);
+        const spacing = narrow ? 520 : 680;
+        for (let y = top + spacing; y < bottom - spacing * 0.6; y += spacing) turns.push(Math.round(y + (random() - 0.5) * 120));
+      });
+      const last = blocks.at(-1)!;
+      const end = last.offsetTop + last.offsetHeight - 48;
+
+      let lane = narrow ? 3 : 4;
+      let x = lanes[lane];
+      let y = Math.round(blocks[0].offsetTop + Math.min(blocks[0].offsetHeight * 0.3, 160));
+      let pen = y;
+
+      for (const turn of [...turns, end]) {
+        if (turn <= y + 60) continue;
+        // Down the current lane to the turn.
+        add('path', { d: `M${x} ${y}V${turn}` }, pen, turn);
+        y = turn;
+        if (turn === end) {
+          add('circle', { cx: x, cy: y, r: 4 }, y - 10, y + 50, false);
+          break;
+        }
+
+        // Across to a different lane, never straight back.
+        let next = lane;
+        while (next === lane || Math.abs(next - lane) > (narrow ? 2 : 3)) next = Math.floor(random() * lanes.length);
+        const nx = lanes[next];
+        const span = Math.abs(nx - x);
+        const sweep = Math.min(240, Math.max(90, span * 0.45));
+        const style = random();
+
+        if (style < 0.25) {
+          // Rounded corner, like a door swing.
+          const r = 28;
+          const dir = Math.sign(nx - x);
+          add('path', { d: `M${x} ${y}A${r} ${r} 0 0 ${dir > 0 ? 0 : 1} ${x + dir * r} ${y + r}H${nx}` }, y, y + sweep);
+          y += r;
+        } else {
+          add('path', { d: `M${x} ${y}H${nx}` }, y, y + sweep);
+        }
+
+        // Drafting marks at the corner and along the run.
+        const markAt = y + sweep * 0.5;
+        if (style >= 0.25 && style < 0.55) {
+          add('circle', { cx: x, cy: y, r: 3.5 }, markAt - 30, markAt + 20, false);
+        } else if (style >= 0.55 && style < 0.75) {
+          add('path', { d: `M${x - 7} ${y - 7}L${x + 7} ${y + 7}M${x + 7} ${y - 7}L${x - 7} ${y + 7}`, class: 'thin' }, markAt - 30, markAt + 20, false);
+        }
+        if (span > 180 && random() < 0.6) {
+          // A dimension: ticks at both ends and a measured length.
+          const dimY = y - 14;
+          const left = Math.min(x, nx);
+          const right = Math.max(x, nx);
+          add('path', { d: `M${left} ${dimY}H${right}`, class: 'thin' }, markAt, markAt + 80);
+          add('path', { d: `M${left - 5} ${dimY + 5}L${left + 5} ${dimY - 5}M${right - 5} ${dimY + 5}L${right + 5} ${dimY - 5}`, class: 'thin' }, markAt + 40, markAt + 100, false);
+          const label = document.createElementNS(NS, 'text');
+          label.textContent = String(Math.round((span * 8) / 50) * 50);
+          label.setAttribute('x', String((left + right) / 2));
+          label.setAttribute('y', String(dimY - 6));
+          label.setAttribute('text-anchor', 'middle');
+          label.classList.add('ink');
+          svg.appendChild(label);
+          strokes.push({ el: label, from: markAt + 50, to: markAt + 120, draw: false, last: -1 });
+        }
+        if (random() < 0.3) {
+          add('circle', { cx: nx, cy: y, r: 5, class: 'accent' }, y + sweep - 20, y + sweep + 40, false);
+        }
+
+        pen = y + sweep;
+        x = nx;
+        lane = next;
+      }
+    };
+
+    const render = () => {
+      frame = 0;
+      const top = main.getBoundingClientRect().top + window.scrollY;
+      let target = window.scrollY + window.innerHeight * 0.72 - top;
+      if (loadStart) {
+        // On arrival the pen catches up over a moment instead of appearing all at once.
+        const t = Math.min(1, (performance.now() - loadStart) / 1400);
+        target = Math.min(target, target * (1 - Math.pow(1 - t, 3)));
+        if (t >= 1) loadStart = 0;
+      }
+      reached = Math.max(reached, target);
+      for (const stroke of strokes) {
+        const t = clamp((reached - stroke.from) / (stroke.to - stroke.from));
+        if (Math.abs(t - stroke.last) < 0.003) continue;
+        stroke.last = t;
+        if (stroke.draw) {
+          stroke.el.style.strokeDashoffset = String(1 - t);
+          stroke.el.style.visibility = t > 0 ? 'visible' : 'hidden';
+        } else {
+          stroke.el.style.opacity = String(t);
+        }
+      }
+      if (loadStart) schedule();
+    };
+
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(render); };
+
+    const rebuild = () => {
+      build();
+      if (reduced) {
+        reached = Number.POSITIVE_INFINITY;
+      }
+      render();
+    };
+
+    if (!reduced) loadStart = performance.now();
+    rebuild();
+    svg.classList.add('ready');
+    window.addEventListener('scroll', schedule, { passive: true });
+
+    // Rebuild when the page reflows: a resize, fonts settling, a FAQ opening.
+    let timer = 0;
+    let lastSize = '';
+    new ResizeObserver(() => {
+      const size = `${main.clientWidth}x${main.scrollHeight}`;
+      if (size === lastSize) return;
+      lastSize = size;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(rebuild, 180);
+    }).observe(main);
+  }
+</script>

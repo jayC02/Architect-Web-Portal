@@ -1,8 +1,11 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
-import LineArt from '@/components/marketing/LineArt.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
-import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import ProjectsDemo from '@/components/marketing/demos/ProjectsDemo.astro';
+import SortDemo from '@/components/marketing/demos/SortDemo.astro';
+import ApplicationDemo from '@/components/marketing/demos/ApplicationDemo.astro';
+import AgentDemo from '@/components/marketing/demos/AgentDemo.astro';
+import TrackingDemo from '@/components/marketing/demos/TrackingDemo.astro';
 import { payAsYouGoRate, lowestPlanMonthly, formatPrice } from '@/lib/marketing/plans';
 import { marketingRoutes } from '@/lib/marketing/routes';
 import { MANUAL_MIN, AUTO_MIN } from '@/components/home/scroll-story/story.js';
@@ -11,6 +14,55 @@ import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
 export const prerender = true;
 setAstroCache(Astro, publicPageShort);
 
+// The five steps a job goes through, in order. Each has a demo to try.
+const features = [
+  {
+    id: 'projects',
+    name: 'Projects',
+    does: 'Keeps every job in one record',
+    title: 'Every job in one place, with what happens next.',
+    body: 'Add the site, client and authority once. Each project shows its stage and the next thing to do, so anyone in the practice can pick it up.',
+    points: ['Stage and next action beside every project', 'Clients, applicants and agents reused across jobs', 'Scottish address lookup for sites'],
+    world: 'site',
+  },
+  {
+    id: 'documents',
+    name: 'Documents',
+    does: 'Sorts your drawings automatically',
+    title: 'Drop in the drawings. They sort themselves.',
+    body: 'Upload a folder of PDFs, however they are named. AI reads each sheet and labels what it is, with its revision and paper size. Anything it is unsure of, it asks you.',
+    points: ['Drawing type, number, revision and paper size read from the sheet', 'You confirm anything uncertain before it is used', 'File checks before anything is sent'],
+    world: 'design',
+  },
+  {
+    id: 'applications',
+    name: 'Applications',
+    does: 'Fills in planning, warrant and completion',
+    title: 'Applications filled in from the record.',
+    body: 'Pick planning permission, building warrant or completion certificate. Every field is filled from the project, the right drawings are attached and the building standards fee is worked out. You check it on one page.',
+    points: ['Nothing typed twice between the three applications', 'Each value shows where it came from', 'Building standards fee calculated for you'],
+    world: 'portal',
+  },
+  {
+    id: 'agent',
+    name: 'Desktop Agent',
+    does: 'Completes the portal for you',
+    title: 'The portal, completed for you.',
+    body: 'The Agent runs on a licensed PC in your office. It signs in with your practice’s own account, keys in every field, uploads each document and stops at payment for you to approve.',
+    points: ['Works from a frozen copy of the draft you approved', 'Live progress and an estimated finish time', 'Picks up where it left off if the portal times out'],
+    world: 'automation',
+  },
+  {
+    id: 'tracking',
+    name: 'Tracking',
+    does: 'Matches replies and decisions',
+    title: 'Replies matched to the right application.',
+    body: 'Connect Gmail and council and verifier emails are recognised, matched to the project and update its status. Deadlines go straight into your calendar.',
+    points: ['Validation, further information and decisions tracked', 'Deadlines synced to Google Calendar', 'Daily checks for anything waiting on you'],
+    world: 'tracking',
+  },
+] as const;
+
 const extras = [
   { title: 'Deadlines that find you', body: 'Determination dates, warrant expiries and follow-ups gather in one list, synced to Google Calendar.', icon: '<path d="M4 7h16v13H4zM4 11h16M9 4v5M15 4v5"/>' },
   { title: 'Clients and sites', body: 'Every applicant, agent and address lives once and fills every application that needs it.', icon: '<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' },
@@ -18,24 +70,6 @@ const extras = [
   { title: 'Xero overview', body: 'Read-only invoices and fee positions per project, without leaving the workspace.', icon: '<path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/>' },
   { title: 'Roles and permissions', body: 'Owners, architects and assistants see and change only what their role allows.', icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M17 11l2 2 3-4"/>' },
   { title: 'Audit history', body: 'Every prepared draft, submission and reply is recorded with who did it and when.', icon: '<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/>' },
-];
-
-const applicationTypes = [
-  {
-    title: 'Planning permission',
-    body: 'Prepared from the project as soon as the drawings are sorted.',
-    points: ['Applicant, agent and site from the project record', 'Description of development carried through', 'Location plan and drawings attached from sorted documents'],
-  },
-  {
-    title: 'Building warrant',
-    body: 'Prepared with the technical documents the verifier expects.',
-    points: ['Description of works and site reused from planning', 'Drawings, specifications and U-value reports attached', 'Building standards fee calculated for you'],
-  },
-  {
-    title: 'Completion certificate',
-    body: 'Prepared at the end of the job, when nobody wants to start from scratch.',
-    points: ['Supporting certificates and documents attached', 'Reviewed on one page before it goes', 'Tracked by email once it is submitted'],
-  },
 ];
 
 const connections = [
@@ -47,7 +81,7 @@ const connections = [
 ---
 <MarketingLayout
   title="Features | Architect Pro"
-  description="Project records, AI document sorting, planning, building warrant and completion certificate preparation, and a desktop Agent that completes the portal for you."
+  description="Project records, AI document sorting, planning, building warrant and completion certificate preparation, a desktop Agent that completes the portal, and tracking of every reply. Try each one."
   world="site"
 >
   <section class="hero">
@@ -55,149 +89,46 @@ const connections = [
       <div>
         <p class="eyebrow">Features</p>
         <h1>One project record. Every application.</h1>
-        <p class="lede">Architect Pro keeps your projects, drawings and deadlines together, prepares planning, building warrant and completion certificate applications from them, then completes the portal for you in the background.</p>
+        <p class="lede">Architect Pro takes a job from first drawing to completion certificate. Each step below has a working example you can try.</p>
         <div class="actions">
           <a class="button primary" href={marketingRoutes.demo}>Book a demo</a>
           <a class="button" href={marketingRoutes.pricing}>See pricing</a>
         </div>
       </div>
-      <LineArt variant="plan" />
+      <nav class="feature-index" aria-label="Features on this page">
+        <ol>
+          {features.map((feature) => (
+            <li>
+              <a href={`#${feature.id}`}>
+                <b>{feature.name}</b>
+                <span>{feature.does}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
     </div>
   </section>
 
-  <section class="section" aria-label="How Architect Pro works">
-    <div class="wrap">
-      <DrawingBoard scene="elevation" number="AP-101">
-      <article class="chapter" data-sheet-stage="1">
-        <div class="chapter-copy">
-          <p class="chapter-index"><b>01</b>Projects</p>
-          <h2>Start every project in one place.</h2>
-          <p>Record the site, client and red line once. Stages run from lead to completion with the next useful action shown beside every project, so the whole practice can see what is moving.</p>
-          <ul class="ticks">
-            <li>Project register with stage and next action together</li>
-            <li>Clients, applicants and agents reused across projects</li>
-            <li>Scottish address lookup for sites</li>
-          </ul>
+  {features.map((feature, index) => (
+    <section class:list={['section', 'feature', { flip: index % 2 === 1 }]} id={feature.id} aria-labelledby={`${feature.id}-title`}>
+      <div class="wrap feature-grid">
+        <div class="feature-copy">
+          <p class="chapter-index"><b>{String(index + 1).padStart(2, '0')}</b>{feature.name}</p>
+          <h2 id={`${feature.id}-title`}>{feature.title}</h2>
+          <p>{feature.body}</p>
+          <ul class="ticks">{feature.points.map((point) => <li>{point}</li>)}</ul>
         </div>
-        <div class="world site">
-          <div class="mock">
-            <div class="mock-title">Project register <span class="tag">Illustrative</span></div>
-            <div class="mock-row"><span>14 Harbour Lane · Extension</span><span class="tag">Planning</span></div>
-            <div class="mock-row"><span>Glebe Cottage · Alterations</span><span class="tag wait">Warrant</span></div>
-            <div class="mock-row"><span>Mill Wynd · New build</span><span class="tag ok">Completion</span></div>
-          </div>
+        <div class:list={['world', feature.world, 'feature-demo']}>
+          {feature.id === 'projects' && <ProjectsDemo />}
+          {feature.id === 'documents' && <SortDemo />}
+          {feature.id === 'applications' && <ApplicationDemo />}
+          {feature.id === 'agent' && <AgentDemo />}
+          {feature.id === 'tracking' && <TrackingDemo />}
         </div>
-      </article>
-
-      <article class="chapter" data-sheet-stage="2">
-        <div class="chapter-copy">
-          <p class="chapter-index"><b>02</b>Documents</p>
-          <h2>Drop the drawings in. They sort themselves.</h2>
-          <p>Upload a folder of PDFs and AI reads each one: location plans, elevations, sections, specifications and certificates are labelled and attached to the right application.</p>
-          <ul class="ticks">
-            <li>Drawing type, number and revision read from the sheet</li>
-            <li>You review every suggestion before it is used</li>
-            <li>Upload limits and file checks before anything is sent</li>
-          </ul>
-        </div>
-        <div class="world design">
-          <div class="mock">
-            <div class="mock-title">Sorting 6 drawings</div>
-            <div class="mock-row"><span>A-001 Location plan.pdf</span><span class="tag ok">Location plan</span></div>
-            <div class="mock-row"><span>A-110 Proposed elevations.pdf</span><span class="tag ok">Elevations</span></div>
-            <div class="mock-row"><span>A-120 Sections.pdf</span><span class="tag ok">Sections</span></div>
-            <div class="mock-row"><span>Spec rev C.pdf</span><span class="tag wait">Check</span></div>
-          </div>
-        </div>
-      </article>
-
-      <article class="chapter" data-sheet-stage="3">
-        <div class="chapter-copy">
-          <p class="chapter-index"><b>03</b>Applications</p>
-          <h2>Planning, warrant and completion, prepared from the record.</h2>
-          <p>Architect Pro drafts each application from the project you already keep: applicant, site, description, documents and fee. You review it on one page and decide when it goes.</p>
-          <ul class="ticks">
-            <li>Planning permission and building warrant drafts</li>
-            <li>Completion certificates with the right supporting documents</li>
-            <li>Building standards fee calculated for you</li>
-          </ul>
-        </div>
-        <div class="world portal">
-          <div class="mock">
-            <div class="mock-title">Building warrant draft <span class="tag live">Ready to review</span></div>
-            <div class="mock-row"><span>Applicant</span><span>Taken from client</span></div>
-            <div class="mock-row"><span>Description of works</span><span>Taken from project</span></div>
-            <div class="mock-row"><span>Documents</span><span class="num">9 attached</span></div>
-            <div class="mock-row"><span>Fee</span><span>Calculated</span></div>
-          </div>
-        </div>
-      </article>
-
-      <article class="chapter" data-sheet-stage="4">
-        <div class="chapter-copy">
-          <p class="chapter-index"><b>04</b>Desktop Agent</p>
-          <h2>The portal, done in the background.</h2>
-          <p>The Architect Pro Agent runs on a licensed Windows PC in your office. It signs in to the portal with your practice's own account, keys in every field, attaches each document and stops at payment for you to approve.</p>
-          <ul class="ticks">
-            <li>Works from a frozen snapshot of the approved draft</li>
-            <li>Shows live progress and an estimated finish time</li>
-            <li>Recovers from portal timeouts and picks up where it left off</li>
-            <li>Licensed per device and only runs with an active subscription</li>
-          </ul>
-        </div>
-        <div class="world automation">
-          <div class="mock">
-            <div class="mock-title">Agent · Office PC <span class="tag ok">Licensed</span></div>
-            <div class="mock-row"><span>Creating proposal</span><span class="tag ok">Done</span></div>
-            <div class="mock-row"><span>Entering applicant and site</span><span class="tag ok">Done</span></div>
-            <div class="mock-row"><span>Attaching documents</span><span class="tag live">7 of 9</span></div>
-            <div class="bar" aria-hidden="true"><span style="width: 78%"></span></div>
-            <p class="mock-caption">Illustrative progress. Actual times vary.</p>
-          </div>
-        </div>
-      </article>
-
-      <article class="chapter" data-sheet-stage="5">
-        <div class="chapter-copy">
-          <p class="chapter-index"><b>05</b>Tracking</p>
-          <h2>Then it keeps track.</h2>
-          <p>Connect Gmail and Architect Pro recognises council and verifier emails, matches them to the right application and updates its status. Validation, requests for information and decisions arrive on the project, not lost in an inbox.</p>
-          <ul class="ticks">
-            <li>Gmail tracking of submissions, validations and decisions</li>
-            <li>Deadlines synced to Google Calendar</li>
-            <li>Daily checks for anything waiting on you</li>
-          </ul>
-        </div>
-        <div class="world tracking">
-          <div class="mock">
-            <div class="mock-title">14 Harbour Lane</div>
-            <div class="mock-row"><span>Planning permission</span><span class="tag ok">Validated</span></div>
-            <div class="mock-row"><span>Building warrant</span><span class="tag wait">Further information</span></div>
-            <div class="mock-row"><span>Completion certificate</span><span class="tag">Not started</span></div>
-          </div>
-        </div>
-      </article>
-      </DrawingBoard>
-    </div>
-  </section>
-
-  <section class="section bordered" aria-labelledby="types-title">
-    <div class="wrap">
-      <div class="section-head">
-        <h2 id="types-title">Three applications, one record.</h2>
-        <p>Each application is prepared from what the project already holds, so nothing is typed twice between planning, the warrant and completion.</p>
       </div>
-      <div class="app-types">
-        {applicationTypes.map((type) => (
-          <article class="app-type">
-            <h3>{type.title}</h3>
-            <p>{type.body}</p>
-            <ul class="ticks">{type.points.map((point) => <li>{point}</li>)}</ul>
-          </article>
-        ))}
-      </div>
-    </div>
-  </section>
+    </section>
+  ))}
 
   <section class="section tint" aria-labelledby="also-title">
     <div class="wrap">
@@ -207,7 +138,7 @@ const connections = [
       </div>
       <div class="grid three">
         {extras.map((item) => (
-          <article class="card reveal">
+          <article class="card">
             <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" set:html={item.icon} aria-hidden="true" /></span>
             <h3>{item.title}</h3>
             <p>{item.body}</p>

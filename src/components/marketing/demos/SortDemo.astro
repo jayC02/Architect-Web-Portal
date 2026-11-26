@@ -1,0 +1,106 @@
+---
+// Interactive document sorting: press Sort and watch each PDF get labelled.
+// One file is left for the visitor to confirm, as the product does when unsure.
+const files = [
+  { name: 'Scan_0042.pdf', type: 'Location plan', detail: '1:1250, A4' },
+  { name: '2411-E-01.pdf', type: 'Existing plans', detail: 'Rev A, A1' },
+  { name: '2411-P-03.pdf', type: 'Proposed elevations', detail: 'Rev B, A1' },
+  { name: '2411-P-04.pdf', type: 'Sections', detail: 'Rev B, A1' },
+  { name: 'Harbour Lane spec.pdf', type: '', detail: '', choices: ['Specification', 'Calculations'] },
+  { name: 'IMG_2204.pdf', type: 'Photographs', detail: '6 pages, A4' },
+];
+---
+<div class="demo" data-demo="sort" data-files={JSON.stringify(files)}>
+  <div class="demo-bar">
+    <span class="demo-title">Uploaded to 14 Harbour Lane</span>
+    <span class="demo-hint">Press Sort</span>
+  </div>
+  <ul class="sd-files">
+    {files.map((file, index) => (
+      <li data-index={index}>
+        <span class="sd-icon" aria-hidden="true">PDF</span>
+        <span class="sd-name">{file.name}</span>
+        <span class="sd-result"><span class="sd-wait">Not sorted</span></span>
+      </li>
+    ))}
+  </ul>
+  <div class="demo-foot">
+    <p class="demo-status" aria-live="polite">6 files waiting.</p>
+    <button type="button" class="button primary small" data-action="sort">Sort 6 files</button>
+  </div>
+</div>
+
+<script>
+  interface File { name: string; type: string; detail: string; choices?: string[] }
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  document.querySelectorAll<HTMLElement>('[data-demo="sort"]').forEach((demo) => {
+    const files = JSON.parse(demo.dataset.files ?? '[]') as File[];
+    const rows = [...demo.querySelectorAll<HTMLElement>('.sd-files li')];
+    const status = demo.querySelector<HTMLElement>('.demo-status')!;
+    const action = demo.querySelector<HTMLButtonElement>('[data-action="sort"]')!;
+    let sorted = false;
+
+    const label = (row: HTMLElement, type: string, detail: string) => {
+      const result = row.querySelector<HTMLElement>('.sd-result')!;
+      result.innerHTML = '';
+      const tag = document.createElement('span');
+      tag.className = 'tag ok';
+      tag.textContent = type;
+      result.append(tag);
+      if (detail) {
+        const small = document.createElement('small');
+        small.textContent = detail;
+        result.append(small);
+      }
+      row.classList.add('done');
+    };
+
+    const reset = () => {
+      rows.forEach((row) => {
+        row.classList.remove('done', 'reading', 'ask');
+        row.querySelector<HTMLElement>('.sd-result')!.innerHTML = '<span class="sd-wait">Not sorted</span>';
+      });
+      status.textContent = `${files.length} files waiting.`;
+      action.textContent = `Sort ${files.length} files`;
+      sorted = false;
+    };
+
+    const sort = async () => {
+      action.disabled = true;
+      status.textContent = 'Reading each sheet…';
+      for (const [index, row] of rows.entries()) {
+        const file = files[index];
+        row.classList.add('reading');
+        row.querySelector<HTMLElement>('.sd-result')!.innerHTML = '<span class="sd-reading" aria-hidden="true"></span><span class="sr-only">Reading</span>';
+        await wait(380);
+        row.classList.remove('reading');
+        if (file.choices) {
+          row.classList.add('ask');
+          const result = row.querySelector<HTMLElement>('.sd-result')!;
+          result.innerHTML = '<span class="sd-ask">Which is it?</span>';
+          for (const choice of file.choices) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'sd-choice';
+            button.textContent = choice;
+            button.addEventListener('click', () => {
+              row.classList.remove('ask');
+              label(row, choice, 'Confirmed by you');
+              status.textContent = 'All 6 files sorted and ready to attach.';
+            });
+            result.append(button);
+          }
+        } else {
+          label(row, file.type, file.detail);
+        }
+      }
+      status.textContent = '5 sorted. 1 needs you to confirm it.';
+      action.textContent = 'Start again';
+      action.disabled = false;
+      sorted = true;
+    };
+
+    action.addEventListener('click', () => (sorted ? reset() : sort()));
+  });
+</script>

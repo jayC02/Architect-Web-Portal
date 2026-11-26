@@ -1,7 +1,6 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import ClosingCta from '@/components/marketing/ClosingCta.astro';
-import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
 import { plans, formatPrice } from '@/lib/marketing/plans';
 import { marketingRoutes } from '@/lib/marketing/routes';
 import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
@@ -70,17 +69,17 @@ const groups = [
       <p class="eyebrow">FAQ</p>
       <h1>Questions, answered.</h1>
       <p class="lede">Something missing? <a class="text-link" href={marketingRoutes.contact}>Ask us</a> and we will reply within one working day.</p>
-      <nav class="faq-chips" aria-label="FAQ sections">
-        {groups.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
-      </nav>
     </div>
   </section>
 
   <section class="section">
-    <div class="wrap">
-      <DrawingBoard scene="street" number="AP-501">
-        {groups.map((group, index) => (
-          <section class="faq-group faq" id={group.id} data-sheet-stage={index + 1} aria-labelledby={`${group.id}-title`}>
+    <div class="wrap faq-layout">
+      <nav class="faq-index" aria-label="FAQ sections">
+        {groups.map((group) => <a href={`#${group.id}`}>{group.title}</a>)}
+      </nav>
+      <div>
+        {groups.map((group) => (
+          <section class="faq-group faq" id={group.id} aria-labelledby={`${group.id}-title`} style="scroll-margin-top: 100px;">
             <h2 id={`${group.id}-title`}>{group.title}</h2>
             {group.items.map((item) => (
               <details>
@@ -90,7 +89,7 @@ const groups = [
             ))}
           </section>
         ))}
-      </DrawingBoard>
+      </div>
     </div>
   </section>
 

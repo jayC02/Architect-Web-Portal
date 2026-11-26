@@ -2,9 +2,10 @@
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SiteHeader from '@/components/marketing/SiteHeader.astro';
 import SiteFooter from '@/components/marketing/SiteFooter.astro';
+import SketchLayer from '@/components/marketing/SketchLayer.astro';
 import { absoluteUrl } from '@/lib/config';
 import '@/styles/marketing.css';
-import '@/styles/marketing-sheet.css';
+import '@/styles/marketing-pages.css';
 
 export type World = 'site' | 'design' | 'portal' | 'automation' | 'tracking' | 'time';
 
@@ -14,9 +15,11 @@ interface Props {
   /** Which of the homepage's paper worlds tints this page. */
   world?: World;
   noindex?: boolean;
+  /** Draw the background pen line as the page scrolls. Off for long reading pages. */
+  sketch?: boolean;
 }
 
-const { title, description, world = 'site', noindex = false } = Astro.props;
+const { title, description, world = 'site', noindex = false, sketch = true } = Astro.props;
 const canonical = absoluteUrl(Astro.url.pathname);
 ---
 <BaseLayout title={title} description={description} noindex={noindex}>
@@ -36,6 +39,7 @@ const canonical = absoluteUrl(Astro.url.pathname);
     <a href="#main" class="skip-link">Skip to content</a>
     <SiteHeader />
     <main id="main" tabindex="-1">
+      {sketch && <SketchLayer />}
       <slot />
     </main>
     <SiteFooter />
