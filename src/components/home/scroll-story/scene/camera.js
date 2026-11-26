@@ -38,11 +38,13 @@ const rail = [
   // then a calm three-quarter view while the certificates go in
   [0.79, -9, 11, 21, 0.5, 4.8, 0, 42, 0],
   [0.835, -4, 12, 23, 0.5, 4.6, 0, 42, 0],
-  // time back: the house finishes at golden hour, the ring returns, dusk aerial
-  [0.86, 14, 9, 22, 0, 3.5, 0, 38, 0],
-  [0.91, 22, 20, 24, 0, 2.5, 0, 40, -2],
-  [0.965, -18, 22, 30, 0, 2, 0, 38, 0],
-  [1.0, -26, 34, 36, 0, 1.5, 0, 36, 0],
+  // time back: up and over the finished house as the hour draws round and falls away,
+  // then a golden-hour aerial with the new sketch beside it
+  [0.87, 6, 20, 30, 0, 2.5, 0, 40, 0],
+  [0.905, 4, 36, 30, 1, 0, 4, 42, 0],
+  [0.94, -8, 32, 34, 3, 0.5, 4, 40, 0],
+  [0.965, -14, 30, 36, 4, 0.5, 5.5, 38, 0],
+  [1.0, -19, 37, 42, 4, 0, 5.5, 36, 0],
 ];
 
 /** Cubic Hermite with time-aware tangents, so cuts between shots never kink. */

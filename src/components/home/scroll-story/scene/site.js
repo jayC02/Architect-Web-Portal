@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ribbon, ribbonMaterial } from "./lines.js";
 import { withBoxInk, inkMaterial, inkEdges } from "./ink.js";
-import { clamp, mix, MANUAL_MIN, AUTO_MIN } from "../story.js";
+import { clamp, mix, smooth, MANUAL_MIN, AUTO_MIN } from "../story.js";
 
 export function seeded(seed) {
   let a = seed >>> 0;
@@ -212,7 +212,8 @@ export function createSite(scene, { mobile }) {
   });
   group.add(poles, bulbs);
 
-  // The minute ring: one segment per minute in the portal, so by hand fills a whole hour.
+  // The minute ring: one segment per minute of portal work by hand, so it is a whole hour.
+  // It is drawn faintly at the opening, and at the end all but the Architect Pro minutes fall away.
   const MINUTES = Math.round(MANUAL_MIN),
     KEEP = Math.round(AUTO_MIN),
     ringR = 12.6,
@@ -220,8 +221,9 @@ export function createSite(scene, { mobile }) {
   const ring = new THREE.Group();
   ring.position.y = 0.05;
   ring.rotation.x = -Math.PI / 2;
+  // twelve o'clock faces the street, so the minutes that remain are in front of the house
+  ring.rotation.z = Math.PI;
   const ringRed = new THREE.Color("#e5452f"),
-    ringKept = new THREE.Color("#5a3df0"),
     ringGold = new THREE.Color("#e3a11f");
   const segments = [];
   for (let i = 0; i < MINUTES; i++) {
@@ -360,23 +362,30 @@ export function createSite(scene, { mobile }) {
     });
 
     // minute ring
+    const f = pose.ringFinal;
+    const drawn = clamp(f / 0.4),
+      fall = clamp((f - 0.4) / 0.6);
     segments.forEach((seg, i) => {
       const mat = seg.material;
-      const lit = clamp(pose.manual * MINUTES - i); // ticks round while you do it by hand
-      let opacity = lit;
+      // the opening: the whole hour, faintly
+      let opacity = 0.35 * pose.ringOpen;
       mat.color.copy(ringRed);
-      if (i < KEEP) mat.color.lerp(ringKept, pose.collapse);
-      else opacity *= 1 - pose.collapse; // the rest simply disappear
-      opacity *= 1 - pose.ringHide;
-      // the ending brings it back: the kept minutes in gold, the saved ones as faint outlines
-      const f = pose.finalRing;
+      seg.position.z = 0;
+      seg.scale.setScalar(1);
       if (f > 0) {
-        mat.color.lerp(ringGold, f);
-        opacity = Math.max(opacity, f * (i < KEEP ? 1 : 0.16));
+        // time back: the hour draws round in red ...
+        opacity = Math.max(opacity, clamp(drawn * MINUTES - i));
+        if (i < KEEP) mat.color.lerp(ringGold, fall);
+        else {
+          // ... then every minute you no longer spend in the portal drops away
+          const away = smooth(clamp(fall * 1.6 - ((i - KEEP) / (MINUTES - KEEP)) * 0.6));
+          opacity *= 1 - away;
+          seg.position.z = -away * 1.2;
+          seg.scale.setScalar(1 - away * 0.25);
+        }
       }
       mat.opacity = opacity;
       seg.visible = mat.opacity > 0.005;
-      seg.scale.setScalar(1 + (i < KEEP ? 0 : pose.collapse * (1 - f) * 0.15));
     });
 
     poles.visible = bulbs.visible = streetIn > 0.5;

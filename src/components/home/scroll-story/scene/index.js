@@ -7,22 +7,12 @@ import { createDocuments } from "./documents.js";
 import { createSection } from "./section.js";
 import { createConstruction } from "./construction.js";
 import { createInspection } from "./inspection.js";
+import { createSketch } from "./sketch.js";
 import { createCameraRig } from "./camera.js";
 import { anchorFromRect, worldAtNdc } from "./anchor.js";
 
 const keys = ["paper", "sky", "ink", "grid", "model"];
 const stops = worlds.map((w) => ({ at: w.at, ...Object.fromEntries(keys.map((k) => [k, new THREE.Color(w[k])])) }));
-// Temporary bridge from the new pose to the keys the previous scene modules read.
-// Each later task deletes the keys it no longer needs; Task 7 removes this.
-function legacyPose(pose) {
-  return {
-    ...pose,
-    manual: 0,
-    collapse: 0,
-    ringHide: 0,
-    finalRing: pose.ringFinal,
-  };
-}
 function colorsAt(p, out) {
   let i = 0;
   while (i < stops.length - 2 && p > stops[i + 1].at) i++;
@@ -86,6 +76,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
   const section = createSection(scene, building, { mobile });
   const construction = createConstruction(scene, building, { mobile });
   const inspection = createInspection(scene, textures, { mobile });
+  const sketch = createSketch(scene, { mobile });
   const rig = createCameraRig(camera);
 
   // Where the Architect Pro window is, as points in the scene a fixed distance from the lens.
@@ -142,7 +133,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     last = now;
     if (!running) return;
     time += dt;
-    const pose = legacyPose(poseAt(progress));
+    const pose = poseAt(progress);
     colorsAt(progress, colors);
 
     scene.fog.color.copy(colors.paper);
@@ -165,6 +156,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     section.update(pose, colors, time, anchor, camera);
     construction.update(pose, colors);
     inspection.update(pose, colors);
+    sketch.update(pose, colors, time);
 
     renderer.render(scene, camera);
     onFrame?.(pose);
@@ -207,6 +199,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
       section.dispose();
       construction.dispose();
       inspection.dispose();
+      sketch.dispose();
       disposeTextures(textures);
       sun.shadow.dispose();
       renderer.dispose();

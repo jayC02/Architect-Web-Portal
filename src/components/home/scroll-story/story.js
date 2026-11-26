@@ -200,18 +200,12 @@ export function poseAt(p) {
     grid: 1 - 0.75 * win(p, 0.08, 0.2),
     studio: {
       walls: win(p, 0.07, 0.11),
-      slab: win(p, 0.065, 0.09),
       roof: win(p, 0.105, 0.125),
       glazing: win(p, 0.11, 0.13),
       terrace: win(p, 0.1, 0.125),
     },
-    // each application's sheets: peel off the model, fly to the window, get read
-    sheets: RUNS.map((r) => ({
-      peel: win(p, r.collect, r.collect + 0.015),
-      fly: win(p, r.collect + 0.005, r.collect + 0.04),
-      read: win(p, r.collect + 0.02, r.fill),
-      t: lin(p, r.collect, r.fill),
-    })),
+    // each application's sheets, from the first peeling off the model to the last in the window
+    sheets: RUNS.map((r) => ({ t: lin(p, r.collect, r.fill) })),
     // building warrant: the studio cut open, its wall build-up exploded into layers
     section: {
       cut: win(p, 0.275, 0.305) * (1 - win(p, 0.46, 0.5)),
@@ -227,7 +221,6 @@ export function poseAt(p) {
       lift: lin(p, 0.54, 0.63),
       storey: lin(p, 0.545, 0.625),
       roof: win(p, 0.615, 0.64),
-      strike: win(p, 0.635, 0.66),
     },
     built: win(p, 0.6, 0.65),
     landscape: win(p, 0.66, 0.7),
