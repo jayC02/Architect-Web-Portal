@@ -5,6 +5,7 @@ import { createSite } from "./site.js";
 import { createBuilding } from "./building.js";
 import { createDocuments } from "./documents.js";
 import { createCameraRig } from "./camera.js";
+import { anchorFromRect, worldAtNdc } from "./anchor.js";
 
 const keys = ["paper", "sky", "ink", "grid", "model"];
 const stops = worlds.map((w) => ({ at: w.at, ...Object.fromEntries(keys.map((k) => [k, new THREE.Color(w[k])])) }));
@@ -19,7 +20,6 @@ function legacyPose(pose) {
     glazing: 1,
     ai: 0,
     scan: 0,
-    docs: 0,
     manual: 0,
     collapse: 0,
     ringHide: 0,
@@ -44,7 +44,7 @@ function colorsAt(p, out) {
  * shadows, no glow. Colours are written straight to the screen (no tone mapping) so the
  * ground matches the paper colour exactly and the scene has no visible horizon.
  */
-export function createExperience(host, { mobile, onFrame, onContextLost }) {
+export function createExperience(host, { mobile, onFrame, onContextLost, getAnchorRect }) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: mobile ? "default" : "high-performance", alpha: false });
   const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
   renderer.setPixelRatio(dpr);
@@ -85,6 +85,30 @@ export function createExperience(host, { mobile, onFrame, onContextLost }) {
   const building = createBuilding(scene, { mobile });
   const documents = createDocuments(scene, textures, { mobile });
   const rig = createCameraRig(camera);
+
+  // Where the Architect Pro window is, as points in the scene a fixed distance from the lens.
+  const ANCHOR_DISTANCE = 9;
+  const anchor = { center: new THREE.Vector3(), beside: new THREE.Vector3(), unit: 1 };
+  function measureAnchor() {
+    camera.updateMatrixWorld();
+    const box = host.getBoundingClientRect();
+    const raw = getAnchorRect?.() ?? null;
+    const rect = raw && { left: raw.left - box.left, top: raw.top - box.top, width: raw.width, height: raw.height };
+    const viewport = { width, height };
+    const center = anchorFromRect(rect, viewport);
+    let beside;
+    if (!rect) beside = { x: center.x - 0.32, y: center.y };
+    else if (rect.width > width * 0.6) {
+      // phones: the window spans the top, so sheets wait just below it
+      beside = anchorFromRect({ left: rect.left + rect.width * 0.3, top: rect.top + rect.height + height * 0.02, width: rect.width * 0.4, height: height * 0.12 }, viewport);
+    } else {
+      // wide screens: sheets wait to the left of the window
+      beside = anchorFromRect({ left: rect.left - width * 0.1, top: rect.top + rect.height * 0.3, width: width * 0.06, height: rect.height * 0.3 }, viewport);
+    }
+    worldAtNdc(camera, center, ANCHOR_DISTANCE, anchor.center);
+    worldAtNdc(camera, beside, ANCHOR_DISTANCE, anchor.beside);
+    anchor.unit = 2 * ANCHOR_DISTANCE * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  }
 
   const sunDir = new THREE.Vector3();
   const colors = Object.fromEntries(keys.map((k) => [k, new THREE.Color()]));
@@ -132,7 +156,9 @@ export function createExperience(host, { mobile, onFrame, onContextLost }) {
     rig.update(progress, width, height, dt);
     site.update(pose, colors, camera.position, rig.target, dt);
     building.update(pose, colors, time);
-    documents.update(pose, colors, time, dpr);
+    // only measured while sheets are in the air
+    if (pose.sheets.some((g) => g.t > 0 && g.t < 1)) measureAnchor();
+    documents.update(pose, colors, time, dpr, anchor, camera);
 
     renderer.render(scene, camera);
     onFrame?.(pose);

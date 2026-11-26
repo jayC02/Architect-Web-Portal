@@ -210,6 +210,7 @@ export function poseAt(p) {
       peel: win(p, r.collect, r.collect + 0.015),
       fly: win(p, r.collect + 0.005, r.collect + 0.04),
       read: win(p, r.collect + 0.02, r.fill),
+      t: lin(p, r.collect, r.fill),
     })),
     // building warrant: the studio cut open, its wall build-up exploded into layers
     section: {
@@ -273,8 +274,3 @@ export const themes = [
   { paper: "#f8eedc", fg: "#3a2513", muted: "#805f42", accent: "#a66305", panel: "rgba(255, 255, 255, 0.82)", line: "rgba(58, 37, 19, 0.14)" },
 ];
 
-// Temporary: the previous scene and overlay still import these. Removed once Tasks 2 and 3 replace them.
-export const GROUPS = 3;
-export const DOCS_PER_GROUP = 9;
-export const DOC_COUNT = GROUPS * DOCS_PER_GROUP;
-export const hud = {};

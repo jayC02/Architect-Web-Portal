@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { DOC_COUNT, DOCS_PER_GROUP } from "../story.js";
+import { APPLICATIONS } from "../story.js";
 
 const FONT = '"Space Grotesk", system-ui, sans-serif';
 const INK = "#16264a";
@@ -139,80 +139,70 @@ const drawings = {
     ctx.setLineDash([]);
     lines(ctx, 46, 500, 420, 5);
   },
-  email(ctx) {
-    txt(ctx, "From: client", 46, 196, 20, SOFT, 500);
-    txt(ctx, "Re: Re: Fwd: revised drawings", 46, 232, 22, INK, 700);
-    lines(ctx, 46, 270, 420, 10, 26);
+  uvalue(ctx) {
+    // the wall build-up in section, then the result
+    const layers = [["#c9785e", 70], ["#ffffff", 34], ["#efd15a", 70], ["#b9c0c8", 70], ["#f1efe9", 14]];
+    let x = 70;
+    layers.forEach(([color, w]) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, 190, w, 220);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, 190, w, 220);
+      x += w;
+    });
+    txt(ctx, "U = 0.17 W/m²K", 46, 470, 34, INK, 700);
+    txt(ctx, "ISO 6946 · combined method", 46, 506, 18, SOFT, 400);
+    lines(ctx, 46, 540, 420, 4);
   },
 };
 
+// Each application's sheets, in the order they fly. The last column says where on the
+// model a sheet peels from: the ground, the front, the roof, the side, or inside the house.
 const docSpecs = [
-  // Planning permission
-  ["Planning", "Application form", "Householder", "form"],
-  ["Planning", "Location plan", "1:1250", "location"],
-  ["Planning", "Site plan", "1:200", "plan"],
-  ["Planning", "Existing elevations", "1:100", "elevation"],
-  ["Planning", "Proposed elevations", "1:100", "elevation"],
-  ["Planning", "Floor plans", "1:100", "plan"],
-  ["Planning", "Design statement", "Rev B", "text"],
-  ["Planning", "Ownership certificate", "Certificate A", "form"],
-  ["Planning", "Roof plan", "1:100", "plan"],
+  // Householder planning
+  ["Planning", "Application form", "Householder", "form", "mid"],
+  ["Planning", "Location plan", "1:1250", "location", "ground"],
+  ["Planning", "Site plan", "1:200", "plan", "ground"],
+  ["Planning", "Existing elevations", "1:100", "elevation", "facade"],
+  ["Planning", "Proposed elevations", "1:100", "elevation", "facade"],
+  ["Planning", "Floor plans", "1:100", "plan", "roof"],
+  ["Planning", "Roof plan", "1:100", "plan", "roof"],
+  ["Planning", "Design statement", "Rev B", "text", "mid"],
+  ["Planning", "Ownership certificate", "Certificate A", "form", "mid"],
   // Building warrant
-  ["Warrant", "Warrant application", "Form A", "form"],
-  ["Warrant", "Structural calculations", "Certificate of design", "calc"],
-  ["Warrant", "Fire safety strategy", "Section 2", "text"],
-  ["Warrant", "Energy report", "Section 6 · SAP", "calc"],
-  ["Warrant", "Drainage layout", "Section 3", "plan"],
-  ["Warrant", "Building sections", "1:50", "section"],
-  ["Warrant", "Specification", "Materials", "text"],
-  ["Warrant", "Construction details", "1:20", "section"],
-  ["Warrant", "Foundations", "1:50", "section"],
+  ["Warrant", "Warrant application", "Form A", "form", "mid"],
+  ["Warrant", "Building sections", "1:50", "section", "side"],
+  ["Warrant", "Structural calculations", "Certificate of design", "calc", "mid"],
+  ["Warrant", "Fire safety strategy", "Section 2", "text", "mid"],
+  ["Warrant", "Energy report", "Section 6", "calc", "facade"],
+  ["Warrant", "Drainage layout", "Section 3", "plan", "ground"],
+  ["Warrant", "Construction details", "1:20", "section", "side"],
+  ["Warrant", "Specification", "Materials", "text", "mid"],
+  ["Warrant", "U-value report", "ISO 6946", "uvalue", "facade"],
   // Completion certificate
-  ["Completion", "Completion certificate", "Relevant person", "form"],
-  ["Completion", "Construction certificate", "Electrical", "form"],
-  ["Completion", "Energy certificate", "EPC", "calc"],
-  ["Completion", "Sustainability", "Statement", "text"],
-  ["Completion", "Fire safety", "Design summary", "text"],
-  ["Completion", "Design certificate", "Form Q", "form"],
-  ["Completion", "As-built plans", "1:100", "plan"],
-  ["Completion", "As-built sections", "1:50", "section"],
-  ["Completion", "Drainage test", "Results", "calc"],
+  ["Completion", "Completion certificate", "Relevant person", "form", "mid"],
+  ["Completion", "Energy certificate", "EPC", "calc", "facade"],
+  ["Completion", "Sustainability", "Statement", "text", "mid"],
+  ["Completion", "Construction certificate", "Electrical", "form", "side"],
+  ["Completion", "Design certificate", "Form Q", "form", "mid"],
+  ["Completion", "Fire safety", "Design summary", "text", "mid"],
+  ["Completion", "As-built plans", "1:100", "plan", "roof"],
+  ["Completion", "As-built sections", "1:50", "section", "side"],
+  ["Completion", "Drainage test", "Results", "calc", "ground"],
 ];
-// Noise the AI clears away.
-const noiseSpecs = [
-  ["Email", "Revised drawings", "Fwd ×4", "email"],
-  ["Email", "Council query", "Validation", "email"],
-  ["Note", "Chase engineer", "", "note"],
-  ["Email", "Fee invoice", "Overdue?", "email"],
-  ["Note", "Which revision?", "", "note"],
-  ["Email", "Client: any news?", "", "email"],
-  ["Note", "Check boundary", "", "note"],
-  ["Email", "Neighbour comment", "", "email"],
-  ["Note", "Deadline Fri!", "", "note"],
-  ["Email", "Re: drainage", "", "email"],
-  ["Note", "Print SAP", "", "note"],
-  ["Email", "Updated survey", "", "email"],
-];
+const GROUP = { Planning: 0, Warrant: 1, Completion: 2 };
+// sheet bands: each application's colour, darkened a touch so it holds against white paper
+const BANDS = ["#4a65a3", "#2f6f69", "#4f7a45"];
 
 function documentTexture([group, title, sub, kind]) {
   return canvasTexture(512, 724, (ctx, w, h) => {
-    if (kind === "note") {
-      ctx.fillStyle = "#ffd85c";
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "rgba(0,0,0,0.06)";
-      ctx.fillRect(0, 0, w, 60);
-      txt(ctx, title, 46, 330, 58, "#3b2b05", 700);
-      ctx.strokeStyle = "#3b2b05";
-      ctx.lineWidth = 6;
-      ctx.strokeRect(3, 3, w - 6, h - 6);
-      return;
-    }
     ctx.fillStyle = "#f8f9fc";
     ctx.fillRect(0, 0, w, h);
-    const band = { Planning: "#16264a", Warrant: "#1f3f9a", Completion: "#0f6b5c" }[group] ?? "#8a93a8";
-    ctx.fillStyle = band;
-    ctx.fillRect(0, 0, w, 18);
-    const heading = { Planning: "Planning permission", Warrant: "Building warrant", Completion: "Completion certificate" }[group] ?? "Inbox";
+    const g = GROUP[group];
+    ctx.fillStyle = BANDS[g];
+    ctx.fillRect(0, 0, w, 22);
+    const heading = APPLICATIONS[g].name;
     txt(ctx, heading, 46, 74, 19, SOFT, 500);
     txt(ctx, title, 46, 120, title.length > 18 ? 34 : 40, INK, 700);
     if (sub) txt(ctx, sub, 46, 154, 19, SOFT, 400);
@@ -228,192 +218,22 @@ function documentTexture([group, title, sub, kind]) {
   });
 }
 
-function badgeTexture(kind) {
+/** A green tick in a disc: approvals and inspection checks. */
+function tickTexture() {
   return canvasTexture(256, 256, (ctx) => {
     ctx.beginPath();
     ctx.arc(128, 128, 112, 0, Math.PI * 2);
-    if (kind === "prepared") {
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.lineWidth = 14;
-      ctx.strokeStyle = "#5a3df0";
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(128, 128, 40, 0, Math.PI * 2);
-      ctx.fillStyle = "#5a3df0";
-      ctx.fill();
-    } else if (kind === "flag") {
-      ctx.fillStyle = "#ffb020";
-      ctx.fill();
-      ctx.fillStyle = "#1a1030";
-      ctx.fillRect(116, 60, 24, 92);
-      ctx.fillRect(116, 172, 24, 24);
-    } else {
-      ctx.fillStyle = "#0d9a78";
-      ctx.fill();
-      ctx.lineWidth = 22;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.moveTo(78, 132);
-      ctx.lineTo(112, 168);
-      ctx.lineTo(180, 92);
-      ctx.stroke();
-    }
-  });
-}
-
-function labelTexture(title, sub, color) {
-  return canvasTexture(1024, 200, (ctx) => {
-    txt(ctx, title, 8, 110, title.length > 20 ? 78 : 88, color, 700);
-    txt(ctx, sub, 12, 176, 40, color, 400);
-  });
-}
-
-/** A canvas texture that can be repainted when its state changes. */
-function liveTexture(w, h, paint) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  const map = new THREE.CanvasTexture(canvas);
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.anisotropy = 8;
-  let key = "";
-  return {
-    map,
-    size: [w, h],
-    draw(state) {
-      const next = JSON.stringify(state);
-      if (next === key) return;
-      key = next;
-      ctx.clearRect(0, 0, w, h);
-      paint(ctx, w, h, state);
-      map.needsUpdate = true;
-    },
-  };
-}
-function pill(ctx, x, y, label, bg, fg, size = 22) {
-  ctx.font = `600 ${size}px ${FONT}`;
-  const w = ctx.measureText(label).width + size * 1.4;
-  ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, size * 1.7, size * 0.85);
-  ctx.fill();
-  txt(ctx, label, x + size * 0.7, y + size * 1.17, size, fg, 600);
-  return w;
-}
-
-// A generic government-style online applications portal. Deliberately unbranded.
-const portalFields = [
-  ["Site address", "14 Harbour Lane"],
-  ["Applicant", "Harbour Lane Homes Ltd"],
-  ["Agent", "Your practice"],
-  ["Description of proposal", "Three-storey house with roof terrace"],
-  ["Site area", "214 m²"],
-  ["Application fee", "Calculated"],
-];
-function paintPortal(ctx, w, h, st) {
-  ctx.fillStyle = "#eceef1";
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#3d4450";
-  ctx.lineWidth = 6;
-  ctx.strokeRect(3, 3, w - 6, h - 6);
-  ctx.fillStyle = "#3d4450";
-  ctx.fillRect(0, 0, w, 74);
-  txt(ctx, "Online applications portal", 34, 48, 28, "#ffffff", 600);
-  txt(ctx, st.auto ? "Signed in automatically" : "Signed in", w - 300, 48, 22, "#c9ced6", 400);
-  txt(ctx, `${st.title}  ·  Page ${st.page} of 14`, 34, 124, 24, "#5b6370", 500);
-  // progress dots
-  for (let i = 0; i < 14; i++) {
-    ctx.fillStyle = i < st.page ? (st.auto ? "#7a66ff" : "#5b6370") : "#cfd3da";
-    ctx.fillRect(34 + i * 34, 142, 26, 8);
-  }
-  portalFields.forEach(([label, value], i) => {
-    const y = 192 + i * 74;
-    txt(ctx, label, 34, y, 20, "#5b6370", 500);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(34, y + 10, 620, 44);
-    ctx.strokeStyle = i < st.filled && st.auto ? "#7a66ff" : "#b8bec8";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(34, y + 10, 620, 44);
-    if (i < st.filled) txt(ctx, value, 48, y + 40, 22, "#1f2633", 500);
-    if (i === st.filled && !st.auto) {
-      ctx.fillStyle = "#1f2633";
-      ctx.fillRect(48, y + 20, 2, 26); // the caret: someone is still typing
-    }
-    if (i < st.filled && st.auto) pill(ctx, 520, y + 18, "Auto", "#7a66ff", "#ffffff", 16);
-  });
-  // uploads
-  txt(ctx, "Drawings and documents", 700, 192, 20, "#5b6370", 500);
-  for (let i = 0; i < 9; i++) {
-    const x = 700 + (i % 3) * 98,
-      y = 206 + Math.floor(i / 3) * 112;
-    ctx.fillStyle = i < st.uploads ? "#ffffff" : "#e0e3e8";
-    ctx.fillRect(x, y, 86, 100);
-    ctx.strokeStyle = i < st.uploads ? (st.auto ? "#7a66ff" : "#8a93a3") : "#c4c9d1";
-    ctx.setLineDash(i < st.uploads ? [] : [6, 5]);
-    ctx.strokeRect(x, y, 86, 100);
-    ctx.setLineDash([]);
-    if (i < st.uploads) {
-      ctx.fillStyle = "#cfd6e4";
-      for (let r = 0; r < 4; r++) ctx.fillRect(x + 12, y + 18 + r * 16, 62 - (r % 2) * 18, 6);
-    }
-  }
-  txt(ctx, `${st.uploads} of 9 uploaded`, 700, 568, 20, "#5b6370", 500);
-  // banners
-  if (st.pay) {
-    ctx.fillStyle = "#2b2f8f";
-    ctx.fillRect(0, h - 120, w, 120);
-    txt(ctx, "Everything is filled in. Fee calculated.", 34, h - 70, 32, "#ffffff", 700);
-    txt(ctx, "Add your payment method and pay to finish.", 34, h - 30, 24, "#d9dcff", 400);
-  } else if (st.submitted) {
-    ctx.fillStyle = "#1f7a52";
-    ctx.fillRect(0, h - 120, w, 120);
-    txt(ctx, "Submitted by ArchitectPro", 34, h - 70, 34, "#ffffff", 700);
-    txt(ctx, "Planning permission, building warrant and completion certificate done.", 34, h - 30, 24, "#c9f2dc", 400);
-  } else {
-    ctx.fillStyle = "#d5d9df";
-    ctx.fillRect(0, h - 90, w, 90);
-    ctx.fillStyle = st.auto ? "#7a66ff" : "#3d4450";
-    ctx.fillRect(w - 230, h - 70, 196, 52);
-    txt(ctx, st.auto ? "Working…" : "Save and continue", w - 216, h - 36, 20, "#ffffff", 600);
-  }
-}
-
-// ArchitectPro's project record: the calm opposite of the portal.
-const statusStyle = {
-  Waiting: ["#e6efec", "#4e7d73"],
-  Submitted: ["#fdebc4", "#8a5a00"],
-  Validated: ["#d9e8fb", "#1b5fb8"],
-  Approved: ["#0d9a78", "#ffffff"],
-  Accepted: ["#0d9a78", "#ffffff"],
-};
-function paintRecord(ctx, w, h, st) {
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.roundRect(3, 3, w - 6, h - 6, 34);
-  ctx.fill();
-  ctx.strokeStyle = "#0f4a40";
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  txt(ctx, "14 Harbour Lane", 56, 100, 56, "#0c3a33", 700);
-  txt(ctx, "Project record, kept by ArchitectPro", 58, 146, 26, "#4e7d73", 400);
-  st.rows.forEach(([label, status], i) => {
-    const y = 200 + i * 106;
-    ctx.fillStyle = "rgba(15, 74, 64, 0.14)";
-    ctx.fillRect(56, y + 90, w - 112, 2);
-    txt(ctx, label, 56, y + 58, 34, "#0c3a33", 500);
-    const [bg, fg] = statusStyle[status];
-    ctx.font = `600 24px ${FONT}`;
-    pill(ctx, w - 96 - ctx.measureText(status).width - 34, y + 22, status, bg, fg, 24);
-  });
-  const stats = [[String(DOC_COUNT), "documents"], ["12", "drawings"], ["0", "portal logins"]];
-  stats.forEach(([n, l], i) => {
-    const x = 56 + i * 300;
-    txt(ctx, n, x, h - 74, 60, st.saved ? "#0d9a78" : "#a9c9c0", 700);
-    txt(ctx, l, x, h - 34, 24, "#4e7d73", 400);
+    ctx.fillStyle = "#1d8a5c";
+    ctx.fill();
+    ctx.lineWidth = 22;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.moveTo(78, 132);
+    ctx.lineTo(112, 168);
+    ctx.lineTo(180, 92);
+    ctx.stroke();
   });
 }
 
@@ -421,21 +241,11 @@ export function createTextures({ mobile = false } = {}) {
   SCALE = mobile ? 0.6 : 1;
   return {
     docs: docSpecs.map(documentTexture),
-    noise: noiseSpecs.map(documentTexture),
-    docSpecs,
-    noiseSpecs,
-    prepared: badgeTexture("prepared"),
-    approved: badgeTexture("approved"),
-    labels: [
-      labelTexture("Planning permission", `${DOCS_PER_GROUP} documents`, "#1e1560"),
-      labelTexture("Building warrant", `${DOCS_PER_GROUP} documents`, "#1e1560"),
-      labelTexture("Completion certificate", `${DOCS_PER_GROUP} documents`, "#1e1560"),
-    ],
-    portal: liveTexture(1024, 720, paintPortal),
-    record: liveTexture(1024, 720, paintRecord),
+    docSpecs: docSpecs.map(([group, title, sub, kind, from]) => ({ group: GROUP[group], title, sub, kind, from })),
+    tick: tickTexture(),
   };
 }
 
 export function disposeTextures(t) {
-  [...t.docs, ...t.noise, ...t.labels, t.prepared, t.approved, t.portal.map, t.record.map].forEach((m) => m.dispose());
+  [...t.docs, t.tick].forEach((m) => m.dispose());
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as story from '../src/components/home/scroll-story/story.js';
 import { windowMarkup, ledgerMarkup } from '../src/components/home/scroll-story/overlay.js';
+import { anchorFromRect, ANCHOR_FALLBACK } from '../src/components/home/scroll-story/scene/anchor.js';
 import { calculateBuildingStandardsFee } from '../src/lib/fees/building-standards-fee';
 
 const samples = Array.from({ length: 2001 }, (_, i) => i / 2000);
@@ -51,6 +52,9 @@ samples.forEach(p => {
 assert.equal(story.poseAt(0.4).construction.cranes, 0, 'no cranes before construction');
 assert.equal(story.poseAt(0.2).section.cut, 0, 'no section before the warrant');
 assert.equal(story.themes.length, 5);
+assert.deepEqual(story.poseAt(0.12).sheets.map(g => g.t), [0, 0, 0], 'planning sheets start as collection starts');
+assert.equal(story.poseAt(0.17).sheets[0].t, 1, 'and are all in the window when filling starts');
+assert.equal(story.poseAt(0.79).sheets[2].t, 1);
 
 const tapped = samples.filter(p => story.windowAt(p).kind === 'pay' && story.windowAt(p).payTapped);
 assert.ok(tapped.some(p => story.windowAt(p).app === 'planning') && tapped.some(p => story.windowAt(p).app === 'warrant'), 'the Pay tap is on screen before the run starts');
@@ -67,5 +71,18 @@ assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /40 min/);
 assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /2\.5 min/);
 assert.equal(windowMarkup({ ...story.windowAt(0.19), visible: false }), '');
 assert.doesNotMatch(planningFill, / · /, 'no dot-joined strings on screen');
+
+// Where sheets fly to: the window's centre in normalised device coordinates
+const vp = { width: 1000, height: 800 };
+assert.deepEqual(anchorFromRect({ left: 400, top: 300, width: 200, height: 200 }, vp), { x: 0, y: 0 });
+const corner = anchorFromRect({ left: 700, top: 50, width: 250, height: 200 }, vp);
+assert.ok(corner.x > 0 && corner.y > 0, 'top-right window gives a top-right anchor');
+assert.deepEqual(anchorFromRect(null, vp), ANCHOR_FALLBACK);
+assert.deepEqual(anchorFromRect({ left: 10, top: 10, width: 0, height: 120 }, vp), ANCHOR_FALLBACK);
+assert.deepEqual(anchorFromRect({ left: 10, top: 10, width: 100, height: 100 }, { width: 0, height: 0 }), ANCHOR_FALLBACK);
+[[null, vp], [{ left: NaN, top: 1, width: 1, height: 1 }, vp]].forEach(([r, v]) => {
+  const a = anchorFromRect(r as never, v);
+  assert.ok(Number.isFinite(a.x) && Number.isFinite(a.y), 'never NaN');
+});
 
 console.log('homepage story tests passed');
