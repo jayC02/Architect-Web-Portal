@@ -29,7 +29,7 @@ const fromUnix = (value?: number | null) => (value ? new Date(value * 1000) : nu
 // suspended workspace is never upgraded or downgraded by Stripe on its own.
 export const subscriptionDataFromStripe = (
   subscription: StripeSubscription,
-  existing: { status: SubscriptionStatus; graceEndsAt: Date | null } | null,
+  existing: { status: SubscriptionStatus; graceEndsAt: Date | null; plan?: string | null; agentDeviceLimit?: number } | null,
   now = new Date(),
 ): Prisma.OrganisationSubscriptionUpdateInput => {
   const items = subscription.items?.data ?? [];
@@ -56,7 +56,14 @@ export const subscriptionDataFromStripe = (
     trialEndsAt: subscription.status === 'trialing' ? fromUnix(subscription.trial_end) : undefined,
     cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
     graceEndsAt,
-    ...(mapped ? { ...planLimits(mapped.plan), billingInterval: mapped.interval ?? 'monthly' } : {}),
+    ...(mapped ? {
+      ...planLimits(mapped.plan),
+      // Keep an Agent limit an admin raised for this customer while the plan is unchanged.
+      agentDeviceLimit: existing?.plan === mapped.plan
+        ? Math.max(existing.agentDeviceLimit ?? 0, planLimits(mapped.plan).agentDeviceLimit)
+        : planLimits(mapped.plan).agentDeviceLimit,
+      billingInterval: mapped.interval ?? 'monthly',
+    } : {}),
   };
 };
 

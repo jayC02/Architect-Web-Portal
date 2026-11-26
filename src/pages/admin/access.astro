@@ -97,7 +97,9 @@ const date = (value: Date | null | undefined) => (value ? value.toLocaleDateStri
                       <option value="activate_firm">Activate Firm (quoted contract)</option>
                       <option value="require_payment">Require payment</option>
                       <option value="suspend">Suspend</option>
+                      <option value="set_agent_limit">Set Agent computer limit</option>
                     </select>
+                    <input name="agentLimit" type="number" min="0" max="500" placeholder="Agents" aria-label="Agent computer limit (for Set Agent computer limit)" class="field w-24" />
                     <button class="btn btn-secondary">Apply</button>
                     <p data-form-status class="w-full text-xs text-stone-500"></p>
                   </form>

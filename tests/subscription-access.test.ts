@@ -10,7 +10,7 @@ import { postSignupRedirect, subscriptionCreateFor } from '../src/server/billing
 import { intervalFor, planForStripePrice, PLANS } from '../src/config/plans';
 import { classifyUsage, usagePeriodMonth } from '../src/server/billing/usage';
 import { checkoutLineItems } from '../src/server/billing/checkout';
-import { accessRequestSchema } from '../src/lib/validation/access';
+import { accessRequestSchema, organisationAccessSchema } from '../src/lib/validation/access';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 const now = new Date('2026-12-01T12:00:00Z');
@@ -100,6 +100,8 @@ assert.equal((pastDue.graceEndsAt as Date).getTime(), days(7).getTime(), 'grace 
 const existingGrace = days(1);
 assert.equal(subscriptionDataFromStripe(stripeSub('unpaid'), { status: 'PAST_DUE', graceEndsAt: existingGrace }, now).graceEndsAt, existingGrace, 'grace is not extended by repeat failures');
 assert.equal(subscriptionDataFromStripe(stripeSub('canceled'), null, now).status, 'CANCELED');
+assert.equal(subscriptionDataFromStripe(stripeSub('active'), { status: 'ACTIVE', graceEndsAt: null, plan: 'practice', agentDeviceLimit: 6 }, now).agentDeviceLimit, 6, 'admin-raised Agent limit survives renewals');
+assert.equal(subscriptionDataFromStripe(stripeSub('active'), { status: 'ACTIVE', graceEndsAt: null, plan: 'studio', agentDeviceLimit: 20 }, now).agentDeviceLimit, 3, 'changing plan resets to the plan default');
 assert.equal(subscriptionDataFromStripe(stripeSub('incomplete'), null, now).status, 'PENDING_PAYMENT');
 assert.equal(subscriptionDataFromStripe(stripeSub('active'), null, now).graceEndsAt, null);
 
@@ -149,6 +151,9 @@ assert.match(jobRoute, /recordApplicationUsage\(tx,/, 'usage is recorded inside 
 assert.doesNotThrow(() => accessRequestSchema.parse({ name: 'Ann Lee', email: 'Ann@Example.com', practiceName: 'Lee Architects', role: '', practiceSize: '2-5', phone: '', message: 'Hi', interest: 'planning', plan: 'practice' }));
 assert.equal(accessRequestSchema.parse({ name: 'Ann Lee', email: 'Ann@Example.com', practiceName: 'Lee Architects' }).email, 'ann@example.com');
 assert.throws(() => accessRequestSchema.parse({ name: 'A', email: 'nope', practiceName: '' }));
+
+assert.equal(organisationAccessSchema.parse({ action: 'set_agent_limit', agentLimit: '5' }).agentLimit, 5);
+assert.equal(organisationAccessSchema.parse({ action: 'comp', agentLimit: '' }).agentLimit, undefined);
 
 // --- Agent licences ----------------------------------------------------------
 const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');

@@ -20,7 +20,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   const organisationId = context.params.id ?? '';
   const organisation = await prisma.organisation.findUnique({ where: { id: organisationId }, include: { subscription: true } });
   if (!organisation) throw new HttpError(404, 'Organisation not found.');
-  const note = `${new Date().toISOString().slice(0, 10)} ${body.action} by ${auth.user.email}`;
+  const note = `${new Date().toISOString().slice(0, 10)} ${body.action}${body.agentLimit !== undefined ? ` ${body.agentLimit}` : ''} by ${auth.user.email}`;
 
   const data = (() => {
     switch (body.action) {
@@ -35,6 +35,11 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
       }
       case 'require_payment':
         return { status: 'PENDING_PAYMENT' as const };
+      case 'set_agent_limit':
+        // Customers can ask for more Agent computers than their plan default.
+        // Kept through Stripe renewals; a change to a different plan resets it.
+        if (body.agentLimit === undefined) throw new HttpError(400, 'Enter the number of Agent computers.');
+        return { agentDeviceLimit: body.agentLimit };
       case 'activate_firm':
         // Quoted Firm contracts: invoiced outside self-serve checkout. If you
         // later create the subscription in Stripe with metadata.organisationId,
@@ -45,7 +50,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
 
   await prisma.organisationSubscription.upsert({
     where: { organisationId },
-    create: { organisationId, source: 'MANUAL', notes: note, ...data },
+    create: { organisationId, source: 'MANUAL', notes: note, status: 'PENDING_PAYMENT', ...data },
     update: { ...data, notes: [organisation.subscription?.notes, note].filter(Boolean).join('\n').slice(-2000) },
   });
   return jsonResponse(200, { ok: true });
