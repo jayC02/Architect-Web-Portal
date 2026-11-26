@@ -8,6 +8,7 @@ import { hashOpaqueToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
 import { PLANS, isPlanId, isBillingInterval } from '@/config/plans';
 import { signupMode } from '@/server/billing/onboarding';
+import { findTeamInviteByToken } from '@/server/billing/team';
 
 export const prerender = false;
 
@@ -27,9 +28,15 @@ const invite = inviteToken
     select: { name: true, email: true, practiceName: true },
   })
   : null;
-const inviteInvalid = Boolean(inviteToken) && !invite;
-const closed = !invite && signupMode() === 'invite_only';
-const subtitle = invite
+// Joining a practice's team through an invitation from one of its admins.
+const teamToken = params.get('team')?.slice(0, 200) ?? '';
+const teamInvite = teamToken ? await findTeamInviteByToken(teamToken) : null;
+const inviteInvalid = (Boolean(inviteToken) && !invite) || (Boolean(teamToken) && !teamInvite);
+const closed = !invite && !teamInvite && signupMode() === 'invite_only';
+const heading = teamInvite ? `Join ${teamInvite.organisation.name}` : 'Create workspace';
+const subtitle = teamInvite
+  ? `You've been invited to ${teamInvite.organisation.name}'s workspace on Architect Pro.`
+  : invite
   ? 'Your demo has been approved. Your workspace starts with a 14-day free trial.'
   : plan
     ? `You're subscribing to ${PLANS[plan as keyof typeof PLANS].name}. Create your account, then complete payment.`
@@ -40,10 +47,12 @@ const subtitle = invite
     <form data-api-form data-action="/api/auth/register" data-method="POST" data-redirect="/dashboard" method="post" action="/api/auth/register" class="panel mx-auto w-full max-w-md rounded-lg p-6">
       <div class="mb-6">
         <BrandLogo class="mb-6 h-auto w-36" />
-        <h1 class="text-2xl font-semibold text-ink">Create workspace</h1>
+        <h1 class="text-2xl font-semibold text-ink">{heading}</h1>
         <p class="mt-1 text-sm text-stone-500">{subtitle}</p>
       </div>
-      {inviteInvalid && <p role="alert" class="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This invitation link has expired or has already been used. <a class="font-semibold underline" href="/demo">Request a new one</a>.</p>}
+      {inviteInvalid && (teamToken
+        ? <p role="alert" class="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This invitation has expired, been cancelled or already been used. Ask your practice to send a new one.</p>
+        : <p role="alert" class="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This invitation link has expired or has already been used. <a class="font-semibold underline" href="/demo">Request a new one</a>.</p>)}
       {closed ? (
         <p class="rounded-md border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-700">Architect Pro is invitation only at the moment. <a class="font-semibold text-ink underline" href="/demo">Request a demo</a> and we'll send you an invitation.</p>
       ) : (<>
@@ -55,14 +64,15 @@ const subtitle = invite
       </div>
       <div class="space-y-4">
         <label class="block"><span class="label">Your name</span><input required name="name" minlength="2" class="field" autocomplete="name" value={invite?.name ?? ''} /></label>
-        <label class="block"><span class="label">Organisation</span><input required name="organisationName" minlength="2" class="field" autocomplete="organization" value={invite?.practiceName ?? ''} /></label>
-        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" value={invite?.email ?? ''} readonly={Boolean(invite)} /></label>
+        {!teamInvite && <label class="block"><span class="label">Organisation</span><input required name="organisationName" minlength="2" class="field" autocomplete="organization" value={invite?.practiceName ?? ''} /></label>}
+        <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="email" value={teamInvite?.email ?? invite?.email ?? ''} readonly={Boolean(invite || teamInvite)} /></label>
         <label class="block"><span class="label">Password</span><input required type="password" name="password" minlength="8" class="field" autocomplete="new-password" /></label>
       </div>
       {invite && <input type="hidden" name="invite" value={inviteToken} />}
+      {teamInvite && <input type="hidden" name="team" value={teamToken} />}
       {plan && <input type="hidden" name="plan" value={plan} />}
       {billing && <input type="hidden" name="billing" value={billing} />}
-      <button class="btn btn-primary mt-6 w-full">{invite ? 'Start free trial' : 'Create account'}</button>
+      <button class="btn btn-primary mt-6 w-full">{teamInvite ? `Join ${teamInvite.organisation.name}` : invite ? 'Start free trial' : 'Create account'}</button>
       </>)}
       <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
       <p class="mt-4 text-center text-sm text-stone-500">Already registered? <a class="font-semibold text-ink" href="/login">Sign in</a></p>

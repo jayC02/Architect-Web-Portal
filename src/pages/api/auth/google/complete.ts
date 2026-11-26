@@ -22,6 +22,7 @@ import {
   signupMode,
   subscriptionCreateFor,
 } from '@/server/billing/onboarding';
+import { acceptTeamInvite, findTeamInviteForVerifiedEmail } from '@/server/billing/team';
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -39,8 +40,11 @@ export const POST: APIRoute = (context) =>
       throw new HttpError(400, 'This Google sign-up has expired. Please try again.');
     }
 
-    const organisationSlug = await resolveOrganisationSlug(body.organisationName);
-    const invite = await findInviteForVerifiedEmail(pending.email);
+    // A pending team invitation for this verified email means joining that practice.
+    const teamInvite = await findTeamInviteForVerifiedEmail(pending.email);
+    if (!teamInvite && !body.organisationName) throw new HttpError(400, 'Enter your organisation name.');
+    const organisationSlug = teamInvite ? null : await resolveOrganisationSlug(body.organisationName!);
+    const invite = teamInvite ? null : await findInviteForVerifiedEmail(pending.email);
     let createdWorkspace = false;
     const userId = await prisma.$transaction(async (tx) => {
       const linkedProvider = await tx.authProvider.findUnique({
@@ -81,6 +85,32 @@ export const POST: APIRoute = (context) =>
         return existingUser.id;
       }
 
+      if (teamInvite) {
+        const membership = await acceptTeamInvite(tx, {
+          inviteId: teamInvite.id, organisationId: teamInvite.organisationId, email: pending.email,
+        });
+        const joined = await tx.user.create({
+          data: {
+            name: pending.displayName,
+            email: pending.email,
+            passwordHash: null,
+            authProviders: {
+              create: {
+                provider: pending.provider,
+                providerAccountId: pending.providerAccountId,
+                email: pending.email,
+                displayName: pending.displayName,
+                avatarUrl: pending.avatarUrl,
+              },
+            },
+            organisationLinks: { create: { role: membership.role, organisationId: membership.organisationId } },
+          },
+          select: { id: true },
+        });
+        await tx.pendingOAuthSignup.delete({ where: { id: pending.id } });
+        return joined.id;
+      }
+
       if (!invite && signupMode() === 'invite_only') {
         throw new HttpError(403, 'Architect Pro is invitation only at the moment. Request a demo and we will send you an invitation.');
       }
@@ -103,8 +133,8 @@ export const POST: APIRoute = (context) =>
               role: 'OWNER',
               organisation: {
                 create: {
-                  name: body.organisationName,
-                  slug: organisationSlug,
+                  name: body.organisationName!,
+                  slug: organisationSlug!,
                   calendarConnections: {
                     create: [{ provider: 'GOOGLE' }, { provider: 'OUTLOOK' }],
                   },

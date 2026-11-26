@@ -33,6 +33,8 @@ function fixture(type = 'HOUSEHOLDER_PLANNING') {
   const credentials: any[] = [{ id: 'credential-a', organisationId: 'org-a', automationJobId: job.id }, { id: 'credential-b', organisationId: 'org-a', automationJobId: job.id }];
   const agent: any = { id: 'agent-a', organisationId: 'org-a', capabilities: { workflows: [type], snapshotVersions: [2], callbackContractVersions: [1], progressContractVersions: [1] } };
   const database: any = {
+    // No subscription row: the evaluation allowance does not apply.
+    organisationSubscription: { findUnique: async () => null },
     automationJob: { findFirst: async ({where}: any) => matches(job, where) ? structuredClone(job) : null,
       updateMany: async ({where, data}: any) => { if (!matches(job, where)) return {count: 0}; Object.assign(job, data); return {count: 1}; } },
     planningApplication: { findFirst: async ({where}: any) => matches(application, where) ? structuredClone(application) : null },

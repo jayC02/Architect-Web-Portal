@@ -649,9 +649,10 @@ export const disconnectGmailTracking = async (organisationId: string) => {
   ]);
 };
 
-export const syncAllEnabledGmailConnections = async () => {
+export const syncAllEnabledGmailConnections = async (input: { organisationIds?: string[] } = {}) => {
   const connections = await prisma.calendarConnection.findMany({
     where: {
+      ...(input.organisationIds ? { organisationId: { in: input.organisationIds } } : {}),
       provider: CalendarProvider.GOOGLE,
       gmailEnabled: true,
       refreshTokenEncrypted: { not: null },

@@ -79,6 +79,50 @@ export const sendAccessRequestNotification = async (
   );
 };
 
+// An invitation to join a practice's workspace.
+export const sendTeamInviteEmail = async (to: string, input: { practiceName: string; invitedBy: string; inviteUrl: string }) => sendEmail(
+  [to],
+  `${input.invitedBy} invited you to ${input.practiceName} on Architect Pro`,
+  `${input.invitedBy} has invited you to join ${input.practiceName} on Architect Pro.
+
+Create your account with this link:
+${input.inviteUrl}
+
+The link is for ${to} only and expires in 14 days.`,
+  `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f211d;max-width:560px;margin:0 auto">
+    <h1 style="font-size:22px;margin:0 0 16px">Join ${escapeHtml(input.practiceName)} on Architect Pro</h1>
+    <p>${escapeHtml(input.invitedBy)} has invited you to their practice's workspace.</p>
+    <p style="margin:28px 0"><a href="${input.inviteUrl}" style="display:inline-block;background:#1f211d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px">Create your account</a></p>
+    <p style="color:#6f6b63;font-size:14px">This link is for ${escapeHtml(to)} only and expires in 14 days.</p>
+  </div>`,
+);
+
+// Sent once, when a workspace's payment first fails, to its owners and admins.
+export const sendPaymentFailedEmail = async (
+  to: string[],
+  input: { practiceName: string; accessUntil: Date | null },
+) => {
+  const billingUrl = absoluteUrl('/billing');
+  const until = input.accessUntil
+    ? input.accessUntil.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : null;
+  const keep = until ? `Your workspace stays open until ${until}.` : 'Your workspace stays open for now.';
+  return sendEmail(
+    to,
+    'Payment failed for your Architect Pro subscription',
+    `We couldn't take payment for ${input.practiceName}'s Architect Pro subscription.
+
+${keep} Update your card before then to keep access for your team and your Agent computers:
+${billingUrl}`,
+    `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f211d;max-width:560px;margin:0 auto">
+      <h1 style="font-size:22px;margin:0 0 16px">Your payment didn't go through</h1>
+      <p>We couldn't take payment for ${escapeHtml(input.practiceName)}'s Architect Pro subscription.</p>
+      <p>${escapeHtml(keep)} Update your card before then to keep access for your team and your Agent computers.</p>
+      <p style="margin:28px 0"><a href="${billingUrl}" style="display:inline-block;background:#1f211d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px">Update payment details</a></p>
+    </div>`,
+  );
+};
+
 export const sendAccessInviteEmail = async (to: string, name: string, inviteUrl: string) => sendEmail(
   [to],
   'Your Architect Pro demo is approved',

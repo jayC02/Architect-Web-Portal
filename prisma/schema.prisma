@@ -437,6 +437,7 @@ model User {
   authProviders            AuthProvider[]
   passwordResetTokens      PasswordResetToken[]
   organisationLinks        OrganisationMember[]
+  teamInvitesSent          TeamInvite[]             @relation("TeamInviteInvitedBy")
   uploadedDocuments        ProjectDocument[]        @relation("DocumentUploadedBy")
   documentSortBatches      DocumentSortBatch[]      @relation("DocumentSortBatchCreatedBy")
   createdPackages          SubmissionPackage[]      @relation("PackageCreatedBy")
@@ -578,6 +579,7 @@ model Organisation {
   uValueCalculations    UValueCalculation[]
   uValueTemplates       UValueTemplate[]
   subscription          OrganisationSubscription?
+  teamInvites           TeamInvite[]
   accessRequests        AccessRequest[]
   applicationUsage      ApplicationUsage[]
 
@@ -2041,4 +2043,25 @@ model StripeWebhookEvent {
   id          String   @id
   type        String
   processedAt DateTime @default(now())
+}
+
+// An invitation for someone to join a workspace's team. Single use, bound to one
+// email, and counted against the plan's user limit while it is pending.
+model TeamInvite {
+  id             String           @id @default(cuid())
+  organisationId String
+  email          String
+  role           OrganisationRole @default(MEMBER)
+  tokenHash      String           @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  invitedById    String?
+  createdAt      DateTime         @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("TeamInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, acceptedAt, revokedAt])
+  @@index([email])
 }

@@ -21,6 +21,25 @@ export const assertOrganisationEntitled = async (organisationId: string, db: Db 
   return { subscription, entitlement: assertEntitled(subscription) };
 };
 
+// Workspaces whose subscription allows access right now. Scheduled jobs that
+// work on a practice's behalf (Gmail, Xero, workflow effects) only process these,
+// so a lapsed or suspended workspace stops costing API calls and sending updates.
+// Its data is untouched and picks up again when the subscription is restored.
+const ACCESS_STATUSES = ['ACTIVE', 'TRIALING', 'PAST_DUE', 'COMPLIMENTARY'] as const;
+
+export const entitledOrganisationIds = async (db: Db = prisma, now: Date = new Date()) => {
+  const subscriptions = await db.organisationSubscription.findMany({
+    where: { status: { in: [...ACCESS_STATUSES] } },
+    select: {
+      organisationId: true, status: true, plan: true, trialEndsAt: true,
+      currentPeriodEndsAt: true, graceEndsAt: true, cancelAtPeriodEnd: true,
+    },
+  });
+  return subscriptions
+    .filter((subscription) => resolveEntitlement(subscription, now).allowed)
+    .map((subscription) => subscription.organisationId);
+};
+
 export const platformAdminEmails = () =>
   (process.env.PLATFORM_ADMIN_EMAILS ?? '')
     .split(',')

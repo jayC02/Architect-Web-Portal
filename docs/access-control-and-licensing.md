@@ -87,7 +87,7 @@ Plans follow the agreed pricing (`src/config/plans.ts`, mirroring `src/lib/marke
 2. **Generate the licence key pair** (`node scripts/generate-licence-keys.mjs`), set `LICENCE_SIGNING_PRIVATE_KEY` in Vercel, give the public key to the Agent repo.
 3. **Create a private Supabase bucket** (`AGENT_RELEASE_BUCKET`, default `agent-releases`) and upload the current installer and source zip under the names in `src/config/agent-release.json`.
 4. Set `PLATFORM_ADMIN_EMAILS` (comma-separated) for who can approve demos.
-5. Run the migration (`npm run db:deploy`). It backfills every existing organisation as `COMPLIMENTARY` so nobody is locked out; downgrade any you want to bill from `/admin/access`.
+5. Run the migrations (`npm run db:deploy`): `20261125140000_subscription_access` and `20261126150000_team_invites`. It backfills every existing organisation as `COMPLIMENTARY` so nobody is locked out; downgrade any you want to bill from `/admin/access`.
 6. Once the installers are in the bucket, delete `agent-releases/` from the repo (about 1.2 GB) in a follow-up. Until then **production downloads return 503**, because the files are no longer public.
 
 ## Agent repo work
@@ -100,9 +100,34 @@ Plans follow the agreed pricing (`src/config/plans.ts`, mirroring `src/lib/marke
 6. Code-sign the installer (EV or OV certificate) so tampered builds are detectable and Windows stops warning.
 7. Optional hardening: bind the stored credential to the machine with Windows DPAPI so copying the Agent's data folder to another PC doesn't carry the credential across.
 
-## Not done yet
+## Finished since
 
-- User limits: stored per plan, but there is no team-invite flow yet to enforce them against.
-- Evaluation workspaces have no cap on how many applications they run in 14 days.
-- Daily crons (Gmail, Xero, workflow effects) still process lapsed organisations; they should skip them.
-- Dunning emails beyond what Stripe sends itself.
+### Team invitations and user limits
+
+- Owners and admins invite people from **Settings > Team** (`/settings/team`). An invitation is single use, bound to one email address, expires after 14 days, and is emailed through Resend when configured (the link is also shown on screen to share another way).
+- A workspace's users are its members **plus pending invitations**, so the plan's limit (Pay as you go 1, Practice 3, Studio 10, Firm unlimited) can't be beaten by sending invitations faster than they're accepted. Invitations and acceptances for one workspace are serialised with a transaction advisory lock, and the limit is checked again when an invitation is accepted in case it was lowered.
+- The invited person registers at `/register?team=…` (no organisation name; they join the existing workspace with the invited role) or with Google using the invited email. An email that already belongs to another workspace can't be invited.
+- Owners and admins can cancel pending invitations and remove members (not the owner, not themselves). A removed member's sessions are ended straight away.
+- If a workspace moves to a plan with fewer users than it has, existing members keep access; no new invitations can be sent until there's room.
+- Migration `20261126150000_team_invites` adds the `TeamInvite` table (additive only).
+
+### Evaluation allowance
+
+- A 14-day evaluation workspace can send **5 applications** through the Agent (`TRIAL_APPLICATION_LIMIT` to change it). The check runs when a run is approved (`authoriseAutomationJobRun`), counts applications already completed **and** ones approved but not finished, and returns `402 EVALUATION_LIMIT_REACHED` with a plain message. Re-running an application that already counted is always allowed. The billing page shows "N of 5 used" during the evaluation.
+
+### Scheduled jobs skip lapsed workspaces
+
+- Gmail sync, Xero sync and workflow effects only process workspaces whose subscription currently allows access (`entitledOrganisationIds`). A lapsed or suspended workspace's data is untouched and picks up again when it's restored. Draft clean-up and usage reporting still run for everyone.
+
+### Payment failure email
+
+- When a workspace's payment first fails (it moves into `PAST_DUE`), its owners and admins get one email with the date access continues until and a link to update their card. Stripe's own retry emails cover later attempts.
+
+### Database protection
+
+- The billing tables (`OrganisationSubscription`, `AccessRequest`, `ApplicationUsage`, `StripeWebhookEvent`) and `TeamInvite` now enable row level security and revoke `anon` / `authenticated` access in their migrations, matching the U-value tables, so they aren't readable through Supabase's public API.
+
+## Still open
+
+- Agent repo work listed above (licence refresh, 402 handling, authenticated self-update, code signing).
+- Owner steps listed above (Stripe, licence keys, private bucket, environment variables, running both migrations).

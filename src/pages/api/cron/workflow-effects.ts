@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db/prisma';
 import { jsonResponse } from '@/lib/utils/http';
 import { expandUndispatchedLifecycleEvents } from '@/server/services/lifecycle-events.service';
 import { drainWorkflowEffects } from '@/server/services/workflow-effects.service';
+import { entitledOrganisationIds } from '@/server/billing/access';
 
 const authorised = (request: Request) => {
   const secret = process.env.CRON_SECRET?.trim();
@@ -19,8 +20,10 @@ const authorised = (request: Request) => {
 export const GET: APIRoute = async ({ request }) => {
   if (!authorised(request)) return jsonResponse(401, { error: 'Unauthorised scheduled request.' });
 
+  // Lapsed and suspended workspaces are skipped until their subscription is restored.
+  const organisationIds = await entitledOrganisationIds();
   const undispatched = await prisma.lifecycleEvent.findMany({
-    where: { dispatchedAt: null },
+    where: { dispatchedAt: null, organisationId: { in: organisationIds } },
     distinct: ['organisationId'],
     take: 20,
     select: { organisationId: true },
@@ -30,6 +33,6 @@ export const GET: APIRoute = async ({ request }) => {
     expanded += await prisma.$transaction((tx) =>
       expandUndispatchedLifecycleEvents(tx, event.organisationId, 50));
   }
-  const result = await drainWorkflowEffects({ limit: 25 });
+  const result = await drainWorkflowEffects({ limit: 25, organisationIds });
   return jsonResponse(200, { ok: true, expanded, ...result });
 };

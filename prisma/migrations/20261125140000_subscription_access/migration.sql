@@ -98,3 +98,14 @@ INSERT INTO "OrganisationSubscription" ("id", "organisationId", "status", "sourc
 SELECT 'sub_' || "id", "id", 'COMPLIMENTARY', 'LEGACY', 10, 'Backfilled when subscription gating launched.', CURRENT_TIMESTAMP
 FROM "Organisation"
 ON CONFLICT ("organisationId") DO NOTHING;
+
+-- Server-side only, like the U-value tables: no browser-role access through
+-- Supabase's public API to billing state, demo requests or usage.
+ALTER TABLE "OrganisationSubscription" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "OrganisationSubscription" FROM anon, authenticated;
+ALTER TABLE "AccessRequest" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "AccessRequest" FROM anon, authenticated;
+ALTER TABLE "ApplicationUsage" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "ApplicationUsage" FROM anon, authenticated;
+ALTER TABLE "StripeWebhookEvent" ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE "StripeWebhookEvent" FROM anon, authenticated;

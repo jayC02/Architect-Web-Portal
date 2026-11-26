@@ -3,7 +3,7 @@ import AppShell from '@/components/layout/AppShell.astro';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { prisma } from '@/lib/db/prisma';
 import { PLANS, PLAN_IDS } from '@/config/plans';
-import { monthlyUsageSummary } from '@/server/billing/usage';
+import { evaluationApplicationLimit, monthlyUsageSummary } from '@/server/billing/usage';
 import { resolveEntitlement } from '@/server/billing/entitlement';
 import { hasLiveStripeSubscription } from '@/server/billing/checkout';
 import { stripeConfigured } from '@/server/billing/stripe';
@@ -23,6 +23,10 @@ const agentsInUse = await prisma.agentRegistration.count({
 });
 const usage = await monthlyUsageSummary(auth.organisation.id);
 const included = subscription?.includedApplications ?? 0;
+// Evaluation workspaces have a fixed allowance for the whole 14 days.
+const evaluation = subscription?.status === 'TRIALING'
+  ? { limit: evaluationApplicationLimit(), used: await prisma.applicationUsage.count({ where: { organisationId: auth.organisation.id } }) }
+  : null;
 const checkout = Astro.url.searchParams.get('checkout');
 const error = Astro.url.searchParams.get('error')?.slice(0, 300) ?? null;
 const formatDate = (value: Date | null | undefined) => (value ? value.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null);
@@ -49,6 +53,7 @@ const showPlans = canManage && !live && !['COMPLIMENTARY', 'SUSPENDED'].includes
       <div><dt class="text-xs font-semibold uppercase text-stone-500">Status</dt><dd class="mt-1 text-lg font-semibold text-ink">{statusLabel[entitlement.status] ?? entitlement.status}</dd></div>
       {planName && <div><dt class="text-xs font-semibold uppercase text-stone-500">Plan</dt><dd class="mt-1 text-lg font-semibold text-ink">{planName}{subscription?.billingInterval ? ` (${subscription.billingInterval})` : ''}</dd></div>}
       {subscription?.status === 'TRIALING' && <div><dt class="text-xs font-semibold uppercase text-stone-500">Trial ends</dt><dd class="mt-1 text-ink">{formatDate(subscription.trialEndsAt)}</dd></div>}
+      {evaluation && <div><dt class="text-xs font-semibold uppercase text-stone-500">Evaluation applications</dt><dd class="mt-1 text-ink">{Math.min(evaluation.used, evaluation.limit)} of {evaluation.limit} used</dd></div>}
       {live && subscription?.currentPeriodEndsAt && <div><dt class="text-xs font-semibold uppercase text-stone-500">{subscription.cancelAtPeriodEnd ? 'Ends on' : 'Renews on'}</dt><dd class="mt-1 text-ink">{formatDate(subscription.currentPeriodEndsAt)}</dd></div>}
       <div><dt class="text-xs font-semibold uppercase text-stone-500">Applications this month</dt><dd class="mt-1 text-ink">{usage.used}{included ? ` of ${included} included` : ''}{usage.billed ? `, ${usage.billed} charged per application` : ''}</dd></div>
       <div><dt class="text-xs font-semibold uppercase text-stone-500">Users</dt><dd class="mt-1 text-ink">{subscription?.userLimit ? `Up to ${subscription.userLimit}` : 'Unlimited'}</dd></div>

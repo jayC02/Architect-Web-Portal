@@ -9,6 +9,24 @@ import {
   type StripeInvoice,
   type StripeSubscription,
 } from '@/server/billing/stripe';
+import { sendPaymentFailedEmail } from '@/server/services/email.service';
+
+// Best-effort: a failed email never blocks the webhook from recording the status.
+const notifyPaymentFailed = async (organisationId: string, accessUntil: Date | null) => {
+  try {
+    const organisation = await prisma.organisation.findUnique({
+      where: { id: organisationId },
+      select: {
+        name: true,
+        members: { where: { role: { in: ['OWNER', 'ADMIN'] } }, select: { user: { select: { email: true } } } },
+      },
+    });
+    const to = [...new Set((organisation?.members ?? []).map((member) => member.user.email).filter(Boolean))];
+    if (organisation && to.length) await sendPaymentFailedEmail(to, { practiceName: organisation.name, accessUntil });
+  } catch (error) {
+    console.error('Payment failure email could not be sent', { organisationId, error });
+  }
+};
 
 const STRIPE_STATUS: Record<StripeSubscription['status'], SubscriptionStatus> = {
   active: 'ACTIVE',
@@ -92,10 +110,15 @@ const applySubscription = async (subscription: StripeSubscription, organisationI
     });
     return;
   }
-  await prisma.organisationSubscription.update({
+  const updated = await prisma.organisationSubscription.update({
     where: { id: existing.id },
     data: { ...subscriptionDataFromStripe(subscription, existing), source: existing.source === 'DEMO_INVITE' ? 'DEMO_INVITE' : 'SELF_SERVE' },
   });
+  // Tell the practice once, when a payment first fails. Stripe's own retry
+  // emails cover the attempts after that.
+  if (existing.status !== 'PAST_DUE' && updated.status === 'PAST_DUE') {
+    await notifyPaymentFailed(existing.organisationId, updated.graceEndsAt);
+  }
 };
 
 const invoiceSubscriptionId = (invoice: StripeInvoice) =>

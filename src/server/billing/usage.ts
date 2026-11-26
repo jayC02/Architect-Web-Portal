@@ -1,5 +1,7 @@
-import type { ApplicationUsageStatus, Prisma, SubscriptionStatus } from '@prisma/client';
+import { AutomationJobStatus, type ApplicationUsageStatus, type Prisma, type PrismaClient, type SubscriptionStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { HttpError } from '@/lib/utils/http';
+import { automationJobApplicationId } from '@/server/services/desktop-automation-status.service';
 import { isPlanId, stripeMeterEventName, stripeUsagePriceIdFor } from '@/config/plans';
 import { sendMeterEvent, stripeConfigured } from '@/server/billing/stripe';
 
@@ -9,6 +11,10 @@ import { sendMeterEvent, stripeConfigured } from '@/server/billing/stripe';
 // Stripe, which charges the plan's flat per-application usage price.
 
 export const usagePeriodMonth = (date: Date) => date.toISOString().slice(0, 7);
+
+/** One application, however many times its job is re-run. */
+export const billableKeyFor = (job: { id: string; type: string }, applicationId: string | null) =>
+  `${job.type}:${applicationId ?? `job:${job.id}`}`;
 
 export const classifyUsage = (input: {
   subscriptionStatus: SubscriptionStatus | null;
@@ -31,7 +37,7 @@ export const recordApplicationUsage = async (
   tx: Prisma.TransactionClient,
   input: { organisationId: string; job: { id: string; type: string }; applicationId: string | null; completedAt: Date },
 ) => {
-  const billableKey = `${input.job.type}:${input.applicationId ?? `job:${input.job.id}`}`;
+  const billableKey = billableKeyFor(input.job, input.applicationId);
   const existing = await tx.applicationUsage.findUnique({
     where: { organisationId_billableKey: { organisationId: input.organisationId, billableKey } },
     select: { id: true },
@@ -57,6 +63,75 @@ export const recordApplicationUsage = async (
       jobType: input.job.type, periodMonth, plan, status, createdAt: input.completedAt,
     },
   });
+};
+
+// ---------- 14-day evaluation allowance ----------
+// An evaluation workspace can send a limited number of applications through the
+// Agent. Set TRIAL_APPLICATION_LIMIT to change it; the default is 5.
+export const DEFAULT_EVALUATION_APPLICATION_LIMIT = 5;
+export const EVALUATION_LIMIT_CODE = 'EVALUATION_LIMIT_REACHED';
+
+export const evaluationApplicationLimit = () => {
+  const configured = Number(process.env.TRIAL_APPLICATION_LIMIT);
+  return Number.isInteger(configured) && configured >= 0 ? configured : DEFAULT_EVALUATION_APPLICATION_LIMIT;
+};
+
+// Jobs approved to run that haven't finished: they count against the allowance
+// too, so several applications can't be approved past it at once.
+const IN_FLIGHT_STATUSES = [
+  AutomationJobStatus.READY,
+  AutomationJobStatus.CLAIMED,
+  AutomationJobStatus.IN_PROGRESS,
+  AutomationJobStatus.NEEDS_REVIEW,
+  AutomationJobStatus.AWAITING_PORTAL_REVIEW,
+];
+
+type AllowanceJob = { id: string; type: string; projectId: string; dataSnapshot: unknown };
+
+/**
+ * Call before approving a job to run. Throws 402 when an evaluation workspace has
+ * used its allowance. Re-running an application that already counted is always
+ * allowed, and paid, complimentary and other workspaces are not limited here.
+ */
+export const assertEvaluationAllowance = async (
+  db: PrismaClient | Prisma.TransactionClient,
+  input: { organisationId: string; job: AllowanceJob },
+) => {
+  const subscription = await db.organisationSubscription.findUnique({
+    where: { organisationId: input.organisationId },
+    select: { status: true },
+  });
+  if (subscription?.status !== 'TRIALING') return { limited: false as const };
+
+  const limit = evaluationApplicationLimit();
+  const keyOf = (job: AllowanceJob) =>
+    billableKeyFor(job, automationJobApplicationId(job as Parameters<typeof automationJobApplicationId>[0]));
+  const key = keyOf(input.job);
+
+  const [counted, inFlight] = await Promise.all([
+    db.applicationUsage.findMany({ where: { organisationId: input.organisationId }, select: { billableKey: true } }),
+    db.automationJob.findMany({
+      where: {
+        organisationId: input.organisationId,
+        id: { not: input.job.id },
+        executionAuthorisedAt: { not: null },
+        status: { in: IN_FLIGHT_STATUSES },
+      },
+      select: { id: true, type: true, projectId: true, dataSnapshot: true },
+    }),
+  ]);
+  const used = new Set(counted.map((usage) => usage.billableKey));
+  if (used.has(key)) return { limited: true as const, limit, used: used.size };
+  for (const job of inFlight) used.add(keyOf(job));
+  used.delete(key);
+  if (used.size >= limit) {
+    throw new HttpError(
+      402,
+      `Your 14-day evaluation includes ${limit} application${limit === 1 ? '' : 's'} sent through the Agent, and you have used them. Choose a plan to send more.`,
+      { code: EVALUATION_LIMIT_CODE },
+    );
+  }
+  return { limited: true as const, limit, used: used.size };
 };
 
 // Best-effort after the completion commits, and retried by the daily cron.

@@ -171,9 +171,10 @@ const MAX_LIFECYCLE_HANDLER_COUNT = Math.max(
 
 const candidateWhere = (
   now: Date,
-  input: { organisationId?: string; lifecycleEventId?: string },
+  input: { organisationId?: string; organisationIds?: string[]; lifecycleEventId?: string },
 ): Prisma.WorkflowEffectWhereInput => ({
   ...(input.organisationId ? { organisationId: input.organisationId } : {}),
+  ...(!input.organisationId && input.organisationIds ? { organisationId: { in: input.organisationIds } } : {}),
   ...(input.lifecycleEventId ? { lifecycleEventId: input.lifecycleEventId } : {}),
   OR: [
     {
@@ -189,6 +190,8 @@ const candidateWhere = (
 
 export const claimWorkflowEffects = async (input: {
   organisationId?: string;
+  /** Only claim effects for these workspaces (scheduled runs pass the entitled ones). */
+  organisationIds?: string[];
   lifecycleEventId?: string;
   limit?: number;
   leaseOwner?: string;
@@ -241,6 +244,7 @@ const retryDelayMs = (attempts: number, random: () => number) => {
 
 export const drainWorkflowEffects = async (input: {
   organisationId?: string;
+  organisationIds?: string[];
   lifecycleEventId?: string;
   limit?: number;
   leaseOwner?: string;
