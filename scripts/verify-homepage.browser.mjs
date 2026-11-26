@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
+import { acts, beats } from '../src/components/home/scroll-story/story.js';
 
 const base = process.env.HOMEPAGE_PREVIEW_URL || 'http://127.0.0.1:4323';
 const output = path.resolve('output/homepage-preview/scroll-story');
@@ -37,7 +38,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); watch(page);
   const response = await page.request.get(base, { maxRedirects: 0 });
   const html = await response.text();
-  check('Server renders the rail before graphics or scroll restoration', response.status() === 200 && html.includes('id="rail"') && html.includes('Then the design takes shape.'));
+  check('Server renders the rail before graphics or scroll restoration', response.status() === 200 && html.includes('id="rail"') && html.includes(acts[1].title));
   check('The view switch is absent from server HTML', !html.includes('Simple view') && !html.includes('toggle-view'));
   check('Session-aware responses remain private', (response.headers()['cache-control'] || '').includes('private, no-store'));
   const signedIn = await page.request.get(base, { headers: { 'x-preview-signed-in': 'yes' }, maxRedirects: 0 });
@@ -51,7 +52,7 @@ try {
   check('Existing logo and account routes remain present', await page.locator('.brand img').getAttribute('src') === '/brand/architect-pro-logo.png' && await page.locator('.account-create').getAttribute('href') === '/demo');
   await page.getByRole('button', { name: 'Scroll to begin' }).click(); await page.waitForTimeout(1800);
   await shot(page, 'desktop-site.png');
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < acts.length; i++) {
     const button = page.locator(`[data-jump="${i}"]`);
     await button.focus(); await page.keyboard.press('Enter');
     await page.waitForFunction(i => document.querySelector('#stage').dataset.act === String(i), i);
@@ -82,9 +83,9 @@ try {
   check('Uploaded document canvases release their backing memory', await phone.evaluate(() => window.__qaTextureCanvases.filter(canvas => canvas.width === 1 && canvas.height === 1).length >= 24));
   await scroll(phone, 0.55); const beforeReload = await progress(phone);
   await phone.reload(); await ready(phone);
-  check('Reload restores the same story position', Math.abs(await progress(phone) - beforeReload) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '3');
+  check('Reload restores the same story position', Math.abs(await progress(phone) - beforeReload) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '2');
   await scroll(phone, 0.35);
-  check('Scrolling up after reload moves backwards without restarting', Math.abs(await progress(phone) - 0.35) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '2');
+  check('Scrolling up after reload moves backwards without restarting', Math.abs(await progress(phone) - 0.35) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '1');
   await scroll(phone, 0.55);
   const canvas = await phone.locator('canvas').elementHandle();
   const copy = await phone.locator('#copy').elementHandle();
@@ -104,7 +105,7 @@ try {
   await phone.waitForFunction(() => document.querySelector('canvas') && document.querySelector('canvas') !== window.__qaLostCanvas && document.querySelector('#loading.done'));
   await ready(phone);
   check('A real WebGL reset rebuilds only the graphics', !await canvas.evaluate(el => el.isConnected) && await copy.evaluate(el => el === document.querySelector('#copy')) && await phone.locator('canvas').count() === 1);
-  check('Graphics recovery keeps the same story position', Math.abs(await progress(phone) - 0.55) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '3');
+  check('Graphics recovery keeps the same story position', Math.abs(await progress(phone) - 0.55) < 0.002 && await phone.locator('#stage').getAttribute('data-act') === '2');
   await phone.emulateMedia({ reducedMotion: 'no-preference' });
   check('Changing motion preference does not replace the scene', await phone.locator('canvas').count() === 1 && Math.abs(await progress(phone) - 0.55) < 0.002);
   await phone.emulateMedia({ reducedMotion: 'reduce' });
@@ -112,21 +113,32 @@ try {
 
   for (const [width, height] of [[320,568],[375,667],[390,844],[768,1024],[568,320],[667,375],[844,390],[932,430]]) {
     await phone.setViewportSize({ width, height }); await phone.waitForTimeout(350);
-    for (const p of [0.06,0.23,0.41,0.55,0.72,0.88,0.99]) {
+    for (const p of [0.06,0.14,0.19,0.23,0.35,0.44,0.55,0.72,0.78,0.88,0.99]) {
       await scroll(phone, p);
       const geometry = await phone.evaluate(() => {
         const box = selector => document.querySelector(selector).getBoundingClientRect();
         const copy = box('#copy'), header = box('.top'), dock = box('.dock');
-        const hud = document.querySelector('.hud.show:not(.dim)') ? box('.hud') : null;
-        const overlap = hud && copy.left < hud.right && copy.right > hud.left && copy.top < hud.bottom && copy.bottom > hud.top;
-        return { copyFits: copy.top >= header.bottom - 1 && copy.bottom <= dock.top + 1, overlap };
+        const shown = selector => {
+          const el = document.querySelector(selector);
+          return el && el.classList.contains('show') && getComputedStyle(el).display !== 'none' ? el.getBoundingClientRect() : null;
+        };
+        const hits = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        const panel = shown('#app-window'), ledger = shown('#ledger');
+        const overlap = hits(copy, panel) || hits(copy, ledger) || hits(panel, ledger);
+        const panelFits = !panel || (panel.top >= header.bottom - 1 && panel.bottom <= dock.top + 1);
+        return { copyFits: copy.top >= header.bottom - 1 && copy.bottom <= dock.top + 1, overlap, panelFits };
       });
-      check(`${width}×${height} chapter frame ${p} stays usable in 3D`, await noOverflow(phone) && geometry.copyFits && !geometry.overlap && await phone.locator('canvas').count() === 1);
+      check(`${width}×${height} chapter frame ${p} stays usable in 3D`, await noOverflow(phone) && geometry.copyFits && geometry.panelFits && !geometry.overlap && await phone.locator('canvas').count() === 1);
     }
     if (width === 390) await shot(phone, 'mobile-finale.png');
   }
   await phone.setViewportSize({ width: 390, height: 844 }); await phone.waitForTimeout(400);
-  await scroll(phone, 0.55); await shot(phone, 'mobile-automation.png');
+  for (const [i, act] of acts.entries()) {
+    await scroll(phone, act.jump);
+    const headline = beats.filter(b => b.at <= act.jump).at(-1).headline;
+    check(`Reduced motion shows chapter ${i + 1} as it is reached`, (await phone.locator('#copy h2').innerText()).trim() === headline);
+  }
+  await scroll(phone, 0.55); await shot(phone, 'mobile-construction.png');
   await phone.getByRole('link', { name: 'Sign in', exact: true }).first().click();
   await phone.getByRole('heading', { name: 'Sign in to Architect Pro' }).waitFor();
   check('Sign in reaches the real form with normal page scrolling', await phone.locator('form[data-action="/api/auth/login"]').count() === 1 && await phone.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY !== 'none'));
@@ -143,7 +155,7 @@ try {
 
   const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   const staticPage = await noJs.newPage(); await staticPage.goto(base);
-  check('No JavaScript retains all story text and real account links', await staticPage.locator('.story-transcript section').count() === 6 && await staticPage.locator('.account-create').isVisible() && await staticPage.locator('#rail').isHidden());
+  check('No JavaScript retains all story text and real account links', await staticPage.locator('.story-transcript section').count() === acts.length && await staticPage.locator('.account-create').isVisible() && await staticPage.locator('#rail').isHidden());
   await noJs.close();
   const noGl = await browser.newContext(phoneSettings);
   await noGl.addInitScript(() => {
@@ -153,13 +165,13 @@ try {
   const unsupported = await noGl.newPage(); watch(unsupported); await unsupported.goto(base);
   await unsupported.locator('#loading.failed').waitFor();
   await scroll(unsupported, 0.55);
-  check('Unavailable WebGL explains the failure while text still scrolls', (await unsupported.locator('#loading-text').innerText()).includes('Scroll to read') && await unsupported.locator('#stage').getAttribute('data-act') === '3' && await unsupported.locator('.simple').count() === 0);
+  check('Unavailable WebGL explains the failure while text still scrolls', (await unsupported.locator('#loading-text').innerText()).includes('Scroll to read') && await unsupported.locator('#stage').getAttribute('data-act') === '2' && await unsupported.locator('.simple').count() === 0);
   await noGl.close();
   const missing = await browser.newContext(phoneSettings);
   await missing.route('**/scroll-story/scene/index.js*', route => route.abort());
   const download = await missing.newPage(); await download.goto(base); await download.locator('#loading.failed').waitFor();
   await scroll(download, 0.72);
-  check('A failed engine download leaves the chapter story usable', await download.locator('#stage').getAttribute('data-act') === '4' && await download.locator('.account-create').isVisible());
+  check('A failed engine download leaves the chapter story usable', await download.locator('#stage').getAttribute('data-act') === '3' && await download.locator('.account-create').isVisible());
   await missing.close();
   const storage = await browser.newContext(phoneSettings);
   await storage.addInitScript(() => {
@@ -168,7 +180,7 @@ try {
     Storage.prototype.setItem = function(key,value) { if (key === 'architectpro-story-progress') throw new Error('Storage unavailable'); return set.call(this,key,value); };
   });
   const privatePage = await storage.newPage(); watch(privatePage); await privatePage.goto(base); await ready(privatePage); await scroll(privatePage, 0.55);
-  check('Unavailable session storage does not break 3D scrolling', await privatePage.locator('#stage').getAttribute('data-act') === '3');
+  check('Unavailable session storage does not break 3D scrolling', await privatePage.locator('#stage').getAttribute('data-act') === '2');
   await storage.close();
 
   check('The homepage makes no application API calls', apiCalls.length === 0);

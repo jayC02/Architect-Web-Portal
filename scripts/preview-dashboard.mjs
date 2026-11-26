@@ -57,7 +57,7 @@ const previewSource = source
 await fs.writeFile(path.join(pages, 'dashboard.astro'), previewSource);
 const withoutSession = (source) => source.replace(/import \{ getSessionUser \} from [^;]+;/, "const getSessionUser = async (context) => context.request.headers.get('x-preview-signed-in') === 'yes' ? { id: 'preview-user' } : null;");
 if (includeHomepage) {
-  for (const route of ['index', 'login', 'register', 'privacy', 'terms']) {
+  for (const route of ['index', 'login', 'register', 'privacy', 'terms', 'demo', 'pricing', 'features', 'security', 'about', 'faq', 'contact']) {
     const source = await fs.readFile(path.join(root, `src/pages/${route}.astro`), 'utf8');
     await fs.writeFile(path.join(pages, `${route}.astro`), withoutSession(source));
   }

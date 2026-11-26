@@ -1,8 +1,8 @@
-import { acts, MANUAL_MIN, AUTO_MIN } from './story.js';
+import { acts, beats, MANUAL_MIN, AUTO_MIN, SAVED_MIN } from './story.js';
 
 export const pad = (n) => String(n + 1).padStart(2, '0');
-export const fictionNote = `14 Harbour Lane is a fictional project and the portal shown is a generic illustration. The ${MANUAL_MIN}-minute versus ${AUTO_MIN}-minute comparison is illustrative; actual times vary. Decisions rest with the planning authority and building standards verifier.`;
-export const FINAL_TITLE = `No more portal. ${MANUAL_MIN} minutes down to ${AUTO_MIN}.`;
+export const fictionNote = `14 Harbour Lane is a fictional householder project and the Architect Pro window is an illustration. The ${MANUAL_MIN}-minute versus ${AUTO_MIN}-minute comparison is illustrative; actual times vary. Decisions rest with the planning authority and building standards verifier.`;
+export const FINAL_TITLE = `${SAVED_MIN} minutes back on every project. Spend them on architecture.`;
 export const mark = '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M4 27h24M7 27V14l9-8 9 8v13" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M12.5 27v-7h7v7" stroke="currentColor" stroke-width="2.2"/><circle cx="25" cy="7" r="3" fill="var(--accent)"/></svg>';
 
 export function header() {
@@ -26,12 +26,13 @@ export function storyMarkup() {
   return `${header()}
     <main id="home-content" tabindex="-1">
       <h1 class="sr-only">Architect Pro — No more portal.</h1>
-      <section class="rail" id="rail" aria-label="ArchitectPro, a six-part scroll story">
+      <section class="rail" id="rail" aria-label="Architect Pro, a five-part scroll story">
         <div class="stage" id="stage" data-act="0">
-          <div class="canvas-host" id="canvas-host" role="img" aria-label="A house is drawn, built and documented while its planning, warrant and completion certificate applications are prepared"></div>
+          <div class="canvas-host" id="canvas-host" role="img" aria-label="A house extension is drawn, approved, built and completed while Architect Pro prepares its planning, building warrant and completion certificate applications"></div>
           <div class="loading" id="loading" role="status"><span class="loading-mark">${mark}</span><span id="loading-text">Drawing the site…</span></div>
-          <div class="copy" id="copy"><p class="act-index"><span>01</span>Site</p><h2>${acts[0].title}</h2><p class="body">${acts[0].body}</p></div>
-          <aside class="hud" id="hud"></aside>
+          <div class="copy" id="copy"><p class="act-index"><span>01</span>${acts[0].name}</p><h2>${acts[0].title}</h2><p class="body">${acts[0].body}</p></div>
+          <aside class="app-window" id="app-window" aria-hidden="true"></aside>
+          <div class="ledger" id="ledger" aria-hidden="true"></div>
           <button type="button" class="scroll-hint" id="scroll-hint">Scroll to begin<svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true"><path d="M7 1v17M1.5 12.5 7 18l5.5-5.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
           <footer class="dock">
             <nav class="acts" aria-label="Jump to part of the story">${acts.map((a,i)=>`<button type="button" data-jump="${i}" aria-label="${pad(i)} ${a.name}" ${i === 0 ? 'aria-current="step"' : ''}><span class="num">${pad(i)}</span><span class="name">${a.name}</span></button>`).join('')}</nav>
@@ -42,8 +43,8 @@ export function storyMarkup() {
       </section>
       <p class="sr-only" id="live" aria-live="polite"></p>
       <noscript><style>.scroll-home .rail { display:none; }</style><article class="story-transcript">
-        <h2>No more portal.</h2><p>Architect Pro prepares planning permission, building warrant and completion certificate applications and keeps your project together.</p>
-        ${acts.map(a=>`<section><h2>${a.title}</h2><p>${a.body}</p></section>`).join('')}
+        <h2>From first sketch to completion certificate.</h2><p>Architect Pro prepares householder planning, building warrant and completion certificate applications and keeps your project together.</p>
+        ${acts.map((a,i)=>`<section><h2>${a.name}</h2>${beats.filter(b=>b.chapter===i).map(b=>`<h3>${b.headline}</h3><p>${b.line}</p>`).join('')}</section>`).join('')}
         <p>${fictionNote}</p><a class="button primary" href="/demo">Book a demo</a> <a class="button" href="/pricing">See pricing</a>
       </article></noscript>
     </main>${footer()}`;

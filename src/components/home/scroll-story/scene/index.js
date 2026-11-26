@@ -79,6 +79,8 @@ export function createExperience(host, { mobile, onFrame, onContextLost }) {
   scene.add(hemi, sun, sun.target);
 
   const textures = createTextures({ mobile });
+  // Upload the sheets now, so nothing stalls the first time they fly, and their canvases are freed.
+  textures.docs.forEach((map) => renderer.initTexture(map));
   const site = createSite(scene, { mobile });
   const building = createBuilding(scene, { mobile });
   const documents = createDocuments(scene, textures, { mobile });

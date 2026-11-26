@@ -137,6 +137,7 @@ export const U_VALUE = {
   method: "ISO 6946",
   target: "0.17 or better · Section 6",
 };
+const TAP_HOLD = 0.006;
 const WINDOW_FROM = 0.115,
   WINDOW_TO = 0.9;
 
@@ -178,10 +179,12 @@ export function windowAt(p) {
   let kind = p >= r.fill ? "fill" : "collect";
   if (r.pay !== null && p >= r.pay) kind = "pay";
   const payTapped = r.pay !== null && p >= r.tap;
+  // the tap stays on screen for a moment before the run takes over
+  const runFrom = r.pay !== null ? r.tap + TAP_HOLD : r.tap;
   let etaSeconds = null;
-  if (p >= r.tap) {
+  if (p >= runFrom) {
     kind = "running";
-    etaSeconds = Math.round(a.autoMin * 60 * (1 - lin(p, r.tap, r.submitted)));
+    etaSeconds = Math.round(a.autoMin * 60 * (1 - lin(p, runFrom, r.submitted)));
   }
   return { ...base, app: a.key, kind, title: c.title, docs, fields, fee, payTapped, etaSeconds };
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import * as story from '../src/components/home/scroll-story/story.js';
+import { windowMarkup, ledgerMarkup } from '../src/components/home/scroll-story/overlay.js';
 import { calculateBuildingStandardsFee } from '../src/lib/fees/building-standards-fee';
 
 const samples = Array.from({ length: 2001 }, (_, i) => i / 2000);
@@ -50,5 +51,21 @@ samples.forEach(p => {
 assert.equal(story.poseAt(0.4).construction.cranes, 0, 'no cranes before construction');
 assert.equal(story.poseAt(0.2).section.cut, 0, 'no section before the warrant');
 assert.equal(story.themes.length, 5);
+
+const tapped = samples.filter(p => story.windowAt(p).kind === 'pay' && story.windowAt(p).payTapped);
+assert.ok(tapped.some(p => story.windowAt(p).app === 'planning') && tapped.some(p => story.windowAt(p).app === 'warrant'), 'the Pay tap is on screen before the run starts');
+
+// Overlay markup
+const planningFill = windowMarkup(story.windowAt(0.19));
+assert.match(planningFill, /data-app="planning"/);
+assert.match(planningFill, /Second-floor studio extension with roof terrace/);
+assert.match(planningFill, /from Design statement/);
+assert.match(windowMarkup(story.windowAt(0.44)), /£1,290\.00/);
+assert.doesNotMatch(windowMarkup(story.windowAt(0.8)), /data-action="pay"/);
+assert.match(windowMarkup(story.windowAt(0.34)), /0\.17 W\/m²K/);
+assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /40 min/);
+assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /2\.5 min/);
+assert.equal(windowMarkup({ ...story.windowAt(0.19), visible: false }), '');
+assert.doesNotMatch(planningFill, / · /, 'no dot-joined strings on screen');
 
 console.log('homepage story tests passed');

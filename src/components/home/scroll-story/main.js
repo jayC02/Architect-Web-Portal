@@ -1,6 +1,7 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { acts, actAt, hud, themes, FINAL_AT, MANUAL_MIN, AUTO_MIN, lin, win, mix } from "./story.js";
+import { acts, actAt, beatAt, themes, FINAL_AT } from "./story.js";
+import { createOverlay } from "./overlay.js";
 import { pad, fictionNote, FINAL_TITLE } from "./markup.js";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -13,21 +14,20 @@ export function mountScrollHome() {
   const root = document.getElementById("scroll-home");
   if (!root) return;
   const rail = root.querySelector("#rail"), stage = root.querySelector("#stage"),
-    copy = root.querySelector("#copy"), hudEl = root.querySelector("#hud"),
+    copy = root.querySelector("#copy"),
     bar = root.querySelector("#bar"), live = root.querySelector("#live"),
     hint = root.querySelector("#scroll-hint"), loading = root.querySelector("#loading"),
     loadingText = root.querySelector("#loading-text"), host = root.querySelector("#canvas-host"),
     navButtons = [...stage.querySelectorAll("[data-jump]")];
+  const overlay = createOverlay(root);
   const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
   // Device classification is fixed for this visit, including when the phone rotates.
   const mobile = matchMedia("(pointer: coarse)").matches || Math.min(screen.width, screen.height) <= 820;
   const priorRestoration = history.scrollRestoration;
   history.scrollRestoration = "manual";
-  let disposed = false, currentAct = -1, isFinal = null, experience = null,
+  let disposed = false, currentAct = -1, currentBeat = null, experience = null,
     stableAt = 0, remeasuring = false, lastWidth = innerWidth,
     saveTimer = 0, resizeTimer = 0, recoveryTimer = 0, recoveryCount = 0, recoveryWindow = 0;
-  const tick = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const clockText = min => `${Math.floor(min)}:${String(Math.floor((min % 1) * 60)).padStart(2, "0")}`;
   function readSavedProgress() {
     try {
       const saved = sessionStorage.getItem(SAVED);
@@ -54,55 +54,28 @@ export function mountScrollHome() {
   const scrollToProgressInstant = p => scrollTo({ top: trigger.start + (trigger.end - trigger.start) * p, behavior: "instant" });
   const scrollToProgress = p => scrollTo({ top: trigger.start + (trigger.end - trigger.start) * p, behavior: reducedQuery.matches ? "instant" : "smooth" });
 
-  function setCopy(act, final) {
+  function setCopy(act, beat, final) {
     const a = acts[act];
     copy.classList.remove("in");
     void copy.offsetWidth; // restart the entrance
-    const timeBack = act === 5 && !final;
     copy.innerHTML = final
       ? `<p class="act-index"><span>${pad(act)}</span>${a.name}</p>
-         <h2 class="final-title">No more portal.<br />${MANUAL_MIN} minutes down to ${AUTO_MIN}.</h2>
+         <h2 class="final-title">${beat.headline}</h2>
+         <p class="body final-line">${beat.line}</p>
          <div class="final-actions">
            <a class="button primary" href="/demo">Book a demo</a>
            <button type="button" class="button" data-action="replay">Replay</button>
          </div>
          <p class="note">${fictionNote}</p>`
-      : timeBack
-        ? `<p class="act-index"><span>${pad(act)}</span>${a.name}</p>
-           <p class="minutes" aria-label="${MANUAL_MIN} minutes down to ${AUTO_MIN} minutes for all three applications">
-             <span class="was">${MANUAL_MIN} min</span><span class="now"><b id="big-min">${MANUAL_MIN}</b><small>min</small></span>
-           </p>
-           <h2 class="time-title">${a.title}</h2><p class="body">${a.body}</p>`
-        : `<p class="act-index"><span>${pad(act)}</span>${a.name}</p><h2>${a.title}</h2><p class="body">${a.body}</p>`;
-    copy.classList.toggle("time-back", timeBack);
+      : `<p class="act-index"><span>${pad(act)}</span>${a.name}</p><h2>${beat.headline}</h2><p class="body">${beat.line}</p>`;
+    copy.dataset.kind = beat.kind;
     copy.classList.add("in");
-    live.textContent = final ? FINAL_TITLE : `Part ${act + 1} of 6, ${a.name}. ${a.title}`;
-  }
-
-  function setHud(act) {
-    const h = hud[act];
-    hudEl.classList.toggle("show", !!h);
-    if (!h) return;
-    hudEl.dataset.act = act;
-    const clock = h.clock
-      ? `<div class="clock ${h.clock.tone}"><span class="digits" id="clock">0:00</span><span class="clock-label">${h.clock.label}</span></div>`
-      : "";
-    const compare = h.compare
-      ? `<div class="compare" aria-hidden="true">
-           <p><span>By hand</span><i style="--w:1"></i><b>${MANUAL_MIN} min</b></p>
-           <p class="ap"><span>ArchitectPro</span><i id="ap-bar" style="--w:0"></i><b>${AUTO_MIN} min</b></p>
-         </div>`
-      : "";
-    hudEl.innerHTML = `<p class="hud-title">${h.title}</p>${clock}${compare}<ol>${h.lines
-      .map(
-        (l, i) =>
-          `<li data-at="${l.at}" data-i="${i}" class="${l.you ? "you" : ""}"><span class="mark">${tick}</span><span class="text">${l.text}</span>${l.steps || l.detail ? `<span class="detail">${l.detail ?? l.steps[0][1]}</span>` : ""}</li>`,
-      )
-      .join("")}</ol>`;
+    live.textContent = final ? FINAL_TITLE : `Part ${act + 1} of ${acts.length}, ${a.name}. ${beat.headline}`;
   }
 
   function update(p) {
     const act = actAt(p),
+      beat = beatAt(p),
       final = p >= FINAL_AT;
     if (act !== currentAct) {
       currentAct = act;
@@ -110,43 +83,13 @@ export function mountScrollHome() {
       applyTheme(act);
       document.querySelector('meta[name="theme-color"]')?.setAttribute("content", themes[act].paper);
       navButtons.forEach((b, i) => (i === act ? b.setAttribute("aria-current", "step") : b.removeAttribute("aria-current")));
-      setHud(act);
-      isFinal = null;
     }
-    if (final !== isFinal) {
-      isFinal = final;
-      setCopy(act, final);
+    if (beat !== currentBeat) {
+      currentBeat = beat;
+      setCopy(act, beat, final);
       stage.classList.toggle("final", final);
-      hudEl.classList.toggle("dim", final);
     }
-    const h = hud[act];
-    const items = [...hudEl.querySelectorAll("li")];
-    const lit = items.filter((li) => p >= Number(li.dataset.at));
-    items.forEach((li) => li.classList.toggle("recent", lit.slice(-3).includes(li)));
-    items.forEach((li) => {
-      li.classList.toggle("on", p >= Number(li.dataset.at));
-      const steps = h?.lines[li.dataset.i]?.steps;
-      if (steps) {
-        const step = steps.filter(([at]) => p >= at).at(-1) ?? steps[0];
-        const detail = li.querySelector(".detail");
-        if (detail.textContent !== step[1]) detail.textContent = step[1];
-        li.dataset.state = step[1].toLowerCase();
-      }
-    });
-    if (h?.clock) {
-      const el = document.getElementById("clock");
-      const t = lin(p, h.clock.a, h.clock.b);
-      el.textContent = clockText(h.clock.to * t);
-      el.parentElement.classList.toggle("stopped", t >= 1);
-    }
-    if (h?.compare) document.getElementById("ap-bar").style.setProperty("--w", (AUTO_MIN / MANUAL_MIN) * lin(p, h.compare.a, h.compare.b));
-    if (act === 5 && !final) {
-      const big = document.getElementById("big-min");
-      const t = win(p, 0.79, 0.86);
-      const value = String(Math.round(mix(MANUAL_MIN, AUTO_MIN, t)));
-      if (big && big.textContent !== value) big.textContent = value;
-      copy.classList.toggle("counted", t >= 1);
-    }
+    overlay.update(p);
     bar.style.transform = `scaleX(${p})`;
     stage.classList.toggle("started", p > 0.01);
     hint.hidden = p > 0.01;
@@ -212,7 +155,7 @@ export function mountScrollHome() {
       scrollToProgress(0);
     }
   };
-  const onHint = () => scrollToProgress(0.06);
+  const onHint = () => scrollToProgress(0.04);
   stage.addEventListener("click", onClick);
   hint.addEventListener("click", onHint);
   window.addEventListener("scroll", onScroll, { passive: true });
@@ -234,7 +177,7 @@ export function mountScrollHome() {
   function mountScene() {
     if (disposed) return;
     try {
-      experience = createExperience(host, { mobile, onContextLost });
+      experience = createExperience(host, { mobile, onContextLost, getAnchorRect: () => overlay.rect() });
       experience.setProgress(proxy.p);
       requestAnimationFrame(() => {
         if (!disposed) { loading.classList.remove("failed"); loading.classList.add("done"); }
