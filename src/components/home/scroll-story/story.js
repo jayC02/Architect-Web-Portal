@@ -1,5 +1,9 @@
 // The whole story is a pure function of scroll progress (0 → 1).
 // Nothing accumulates, so scrolling backwards always lands on exactly the same frame.
+//
+// 14 Harbour Lane is an existing two-storey house. The project adds a second-floor
+// timber studio with a roof terrace: a householder planning application, a building
+// warrant and, once it is built, a completion certificate.
 
 export const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 export const smooth = (v) => {
@@ -8,182 +12,266 @@ export const smooth = (v) => {
 };
 /** Eased 0→1 window between progress a and b. */
 export const win = (p, a, b) => smooth((p - a) / (b - a));
-/** Linear 0→1 window: used for clocks, which should tick evenly. */
+/** Linear 0→1 window: used for clocks and ledgers, which should move evenly. */
 export const lin = (p, a, b) => clamp((p - a) / (b - a));
 export const mix = (a, b, t) => a + (b - a) * t;
 
-/** The headline numbers, in minutes, roughly. By hand means keying it all into the portal. */
-export const MANUAL_MIN = 60; // planning, warrant and completion certificate by hand
-export const AUTO_MIN = 4; // all three with ArchitectPro
+/** The three applications, in the order a project meets them. Minutes are illustrative. */
+export const APPLICATIONS = [
+  { key: "planning", name: "Householder planning", short: "Planning", colour: "#6c86c6", manualMin: 15, autoMin: 1, fee: "entered" },
+  { key: "warrant", name: "Building warrant", short: "Warrant", colour: "#488b85", manualMin: 25, autoMin: 1.5, fee: "calculated" },
+  { key: "completion", name: "Completion certificate", short: "Completion", colour: "#7c9d70", manualMin: 20, autoMin: 1.5, fee: "none" },
+];
+export const MANUAL_MIN = APPLICATIONS.reduce((s, a) => s + a.manualMin, 0); // 60
+export const AUTO_MIN = APPLICATIONS.reduce((s, a) => s + a.autoMin, 0); // 4
 export const SAVED_MIN = MANUAL_MIN - AUTO_MIN;
-/** Documents on the board: one group per application. */
-export const GROUPS = 3;
-export const DOCS_PER_GROUP = 9;
-export const DOC_COUNT = GROUPS * DOCS_PER_GROUP;
+export const FINAL_AT = 0.965;
 
-export const acts = [
-  {
-    name: "Site",
-    start: 0,
-    jump: 0.03,
-    title: "Every project starts with a red line.",
-    body: "A site, a boundary and a client with plans. Before anything is built, it has to be drawn, described and approved.",
-  },
-  {
-    name: "Design",
-    start: 0.15,
-    jump: 0.23,
-    title: "Then the design takes shape.",
-    body: "Plans become walls, walls become rooms. This is the part architects trained for.",
-  },
-  {
-    name: "The portal",
-    start: 0.3,
-    jump: 0.41,
-    title: "And then the portal.",
-    body: `By hand, every application means logging into eDevelopment, creating the proposal, finding the address, keying in every detail, attaching each document one by one and working out the fee. Roughly ${MANUAL_MIN} minutes for planning, warrant and completion certificate.`,
-  },
-  {
-    name: "Automation",
-    start: 0.45,
-    jump: 0.55,
-    title: "ArchitectPro does it in the background.",
-    body: `It reads the project once, then does the whole portal for you in the background, fee calculation included. About ${AUTO_MIN} minutes for all three applications. Add your payment method, pay, and you’re done.`,
-  },
-  {
-    name: "Tracking",
-    start: 0.62,
-    jump: 0.72,
-    title: "Then it keeps track.",
-    body: "Submissions and approvals are followed for you, and every project detail stays organised in one place for whenever you need it.",
-  },
-  {
-    name: "Time back",
-    start: 0.78,
-    jump: 0.88,
-    title: `${SAVED_MIN} minutes back on every project.`,
-    body: "Planning permission, building warrant and completion certificate, submitted for you. No portal, no re-typing, no timeouts. That time goes back into the architecture.",
-  },
+/**
+ * Each application's paperwork window: documents read, form filled, paid (or not),
+ * then running in the background until it is submitted. Decisions arrive later as
+ * tracked replies.
+ */
+const RUNS = [
+  { collect: 0.12, fill: 0.17, pay: 0.215, tap: 0.235, submitted: 0.25, decided: 0.33, decision: "Approved", end: 0.27 },
+  { collect: 0.38, fill: 0.42, pay: 0.455, tap: 0.468, submitted: 0.48, decided: 0.53, decision: "Approved", end: 0.5, uvalue: 0.32 },
+  { collect: 0.74, fill: 0.79, pay: null, tap: 0.82, submitted: 0.84, decided: 0.875, decision: "Accepted", end: 0.9 },
 ];
 
-export const FINAL_AT = 0.965;
+export const beats = [
+  { at: 0, chapter: 0, app: null, kind: "intro", headline: "From first sketch to completion certificate.", line: "Architect Pro prepares planning, building warrant and completion for you." },
+  { at: 0.03, chapter: 0, app: null, kind: "design", headline: "Every project starts with a red line.", line: "Draw the site and the design, as you always have." },
+  { at: 0.12, chapter: 0, app: "planning", kind: "collect", headline: "Your drawings, collected and read.", line: "Every sheet labelled by type, scale and revision. Anything it is unsure of, it asks you." },
+  { at: 0.17, chapter: 0, app: "planning", kind: "fill", headline: "Read into the householder application.", line: "Each field filled from the drawings or the project. Nothing typed twice." },
+  { at: 0.215, chapter: 0, app: "planning", kind: "pay", headline: "Add the fee and pay.", line: "That is your part. It completes the portal in the background." },
+  { at: 0.27, chapter: 1, app: "warrant", kind: "design", headline: "Then the technical detail.", line: "Sections, structure, drainage, fire and energy for the building warrant." },
+  { at: 0.32, chapter: 1, app: "warrant", kind: "uvalue", headline: "U-values, calculated to ISO 6946.", line: "Set out the build-up and the result and report are ready for the warrant." },
+  { at: 0.38, chapter: 1, app: "warrant", kind: "collect", headline: "A full building warrant, coming together.", line: "Every document read and matched to the right section." },
+  { at: 0.42, chapter: 1, app: "warrant", kind: "fill", headline: "Details finalised. Fee calculated.", line: "The building standards fee is worked out for you. All you do is pay." },
+  { at: 0.455, chapter: 1, app: "warrant", kind: "pay", headline: "Pay, and get back to drawing.", line: "It submits in the background while you get on with the architecture." },
+  { at: 0.5, chapter: 2, app: null, kind: "build", headline: "Then it gets built.", line: "Approved and on site. Every document stays in the project record." },
+  { at: 0.66, chapter: 3, app: null, kind: "inspect", headline: "Finished, and checked over.", line: "Fire, energy, drainage and electrical, signed off one by one." },
+  { at: 0.74, chapter: 3, app: "completion", kind: "collect", headline: "Completion certificates, gathered and read.", line: "EPC, sustainability, construction and design certificates matched to the warrant." },
+  { at: 0.79, chapter: 3, app: "completion", kind: "fill", headline: "Completion, ready to submit.", line: "Details pulled from the warrant. No fee for a completion certificate." },
+  { at: 0.82, chapter: 3, app: "completion", kind: "background", headline: "Submitted in the background.", line: "Accepted when the verifier replies." },
+  { at: 0.86, chapter: 4, app: null, kind: "ring", headline: "An hour of portal work. Four minutes.", line: "Planning, warrant and completion, completed in the background." },
+  { at: FINAL_AT, chapter: 4, app: null, kind: "final", headline: `${SAVED_MIN} minutes back on every project.`, line: "Spend them on architecture." },
+];
+
+const CHAPTERS = [
+  { name: "Planning", start: 0, jump: 0.035 },
+  { name: "Building warrant", start: 0.27, jump: 0.3 },
+  { name: "Construction", start: 0.5, jump: 0.56 },
+  { name: "Completion", start: 0.66, jump: 0.72 },
+  { name: "Time back", start: 0.86, jump: 0.9 },
+];
+/** Chapters for the dock. Title and body are the chapter's opening beat, for the transcript. */
+export const acts = CHAPTERS.map((c, i) => {
+  const first = beats.find((b) => b.chapter === i);
+  return { ...c, title: first.headline, body: first.line };
+});
 
 export function actAt(p) {
   let i = 0;
   while (i < acts.length - 1 && p >= acts[i + 1].start) i++;
   return i;
 }
+export function beatAt(p) {
+  let i = 0;
+  while (i < beats.length - 1 && p >= beats[i + 1].at) i++;
+  return beats[i];
+}
 
-/**
- * Side panel per act. `clock` is a stopwatch driven by scroll; `compare` shows the
- * by-hand and ArchitectPro bars; a line's `steps` change its status text as you scroll.
- */
-export const hud = {
-  2: {
-    title: "By hand, in the portal",
-    clock: { to: MANUAL_MIN, a: 0.31, b: 0.44, label: "for all three", tone: "manual" },
-    lines: [
-      { at: 0.32, text: "Log in to eDevelopment" },
-      { at: 0.334, text: "Create the proposal" },
-      { at: 0.348, text: "Find the site address" },
-      { at: 0.362, text: "Enter the proposal" },
-      { at: 0.376, text: "Type every main detail into the portal" },
-      { at: 0.39, text: "Attach each document and the location plan, one by one" },
-      { at: 0.405, text: "Calculate the fee" },
-      { at: 0.42, text: "Submit. Then again for the warrant and completion" },
+/** Minutes by hand and with Architect Pro, building up as each application is done. */
+export function ledgerAt(p) {
+  let manual = 0,
+    auto = 0;
+  APPLICATIONS.forEach((a, g) => {
+    const t = lin(p, RUNS[g].collect, RUNS[g].submitted);
+    manual += a.manualMin * t;
+    auto += a.autoMin * t;
+  });
+  const round = (v) => Math.round(v * 100) / 100;
+  return { manual: round(manual), auto: round(auto) };
+}
+
+// What the Architect Pro window shows for each application.
+const money = (minor) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(minor / 100);
+/** calculateBuildingStandardsFee for £85,000 of works (checked against the calculator in the tests). */
+export const EXAMPLE_WARRANT_FEE_MINOR = 129000;
+const CONTENT = [
+  {
+    title: "Householder application",
+    docs: ["Location plan · 1:1250", "Site plan · 1:200", "Existing elevations · 1:100", "Proposed elevations · 1:100", "Floor plans · 1:100"],
+    fields: [
+      ["Site address", "14 Harbour Lane", "Project"],
+      ["Applicant", "Harbour Lane Homes Ltd", "Project"],
+      ["Proposal", "Second-floor studio extension with roof terrace", "Design statement"],
+      ["Ownership", "Certificate A", "Ownership certificate"],
     ],
+    fee: { kind: "entered", text: "Planning fee · added by you" },
   },
-  3: {
-    title: "With ArchitectPro",
-    clock: { to: AUTO_MIN, a: 0.49, b: 0.6, label: "for all three", tone: "auto" },
-    compare: { a: 0.49, b: 0.6 },
-    lines: [
-      { at: 0.5, text: "Project details read once" },
-      { at: 0.515, text: "Proposal created, address found" },
-      { at: 0.53, text: "Main details entered in the background" },
-      { at: 0.545, text: "Documents and location plan attached" },
-      { at: 0.56, text: "Fee calculated" },
-      { at: 0.575, text: "You add your payment method and pay", you: true },
-      { at: 0.6, text: "Planning, warrant and completion certificate submitted" },
+  {
+    title: "Building warrant",
+    docs: ["Building sections · 1:50", "Structural calculations", "Drainage layout", "Fire safety strategy", "U-value report · ISO 6946"],
+    fields: [
+      ["Value of works", "£85,000", "Project"],
+      ["Certifier of design", "Structural", "Certificate"],
+      ["Description", "Second-floor timber studio", "Drawings"],
     ],
+    fee: { kind: "calculated", text: `Fee calculated · ${money(EXAMPLE_WARRANT_FEE_MINOR)}` },
   },
-  4: {
-    title: "Tracked for you",
-    lines: [
-      { at: 0.655, text: "Planning permission", steps: [[0.655, "Submitted"], [0.69, "Validated"], [0.72, "Approved"]] },
-      { at: 0.67, text: "Building warrant", steps: [[0.67, "Submitted"], [0.705, "Validated"], [0.735, "Approved"]] },
-      { at: 0.685, text: "Completion certificate", steps: [[0.685, "Submitted"], [0.738, "Accepted"]] },
-      { at: 0.753, text: "Portal logins needed", detail: "None" },
-      { at: 0.76, text: "Project record saved", detail: `${DOC_COUNT} documents` },
+  {
+    title: "Completion certificate",
+    docs: ["Energy Performance Certificate", "Statement of Sustainability", "Certificate of Construction", "Form Q · design certificate", "Fire Safety Design Summary"],
+    fields: [
+      ["Warrant", "BW/26/0412", "Warrant"],
+      ["Covers all work", "Yes", "Warrant"],
     ],
+    fee: { kind: "none", text: "No fee" },
   },
+];
+export const U_VALUE = {
+  layers: ["Brick 102.5 mm", "Cavity 50 mm", "PIR insulation 100 mm", "Block 100 mm", "Plasterboard 12.5 mm"],
+  result: "0.17 W/m²K",
+  method: "ISO 6946",
+  target: "0.17 or better · Section 6",
 };
+const WINDOW_FROM = 0.115,
+  WINDOW_TO = 0.9;
+
+function statusOf(g, p) {
+  const r = RUNS[g];
+  if (p >= r.decided) return r.decision;
+  if (p >= r.submitted) return "Submitted";
+  if (p >= (r.uvalue ?? r.collect)) return "In progress";
+  return "Not started";
+}
+
+export function windowAt(p) {
+  const statuses = APPLICATIONS.map((a, g) => ({ app: a.key, label: statusOf(g, p) }));
+  const visible = p >= WINDOW_FROM && p < WINDOW_TO;
+  // the application on screen, if any
+  let g = -1;
+  if (p >= RUNS[2].collect) g = 2;
+  else if (p >= acts[1].start && p < acts[2].start) g = 1;
+  else if (p < acts[1].start) g = 0;
+  const base = { visible, app: null, kind: "record", title: "14 Harbour Lane", docs: [], fields: [], fee: null, uvalue: null, payTapped: false, etaSeconds: null, statuses };
+  if (!visible || g < 0) return base;
+  const r = RUNS[g],
+    c = CONTENT[g],
+    a = APPLICATIONS[g];
+  // before its documents arrive, the warrant shows its U-value step, or the planning run still finishing
+  if (p < r.collect) {
+    if (g === 1 && p >= r.uvalue) {
+      const t = lin(p, 0.33, 0.37);
+      const shown = Math.min(U_VALUE.layers.length, Math.floor(t * U_VALUE.layers.length + 1e-9));
+      return { ...base, app: a.key, kind: "uvalue", title: "U-value calculator", uvalue: { layers: U_VALUE.layers, shown, result: shown === U_VALUE.layers.length ? U_VALUE.result : null } };
+    }
+    return base;
+  }
+  const readT = lin(p, r.collect, r.fill - 0.005);
+  const docs = c.docs.map((label, i) => ({ label, read: readT >= (i + 1) / c.docs.length }));
+  const fillT = lin(p, r.fill, (r.pay ?? r.tap) - 0.005);
+  const fields = c.fields.map(([label, value, source], i) => ({ label, value, source, filled: fillT >= (i + 1) / (c.fields.length + 0.5) }));
+  const fee = p >= r.fill ? c.fee : null;
+  let kind = p >= r.fill ? "fill" : "collect";
+  if (r.pay !== null && p >= r.pay) kind = "pay";
+  const payTapped = r.pay !== null && p >= r.tap;
+  let etaSeconds = null;
+  if (p >= r.tap) {
+    kind = "running";
+    etaSeconds = Math.round(a.autoMin * 60 * (1 - lin(p, r.tap, r.submitted)));
+  }
+  return { ...base, app: a.key, kind, title: c.title, docs, fields, fee, payTapped, etaSeconds };
+}
 
 /** Every animated quantity in the scene, derived from progress. */
 export function poseAt(p) {
-  const pack = win(p, 0.612, 0.652);
+  const ringOpen = win(p, 0, 0.02) * (1 - win(p, 0.035, 0.075));
   return {
     p,
-    redline: win(p, 0.01, 0.07),
-    plan: win(p, 0.025, 0.13),
-    grid: 1 - 0.8 * win(p, 0.14, 0.3),
-    walls: [win(p, 0.14, 0.205), win(p, 0.18, 0.245), win(p, 0.22, 0.28)],
-    slabs: [win(p, 0.195, 0.235), win(p, 0.235, 0.27)],
-    roof: win(p, 0.265, 0.305),
-    glazing: win(p, 0.28, 0.32),
-    // paperwork
-    docs: win(p, 0.3, 0.36),
-    manual: lin(p, 0.31, 0.44),
-    portal: win(p, 0.315, 0.355),
-    portalAway: win(p, 0.455, 0.51),
-    portalFill: lin(p, 0.53, 0.6),
-    // automation
-    noise: win(p, 0.445, 0.505),
-    order: win(p, 0.455, 0.535),
-    collapse: win(p, 0.47, 0.53),
-    ai: win(p, 0.45, 0.49) * (1 - win(p, 0.6, 0.64)),
-    scan: win(p, 0.48, 0.6),
-    prepared: win(p, 0.505, 0.6),
-    auto: lin(p, 0.49, 0.6),
-    // tracking
-    pack,
-    submit: win(p, 0.652, 0.69),
-    track: lin(p, 0.655, 0.76),
-    record: win(p, 0.66, 0.7),
-    store: win(p, 0.77, 0.82),
-    ringHide: win(p, 0.6, 0.64),
-    // time back
-    built: win(p, 0.8, 0.92),
-    finalRing: win(p, 0.84, 0.9),
-    city: mix(mix(0.03, 0.3, win(p, 0.15, 0.3)), 1, win(p, 0.82, 0.95)),
+    // planning: the red line, the drawing, the studio massing
+    redline: win(p, 0.02, 0.06),
+    plan: win(p, 0.035, 0.09),
+    grid: 1 - 0.75 * win(p, 0.08, 0.2),
+    studio: {
+      walls: win(p, 0.07, 0.11),
+      slab: win(p, 0.065, 0.09),
+      roof: win(p, 0.105, 0.125),
+      glazing: win(p, 0.11, 0.13),
+      terrace: win(p, 0.1, 0.125),
+    },
+    // each application's sheets: peel off the model, fly to the window, get read
+    sheets: RUNS.map((r) => ({
+      peel: win(p, r.collect, r.collect + 0.015),
+      fly: win(p, r.collect + 0.005, r.collect + 0.04),
+      read: win(p, r.collect + 0.02, r.fill),
+    })),
+    // building warrant: the studio cut open, its wall build-up exploded into layers
+    section: {
+      cut: win(p, 0.275, 0.305) * (1 - win(p, 0.46, 0.5)),
+      explode: win(p, 0.315, 0.345) * (1 - win(p, 0.37, 0.385)),
+      uvalue: lin(p, 0.33, 0.37),
+    },
+    construction: {
+      ghost: win(p, 0.5, 0.53) * (1 - win(p, 0.615, 0.645)),
+      hoarding: win(p, 0.5, 0.52) * (1 - win(p, 0.655, 0.675)),
+      scaffold: win(p, 0.51, 0.55) * (1 - win(p, 0.635, 0.66)),
+      cranes: win(p, 0.515, 0.54) * (1 - win(p, 0.64, 0.665)),
+      swing: 1.1 * Math.sin(lin(p, 0.54, 0.63) * Math.PI * 4),
+      lift: lin(p, 0.54, 0.63),
+      storey: lin(p, 0.545, 0.625),
+      roof: win(p, 0.615, 0.64),
+      strike: win(p, 0.635, 0.66),
+    },
+    built: win(p, 0.6, 0.65),
+    landscape: win(p, 0.66, 0.7),
+    inspection: {
+      ring: win(p, 0.675, 0.69) * (1 - win(p, 0.742, 0.76)),
+      checks: [0.69, 0.703, 0.716, 0.729].map((a) => win(p, a, a + 0.007)),
+    },
+    city: mix(mix(0.05, 0.35, win(p, 0.03, 0.12)), 1, win(p, 0.12, 0.3)),
     dusk: win(p, 0.88, 1),
+    ringOpen,
+    ringFinal: lin(p, 0.87, 0.93),
+    sketch: win(p, 0.92, 0.985),
   };
 }
 
 /**
- * Colour worlds: tinted paper, one per act. `paper` is the ground and horizon, `sky` the
- * tone overhead, `ink` the outline colour, `model` the white of the model itself.
+ * Colour worlds: tinted paper. `paper` is the ground and horizon, `sky` the tone
+ * overhead, `ink` the outline colour, `model` the white of the model itself.
  */
+const BLUE = { paper: "#e6edf9", sky: "#d9e4f6", ink: "#1d3f9e", grid: "#9db4e3", model: "#ffffff" };
+const TEAL = { paper: "#e3efee", sky: "#d4e7e5", ink: "#16403c", grid: "#a2c9c4", model: "#ffffff" };
+const SITE = { paper: "#f5ebdd", sky: "#eedcc4", ink: "#3d2a1a", grid: "#dcc3a0", model: "#fffaf3" };
+const GREEN = { paper: "#e3f4ed", sky: "#d4ede2", ink: "#0f4a40", grid: "#a5d6c4", model: "#ffffff" };
+const GOLD = { paper: "#f8eedc", sky: "#f2e4cb", ink: "#3d2a1a", grid: "#dcc7a3", model: "#ffffff" };
 export const worlds = [
-  { at: 0.0, paper: "#e6edf9", sky: "#d9e4f6", ink: "#1d3f9e", grid: "#9db4e3", model: "#ffffff" },
-  { at: 0.13, paper: "#e9eff8", sky: "#dde7f6", ink: "#1d3f9e", grid: "#a9bde6", model: "#ffffff" },
-  { at: 0.26, paper: "#f4f4f0", sky: "#eaece7", ink: "#1b2a4a", grid: "#c6cad3", model: "#ffffff" },
-  { at: 0.35, paper: "#f9e7e0", sky: "#f5d9cf", ink: "#4a1c16", grid: "#e6b3a5", model: "#fffaf8" },
-  { at: 0.43, paper: "#f7ddd3", sky: "#f2cdc0", ink: "#4a1c16", grid: "#e2a595", model: "#fff8f5" },
-  { at: 0.5, paper: "#ebe8fc", sky: "#dedafa", ink: "#3a2bb0", grid: "#b3a9ee", model: "#f7f5ff" },
-  { at: 0.6, paper: "#e8e5fb", sky: "#dad6f9", ink: "#3a2bb0", grid: "#a99eec", model: "#f4f1ff" },
-  { at: 0.68, paper: "#e3f4ed", sky: "#d4ede2", ink: "#0f4a40", grid: "#a5d6c4", model: "#ffffff" },
-  { at: 0.77, paper: "#e6f5ee", sky: "#d7efe5", ink: "#0f4a40", grid: "#a5d6c4", model: "#ffffff" },
-  { at: 0.86, paper: "#f8eedc", sky: "#f2e4cb", ink: "#3d2a1a", grid: "#dcc7a3", model: "#ffffff" },
-  { at: 1.0, paper: "#f8e3cc", sky: "#f3cfae", ink: "#3d2a1a", grid: "#d9b48a", model: "#fff7ec" },
+  { at: 0, ...BLUE },
+  { at: 0.245, ...BLUE },
+  { at: 0.29, ...TEAL },
+  { at: 0.48, ...TEAL },
+  { at: 0.53, ...SITE },
+  { at: 0.64, ...SITE },
+  { at: 0.69, ...GREEN },
+  { at: 0.85, ...GREEN },
+  { at: 0.9, ...GOLD },
+  { at: 1, paper: "#f8e3cc", sky: "#f3cfae", ink: "#3d2a1a", grid: "#d9b48a", model: "#fff7ec" },
 ];
 
-/** Overlay theme per act: ink text on that act's paper. */
+/** Overlay theme per chapter: ink text on that chapter's paper. */
 export const themes = [
-  { paper: "#e6edf9", fg: "#10224f", muted: "#4e6293", accent: "#cd3428", panel: "rgba(255, 255, 255, 0.82)", line: "rgba(16, 34, 79, 0.16)" },
-  { paper: "#f4f4f0", fg: "#14213d", muted: "#56627a", accent: "#2b52d4", panel: "rgba(255, 255, 255, 0.82)", line: "rgba(20, 33, 61, 0.16)" },
-  { paper: "#f7ddd3", fg: "#3d1410", muted: "#82544a", accent: "#c63321", panel: "rgba(255, 255, 255, 0.84)", line: "rgba(61, 20, 16, 0.16)" },
-  { paper: "#e8e5fb", fg: "#1e1560", muted: "#6258a8", accent: "#5a3df0", panel: "rgba(255, 255, 255, 0.84)", line: "rgba(30, 21, 96, 0.16)" },
-  { paper: "#e6f5ee", fg: "#0c3a33", muted: "#477368", accent: "#087b60", panel: "rgba(255, 255, 255, 0.84)", line: "rgba(12, 58, 51, 0.16)" },
-  { paper: "#f8eedc", fg: "#3a2513", muted: "#805f42", accent: "#a66305", panel: "rgba(255, 255, 255, 0.8)", line: "rgba(58, 37, 19, 0.16)" },
+  { paper: "#e6edf9", fg: "#10224f", muted: "#4e6293", accent: "#3f5fb0", panel: "rgba(255, 255, 255, 0.86)", line: "rgba(16, 34, 79, 0.14)" },
+  { paper: "#e3efee", fg: "#0f3633", muted: "#4a6f6b", accent: "#2f6f69", panel: "rgba(255, 255, 255, 0.86)", line: "rgba(15, 54, 51, 0.14)" },
+  { paper: "#f5ebdd", fg: "#3a2513", muted: "#7d5f44", accent: "#a35a12", panel: "rgba(255, 255, 255, 0.84)", line: "rgba(58, 37, 19, 0.14)" },
+  { paper: "#e3f4ed", fg: "#0c3a33", muted: "#477368", accent: "#2f7a52", panel: "rgba(255, 255, 255, 0.86)", line: "rgba(12, 58, 51, 0.14)" },
+  { paper: "#f8eedc", fg: "#3a2513", muted: "#805f42", accent: "#a66305", panel: "rgba(255, 255, 255, 0.82)", line: "rgba(58, 37, 19, 0.14)" },
 ];
+
+// Temporary: the previous scene and overlay still import these. Removed once Tasks 2 and 3 replace them.
+export const GROUPS = 3;
+export const DOCS_PER_GROUP = 9;
+export const DOC_COUNT = GROUPS * DOCS_PER_GROUP;
+export const hud = {};

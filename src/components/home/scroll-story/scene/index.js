@@ -8,6 +8,24 @@ import { createCameraRig } from "./camera.js";
 
 const keys = ["paper", "sky", "ink", "grid", "model"];
 const stops = worlds.map((w) => ({ at: w.at, ...Object.fromEntries(keys.map((k) => [k, new THREE.Color(w[k])])) }));
+// Temporary bridge from the new pose to the keys the previous scene modules read.
+// Each later task deletes the keys it no longer needs; Task 7 removes this.
+function legacyPose(pose) {
+  return {
+    ...pose,
+    walls: [1, 1, pose.studio.walls],
+    slabs: [1, pose.studio.slab],
+    roof: pose.studio.roof,
+    glazing: 1,
+    ai: 0,
+    scan: 0,
+    docs: 0,
+    manual: 0,
+    collapse: 0,
+    ringHide: 0,
+    finalRing: pose.ringFinal,
+  };
+}
 function colorsAt(p, out) {
   let i = 0;
   while (i < stops.length - 2 && p > stops[i + 1].at) i++;
@@ -96,7 +114,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost }) {
     last = now;
     if (!running) return;
     time += dt;
-    const pose = poseAt(progress);
+    const pose = legacyPose(poseAt(progress));
     colorsAt(progress, colors);
 
     scene.fog.color.copy(colors.paper);
