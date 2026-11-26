@@ -5,6 +5,7 @@ import { createSite } from "./site.js";
 import { createBuilding } from "./building.js";
 import { createDocuments } from "./documents.js";
 import { createSection } from "./section.js";
+import { createConstruction } from "./construction.js";
 import { createCameraRig } from "./camera.js";
 import { anchorFromRect, worldAtNdc } from "./anchor.js";
 
@@ -82,6 +83,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
   const building = createBuilding(scene, { mobile });
   const documents = createDocuments(scene, textures, { mobile });
   const section = createSection(scene, building, { mobile });
+  const construction = createConstruction(scene, building, { mobile });
   const rig = createCameraRig(camera);
 
   // Where the Architect Pro window is, as points in the scene a fixed distance from the lens.
@@ -144,7 +146,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     scene.fog.color.copy(colors.paper);
     hemi.groundColor.copy(colors.paper).multiplyScalar(0.95);
     // the sun sweeps round through the day, then drops for long evening shadows
-    const sweep = mix(-0.7, 2.3, progress);
+    const sweep = mix(-0.7, 2.3, progress) + Math.PI * 4 * smooth(Math.min(1, Math.max(0, (progress - 0.52) / 0.12)));
     const elev = mix(0.95, 0.42, smooth(Math.max(0, progress - 0.78) / 0.22));
     // Keep every street block between the light and the ground as the sun moves.
     sunDir.set(Math.cos(sweep) * 30, Math.sin(elev) * 40 + 4, Math.sin(sweep) * 30).normalize();
@@ -159,6 +161,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
     if (flying) measureAnchor();
     documents.update(pose, colors, time, dpr, anchor, camera);
     section.update(pose, colors, time, anchor, camera);
+    construction.update(pose, colors);
 
     renderer.render(scene, camera);
     onFrame?.(pose);
@@ -199,6 +202,7 @@ export function createExperience(host, { mobile, onFrame, onContextLost, getAnch
       building.dispose();
       documents.dispose();
       section.dispose();
+      construction.dispose();
       disposeTextures(textures);
       sun.shadow.dispose();
       renderer.dispose();

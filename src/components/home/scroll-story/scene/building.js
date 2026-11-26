@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ribbon, ribbonMaterial, arcSegments } from "./lines.js";
 import { inkMaterial, inkLines, inkEdges, mergedBoxes } from "./ink.js";
-import { clamp, mix, smooth } from "../story.js";
+import { clamp, mix, smooth, win as span } from "../story.js";
 
 // 14 Harbour Lane: a fictional two-storey house (storeys 0 and 1, existing) gaining a
 // second-floor timber studio with a roof terrace (storey 2, the proposal). Units are metres.
@@ -398,6 +398,13 @@ export function createBuilding(scene) {
   function update(pose, colors) {
     const studio = pose.studio;
     const built = pose.built;
+    // construction: the white model goes, and the real studio rises in its place
+    const c = pose.construction;
+    const onSite = pose.p >= 0.5;
+    const cleared = span(pose.p, 0.5, 0.525);
+    const walls = !onSite ? studio.walls : pose.p < 0.545 ? 1 - cleared : c.storey;
+    const roofUp = !onSite ? studio.roof : pose.p < 0.545 ? 1 - cleared : c.roof;
+    const timber = onSite && pose.p >= 0.545 ? 1 : built;
     // pens: the existing house in a quieter tone until the whole house is one again
     ink.color.copy(colors.ink);
     inkFaint.color.copy(colors.ink);
@@ -415,15 +422,15 @@ export function createBuilding(scene) {
     planWalls.visible = planDetail.visible = pose.plan > 0.001 && planFade > 0.01;
 
     wallGroups.forEach(({ group, order }) => {
-      const rise = clamp(studio.walls * 1.5 - order * 0.5);
+      const rise = clamp(walls * 1.5 - order * 0.5);
       group.scale.y = Math.max(0.0001, rise);
       group.visible = rise > 0.0005;
     });
     // the roof grows up from the wall tops, like the walls
     roof.position.y = H * 3;
-    roof.scale.y = Math.max(0.0001, studio.roof);
-    roof.visible = studio.roof > 0.001;
-    roofMat.opacity = clamp(studio.roof * 2);
+    roof.scale.y = Math.max(0.0001, roofUp);
+    roof.visible = roofUp > 0.001;
+    roofMat.opacity = clamp(roofUp * 2);
     decking.visible = studio.terrace > 0.5;
     rail.forEach((p) => (p.visible = studio.terrace > 0.05));
 
@@ -432,8 +439,8 @@ export function createBuilding(scene) {
     slabMat.color.copy(colors.model).lerp(finish.slab, 0.75);
     frameMat.color.copy(finish.frame);
     doorMat.color.copy(finish.door);
-    upperMat.color.copy(colors.model).lerp(finish.upper, built);
-    roofMat.color.copy(colors.model).lerp(finish.roof, built);
+    upperMat.color.copy(colors.model).lerp(finish.upper, timber);
+    roofMat.color.copy(colors.model).lerp(finish.roof, timber);
     frameNewMat.color.copy(colors.model).lerp(colors.ink, 0.55).lerp(finish.frame, built);
     inkFaint.opacity = mix(0.26, 0.4, built);
 
@@ -444,7 +451,9 @@ export function createBuilding(scene) {
     glassMat.color.copy(glassDay).lerp(glassLit, pose.dusk);
     glassNewMat.opacity = g * mix(0.55, 0.92, Math.max(built * 0.4, pose.dusk));
     glassMat.opacity = mix(0.6, 0.92, Math.max(0.3, pose.dusk));
-    glazing.forEach((item) => (item.visible = studio.walls > 0.95 && g > 0.001));
+    // on site, the studio glazing goes in once the walls are up
+    const glazed = onSite ? walls > 0.98 && roofUp > 0.5 : walls > 0.95;
+    glazing.forEach((item) => (item.visible = glazed && g > 0.001));
 
     // the section: the cut slides in from the street to the middle of the studio
     cut.constant = mix(CUT_FAR, CUT_AT, smooth(pose.section.cut));
