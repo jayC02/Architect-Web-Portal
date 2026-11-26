@@ -1,0 +1,76 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SiteHeader from '@/components/marketing/SiteHeader.astro';
+import SiteFooter from '@/components/marketing/SiteFooter.astro';
+import { absoluteUrl } from '@/lib/config';
+import '@/styles/marketing.css';
+import '@/styles/marketing-sheet.css';
+
+export type World = 'site' | 'design' | 'portal' | 'automation' | 'tracking' | 'time';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Which of the homepage's paper worlds tints this page. */
+  world?: World;
+  noindex?: boolean;
+}
+
+const { title, description, world = 'site', noindex = false } = Astro.props;
+const canonical = absoluteUrl(Astro.url.pathname);
+---
+<BaseLayout title={title} description={description} noindex={noindex}>
+  <Fragment slot="head">
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={absoluteUrl('/brand/architect-pro-logo.png')} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="theme-color" content="#e6edf9" />
+    <link rel="preload" href="/fonts/scroll-story/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <slot name="head" />
+  </Fragment>
+  <div class="mk" data-world={world}>
+    <a href="#main" class="skip-link">Skip to content</a>
+    <SiteHeader />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter />
+  </div>
+  <script>
+    const header = document.querySelector('.mk .site-header');
+    const onScroll = () => header?.classList.toggle('scrolled', window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // Close the mobile menu after choosing a link or pressing Escape.
+    const menu = document.querySelector<HTMLDetailsElement>('.mk .menu');
+    menu?.addEventListener('click', (event) => {
+      if ((event.target as HTMLElement).closest('a')) menu.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && menu?.open) {
+        menu.open = false;
+        menu.querySelector('summary')?.focus();
+      }
+    });
+
+    const revealed = document.querySelectorAll('.mk .reveal');
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('in');
+            observer.unobserve(entry.target);
+          }
+        }
+      }, { rootMargin: '0px 0px -10% 0px' });
+      revealed.forEach((element) => observer.observe(element));
+    } else {
+      revealed.forEach((element) => element.classList.add('in'));
+    }
+  </script>
+</BaseLayout>

@@ -1,0 +1,31 @@
+---
+import { marketingRoutes, primaryNav } from '@/lib/marketing/routes';
+
+const current = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+<header class="site-header">
+  <div class="wrap">
+    <a href={marketingRoutes.home} class="brand" aria-label="Architect Pro home">
+      <img src="/brand/architect-pro-logo.png" width="800" height="280" alt="Architect Pro" />
+    </a>
+    <nav class="main-nav" aria-label="Main">
+      {primaryNav.map((item) => (
+        <a href={item.href} aria-current={current === item.href ? 'page' : undefined}>{item.label}</a>
+      ))}
+    </nav>
+    <div class="header-actions">
+      <a class="sign-in" href={marketingRoutes.signIn}>Sign in</a>
+      <a class="button primary small desktop-only header-demo" href={marketingRoutes.demo}>Book a demo</a>
+      <details class="menu">
+        <summary>Menu</summary>
+        <nav class="menu-panel" aria-label="Main">
+          {primaryNav.map((item) => (
+            <a href={item.href} aria-current={current === item.href ? 'page' : undefined}>{item.label}</a>
+          ))}
+          <a href={marketingRoutes.contact}>Contact</a>
+          <a class="button primary" href={marketingRoutes.demo}>Book a demo</a>
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>

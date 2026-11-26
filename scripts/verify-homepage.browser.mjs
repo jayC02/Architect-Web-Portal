@@ -48,7 +48,7 @@ try {
   }
   await page.goto(base); await ready(page);
   check('Desktop opens in 3D with one canvas and one heading', await page.locator('canvas').count() === 1 && await page.locator('h1').count() === 1);
-  check('Existing logo and account routes remain present', await page.locator('.brand img').getAttribute('src') === '/brand/architect-pro-logo.png' && await page.locator('.account-create').getAttribute('href') === '/register');
+  check('Existing logo and account routes remain present', await page.locator('.brand img').getAttribute('src') === '/brand/architect-pro-logo.png' && await page.locator('.account-create').getAttribute('href') === '/demo');
   await page.getByRole('button', { name: 'Scroll to begin' }).click(); await page.waitForTimeout(1800);
   await shot(page, 'desktop-site.png');
   for (let i = 0; i < 6; i++) {
@@ -58,7 +58,7 @@ try {
     check(`Keyboard navigation reaches chapter ${i + 1}`, await button.getAttribute('aria-current') === 'step');
   }
   await scroll(page, 0.99, 1800); await shot(page, 'desktop-finale.png');
-  check('Finale links to registration and labels the illustration', await page.locator('#copy .primary').getAttribute('href') === '/register' && (await page.locator('#copy .note').innerText()).includes('illustrative'));
+  check('Finale links to booking a demo and labels the illustration', await page.locator('#copy .primary').getAttribute('href') === '/demo' && (await page.locator('#copy .note').innerText()).includes('illustrative'));
   await page.getByRole('button', { name: 'Replay', exact: true }).click();
   await page.waitForFunction(() => scrollY < 10);
   check('Replay is the deliberate action that returns to the start', await page.locator('#stage').getAttribute('data-act') === '0');
@@ -132,10 +132,10 @@ try {
   check('Sign in reaches the real form with normal page scrolling', await phone.locator('form[data-action="/api/auth/login"]').count() === 1 && await phone.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY !== 'none'));
   await phone.goBack(); await ready(phone);
   check('Returning from sign in retains the story position', Math.abs(await progress(phone) - 0.55) < 0.002);
-  await phone.getByRole('link', { name: 'Create workspace', exact: true }).click();
-  await phone.getByRole('heading', { name: 'Create workspace' }).waitFor();
-  check('Create workspace still reaches real registration', await phone.locator('form[data-action="/api/auth/register"]').count() === 1);
-  for (const route of ['privacy', 'terms']) {
+  await phone.getByRole('link', { name: 'Book a demo', exact: true }).click();
+  await phone.getByRole('heading', { name: 'See it with one of your own projects.' }).waitFor();
+  check('Book a demo reaches the access request form', await phone.locator('form.access-form').count() === 1);
+  for (const route of ['privacy', 'terms', 'pricing', 'features']) {
     await phone.goto(base); await ready(phone); await phone.locator(`.site-footer a[href="/${route}"]`).click();
     check(`${route} remains reachable`, new URL(phone.url()).pathname === `/${route}`);
   }

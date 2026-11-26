@@ -1,0 +1,55 @@
+---
+import { marketingRoutes } from '@/lib/marketing/routes';
+
+const columns = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'Features', href: marketingRoutes.features },
+      { label: 'Pricing', href: marketingRoutes.pricing },
+      { label: 'Security', href: marketingRoutes.security },
+      { label: 'Book a demo', href: marketingRoutes.demo },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About', href: marketingRoutes.about },
+      { label: 'Contact', href: marketingRoutes.contact },
+      { label: 'FAQ', href: marketingRoutes.faq },
+      { label: 'Sign in', href: marketingRoutes.signIn },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Privacy', href: marketingRoutes.privacy },
+      { label: 'Terms', href: marketingRoutes.terms },
+    ],
+  },
+];
+---
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img src="/brand/architect-pro-logo.png" width="800" height="280" alt="Architect Pro" loading="lazy" />
+        <p>Planning, building warrants and completion certificates for Scottish architecture practices, prepared and tracked in one place.</p>
+      </div>
+      {columns.map((column) => (
+        <nav aria-label={column.title}>
+          <h2>{column.title}</h2>
+          <ul>
+            {column.links.map((link) => (
+              <li><a href={link.href}>{link.label}</a></li>
+            ))}
+          </ul>
+        </nav>
+      ))}
+    </div>
+    <div class="footer-base">
+      <span>&copy; {new Date().getFullYear()} Architect Pro</span>
+      <span>Made in Scotland for Scottish practices</span>
+    </div>
+  </div>
+</footer>

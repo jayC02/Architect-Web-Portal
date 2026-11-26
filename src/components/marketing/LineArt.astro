@@ -1,0 +1,66 @@
+---
+// Architectural linework in the homepage story's drawing style. Decorative only.
+interface Props {
+  variant: 'house' | 'plan' | 'elevation' | 'stack' | 'studio';
+  class?: string;
+}
+const { variant, class: className } = Astro.props;
+---
+<div class:list={['hero-art', className]} aria-hidden="true">
+  {variant === 'house' && (
+    <svg viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="draw">
+      <path d="M20 330h440" />
+      <path d="M70 330V178l170-118 170 118v152" />
+      <path d="M40 196 240 56l200 140" class="accent" stroke-width="2.2" />
+      <rect x="110" y="206" width="70" height="64" />
+      <path d="M145 206v64M110 238h70" />
+      <rect x="300" y="206" width="70" height="64" />
+      <path d="M335 206v64M300 238h70" />
+      <path d="M210 330v-86h60v86" />
+      <path d="M200 120h80v46h-80z" />
+      <path d="M240 120v46" />
+      <path d="M20 352h120M180 352h40M260 352h200" stroke-dasharray="4 6" />
+      <circle cx="420" cy="70" r="16" class="fill-accent" stroke="none" />
+    </svg>
+  )}
+  {variant === 'plan' && (
+    <svg viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" class="draw">
+      <rect x="40" y="40" width="400" height="300" />
+      <path d="M40 180h170M250 180h190M210 40v100M210 220v120M330 180v160" />
+      <path d="M210 140a40 40 0 0 1 40 40M210 220a40 40 0 0 0 40-40" />
+      <path d="M90 40v-14M390 40v-14M90 26h300" />
+      <path d="M440 40h14M440 340h14M454 40v300" />
+      <rect x="64" y="64" width="110" height="80" stroke-dasharray="3 5" />
+      <path d="M20 360h440" class="accent" stroke-dasharray="10 6" stroke-width="2.2" />
+    </svg>
+  )}
+  {variant === 'elevation' && (
+    <svg viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="draw">
+      <path d="M20 330h440" />
+      <path d="M60 330V150h150v180M210 330V90l110-50 110 50v240" />
+      <path d="M90 180h90v50H90zM90 260h90v40H90z" />
+      <path d="M250 120h140v60H250zM250 210h60v120h-60zM330 210h60v60h-60z" />
+      <path d="M60 150 135 110l75 40" class="accent" stroke-width="2.2" />
+      <path d="M440 90v240M432 90h16M432 330h16" />
+    </svg>
+  )}
+  {variant === 'stack' && (
+    <svg viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="draw">
+      <path d="M120 300 240 340l120-40-120-40z" />
+      <path d="M120 240 240 280l120-40-120-40z" />
+      <path d="M120 180 240 220l120-40-120-40z" class="accent" stroke-width="2.2" />
+      <path d="M240 140V60M210 90l30-30 30 30" />
+      <path d="M120 180v120M360 180v120M240 220v120" stroke-dasharray="3 6" />
+    </svg>
+  )}
+  {variant === 'studio' && (
+    <svg viewBox="0 0 480 380" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="draw">
+      <path d="M20 330h440" />
+      <path d="M50 330V120l80-50 80 50v210M210 330V170h120v160M330 330V100l50-40 50 40v230" />
+      <path d="M80 150h40v40H80zM140 150h40v40h-40zM80 220h40v40H80zM140 220h40v40h-40z" />
+      <path d="M240 200h60v40h-60zM255 330v-60h30v60" />
+      <path d="M355 120h50v60h-50zM355 210h50v60h-50z" />
+      <path d="M50 120l80-50 80 50" class="accent" stroke-width="2.2" />
+    </svg>
+  )}
+</div>

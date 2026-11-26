@@ -1,0 +1,342 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import DrawingBoard from '@/components/marketing/DrawingBoard.astro';
+import { marketingRoutes, subscribeHref, demoHref } from '@/lib/marketing/routes';
+import { plans, everyPlanIncludes, pricingNotes, formatPrice, yearlySaving, type Plan } from '@/lib/marketing/plans';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+
+const yearlyLabel = (plan: Plan) =>
+  plan.yearly === null ? 'n/a' : plan.yearly === 'quoted' ? 'Quoted' : formatPrice(plan.yearly);
+const monthlyLabel = (plan: Plan) => `${plan.fromPrice ? 'from ' : ''}${formatPrice(plan.monthly)}`;
+const sentenceCase = (text: string) => text.replace(/^For /, '').replace(/^\w/, (letter) => letter.toUpperCase());
+
+const comparison: [string, (plan: Plan) => string][] = [
+  ['For', (plan) => sentenceCase(plan.audience)],
+  ['Monthly', monthlyLabel],
+  ['Yearly (2 months free)', yearlyLabel],
+  ['Applications included', (plan) => String(plan.included)],
+  ['Cost per included application', (plan) => plan.perIncluded],
+  ['Extra applications', (plan) => plan.extraLabel],
+  ['Users', (plan) => plan.users],
+  ['U-values', (plan) => plan.uValues],
+  ['Support', (plan) => plan.support],
+];
+
+const card = (plan: Plan) => {
+  if (plan.id === 'payg') {
+    const rate = formatPrice(plan.extraRate ?? 0);
+    return {
+      from: { monthly: '', yearly: '' },
+      price: { monthly: formatPrice(0), yearly: formatPrice(0) },
+      unit: { monthly: 'a month', yearly: 'a month' },
+      note: { monthly: `No subscription. ${rate} per application.`, yearly: `No yearly plan. ${rate} per application.` },
+    };
+  }
+  if (plan.yearly === 'quoted') {
+    return {
+      from: { monthly: 'from', yearly: '' },
+      price: { monthly: formatPrice(plan.monthly), yearly: 'Quoted' },
+      unit: { monthly: 'a month', yearly: '' },
+      note: { monthly: `${plan.included} applications included each month.`, yearly: 'Yearly price agreed with your firm.' },
+    };
+  }
+  return {
+    from: { monthly: '', yearly: '' },
+    price: { monthly: formatPrice(plan.monthly), yearly: formatPrice(plan.yearly ?? 0) },
+    unit: { monthly: 'a month', yearly: 'a year' },
+    note: { monthly: `${plan.included} applications included each month.`, yearly: `Two months free. You save ${formatPrice(yearlySaving(plan))}.` },
+  };
+};
+
+const finderData = JSON.stringify(plans.map(({ id, name, monthly, yearly, included, extraRate, userLimit, cta }) => ({
+  id, name, monthly, yearly, included, extraRate, userLimit,
+  href: cta === 'talk' ? demoHref(id) : subscribeHref(id, 'monthly'),
+  action: cta === 'talk' ? 'Talk to us about Firm' : id === 'payg' ? 'Start pay as you go' : `Start ${name}`,
+})));
+
+const [payg, practice, studio] = plans;
+const faqs = [
+  { q: 'What counts as an application?', a: 'Each planning permission, building warrant or completion certificate that Architect Pro prepares and submits for you counts as one application.' },
+  { q: 'What if we go over the applications in our plan?', a: `Extra applications are charged at your plan’s rate: ${practice.extraLabel} each on Practice and ${studio.extraLabel} each on Studio. Firm agrees its rate with us. On pay as you go every application is ${payg.extraLabel}.` },
+  { q: 'How are U-value reports charged?', a: `On pay as you go, each project’s U-value report is £25. Practice can add the U-value calculator for £19 a month. Studio and Firm include it.` },
+  { q: 'Is there a free trial?', a: 'There is no open free trial. Book a demo and, if Architect Pro suits your practice, we approve a 14-day guided evaluation workspace with one licensed Agent. When it ends you choose a plan or the workspace locks.' },
+  { q: 'Can we change plan later?', a: 'Yes. Upgrades take effect immediately and are prorated. Downgrades apply from your next billing date.' },
+  { q: 'Do prices include council fees?', a: 'No. Planning, building warrant and verifier fees are paid to the relevant authority. Architect Pro calculates the building standards fee for you but never charges it.' },
+  { q: 'What happens to the desktop Agent if we cancel?', a: 'Each Agent is licensed to your workspace and checks its licence when it starts and regularly while running. When a subscription ends, Agents stop submitting. If you need a copy of your project records, contact us and we will arrange an export.' },
+];
+---
+<MarketingLayout
+  title="Pricing | Architect Pro"
+  description="Pay as you go at £29 an application, or plans from £79 a month with applications included. For Scottish architecture practices of every size. Prices exclude VAT."
+  world="design"
+>
+  <section class="hero compact">
+    <div class="wrap">
+      <p class="eyebrow">Pricing, excluding VAT</p>
+      <h1>Pay for the applications you send.</h1>
+      <p class="lede">Start pay as you go at {payg.extraLabel} an application, or choose a plan with applications included and a lower rate for every one after. Every plan has the whole workspace and a licensed desktop Agent.</p>
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button type="button" data-billing="monthly" aria-pressed="true">Monthly</button>
+        <button type="button" data-billing="yearly" aria-pressed="false">Yearly <span class="save">2 months free</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-label="Plans" style="padding-top: 56px;">
+    <div class="wrap">
+      <div class="plans four">
+        {plans.map((plan) => {
+          const view = card(plan);
+          return (
+            <article class:list={['plan', { highlight: plan.highlight }]} aria-labelledby={`plan-${plan.id}`}>
+              {plan.highlight && <span class="badge"><span aria-hidden="true">★ </span>Recommended</span>}
+              <h3 id={`plan-${plan.id}`}>{plan.name}</h3>
+              <p class="plan-for">{plan.audience}</p>
+              <p class="price">
+                <span class="from" data-monthly={view.from.monthly} data-yearly={view.from.yearly}>{view.from.monthly}</span>
+                <b data-monthly={view.price.monthly} data-yearly={view.price.yearly}>{view.price.monthly}</b>
+                <span data-monthly={view.unit.monthly} data-yearly={view.unit.yearly}>{view.unit.monthly}</span>
+              </p>
+              <p class="price-note" data-monthly={view.note.monthly} data-yearly={view.note.yearly}>{view.note.monthly}</p>
+              {plan.cta === 'talk'
+                ? <a class="button dark" href={demoHref(plan.id)}>Talk to us</a>
+                : (
+                  <a
+                    class:list={['button', plan.highlight ? 'primary' : 'dark']}
+                    href={subscribeHref(plan.id, 'monthly')}
+                    data-monthly={subscribeHref(plan.id, 'monthly')}
+                    data-yearly={plan.yearly === null ? subscribeHref(plan.id, 'monthly') : subscribeHref(plan.id, 'annual')}
+                  >{plan.id === 'payg' ? 'Start pay as you go' : 'Start subscription'}</a>
+                )}
+              <a class="secondary-link text-link" href={demoHref(plan.id)}>Book a demo first</a>
+              <dl class="plan-facts">
+                <div><dt>Applications included</dt><dd>{plan.included}</dd></div>
+                <div><dt>Per included application</dt><dd>{plan.perIncluded}</dd></div>
+                <div><dt>Extra applications</dt><dd>{plan.extraLabel}</dd></div>
+                <div><dt>Users</dt><dd>{plan.users}</dd></div>
+                <div><dt>U-values</dt><dd>{plan.uValues}</dd></div>
+                <div><dt>Support</dt><dd>{plan.support}</dd></div>
+              </dl>
+            </article>
+          );
+        })}
+      </div>
+
+      <ul class="footnote" style="display: grid; gap: 4px;">
+        {pricingNotes.map((note) => <li>{note}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section bordered" aria-label="Choosing a plan">
+    <div class="wrap">
+      <DrawingBoard scene="plan" number="AP-201">
+        <div class="board-block calc" data-sheet-stage="1" data-plans={finderData} role="group" aria-labelledby="calc-title">
+          <h2 id="calc-title">Find the plan that fits.</h2>
+          <p>Set a typical month for your practice. We work out what each plan would cost and suggest the cheapest one that covers your team.</p>
+          <div class="calc-inputs">
+            <div class="calc-field">
+              <label for="calc-apps">Applications a month <output for="calc-apps" data-out="apps">8</output></label>
+              <input id="calc-apps" type="range" min="0" max="120" step="1" value="8" />
+              <div class="scale" aria-hidden="true"><span>0</span><span>30</span><span>60</span><span>90</span><span>120</span></div>
+            </div>
+            <div class="calc-field">
+              <label for="calc-users">People who need access <output for="calc-users" data-out="users">2</output></label>
+              <input id="calc-users" type="range" min="1" max="25" step="1" value="2" />
+              <div class="scale" aria-hidden="true"><span>1</span><span>10</span><span>25</span></div>
+            </div>
+          </div>
+          <div class="calc-result" aria-live="polite">
+            <span class="calc-label">Best fit</span>
+            <div class="best"><b data-result="name">Practice</b><span data-result="cost">£79 a month</span></div>
+            <p data-result="detail">8 of 10 included applications used.</p>
+          </div>
+          <ul class="calc-bars" aria-label="Monthly cost on each plan">
+            {plans.map((plan) => (
+              <li data-plan={plan.id}><span class="name">{plan.name}</span><span class="track" aria-hidden="true"><i></i></span><span class="cost">–</span></li>
+            ))}
+          </ul>
+          <div class="actions">
+            <a class="button primary" data-result="action" href={subscribeHref('practice', 'monthly')}>Start Practice</a>
+            <a class="button" href={demoHref()}>Book a demo</a>
+          </div>
+          <p class="footnote">Estimates exclude VAT, U-value add-ons and statutory fees.</p>
+        </div>
+
+        <div class="board-block" data-sheet-stage="2" aria-labelledby="includes-title">
+          <h2 id="includes-title">Every plan includes the whole workspace.</h2>
+          <p class="body-copy">Plans differ in how many applications are included, how many people can sign in, U-values and support. Nothing else is held back.</p>
+          <ul class="includes">
+            {everyPlanIncludes.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+
+        <div class="board-block" data-sheet-stage="3" aria-labelledby="access-title">
+          <h2 id="access-title">How access works.</h2>
+          <p class="body-copy">Architect Pro is only available to approved practices, on pay as you go or a subscription. That keeps your data, and the portal accounts the Agent uses, in trusted hands.</p>
+          <ol class="access-steps">
+            <li><h3>Book a demo or choose a plan</h3><p>Walk through a real project with us, or go straight to checkout if you already know.</p></li>
+            <li><h3>We approve your practice</h3><p>Demo practices are approved for a guided evaluation. Paid accounts open as soon as payment clears.</p></li>
+            <li data-sheet-stage="4"><h3>Your workspace opens</h3><p>Invite your team. Users follow your plan and the owner controls who has access.</p></li>
+            <li><h3>Licence your Agent</h3><p>Download the Agent from inside your workspace and pair it to an office PC with a one-time code.</p></li>
+          </ol>
+        </div>
+      </DrawingBoard>
+    </div>
+  </section>
+
+  <section class="section bordered" aria-labelledby="compare-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="compare-title">Compare plans.</h2>
+        <p>Every figure excludes VAT. Applications included are per month; extra applications are charged at the rate shown.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="compare">
+          <caption class="sr-only">Plan comparison, prices excluding VAT</caption>
+          <thead>
+            <tr><th scope="col"><span class="sr-only">Feature</span></th>{plans.map((plan) => <th scope="col">{plan.name}{plan.highlight && <span aria-hidden="true"> ★</span>}</th>)}</tr>
+          </thead>
+          <tbody>
+            {comparison.map(([label, value]) => (
+              <tr>
+                <th scope="row">{label}</th>
+                {plans.map((plan) => <td>{value(plan)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tint" aria-labelledby="pricing-faq-title">
+    <div class="wrap faq-layout">
+      <div>
+        <h2 id="pricing-faq-title" style="font-size: clamp(26px, 2.6vw, 36px);">Pricing questions</h2>
+        <p class="body-copy" style="margin-top: 12px;">More in the <a class="text-link" href={marketingRoutes.faq}>full FAQ</a>.</p>
+      </div>
+      <div class="faq">
+        {faqs.map((item) => (
+          <details>
+            <summary>{item.q}</summary>
+            <div class="answer"><p>{item.a}</p></div>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta title="Not sure which plan fits?" body="Book a demo and we will recommend a plan from the number of applications your practice sends each month." />
+
+  <script>
+    type Period = 'monthly' | 'yearly';
+    const toggle = document.querySelector('.billing-toggle');
+    toggle?.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-billing]');
+      if (!button) return;
+      const period = button.dataset.billing as Period;
+      toggle.querySelectorAll('button').forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === button)));
+      document.querySelectorAll<HTMLElement>('.plan [data-monthly]').forEach((element) => {
+        const value = element.dataset[period] ?? '';
+        if (element instanceof HTMLAnchorElement) element.href = value;
+        else element.textContent = value;
+      });
+    });
+
+    interface FinderPlan {
+      id: string;
+      name: string;
+      monthly: number;
+      yearly: number | 'quoted' | null;
+      included: number;
+      extraRate: number | null;
+      userLimit: number | null;
+      href: string;
+      action: string;
+    }
+
+    const finder = document.querySelector<HTMLElement>('.calc[data-plans]');
+    if (finder) {
+      const plans = JSON.parse(finder.dataset.plans ?? '[]') as FinderPlan[];
+      const board = finder.closest<HTMLElement>('[data-board]');
+      const apps = finder.querySelector<HTMLInputElement>('#calc-apps')!;
+      const users = finder.querySelector<HTMLInputElement>('#calc-users')!;
+      const out = (name: string) => finder.querySelector<HTMLElement>(`[data-out="${name}"]`)!;
+      const result = (name: string) => finder.querySelector<HTMLElement>(`[data-result="${name}"]`)!;
+      const money = (value: number) => `£${value.toLocaleString('en-GB')}`;
+
+      const quote = (plan: FinderPlan, applications: number, people: number) => {
+        if (plan.userLimit !== null && people > plan.userLimit) {
+          return { eligible: false, monthly: null as number | null, rank: Infinity, label: `Up to ${plan.userLimit} user${plan.userLimit === 1 ? '' : 's'}` };
+        }
+        const extra = Math.max(0, applications - plan.included);
+        if (plan.extraRate === null) {
+          // Firm: a starting price for its included applications, agreed beyond that.
+          return extra > 0
+            ? { eligible: true, monthly: null, rank: plan.monthly, label: 'Quoted' }
+            : { eligible: true, monthly: plan.monthly, rank: plan.monthly, label: `from ${money(plan.monthly)}` };
+        }
+        const monthly = plan.monthly + extra * plan.extraRate;
+        return { eligible: true, monthly, rank: monthly, label: `${money(monthly)} a month` };
+      };
+
+      const update = () => {
+        const applications = Number(apps.value);
+        const people = Number(users.value);
+        out('apps').textContent = applications >= Number(apps.max) ? `${applications}+` : String(applications);
+        out('users').textContent = people >= Number(users.max) ? `${people}+` : String(people);
+
+        const quotes = plans.map((plan) => ({ plan, ...quote(plan, applications, people) }));
+        const best = quotes.filter((entry) => entry.eligible).sort((a, b) => a.rank - b.rank)[0];
+        const scale = Math.max(1, ...quotes.filter((entry) => entry.eligible).map((entry) => entry.rank));
+
+        quotes.forEach((entry) => {
+          const row = finder.querySelector<HTMLElement>(`.calc-bars [data-plan="${entry.plan.id}"]`);
+          if (!row) return;
+          row.classList.toggle('best', entry === best);
+          row.classList.toggle('out', !entry.eligible);
+          const value = entry.eligible ? entry.rank : 0;
+          row.querySelector<HTMLElement>('.track i')!.style.width = `${value > 0 ? Math.max(2, (value / scale) * 100) : 0}%`;
+          row.querySelector<HTMLElement>('.cost')!.textContent = entry.label;
+        });
+
+        if (!best) return;
+        const { plan } = best;
+        const extra = Math.max(0, applications - plan.included);
+        result('name').textContent = plan.name;
+        result('cost').textContent = best.monthly === null ? 'Quoted' : `${plan.extraRate === null ? 'from ' : ''}${money(best.monthly)} a month`;
+        let detail: string;
+        if (plan.included === 0) {
+          detail = applications === 0
+            ? 'Nothing to pay until you send an application.'
+            : `${applications} application${applications === 1 ? '' : 's'} at ${money(plan.extraRate ?? 0)} each.`;
+        } else if (plan.extraRate === null) {
+          detail = extra > 0
+            ? `${plan.included} applications included. We agree a rate for the other ${extra} with you.`
+            : `${plan.included} applications included, with unlimited users and a named contact.`;
+        } else {
+          detail = extra > 0
+            ? `${plan.included} included, plus ${extra} extra at ${money(plan.extraRate)} each.`
+            : `${applications} of ${plan.included} included applications used.`;
+          if (typeof plan.yearly === 'number') {
+            detail += ` Billed yearly: ${money(plan.yearly + extra * plan.extraRate * 12)} a year.`;
+          }
+        }
+        result('detail').textContent = detail;
+        const action = result('action') as HTMLAnchorElement;
+        action.textContent = plan.action;
+        action.href = plan.href;
+        if (board) board.dataset.highlight = plan.id;
+      };
+
+      apps.addEventListener('input', update);
+      users.addEventListener('input', update);
+      update();
+    }
+  </script>
+</MarketingLayout>
