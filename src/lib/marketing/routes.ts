@@ -7,6 +7,8 @@
 export const marketingRoutes = {
   home: '/',
   features: '/features',
+  /** The 3D scroll story: one project from first sketch to completion. */
+  liveDemo: '/live-demo',
   pricing: '/pricing',
   demo: '/demo',
   security: '/security',
@@ -31,6 +33,7 @@ export const demoHref = (interest?: string) =>
 
 export const primaryNav = [
   { label: 'Features', href: marketingRoutes.features },
+  { label: 'Live demo', href: marketingRoutes.liveDemo },
   { label: 'Pricing', href: marketingRoutes.pricing },
   { label: 'Security', href: marketingRoutes.security },
   { label: 'About', href: marketingRoutes.about },

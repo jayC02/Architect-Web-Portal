@@ -1,22 +1,307 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro';
-import { storyMarkup } from './scroll-story/markup.js';
-import '@/styles/scroll-home.css';
+// The public homepage: says plainly what Architect Pro does, then lets the visitor
+// run it. Hero (every form filled for you), how it works in three steps, the
+// click-to-run product demo, a job from planning to completion, time saved,
+// the live demo, pricing, then the closing call to action. Small 3D drawings
+// play as each part scrolls into view; the page pen line runs behind it all.
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import ClosingCta from '@/components/marketing/ClosingCta.astro';
+import ProductDemo from './ProductDemo.astro';
+import * as scenes from './scenes';
+import { plans, formatPrice } from '@/lib/marketing/plans';
+import { marketingRoutes } from '@/lib/marketing/routes';
+import { MANUAL_MIN, AUTO_MIN } from './scroll-story/story.js';
+import '@/styles/home.css';
+
+const draw = (scene: scenes.Scene) => `<svg viewBox="${scene.viewBox}" aria-hidden="true" focusable="false">${scene.svg}</svg>`;
+
+// The forms the hero fills in, one after another.
+const heroForms = [
+  { name: 'Householder', title: 'Householder planning application', fields: [['Site address', '14 Harbour Lane, Anstruther'], ['Applicant', 'Morag Reid'], ['Proposal', 'Single-storey rear extension'], ['Drawings', '6 attached']] },
+  { name: 'Full planning permission', title: 'Full planning permission', fields: [['Site address', 'Plot 2, Shore Road, Elie'], ['Applicant', 'Firth Homes Ltd'], ['Proposal', 'New two-storey house'], ['Drawings', '9 attached']] },
+  { name: 'Building warrant', title: 'Building warrant', fields: [['Site address', '14 Harbour Lane, Anstruther'], ['Value of works', '£85,000'], ['Fee', '£1,290.00, calculated'], ['Drawings', '11 attached']] },
+  { name: 'Completion certificate', title: 'Completion certificate', fields: [['Warrant', '26/01137/WARR'], ['Work finished', '12 March'], ['Certificates', '3 attached'], ['Fee', 'No fee']] },
+];
+
+const how = [
+  { title: 'Drop in your drawings', body: 'Upload the PDFs for the job, however they are named.', art: draw(scenes.tray()), kind: 'tray' },
+  { title: 'AI reads every sheet', body: 'It finds the client, site, proposal and costs, and fills every form from them.', art: draw(scenes.reader()), kind: 'reader' },
+  { title: 'Submitted in the background', body: 'The Desktop Agent completes the portal. You approve any fee.', art: draw(scenes.forms()), kind: 'forms' },
+];
+
+const journey = [
+  { stage: 'Planning', form: 'Householder or full planning permission', art: draw(scenes.planning()), kind: 'planning' },
+  { stage: 'Building warrant', form: 'Building warrant, fee calculated', art: draw(scenes.warrant()), kind: 'warrant' },
+  { stage: 'Construction', form: 'Every reply tracked and matched', art: draw(scenes.construction()), kind: 'construction' },
+  { stage: 'Completion', form: 'Completion certificate', art: draw(scenes.completion()), kind: 'completion' },
+];
+
+const priceCards = plans.map((plan) => ({
+  id: plan.id,
+  name: plan.name,
+  price: formatPrice(plan.monthly === 0 ? plan.extraRate ?? 0 : plan.monthly),
+  unit: plan.monthly === 0 ? 'per application' : 'a month',
+  from: plan.fromPrice ? 'From' : '',
+  line: plan.monthly === 0 ? 'No monthly fee' : `${plan.included} applications included`,
+  highlight: plan.highlight ?? false,
+}));
 ---
-<BaseLayout
-  title="Architect Pro | No more portal"
-  description="From the first red line to planning permission, building warrants and completion certificates. See how Architect Pro prepares your applications and keeps your projects together."
+<MarketingLayout
+  title="Architect Pro | Every application form, filled in for you"
+  description="Householder, full planning permission, building warrant and completion certificate. Drop in your drawings and Architect Pro fills in and submits every application form in the background, in a few clicks."
+  world="site"
 >
-  <Fragment slot="head">
-    <meta name="theme-color" content="#e6edf9" />
-    <link rel="preload" href="/fonts/scroll-story/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin />
-  </Fragment>
-  <div id="scroll-home" class="scroll-home" data-view="3d">
-    <a href="#home-content" class="skip-link">Skip to content</a>
-    <div id="scroll-home-content" set:html={storyMarkup()} />
-  </div>
-  <script>
-    import { mountScrollHome } from './scroll-story/main.js';
-    mountScrollHome();
-  </script>
-</BaseLayout>
+  <section class="hero home-hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Planning to completion, automated</p>
+        <h1>Every application form, filled in for you.</h1>
+        <p class="lede">Drop in your drawings. Architect Pro reads them, fills in every form and submits it in the background, in a few clicks.</p>
+        <ul class="form-chips" aria-label="Forms Architect Pro fills in">
+          {heroForms.map((form, index) => <li data-chip={index}><span class="chip-tick" aria-hidden="true"></span>{form.name}</li>)}
+        </ul>
+        <div class="actions">
+          <a class="button primary" href="#demo">
+            See it fill in the forms
+            <svg class="nudge" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5" /></svg>
+          </a>
+          <a class="button" href={marketingRoutes.demo}>Book a demo</a>
+        </div>
+      </div>
+
+      <div class="hero-art hero-stage" aria-hidden="true" data-hero-forms={JSON.stringify(heroForms)}>
+        <div class="iso hero-site on" set:html={draw(scenes.heroSite())} />
+        <div class="hf-card">
+          <div class="hf-head">
+            <b class="hf-title">{heroForms[0].title}</b>
+            <span class="tag live hf-tag">Filling in</span>
+          </div>
+          <dl class="hf-fields">
+            {heroForms[0].fields.map(([label, value]) => <div><dt>{label}</dt><dd><span data-value={value}>{value}</span></dd></div>)}
+          </dl>
+          <div class="bar"><span></span></div>
+          <p class="hf-foot"><span class="hf-count">Filled from the drawings</span><span class="hf-stamp">Submitted</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-how" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title" class="home-center">Three steps. Most of them happen without you.</h2>
+      <ol class="how">
+        {how.map((step, index) => (
+          <li class="reveal" style={`--i:${index}`}>
+            <div class:list={['iso', step.kind]} set:html={step.art} />
+            <p class="how-num">{index + 1}</p>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
+      <a class="try-here" href="#demo">
+        <svg viewBox="0 0 60 80" aria-hidden="true"><path pathLength="1" d="M30 4c-14 18-14 38 0 64" /><path pathLength="1" d="M20 58l10 12 10-12" /></svg>
+        <span>Try it yourself</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="section home-demo" id="demo" aria-labelledby="demo-title">
+    <div class="wrap">
+      <div class="home-center demo-head">
+        <h2 id="demo-title">See it do a whole job.</h2>
+        <p>Six drawings in. Three applications out. Press Run.</p>
+      </div>
+      <div class="world automation demo-world">
+        <ProductDemo />
+      </div>
+      <p class="footnote home-center">Illustrative example, run in your browser. Nothing is uploaded or submitted. Shown back to back here; in practice each application goes in when the job reaches that stage.</p>
+    </div>
+  </section>
+
+  <section class="section home-journey" aria-labelledby="journey-title" data-journey>
+    <div class="wrap">
+      <div class="home-center">
+        <h2 id="journey-title">One project, start to finish.</h2>
+        <p class="home-sub">Each form is filled from the same record, so nothing is typed twice.</p>
+      </div>
+      <div class="journey">
+        <svg class="journey-line" viewBox="0 0 1000 10" preserveAspectRatio="none" aria-hidden="true"><path d="M0 5H1000" pathLength="1" /></svg>
+        <ol>
+          {journey.map((step, index) => (
+            <li data-stop={index}>
+              <div class:list={['iso', step.kind]} set:html={step.art} />
+              <span class="journey-dot" aria-hidden="true"></span>
+              <h3>{step.stage}</h3>
+              <p>{step.form}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="section bordered home-time" aria-labelledby="time-title">
+    <div class="wrap time-grid">
+      <h2 id="time-title">An hour of portal work, down to four minutes.</h2>
+      <div class="time-bars" data-time>
+        <div class="time-row">
+          <span>By hand</span>
+          <div class="track"><i style={`--w:100%`}></i></div>
+          <b class="num">{MANUAL_MIN} min</b>
+        </div>
+        <div class="time-row ours">
+          <span>Architect Pro</span>
+          <div class="track"><i style={`--w:${(AUTO_MIN / MANUAL_MIN) * 100}%`}></i></div>
+          <b class="num">{AUTO_MIN} min</b>
+        </div>
+        <p class="footnote">Planning, building warrant and completion certificate for one job. Illustrative; actual times vary.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-live" aria-labelledby="live-title">
+    <div class="wrap live-grid">
+      <div class="iso live-art" set:html={draw(scenes.construction())} />
+      <div>
+        <h2 id="live-title">Prefer the long version?</h2>
+        <p class="home-sub">The live demo follows one project in 3D, from the first sketch to the completion certificate, as you scroll.</p>
+        <div class="actions">
+          <a class="button dark" href={marketingRoutes.liveDemo}>Open the live demo</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-pricing" aria-labelledby="pricing-title">
+    <div class="wrap">
+      <div class="home-center">
+        <h2 id="pricing-title">Simple pricing.</h2>
+        <p class="home-sub">Pay per application, or choose a plan with applications included.</p>
+      </div>
+      <ul class="tplans" data-tplans>
+        {priceCards.map((card) => (
+          <li class:list={['plan', 'tplan', { highlight: card.highlight }]}>
+            {card.highlight && (
+              <svg class="pen-ring" viewBox="0 0 200 200" preserveAspectRatio="none" aria-hidden="true">
+                <path pathLength="1" d="M40 7C90 4 150 5 176 8c16 2 18 14 18 34 1 40 1 84-1 120-1 22-8 30-30 31-44 2-96 2-130 0-18-1-26-10-27-30-2-38-2-82 0-122 1-24 12-33 42-35 30-1 54 0 70 2" />
+              </svg>
+            )}
+            <h3>{card.name}</h3>
+            <p class="price"><span class="from">{card.from}</span><b>{card.price}</b><span>{card.unit}</span></p>
+            <p class="tplan-line">{card.line}</p>
+            {card.highlight && <p class="pen-note" aria-hidden="true">Where most practices start</p>}
+          </li>
+        ))}
+      </ul>
+      <div class="home-center pricing-foot">
+        <a class="button primary" href={marketingRoutes.pricing}>See full pricing</a>
+        <p class="footnote">Per practice, excluding VAT. Council and verifier fees are paid to the authority.</p>
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta />
+</MarketingLayout>
+
+<script>
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Drawings and rings play once they scroll into view.
+  const playOnView = document.querySelectorAll<HTMLElement>('.iso:not(.on), [data-tplans], [data-time], .try-here');
+  if ('IntersectionObserver' in window && !reduced) {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add('on');
+        observer.unobserve(entry.target);
+      }
+    }, { rootMargin: '0px 0px -15% 0px' });
+    playOnView.forEach((el) => observer.observe(el));
+  } else {
+    playOnView.forEach((el) => el.classList.add('on'));
+  }
+
+  // The journey: a red line runs along the four stages as the section scrolls through.
+  const journey = document.querySelector<HTMLElement>('[data-journey]');
+  if (journey) {
+    const stops = [...journey.querySelectorAll<HTMLElement>('[data-stop]')];
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const rect = journey.getBoundingClientRect();
+      // 0 as the section comes up the screen, 1 once its drawings sit in the middle of it
+      const p = reduced ? 1 : Math.min(1, Math.max(0, (innerHeight * 0.9 - rect.top) / (rect.height * 0.9)));
+      journey.style.setProperty('--p', p.toFixed(3));
+      stops.forEach((stop, index) => stop.classList.toggle('reached', p >= (index + 0.4) / stops.length));
+    };
+    update();
+    addEventListener('scroll', () => { if (!frame) frame = requestAnimationFrame(update); }, { passive: true });
+    addEventListener('resize', update);
+  }
+
+  // The hero form: fields fill in, it is submitted, then the next form takes its place.
+  const stage = document.querySelector<HTMLElement>('[data-hero-forms]');
+  if (stage) {
+    interface Form { name: string; title: string; fields: string[][] }
+    const forms = JSON.parse(stage.dataset.heroForms ?? '[]') as Form[];
+    const card = stage.querySelector<HTMLElement>('.hf-card')!;
+    const title = card.querySelector<HTMLElement>('.hf-title')!;
+    const tag = card.querySelector<HTMLElement>('.hf-tag')!;
+    const bar = card.querySelector<HTMLElement>('.bar span')!;
+    const rows = [...card.querySelectorAll<HTMLElement>('.hf-fields div')];
+    const chips = [...document.querySelectorAll<HTMLElement>('[data-chip]')];
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const fillTo = (form: Form, done: boolean) => {
+      title.textContent = form.title;
+      rows.forEach((row, index) => {
+        row.querySelector('dt')!.textContent = form.fields[index][0];
+        const value = row.querySelector<HTMLElement>('dd span')!;
+        value.textContent = done ? form.fields[index][1] : '';
+        row.classList.toggle('in', done);
+      });
+      bar.style.width = done ? '100%' : '0%';
+      card.classList.toggle('sent', done);
+      tag.textContent = done ? 'Submitted' : 'Filling in';
+      tag.className = `tag hf-tag ${done ? 'ok' : 'live'}`;
+    };
+
+    if (reduced) {
+      fillTo(forms[0], true);
+      chips.forEach((chip) => chip.classList.add('done'));
+    } else {
+      const type = async (el: HTMLElement, text: string) => {
+        for (let i = 1; i <= text.length; i += 2) {
+          el.textContent = text.slice(0, i);
+          await sleep(22);
+        }
+        el.textContent = text;
+      };
+      const loop = async () => {
+        for (let round = 0; ; round++) {
+          for (const [index, form] of forms.entries()) {
+            card.classList.add('swap');
+            await sleep(320);
+            fillTo(form, false);
+            card.classList.remove('swap');
+            await sleep(450);
+            for (const [r, row] of rows.entries()) {
+              row.classList.add('in');
+              await type(row.querySelector<HTMLElement>('dd span')!, form.fields[r][1]);
+              bar.style.width = `${((r + 1) / rows.length) * 100}%`;
+              await sleep(160);
+            }
+            card.classList.add('sent');
+            tag.textContent = 'Submitted';
+            tag.className = 'tag hf-tag ok';
+            chips[index]?.classList.add('done');
+            await sleep(1500);
+          }
+          await sleep(600);
+          chips.forEach((chip) => chip.classList.remove('done'));
+        }
+      };
+      loop();
+    }
+  }
+</script>

@@ -1,0 +1,10 @@
+---
+// The 3D scroll story: one fictional project walked from first sketch to completion.
+// It used to be the homepage; the homepage now explains the product plainly and links here.
+import LiveDemoPage from '@/components/home/LiveDemoPage.astro';
+import { publicPageShort, setAstroCache } from '@/lib/server/cache-control';
+
+export const prerender = true;
+setAstroCache(Astro, publicPageShort);
+---
+<LiveDemoPage />

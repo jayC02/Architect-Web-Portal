@@ -18,7 +18,7 @@ export function header() {
 }
 
 export function footer() {
-  return `<footer class="site-footer" id="home-footer"><span>&copy; ${new Date().getFullYear()} Architect Pro</span><nav aria-label="Footer navigation"><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/about">About</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/login">Sign in</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>`;
+  return `<footer class="site-footer" id="home-footer"><span>&copy; ${new Date().getFullYear()} Architect Pro</span><nav aria-label="Footer navigation"><a href="/">Home</a><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/about">About</a><a href="/faq">FAQ</a><a href="/contact">Contact</a><a href="/login">Sign in</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav></footer>`;
 }
 
 // The rail exists in the server response, before scroll restoration or graphics loading.

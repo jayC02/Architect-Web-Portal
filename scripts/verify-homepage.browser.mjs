@@ -3,8 +3,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { acts, beats } from '../src/components/home/scroll-story/story.js';
+import { plans } from '../src/lib/marketing/plans.ts';
 
-const base = process.env.HOMEPAGE_PREVIEW_URL || 'http://127.0.0.1:4323';
+const base = (process.env.HOMEPAGE_PREVIEW_URL || 'http://127.0.0.1:4323').replace(/\/$/, '');
+// The 3D scroll story lives on the live demo page; the homepage explains the product and runs the click-through demo.
+const story = `${base}/live-demo`;
 const output = path.resolve('output/homepage-preview/scroll-story');
 await fs.mkdir(output, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--no-proxy-server'] });
@@ -34,21 +37,72 @@ const noOverflow = page => page.evaluate(() => document.documentElement.scrollWi
 const shot = (page, name) => page.screenshot({ path: path.join(output, name) });
 const phoneSettings = { viewport: { width: 390, height: 844 }, screen: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, reducedMotion: 'reduce' };
 
+// The homepage: hero, click-to-run demo, live demo link and pricing, on desktop and phones.
+async function homepageChecks() {
+  const desk = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); watch(desk);
+  await desk.goto(base);
+  check('The header links to the live demo', await desk.locator('.main-nav a[href="/live-demo"]').count() === 1);
+  await desk.getByRole('link', { name: 'See it fill in the forms' }).click();
+  await desk.waitForFunction(() => Math.abs(document.querySelector('#demo').getBoundingClientRect().top) < 140);
+  check('The hero button takes the visitor to the demo', true);
+  const demo = desk.locator('[data-pdemo]');
+  check('The demo waits for a press of Run', await demo.getAttribute('data-stage') === 'idle' && await desk.getByRole('button', { name: 'Run the demo' }).isVisible());
+  await desk.getByRole('button', { name: 'Run the demo' }).click();
+  await desk.waitForFunction(() => document.querySelector('[data-pdemo]').dataset.stage === 'read', null, { timeout: 15000 });
+  check('Run uploads the drawings, then reads them', await demo.locator('[data-file]').count() === 6);
+  await desk.waitForFunction(() => document.querySelector('[data-pdemo]').dataset.stage === 'submit', null, { timeout: 15000 });
+  const order = await desk.evaluate(async () => {
+    const seen = [];
+    while (document.querySelector('[data-pdemo]').dataset.stage === 'submit') {
+      const done = [...document.querySelectorAll('[data-app]')].map(card => card.dataset.state === 'done');
+      if (JSON.stringify(seen.at(-1)) !== JSON.stringify(done)) seen.push(done);
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }
+    return seen;
+  });
+  check('Applications are completed one after another', JSON.stringify(order.filter(s => s.some(Boolean))) === JSON.stringify([[true, false, false], [true, true, false], [true, true, true]]));
+  await desk.waitForFunction(() => document.querySelector('[data-pdemo]').dataset.stage === 'project', null, { timeout: 15000 });
+  const project = await demo.locator('[data-panel="project"]').innerText();
+  check('The finished project holds client, site, applications and documents', ['Morag and Euan Reid', '14 Harbour Lane', 'Fife Council'].every(text => project.includes(text)) && await demo.locator('.pd-docs li').count() === 9 && await demo.locator('.pd-apps .tag.ok').count() === 3);
+  await desk.getByRole('button', { name: 'Run it again' }).click();
+  check('Run it again starts from the upload', await demo.getAttribute('data-stage') === 'upload');
+  await desk.getByRole('button', { name: 'Skip to the end' }).click();
+  check('Skip goes straight to the finished project', await demo.getAttribute('data-stage') === 'project' && await demo.locator('[data-app][data-state="done"]').count() === 3);
+  await shot(desk, 'home-demo-desktop.png');
+  const prices = await desk.locator('.tplan .price b').allInnerTexts();
+  check('Pricing shows every plan from the price list', prices.length === plans.length && await desk.locator('.home-pricing a[href="/pricing"]').count() === 1);
+  check('The homepage links to the live demo page', await desk.locator('.home-live a[href="/live-demo"]').count() === 1);
+  await desk.close();
+  for (const [width, height] of [[320, 568], [390, 844], [768, 1024]]) {
+    const small = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' }); watch(small);
+    await small.goto(base);
+    await small.getByRole('button', { name: 'Run the demo' }).click();
+    await small.waitForFunction(() => document.querySelector('[data-pdemo]').dataset.stage === 'project', null, { timeout: 15000 });
+    check(`${width}×${height} homepage fits and runs the demo with reduced motion`, await noOverflow(small));
+    if (width === 390) await shot(small, 'home-demo-phone.png');
+    await small.close();
+  }
+}
+
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); watch(page);
-  const response = await page.request.get(base, { maxRedirects: 0 });
+  const response = await page.request.get(story, { maxRedirects: 0 });
   const html = await response.text();
   check('Server renders the rail before graphics or scroll restoration', response.status() === 200 && html.includes('id="rail"') && html.includes(acts[1].title));
   check('The view switch is absent from server HTML', !html.includes('Simple view') && !html.includes('toggle-view'));
-  check('Session-aware responses remain private', (response.headers()['cache-control'] || '').includes('private, no-store'));
+  const home = await page.request.get(base, { maxRedirects: 0 });
+  const homeHtml = await home.text();
+  check('The homepage says every application form is filled in', home.status() === 200 && homeHtml.includes('Every application form, filled in for you.') && ['Householder', 'Full planning permission', 'Building warrant', 'Completion certificate'].every(form => homeHtml.includes(form)));
+  check('Session-aware responses remain private', (home.headers()['cache-control'] || '').includes('private, no-store'));
   const signedIn = await page.request.get(base, { headers: { 'x-preview-signed-in': 'yes' }, maxRedirects: 0 });
   check('Signed-in visitors still reach the dashboard', signedIn.status() === 302 && signedIn.headers().location === '/dashboard');
   for (const query of ['reset=success', 'authError=google_failed', 'returnTo=%2Fprojects']) {
     const result = await page.request.get(`${base}/?${query}`, { maxRedirects: 0 });
     check(`Legacy ${query.split('=')[0]} links still reach sign in`, result.status() === 302 && result.headers().location.includes(query));
   }
-  await page.goto(base); await ready(page);
+  await page.goto(story); await ready(page);
   check('Desktop opens in 3D with one canvas and one heading', await page.locator('canvas').count() === 1 && await page.locator('h1').count() === 1);
+  await homepageChecks();
   check('Existing logo and account routes remain present', await page.locator('.brand img').getAttribute('src') === '/brand/architect-pro-logo.png' && await page.locator('.account-create').getAttribute('href') === '/demo');
   await page.getByRole('button', { name: 'Scroll to begin' }).click(); await page.waitForTimeout(1800);
   await shot(page, 'desktop-site.png');
@@ -76,7 +130,7 @@ try {
     };
   });
   const phone = await mobileContext.newPage(); watch(phone);
-  await phone.goto(base); await ready(phone);
+  await phone.goto(story); await ready(phone);
   check('An emulated iPhone with Reduce Motion opens in 3D', await phone.locator('canvas').count() === 1 && await phone.locator('[data-action="toggle-view"]').count() === 0);
   check('Mobile rendering is capped at 1.5x pixel density', await phone.locator('canvas').evaluate(canvas => canvas.width / canvas.clientWidth <= 1.501));
   await scroll(phone, 0.41);
@@ -150,13 +204,13 @@ try {
   await phone.getByRole('heading', { name: 'See it with one of your own projects.' }).waitFor();
   check('Book a demo reaches the access request form', await phone.locator('form.access-form').count() === 1);
   for (const route of ['privacy', 'terms', 'pricing', 'features']) {
-    await phone.goto(base); await ready(phone); await phone.locator(`.site-footer a[href="/${route}"]`).click();
+    await phone.goto(story); await ready(phone); await phone.locator(`.site-footer a[href="/${route}"]`).click();
     check(`${route} remains reachable`, new URL(phone.url()).pathname === `/${route}`);
   }
   await mobileContext.close();
 
   const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
-  const staticPage = await noJs.newPage(); await staticPage.goto(base);
+  const staticPage = await noJs.newPage(); await staticPage.goto(story);
   check('No JavaScript retains all story text and real account links', await staticPage.locator('.story-transcript section').count() === acts.length && await staticPage.locator('.account-create').isVisible() && await staticPage.locator('#rail').isHidden());
   await noJs.close();
   const noGl = await browser.newContext(phoneSettings);
@@ -164,14 +218,14 @@ try {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function(type, ...args) { return type.includes('webgl') ? null : original.call(this,type,...args); };
   });
-  const unsupported = await noGl.newPage(); watch(unsupported); await unsupported.goto(base);
+  const unsupported = await noGl.newPage(); watch(unsupported); await unsupported.goto(story);
   await unsupported.locator('#loading.failed').waitFor();
   await scroll(unsupported, 0.55);
   check('Unavailable WebGL explains the failure while text still scrolls', (await unsupported.locator('#loading-text').innerText()).includes('Scroll to read') && await unsupported.locator('#stage').getAttribute('data-act') === '2' && await unsupported.locator('.simple').count() === 0);
   await noGl.close();
   const missing = await browser.newContext(phoneSettings);
   await missing.route('**/scroll-story/scene/index.js*', route => route.abort());
-  const download = await missing.newPage(); await download.goto(base); await download.locator('#loading.failed').waitFor();
+  const download = await missing.newPage(); await download.goto(story); await download.locator('#loading.failed').waitFor();
   await scroll(download, 0.72);
   check('A failed engine download leaves the chapter story usable', await download.locator('#stage').getAttribute('data-act') === '3' && await download.locator('.account-create').isVisible());
   await missing.close();
@@ -181,7 +235,7 @@ try {
     Storage.prototype.getItem = function(key) { if (key === 'architectpro-story-progress') throw new Error('Storage unavailable'); return get.call(this,key); };
     Storage.prototype.setItem = function(key,value) { if (key === 'architectpro-story-progress') throw new Error('Storage unavailable'); return set.call(this,key,value); };
   });
-  const privatePage = await storage.newPage(); watch(privatePage); await privatePage.goto(base); await ready(privatePage); await scroll(privatePage, 0.55);
+  const privatePage = await storage.newPage(); watch(privatePage); await privatePage.goto(story); await ready(privatePage); await scroll(privatePage, 0.55);
   check('Unavailable session storage does not break 3D scrolling', await privatePage.locator('#stage').getAttribute('data-act') === '2');
   await storage.close();
 

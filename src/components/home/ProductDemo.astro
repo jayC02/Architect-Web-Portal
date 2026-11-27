@@ -1,0 +1,345 @@
+---
+// The homepage product demo. Press Run and it plays through what Architect Pro does
+// for one job: six drawings go into the upload box, each is read by AI, the facts it
+// finds fill three applications that are submitted one after another, and the
+// finished project holds the client, the site and every document. It runs in the
+// browser only: nothing is uploaded or submitted. Illustrative example.
+const files = [
+  { name: 'Location plan.pdf', type: 'Location plan', detail: '1:1250' },
+  { name: '2411-E-01.pdf', type: 'Existing plans', detail: 'Rev A' },
+  { name: '2411-P-02.pdf', type: 'Proposed plans', detail: 'Rev B' },
+  { name: '2411-P-03.pdf', type: 'Proposed elevations', detail: 'Rev B' },
+  { name: '2411-S-01.pdf', type: 'Sections', detail: 'Rev A' },
+  { name: 'Cost estimate.pdf', type: 'Cost estimate', detail: '2 pages' },
+];
+
+// What the AI finds, and which file it is read from (an index into files).
+const facts = [
+  { label: 'Client', value: 'Morag and Euan Reid', from: 0 },
+  { label: 'Site address', value: '14 Harbour Lane, Anstruther', from: 0 },
+  { label: 'Proposal', value: 'Single-storey rear extension', from: 2 },
+  { label: 'New floor area', value: '32 m²', from: 2 },
+  { label: 'Value of works', value: '£85,000', from: 5 },
+];
+
+const applications = [
+  {
+    name: 'Planning permission',
+    kind: 'Householder',
+    fields: 42,
+    lines: [['Site address', '14 Harbour Lane'], ['Description', 'Rear extension'], ['Applicant', 'Morag Reid']],
+    fee: 'Fee approved by you',
+    ref: 'Ref 26/00418/FULL',
+  },
+  {
+    name: 'Building warrant',
+    kind: 'New work',
+    fields: 57,
+    lines: [['Value of works', '£85,000'], ['Fee', '£1,290.00'], ['Drawings', '6 attached']],
+    fee: 'Fee calculated, approved by you',
+    ref: 'Ref 26/01137/WARR',
+  },
+  {
+    name: 'Completion certificate',
+    kind: 'Submitted at the end of the work',
+    fields: 18,
+    lines: [['Warrant', '26/01137/WARR'], ['Work finished', '12 March'], ['Fee', 'No fee']],
+    fee: 'No fee to pay',
+    ref: 'Ref 26/01137/COMP',
+  },
+];
+
+const steps = ['Upload drawings', 'AI reads them', 'Forms submitted', 'All in one place'];
+---
+<div class="pdemo" data-pdemo data-stage="idle" data-files={JSON.stringify(files)} data-facts={JSON.stringify(facts)} data-apps={JSON.stringify(applications)}>
+  <ol class="pdemo-steps" aria-label="Demo steps">
+    {steps.map((step, index) => <li data-step={index}><b>{index + 1}</b><span>{step}</span></li>)}
+  </ol>
+
+  <div class="pdemo-stage">
+    <!-- 1. The upload box, with the drawings waiting beside it -->
+    <section class="pdemo-panel" data-panel="upload" aria-label="Upload">
+      <div class="pd-desk" aria-hidden="true">
+        {files.map((file, index) => (
+          <span class="pd-file" style={`--i:${index}`}><i>PDF</i>{file.name}</span>
+        ))}
+      </div>
+      <div class="pd-drop">
+        <div class="pd-drop-inner">
+          <svg class="pd-drop-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 32V10M15 19l9-9 9 9M8 30v8h32v-8" /></svg>
+          <p class="pd-drop-label">Drop your drawings here</p>
+          <p class="pd-drop-count" aria-hidden="true"><b>0</b> of 6 uploaded</p>
+        </div>
+        <div class="pd-start">
+          <span class="pd-run-wrap">
+            <button type="button" class="button primary pd-run" data-action="run">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+              Run the demo
+            </button>
+            <span class="pd-pointer" aria-hidden="true">
+              <span>Press to watch it do a whole job</span>
+              <svg viewBox="0 0 110 60"><path pathLength="1" d="M8 8c18 30 48 42 90 36" /><path pathLength="1" class="tip" d="M84 32l14 12-14 10" /></svg>
+            </span>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Every file read, and the facts found in them -->
+    <section class="pdemo-panel" data-panel="read" aria-label="Reading the drawings">
+      <div class="pd-read">
+        <div>
+          <p class="pd-label">Reading each sheet</p>
+          <ul class="pd-files">
+            {files.map((file, index) => (
+              <li data-file={index}>
+                <span class="sd-icon" aria-hidden="true">PDF</span>
+                <span class="pd-fname">{file.name}</span>
+                <span class="pd-fresult"><span class="sd-wait">Waiting</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <p class="pd-label">Found in the drawings</p>
+          <dl class="pd-facts">
+            {facts.map((fact, index) => (
+              <div data-fact={index}>
+                <dt>{fact.label}</dt>
+                <dd><span>{fact.value}</span><small>from {files[fact.from].type}</small></dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. The three applications, filled and submitted one after another -->
+    <section class="pdemo-panel" data-panel="submit" aria-label="Submitting applications">
+      <p class="pd-label pd-agent"><span class="pd-live" aria-hidden="true"></span>Desktop Agent working in the background</p>
+      <ol class="pd-queue">
+        {applications.map((app, index) => (
+          <li class="pd-app" data-app={index}>
+            <div class="pd-app-head">
+              <div><b>{app.name}</b><span>{app.kind}</span></div>
+              <span class="tag pd-state">In queue</span>
+            </div>
+            <dl class="pd-app-lines">
+              {app.lines.map(([label, value]) => <div><dt>{label}</dt><dd>{value}</dd></div>)}
+            </dl>
+            <div class="bar"><span></span></div>
+            <p class="pd-app-foot"><span class="pd-count">0 of {app.fields} fields</span><span class="pd-fee">{app.fee}</span></p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <!-- 4. The finished project: client, site and every document together -->
+    <section class="pdemo-panel" data-panel="project" aria-label="The project">
+      <div class="pd-project">
+        <header class="pd-project-head">
+          <div>
+            <p class="pd-label">Project</p>
+            <h3>14 Harbour Lane, Anstruther</h3>
+            <p class="pd-sub">Single-storey rear extension</p>
+          </div>
+          <span class="tag ok">3 applications submitted</span>
+        </header>
+        <div class="pd-project-grid">
+          <div class="pd-card" style="--i:0">
+            <p class="pd-label">Client</p>
+            <p class="pd-strong">Morag and Euan Reid</p>
+            <p>morag.reid@example.com</p>
+            <p>07700 900418</p>
+            <p class="pd-label pd-gap">Site</p>
+            <p class="pd-strong">14 Harbour Lane</p>
+            <p>Anstruther, KY10 3AB</p>
+            <p>Fife Council</p>
+          </div>
+          <div class="pd-card" style="--i:1">
+            <p class="pd-label">Applications</p>
+            <ul class="pd-apps">
+              {applications.map((app) => (
+                <li><span><b>{app.name}</b><small>{app.ref}</small></span><span class="tag ok">Submitted</span></li>
+              ))}
+            </ul>
+          </div>
+          <div class="pd-card" style="--i:2">
+            <p class="pd-label">Documents <span class="pd-num">9</span></p>
+            <ul class="pd-docs">
+              {files.map((file) => <li><span class="sd-icon" aria-hidden="true">PDF</span><span>{file.type}</span><small>Drawing</small></li>)}
+              {applications.map((app) => <li><span class="sd-icon form" aria-hidden="true">FORM</span><span>{app.name}</span><small>As submitted</small></li>)}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pdemo-foot">
+    <p class="demo-status" aria-live="polite">Six drawings for a rear extension, ready to upload.</p>
+    <div class="actions">
+      <button type="button" class="button small" data-action="skip" hidden>Skip to the end</button>
+      <button type="button" class="button small dark" data-action="again" hidden>Run it again</button>
+    </div>
+  </div>
+  <noscript><p class="pd-noscript">Turn on JavaScript to run the demo.</p></noscript>
+</div>
+
+<script>
+  interface DemoFile { name: string; type: string; detail: string }
+  interface Fact { label: string; value: string; from: number }
+  interface App { name: string; fields: number }
+
+  document.querySelectorAll<HTMLElement>('[data-pdemo]').forEach((demo) => {
+    const files = JSON.parse(demo.dataset.files ?? '[]') as DemoFile[];
+    const facts = JSON.parse(demo.dataset.facts ?? '[]') as Fact[];
+    const apps = JSON.parse(demo.dataset.apps ?? '[]') as App[];
+    const status = demo.querySelector<HTMLElement>('.demo-status')!;
+    const run = demo.querySelector<HTMLButtonElement>('[data-action="run"]')!;
+    const skip = demo.querySelector<HTMLButtonElement>('[data-action="skip"]')!;
+    const again = demo.querySelector<HTMLButtonElement>('[data-action="again"]')!;
+    const count = demo.querySelector<HTMLElement>('.pd-drop-count b')!;
+    const fileRows = [...demo.querySelectorAll<HTMLElement>('[data-file]')];
+    const factRows = [...demo.querySelectorAll<HTMLElement>('[data-fact]')];
+    const appCards = [...demo.querySelectorAll<HTMLElement>('[data-app]')];
+    const steps = [...demo.querySelectorAll<HTMLElement>('[data-step]')];
+    const stages = ['upload', 'read', 'submit', 'project'];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    // Each run gets a number; a step from an older run stops as soon as it wakes.
+    let current = 0;
+    const pace = () => (reduced.matches ? 0.35 : 1);
+    const wait = (ms: number, id: number) =>
+      new Promise<void>((resolve, reject) => setTimeout(() => (id === current ? resolve() : reject(new Error('stopped'))), ms * pace()));
+
+    const show = (stage: string) => {
+      demo.dataset.stage = stage;
+      const at = stages.indexOf(stage);
+      steps.forEach((step, index) => {
+        step.classList.toggle('done', index < at || stage === 'done');
+        step.classList.toggle('now', index === at && stage !== 'done');
+        if (index === at && stage !== 'done') step.setAttribute('aria-current', 'step');
+        else step.removeAttribute('aria-current');
+      });
+    };
+
+    const labelFile = (row: HTMLElement, file: DemoFile) => {
+      const result = row.querySelector<HTMLElement>('.pd-fresult')!;
+      result.innerHTML = '';
+      const tag = document.createElement('span');
+      tag.className = 'tag ok';
+      tag.textContent = file.type;
+      const small = document.createElement('small');
+      small.textContent = file.detail;
+      result.append(tag, small);
+      row.className = 'done';
+    };
+
+    const setApp = (card: HTMLElement, state: 'queue' | 'filling' | 'paying' | 'done', filled: number) => {
+      const app = apps[Number(card.dataset.app)];
+      card.dataset.state = state;
+      const tag = card.querySelector<HTMLElement>('.pd-state')!;
+      tag.className = `tag pd-state ${state === 'done' ? 'ok' : state === 'queue' ? '' : 'live'}`;
+      tag.textContent = { queue: 'In queue', filling: 'Filling in', paying: 'Fee', done: 'Submitted' }[state];
+      card.querySelector<HTMLElement>('.bar span')!.style.width = `${(filled / app.fields) * 100}%`;
+      card.querySelector<HTMLElement>('.pd-count')!.textContent = `${filled} of ${app.fields} fields`;
+      card.querySelectorAll<HTMLElement>('.pd-app-lines div').forEach((line, index, all) => line.classList.toggle('in', filled / app.fields > index / all.length));
+    };
+
+    const reset = () => {
+      count.textContent = '0';
+      demo.classList.remove('dropped');
+      fileRows.forEach((row) => {
+        row.className = '';
+        row.querySelector<HTMLElement>('.pd-fresult')!.innerHTML = '<span class="sd-wait">Waiting</span>';
+      });
+      factRows.forEach((row) => row.classList.remove('in'));
+      appCards.forEach((card) => setApp(card, 'queue', 0));
+    };
+
+    const finish = () => {
+      current++;
+      fileRows.forEach((row, index) => labelFile(row, files[index]));
+      factRows.forEach((row) => row.classList.add('in'));
+      appCards.forEach((card) => setApp(card, 'done', apps[Number(card.dataset.app)].fields));
+      count.textContent = String(files.length);
+      show('project');
+      demo.classList.add('finished');
+      status.innerHTML = '<b>Done.</b> Three applications submitted, and everything for the job is in one place.';
+      skip.hidden = true;
+      again.hidden = false;
+    };
+
+    const play = async () => {
+      const id = ++current;
+      reset();
+      demo.classList.remove('finished');
+      skip.hidden = false;
+      again.hidden = true;
+      try {
+        show('upload');
+        status.textContent = 'Uploading 6 drawings…';
+        demo.classList.add('dropped');
+        for (let i = 1; i <= files.length; i++) {
+          await wait(200, id);
+          count.textContent = String(i);
+        }
+        await wait(700, id);
+        status.textContent = '6 drawings uploaded. Reading each sheet…';
+        await wait(500, id);
+
+        show('read');
+        for (const [index, row] of fileRows.entries()) {
+          row.className = 'reading';
+          row.querySelector<HTMLElement>('.pd-fresult')!.innerHTML = '<span class="sd-reading" aria-hidden="true"></span><span class="sr-only">Reading</span>';
+          await wait(420, id);
+          labelFile(row, files[index]);
+          facts.forEach((fact, factIndex) => {
+            if (fact.from === index) factRows[factIndex].classList.add('in');
+          });
+        }
+        status.textContent = 'Every sheet read. Client, site and proposal found.';
+        await wait(1300, id);
+
+        show('submit');
+        for (const [index, card] of appCards.entries()) {
+          const app = apps[index];
+          status.textContent = `${app.name}: filling in ${app.fields} fields from the drawings…`;
+          const ticks = 12;
+          for (let t = 1; t <= ticks; t++) {
+            setApp(card, 'filling', Math.round((app.fields * t) / ticks));
+            await wait(115, id);
+          }
+          setApp(card, 'paying', app.fields);
+          await wait(450, id);
+          setApp(card, 'done', app.fields);
+          status.textContent = `${app.name} submitted.`;
+          await wait(650, id);
+        }
+        await wait(500, id);
+        finish();
+      } catch {
+        // A newer run or Skip took over.
+      }
+    };
+
+    // On a small screen the panels change height, so bring the whole demo into view first.
+    const frame = () => {
+      const top = demo.getBoundingClientRect().top;
+      if (top < 0 || top > innerHeight * 0.35) demo.scrollIntoView({ block: 'start', behavior: reduced.matches ? 'auto' : 'smooth' });
+    };
+    run.addEventListener('click', () => {
+      frame();
+      play();
+      skip.focus({ preventScroll: true });
+    });
+    again.addEventListener('click', () => {
+      frame();
+      play();
+      skip.focus({ preventScroll: true });
+    });
+    skip.addEventListener('click', finish);
+    appCards.forEach((card) => setApp(card, 'queue', 0));
+  });
+</script>
