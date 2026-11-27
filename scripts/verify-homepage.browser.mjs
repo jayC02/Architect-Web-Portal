@@ -126,9 +126,11 @@ try {
         const panel = shown('#app-window'), ledger = shown('#ledger');
         const overlap = hits(copy, panel) || hits(copy, ledger) || hits(panel, ledger);
         const panelFits = !panel || (panel.top >= header.bottom - 1 && panel.bottom <= dock.top + 1);
-        return { copyFits: copy.top >= header.bottom - 1 && copy.bottom <= dock.top + 1, overlap, panelFits };
+        // the time strip keeps clear space above the dock, so the two never read as one block
+        const ledgerClear = !ledger || ledger.bottom <= dock.top - 6;
+        return { copyFits: copy.top >= header.bottom - 1 && copy.bottom <= dock.top + 1, overlap, panelFits, ledgerClear };
       });
-      check(`${width}×${height} chapter frame ${p} stays usable in 3D`, await noOverflow(phone) && geometry.copyFits && geometry.panelFits && !geometry.overlap && await phone.locator('canvas').count() === 1);
+      check(`${width}×${height} chapter frame ${p} stays usable in 3D`, await noOverflow(phone) && geometry.copyFits && geometry.panelFits && geometry.ledgerClear && !geometry.overlap && await phone.locator('canvas').count() === 1);
     }
     if (width === 390) await shot(phone, 'mobile-finale.png');
   }

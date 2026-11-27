@@ -617,6 +617,28 @@ html:has(#scroll-home), body:has(#scroll-home) { overscroll-behavior-y: none; }
 @media (max-height: 350px) and (orientation: landscape) {
   .scroll-home .ledger { display: none; }
 }
+/* Phones: the chapter timeline gives way to the time strip, and only the disclaimer stays at the foot */
+@media (max-width: 820px), (max-height: 500px) and (orientation: landscape) {
+  .scroll-home .acts, .scroll-home .progress { display: none; }
+  .scroll-home .dock { bottom: 10px; }
+  .scroll-home .story-disclaimer { margin-top: 0; }
+}
+@media (max-width: 820px) and (min-height: 501px) {
+  /* two blocks side by side: label and minutes on one line, the bar beneath */
+  .scroll-home .ledger { bottom: 36px; gap: 16px; padding: 8px 12px 10px; }
+  .scroll-home .ledger .lg-row { grid-template-columns: 1fr auto; grid-template-areas: "label value" "bar bar"; justify-content: stretch; row-gap: 6px; column-gap: 8px; }
+  .scroll-home .ledger .lg-label { grid-area: label; overflow: hidden; text-overflow: ellipsis; }
+  .scroll-home .ledger .lg-row b { grid-area: value; }
+  .scroll-home .ledger .lg-bar { grid-area: bar; display: block; height: 5px; }
+  .scroll-home .stage.started .copy { bottom: 104px; }
+  .scroll-home .stage:not(.started) .copy { bottom: 92px; }
+  .scroll-home .scroll-hint { bottom: 40px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .scroll-home .ledger { bottom: 34px; }
+  .scroll-home .stage:not(.started) .copy, .scroll-home .copy, .scroll-home .stage.started .copy, .scroll-home .stage.final .copy { bottom: 40px; }
+  .scroll-home .scroll-hint { bottom: 40px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .scroll-home .aw-docs li.scanning::after { animation: none; width: 100%; transform: none; }
 }
