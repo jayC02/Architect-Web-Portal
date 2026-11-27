@@ -7,6 +7,7 @@ export const DESKTOP_PROGRESS_CONTRACT_VERSION = 1 as const;
 export const agentCapabilitiesSchema = z.object({
   workflows: z.array(z.enum([
     AutomationJobType.HOUSEHOLDER_PLANNING,
+    AutomationJobType.PLANNING_APPLICATION,
     AutomationJobType.BUILDING_WARRANT,
     AutomationJobType.COMPLETION_CERTIFICATE,
   ])).min(1).max(10),

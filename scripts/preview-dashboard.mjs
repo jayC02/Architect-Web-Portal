@@ -19,6 +19,7 @@ const projects = projectNames.map((name, index) => ({
   clientName: ['Prestige Properties', 'Emma & James Wilson', 'Alexander Reid', 'Sarah MacLeod', 'Parkside Developments'][index],
   siteSummary: ['147 Blackhill Drive, Glasgow', '24 Victoria Road, Bearsden', '8 Great Western Terrace, Glasgow', 'Loch Lomond, West Dunbartonshire', '16 Park Terrace, Glasgow'][index],
   documentReviewCount: index === 0 ? 3 : index === 2 ? 2 : 0, readyAutomationJobCount: index === 0 ? 1 : 0,
+  needsAttention: index === 0 || index === 2,
   nextDeadline: { title: ['Planning decision target', 'Design review', 'Warrant response target', 'Site survey', 'Completion documents'][index], dueDate: day([4, 6, 8, 11, 15][index]) },
   nextAction: { label: ['Review supporting documents', 'Continue design development', 'Review council response', 'Prepare survey information', 'Upload completion documents'][index], href: `/projects/preview-${index + 1}`, tone: index === 0 || index === 2 ? 'warning' : 'neutral' },
 }));
@@ -46,6 +47,7 @@ const summary = {
     { id: 'attention-2', type: 'Documents to review', projectName: projectNames[0], reason: '3 supporting documents need review', href: '/projects/preview-1/files', tone: 'warning' },
     { id: 'attention-3', type: 'Needs your review', projectName: projectNames[2], reason: 'Building warrant ready for final review', href: '/projects/preview-3/building-warrant', tone: 'warning' },
     { id: 'attention-4', type: 'Automation ready', projectName: projectNames[0], reason: 'Planning application prepared', href: '/projects/preview-1/planning', tone: 'ready' },
+    { id: 'attention-5', type: 'Deadline approaching', projectName: projectNames[0], reason: 'Planning decision target', href: '/deadlines?projectId=preview-1', tone: 'warning' },
   ],
 };
 const auth = { user: { name: 'Jayveer', email: 'jayveer@example.com' }, organisation: { name: 'Your organisation' }, membership: { role: 'OWNER' } };

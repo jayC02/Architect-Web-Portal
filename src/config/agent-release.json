@@ -1,10 +1,11 @@
 {
-  "version": "4.2.27",
-  "downloadUrl": "/downloads/ArchitectProAgentSetup-4.2.27.exe",
-  "sha256": "06415ba317b3f79248d812733e20359f86385198d7015779bd93b794f262ae6f",
-  "sizeBytes": 46321743,
+  "version": "4.2.29",
+  "downloadUrl": "/downloads/ArchitectProAgentSetup-4.2.29.exe",
+  "sha256": "2b4d1dd484fe60844592196185160d540c2baeade60f827e40033dea8d68452c",
+  "sizeBytes": 46368646,
   "minimumSupportedVersion": "4.1.0",
   "status": "AVAILABLE",
   "signed": false,
-  "sourceDownloadUrl": "/downloads/ArchitectProAgentSource-4.2.27.zip"
+  "sourceDownloadUrl": "/downloads/ArchitectProAgentSource-4.2.29.zip",
+  "sourceSha256": "20eb8eb9f267ee90708ed5db96b9c67bfc657c7ae3a218880de4b3270701b63e"
 }

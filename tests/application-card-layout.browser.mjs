@@ -102,9 +102,15 @@ else {
     const statusPattern = '**/api/automation-jobs/*/status';
     const timestamp = () => new Date().toISOString();
     let liveJob;
-    await page.route(statusPattern, route => route.fulfill({
-      json: { job: liveJob, compatibleAgentOnline: true },
-    }));
+    let firstClaimReport = false;
+    await page.route(statusPattern, route => {
+      if (firstClaimReport) {
+        firstClaimReport = false;
+        const claimedAt = timestamp();
+        liveJob = { ...liveJob, claimedAt, progressUpdatedAt: claimedAt };
+      }
+      return route.fulfill({ json: { job: liveJob, compatibleAgentOnline: true } });
+    });
     for (const [cardId, query, estimate] of [
       ['planning', '?state=active', 'About 1 min 15 sec remaining'],
       ['building-warrant', '?state=active&mirror=1', 'About 2 minutes remaining'],
@@ -112,8 +118,8 @@ else {
       liveJob = {
         ...records.active, executionAuthorisedAt: '2026-10-22T10:00:00Z',
         progressStage: 'proposal', progressStageState: 'running', progressPercent: 8,
-        claimedAt: timestamp(), progressUpdatedAt: timestamp(),
       };
+      firstClaimReport = true;
       await open(query);
       const card = page.locator(`#${cardId}`);
       await card.getByText(estimate, { exact: true }).waitFor();

@@ -33,12 +33,14 @@ assert.doesNotMatch(
   'refreshing an unstarted handoff never creates a duplicate automation job',
 );
 
+assert.match(snapshotService, /snapshotClientApplicant\(project\.client, applicantOwner\)/, 'refresh passes the canonical Client to the shared snapshot builder');
+
 for (const canonicalMapping of [
   /addressLine1: \[project\.site\.buildingNumber, project\.site\.addressLine1\]/,
   /townCity: project\.site\.townCity/,
   /postcode: project\.site\.postcode/,
-  /buildingNumber: project\.client\.buildingNumber/,
-  /addressLine1: project\.client\.addressLine1 \?\? project\.client\.address/,
+  /buildingNumber: client\.buildingNumber/,
+  /addressLine1: client\.addressLine1 \?\? client\.address/,
   /buildingNumber: defaults\?\.agentBuildingNumber \?\? null/,
 ]) {
   assert.match(snapshotService, canonicalMapping, 'refreshed snapshots use current canonical Client, Site and Agent data');

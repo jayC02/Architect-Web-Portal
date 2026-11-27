@@ -4,7 +4,7 @@ import { ApplicationDraftType, DocumentStatus, DocumentType } from '@prisma/clie
 import { evaluateClientApplicationDraftReadiness } from '../src/lib/application-draft-readiness';
 import { applicationDraftReviewSchema } from '../src/lib/validation/application-draft';
 
-const reviewUi = readFileSync('src/components/applications/ApplicationDraftReview.tsx', 'utf8');
+const reviewUi = readFileSync('src/components/applications/ClientApplicantReview.tsx', 'utf8');
 const draftService = readFileSync('src/server/services/application-draft.service.ts', 'utf8');
 
 const review = applicationDraftReviewSchema.parse({
@@ -25,8 +25,9 @@ const review = applicationDraftReviewSchema.parse({
 
 assert.ok(evaluateClientApplicationDraftReadiness(review).some((issue) => issue.key === 'client.title'), 'an individual title is mandatory');
 assert.ok(!evaluateClientApplicationDraftReadiness({ ...review, client: { ...review.client, title: 'Other' } }).some((issue) => issue.key === 'client.title'), 'Other satisfies title readiness');
-assert.match(reviewUi, /Title <span aria-hidden="true">\*<\/span>[\s\S]*?<select[\s\S]*?required/, 'the title select is visibly and natively required');
+assert.match(reviewUi, /field\('title', 'Title', true,/, 'the title field is required in the review');
+assert.match(reviewUi, /<select[\s\S]*?\baria-required=\{required\}/, 'the title control exposes required semantics');
 assert.match(draftService, /suggestionFromFacts\(facts, 'applicant\.title', 'Other'\)/, 'missing analysed titles default to Other');
-assert.match(draftService, /withDefaultIndividualTitle\(existingReview\.data\.applicant \?\? existingReview\.data\.client\)/, 'reopened drafts also receive the safe title default');
+assert.match(draftService, /withDefaultIndividualTitle\(\s*existingReview\.data\.applicantDifferentFromClient\s*\?\s*existingReview\.data\.applicant \?\? confirmedClient\s*:\s*confirmedClient/, 'reopened drafts also receive the safe title default');
 
 console.log('application title default tests passed');

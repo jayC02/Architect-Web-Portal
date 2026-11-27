@@ -7,7 +7,8 @@ import { applicationDraftReviewSchema } from '../src/lib/validation/application-
 const source = (path: string) => fs.readFileSync(path, 'utf8');
 const reviewUi = source('src/components/applications/ApplicationDraftReview.tsx');
 const commitService = source('src/server/services/application-draft-commit.service.ts');
-const siteDirectory = source('src/components/live/LiveDataPanel.tsx');
+const siteDirectory = source('src/components/live/DirectoryEditor.tsx');
+const personReview = source('src/components/applications/ClientApplicantReview.tsx');
 const snapshotService = source('src/server/services/automation-jobs.service.ts');
 
 const review = applicationDraftReviewSchema.parse({
@@ -65,7 +66,8 @@ assert.ok(
   'the Site section identifies a missing building number',
 );
 assert.match(reviewUi, /withSiteAddress[\s\S]*buildingNumber: site\.buildingNumber/, 'same-as-site copies the Site number');
-assert.match(reviewUi, /showAddress \? <section[\s\S]*Address details/, 'same-as-site hides duplicate Client address inputs');
+assert.match(personReview, /onClick=\{useSite\}/, 'the client editor offers the site address');
+assert.match(personReview, /sameAsSite \? 'Site address' : 'Correspondence address'/, 'the client editor identifies the address source');
 assert.match(reviewUi, /label="Building number"[\s\S]*review\.site\.buildingNumber/, 'the Site review owns the input');
 assert.match(commitService, /buildingNumber: review\.site\.buildingNumber/, 'the canonical Site stores the number');
 assert.match(siteDirectory, /name="buildingNumber"[\s\S]*site\?\.buildingNumber/, 'Site profiles load and save the number');

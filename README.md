@@ -36,7 +36,9 @@ An Astro/React/Prisma MVP foundation for architecture practice operations.
 3. Run `npm install`.
 4. Run `npm run db:migrate`.
 5. Optional: run `npm run db:seed` for a demo organisation and project.
-6. Run `npm run dev`.
+6. Run `npm start` to start the local Astro server on `127.0.0.1`. Use `npm run dev` to pass different Astro options.
+
+`npm run preview` builds and serves a local Node preview on `127.0.0.1`. It uses the app's local environment settings and writes to `output/local-preview/`. `npm run build` creates the Vercel deployment output. Use a Vercel preview deployment to check that build with deployment settings.
 
 ## Environment Variables
 

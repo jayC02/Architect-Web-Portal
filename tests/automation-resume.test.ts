@@ -33,8 +33,12 @@ assert.equal(automationJobSnapshotV2Schema.parse(resumeSnapshot).metadata.resume
 const caps = { workflows: ['BUILDING_WARRANT'], snapshotVersions: [2], callbackContractVersions: [1], progressContractVersions: [1] };
 const resumeJob = { type: enums.AutomationJobType.BUILDING_WARRANT, payloadVersion: 2, dataSnapshot: { metadata: { resumeOfJobId: 'job-failed' } } };
 assert.equal(agentSupportsJob({ capabilities: caps } as never, resumeJob), false, 'an older Agent would create a duplicate proposal');
-assert.equal(agentSupportsJob({ capabilities: { ...caps, resumeContractVersions: [1] } } as never, resumeJob), true);
-assert.equal(agentCapabilitiesSchema.safeParse({ ...caps, resumeContractVersions: [1] }).success, true);
+const olderAgent = { capabilities: { ...caps, resumeContractVersions: [1] } };
+const currentAgent = { capabilities: { ...caps, resumeContractVersions: [1, 2] } };
+assert.equal(agentSupportsJob(olderAgent as never, resumeJob), false, 'older Agents cannot resume with filename-only reconciliation');
+assert.equal(agentSupportsJob(olderAgent as never, { ...resumeJob, dataSnapshot: {} }), true, 'fresh compatible jobs still run');
+assert.equal(agentSupportsJob(currentAgent as never, resumeJob), true);
+assert.equal(agentCapabilitiesSchema.safeParse(currentAgent.capabilities).success, true);
 
 const restartService = readFileSync('src/server/services/automation-job-restart.service.ts', 'utf8');
 const jobsService = readFileSync('src/server/services/automation-jobs.service.ts', 'utf8');

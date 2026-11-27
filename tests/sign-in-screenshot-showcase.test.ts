@@ -27,7 +27,7 @@ assert.equal(fs.existsSync(oldPreviewPath), false, 'the fake workflow component 
 assert.doesNotMatch(authEntry + showcase, /Proposed Elevations\.pdf|AI analyses the files|Suggested categories|Prepare automation/);
 
 assert.match(authEntry, /data-action="\/api\/auth\/login"/, 'the sign-in form remains rendered');
-assert.match(authEntry, /<GoogleAuthButton \/>/, 'Google sign-in remains rendered');
+assert.match(authEntry, /<GoogleAuthButton \{returnTo\} \/>/, 'Google sign-in remains rendered');
 assert.match(authEntry, /href="\/forgot-password"/);
 assert.match(authEntry, /href="\/register"/);
 assert.match(authEntry, /prefers-reduced-motion: reduce/);

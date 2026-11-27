@@ -14,6 +14,12 @@ assert.equal(agentSupportsJob({ capabilities } as never, { type: AutomationJobTy
 assert.equal(agentSupportsJob({ capabilities } as never, { type: AutomationJobType.HOUSEHOLDER_PLANNING, payloadVersion: 2 }), false);
 assert.equal(agentSupportsJob({ capabilities: { ...capabilities, progressContractVersions: [2] } } as never, { type: AutomationJobType.BUILDING_WARRANT, payloadVersion: 2 }), false);
 
+const planningJob = { type: AutomationJobType.PLANNING_APPLICATION, payloadVersion: 2 };
+const planningCapabilities = { ...capabilities, workflows: [...capabilities.workflows, AutomationJobType.PLANNING_APPLICATION] };
+assert.equal(agentSupportsJob({ capabilities } as never, planningJob), false);
+assert.equal(agentSupportsJob({ capabilities: planningCapabilities } as never, planningJob), true);
+assert.equal(agentSupportsJob({ capabilities: planningCapabilities } as never, { ...planningJob, type: AutomationJobType.BUILDING_WARRANT }), true);
+
 const validProgress = {
   version: 1,
   jobId: 'job_12345678',

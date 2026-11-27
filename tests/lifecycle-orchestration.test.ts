@@ -231,7 +231,7 @@ assert.equal(store.activities.length, 1);
 assert.equal(store.deadlines.length, 1);
 assert.equal(calendarEvents.size, 1);
 assert.equal(store.deadlines[0].sourceKey, `workflow:project:${first.project.id}:document-review`);
-assert.match(store.deadlines[0].description, /Internal practice target/);
+assert.match(store.deadlines[0].description, /Internal target.*checking the project documents/);
 assert.equal(store.deadlines[0].dueDate.toISOString(), '2026-08-17T09:00:00.000Z');
 
 for (const effect of store.effects) {

@@ -28,13 +28,17 @@ const browser=await chromium.launch({channel:'chrome',headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 let draft,failSave,failAnalyse,transientUploads,actions,intents,patchDelay,failFinalise,uploadNames,loseRemoveResponse;
 let setupAgents=[],setupPolls=0;
+let setupVersion='4.2.7',setupSource='/downloads/ArchitectProAgentSource-4.2.7.zip';
+const setupRelease=()=>({version:setupVersion,downloadUrl:'/downloads/test-installer.exe',
+  sourceDownloadUrl:setupSource,status:'AVAILABLE',signed:true});
 const errors=[];const checks=[];
 page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
 await page.route('**/api/**',async route=>{
  const request=route.request(),url=new URL(request.url()),method=request.method();
  const reply=(status,json)=>route.fulfill({status,json});
  if(url.pathname==='/api/settings/desktop-agents'){setupPolls++;return reply(200,{agents:setupAgents.map(agent=>({...agent,lastSeenAt:new Date().toISOString()}))});}
- if(url.pathname==='/api/settings/desktop-agents/setup')return reply(201,{release:{version:'4.2.7',downloadUrl:'/downloads/test-installer.exe',signed:true},expiresAt:new Date(Date.now()+600000).toISOString()});
+ if(url.pathname==='/api/desktop/releases/latest')return reply(200,setupRelease());
+ if(url.pathname==='/api/settings/desktop-agents/setup')return reply(201,{release:setupRelease(),expiresAt:new Date(Date.now()+600000).toISOString()});
  if(url.pathname==='/api/clients')return reply(200,{clients:[],nextCursor:null});
  if(url.pathname.endsWith('/address-lookup'))return reply(200,{status:'not_configured',fields:{}});
  if(url.pathname==='/api/application-drafts/concept-a-review'){
@@ -252,6 +256,9 @@ try{
  setupAgents=[remote];setupPolls=0;
  await page.route('**/downloads/test-installer.exe',route=>route.fulfill({status:200,headers:{'content-disposition':'attachment; filename="test-installer.exe"'},body:'isolated-test'}));
  await page.goto(`http://127.0.0.1:${server.address().port}/agent-setup`);
+ const sourceLink=page.getByRole('link',{name:'Download updated Agent source code'});
+ await sourceLink.waitFor();
+ check('Setup links to the published source archive',await sourceLink.getAttribute('href')===setupSource);
  await page.getByRole('button',{name:'Download & connect Agent',exact:true}).click();
  await waitFor(()=>setupPolls>=2,'setup did not poll');
  check('An already connected remote Agent cannot falsely complete this installation',await page.getByText('Connecting this computer...',{exact:true}).isVisible());
@@ -260,12 +267,17 @@ try{
  check('A newly connected installation completes setup',await page.getByText(/New computer · Agent/).isVisible());
 
  setupAgents=[{...remote,id:'old-device',connected:false,usable:false}];setupPolls=0;
+ setupVersion='4.1.0';setupSource=null;
+ const legacyMetadata=page.waitForResponse(response=>response.url().endsWith('/api/desktop/releases/latest'));
  await page.goto(`http://127.0.0.1:${server.address().port}/agent-setup?offline=1`);
+ await legacyMetadata;
+ check('An installer-only rollback omits the source link',await sourceLink.count()===0);
  await page.getByRole('button',{name:'Download installer',exact:true}).click();
  await waitFor(()=>setupPolls>=1,'replacement setup did not start');
  setupAgents.push({...remote,id:'replacement-device',machineName:'Replacement computer'});
  await page.getByText('Connected and ready',{exact:true}).waitFor();
  check('A replacement computer can connect when the previous Agent is offline',await page.getByText(/Replacement computer · Agent/).isVisible());
+ check('An installer-only rollback keeps the source link hidden after setup',await sourceLink.count()===0);
  await page.goto(`http://127.0.0.1:${server.address().port}?state=agent-defaults`);
  const requiredPhone=page.locator('input[name="agentPhone"]');
  await requiredPhone.waitFor();

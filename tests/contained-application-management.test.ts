@@ -24,7 +24,7 @@ assert.equal(snapshot.organisation.agent.buildingNumber, '20', 'Agent Building N
 assert.equal(snapshot.applicant.buildingNumber, '147', 'Applicant Building Number survives the snapshot contract');
 
 const snapshotService = source('src/server/services/automation-jobs.service.ts');
-assert.match(snapshotService, /buildingNumber: project\.client\.buildingNumber/, 'client Building Number is written into new automation snapshots');
+assert.match(snapshotService, /buildingNumber: client\.buildingNumber/, 'client Building Number is written into new automation snapshots');
 assert.match(snapshotService, /buildingNumber: nullableString\(person\.buildingNumber\)/, 'separate applicant overrides retain Building Number');
 const commitService = source('src/server/services/application-draft-commit.service.ts');
 assert.match(commitService, /buildingNumber: review\.client\.buildingNumber/, 'draft commit persists the applicant Building Number on the Client');
