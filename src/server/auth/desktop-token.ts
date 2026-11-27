@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
 import { assertRegisteredAgentActive } from '@/server/services/desktop-execution.service';
+import { assertOrganisationEntitled } from '@/server/billing/access';
 
 const TOKEN_PREFIX = 'apd_';
 const TOKEN_LIFETIME_MS = 180 * 24 * 60 * 60 * 1000;
@@ -74,6 +75,7 @@ export const requireDesktopAuth = async (context: APIContext) => {
     throw new HttpError(401, 'Desktop access has expired or been revoked.');
   }
   await assertDesktopTokenActive(prisma, access);
+  await assertOrganisationEntitled(access.organisationId);
 
   if (!access.lastUsedAt || Date.now() - access.lastUsedAt.getTime() > 5 * 60 * 1000) {
     void prisma.desktopAccessToken.update({ where: { id: access.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);

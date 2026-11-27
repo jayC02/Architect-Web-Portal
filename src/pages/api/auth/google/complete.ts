@@ -15,6 +15,14 @@ import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { completeGoogleSignupSchema } from '@/lib/validation/auth';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
+import {
+  findInviteForVerifiedEmail,
+  markInviteAccepted,
+  postSignupRedirect,
+  signupMode,
+  subscriptionCreateFor,
+} from '@/server/billing/onboarding';
+import { acceptTeamInvite, findTeamInviteForVerifiedEmail } from '@/server/billing/team';
 
 export const POST: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -32,7 +40,12 @@ export const POST: APIRoute = (context) =>
       throw new HttpError(400, 'This Google sign-up has expired. Please try again.');
     }
 
-    const organisationSlug = await resolveOrganisationSlug(body.organisationName);
+    // A pending team invitation for this verified email means joining that practice.
+    const teamInvite = await findTeamInviteForVerifiedEmail(pending.email);
+    if (!teamInvite && !body.organisationName) throw new HttpError(400, 'Enter your organisation name.');
+    const organisationSlug = teamInvite ? null : await resolveOrganisationSlug(body.organisationName!);
+    const invite = teamInvite ? null : await findInviteForVerifiedEmail(pending.email);
+    let createdWorkspace = false;
     const userId = await prisma.$transaction(async (tx) => {
       const linkedProvider = await tx.authProvider.findUnique({
         where: {
@@ -72,6 +85,35 @@ export const POST: APIRoute = (context) =>
         return existingUser.id;
       }
 
+      if (teamInvite) {
+        const membership = await acceptTeamInvite(tx, {
+          inviteId: teamInvite.id, organisationId: teamInvite.organisationId, email: pending.email,
+        });
+        const joined = await tx.user.create({
+          data: {
+            name: pending.displayName,
+            email: pending.email,
+            passwordHash: null,
+            authProviders: {
+              create: {
+                provider: pending.provider,
+                providerAccountId: pending.providerAccountId,
+                email: pending.email,
+                displayName: pending.displayName,
+                avatarUrl: pending.avatarUrl,
+              },
+            },
+            organisationLinks: { create: { role: membership.role, organisationId: membership.organisationId } },
+          },
+          select: { id: true },
+        });
+        await tx.pendingOAuthSignup.delete({ where: { id: pending.id } });
+        return joined.id;
+      }
+
+      if (!invite && signupMode() === 'invite_only') {
+        throw new HttpError(403, 'Architect Pro is invitation only at the moment. Request a demo and we will send you an invitation.');
+      }
       const user = await tx.user.create({
         data: {
           name: pending.displayName,
@@ -91,23 +133,28 @@ export const POST: APIRoute = (context) =>
               role: 'OWNER',
               organisation: {
                 create: {
-                  name: body.organisationName,
-                  slug: organisationSlug,
+                  name: body.organisationName!,
+                  slug: organisationSlug!,
                   calendarConnections: {
                     create: [{ provider: 'GOOGLE' }, { provider: 'OUTLOOK' }],
                   },
+                  subscription: { create: subscriptionCreateFor(invite) },
                 },
               },
             },
           },
         },
-        select: { id: true },
+        select: { id: true, organisationLinks: { select: { organisationId: true }, take: 1 } },
       });
+      if (invite) await markInviteAccepted(tx, invite.id, user.organisationLinks[0].organisationId);
       await tx.pendingOAuthSignup.delete({ where: { id: pending.id } });
+      createdWorkspace = true;
       return user.id;
     });
 
-    const returnTo = pendingGoogleSignupReturnTo(context);
+    const returnTo = createdWorkspace && !invite
+      ? postSignupRedirect(false)
+      : pendingGoogleSignupReturnTo(context);
     clearPendingGoogleSignupCookie(context);
     await createSession(userId, context);
     return jsonResponse(201, { redirectTo: returnTo });

@@ -1,7 +1,7 @@
 ---
 import AppShell from '@/components/layout/AppShell.astro';
 import { requirePageAuth } from '@/lib/server/page-auth';
-import { ArrowRight, Building2, Link2, SlidersHorizontal, UserRoundCheck } from 'lucide-react';
+import { ArrowRight, Building2, CreditCard, Link2, SlidersHorizontal, UserRoundCheck, Users } from 'lucide-react';
 
 const auth = await requirePageAuth(Astro as never);
 if (!auth) return Astro.redirect('/login');
@@ -14,6 +14,8 @@ if (!auth) return Astro.redirect('/login');
   <nav aria-label="Settings areas" class="grid gap-4 md:grid-cols-2">
     {[
       { title: 'Organisation', description: 'Organisation details and default application contact', href: '/settings/practice', icon: Building2 },
+      { title: 'Team', description: 'Invite people and manage who can use your workspace', href: '/settings/team', icon: Users },
+      { title: 'Billing', description: 'Plan, payment details, invoices and Agent computer limit', href: '/billing', icon: CreditCard },
       { title: 'Certifiers', description: 'Saved Building Standards certifiers', href: '/settings/certifiers', icon: UserRoundCheck },
       { title: 'Integrations', description: 'Desktop Agent, Google Calendar, Gmail and Xero', href: '/settings/integrations', icon: Link2 },
       { title: 'Preferences', description: 'Simple user-facing behaviour and notifications', href: '/settings/preferences', icon: SlidersHorizontal },

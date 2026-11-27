@@ -3,6 +3,7 @@ import { AutomationJobStatus, AutomationJobType, type PrismaClient } from '@pris
 import { prisma } from '@/lib/db/prisma';
 import { HttpError } from '@/lib/utils/http';
 import { agentPhoneError } from '@/lib/validation/client-contact';
+import { assertEvaluationAllowance } from '@/server/billing/usage';
 import {
   agentSupportsJob,
   ensureWaitingForAgentAction,
@@ -40,6 +41,9 @@ export const authoriseAutomationJobRun = async (input: {
     const phoneError = agentPhoneError(typeof phone === 'string' ? phone : null);
     if (phoneError) throw new HttpError(409, `${phoneError} Complete the agent details in the web portal and prepare this application again.`, { field: 'agentPhone' });
   }
+
+  // Evaluation workspaces can only send a limited number of applications.
+  await assertEvaluationAllowance(database, { organisationId: input.organisationId, job });
 
   await database.$transaction(async (tx) => {
     const authorised = await tx.automationJob.updateMany({

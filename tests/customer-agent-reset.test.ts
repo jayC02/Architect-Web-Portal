@@ -26,7 +26,7 @@ const tx: any = {
     if (where.organisationId !== job.organisationId || where.claimedByAgentId !== job.claimedByAgentId) return null;
     return ['CLAIMED', 'IN_PROGRESS', 'NEEDS_REVIEW'].includes(job.status) || (job.status === 'AWAITING_PORTAL_REVIEW' && !job.released) ? job : null;
   } },
-  agentRegistration: {
+  agentRegistration: { count: async () => 0,
     findUnique: async () => agent,
     findFirst: async ({ where }: any) => Object.entries(where).every(([key, value]) => agent[key] === value) ? agent : null,
     update: async ({ data }: any) => { Object.assign(agent, data); return agent; },
@@ -49,6 +49,7 @@ const modules: any = {
   '@/server/services/desktop-agent-revocation.service': { revokeAgentInTransaction },
   '@/server/services/desktop-execution.service': execution,
   '@/server/services/desktop-agent-reset.service': { assertAgentConnectionResettable },
+  '@/server/billing/access': { assertOrganisationEntitled: async () => ({ subscription: { agentDeviceLimit: 10 }, entitlement: { allowed: true } }) },
   '@/server/services/desktop-agent.service': { agentLeaseExpiry: () => new Date(), reconcileStaleAgentJobs: async () => {} },
 };
 function route(file: string, method: string) {

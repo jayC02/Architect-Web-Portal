@@ -437,6 +437,7 @@ model User {
   authProviders            AuthProvider[]
   passwordResetTokens      PasswordResetToken[]
   organisationLinks        OrganisationMember[]
+  teamInvitesSent          TeamInvite[]             @relation("TeamInviteInvitedBy")
   uploadedDocuments        ProjectDocument[]        @relation("DocumentUploadedBy")
   documentSortBatches      DocumentSortBatch[]      @relation("DocumentSortBatchCreatedBy")
   createdPackages          SubmissionPackage[]      @relation("PackageCreatedBy")
@@ -577,6 +578,10 @@ model Organisation {
   xeroWriteAttempts     XeroWriteAttempt[]
   uValueCalculations    UValueCalculation[]
   uValueTemplates       UValueTemplate[]
+  subscription          OrganisationSubscription?
+  teamInvites           TeamInvite[]
+  accessRequests        AccessRequest[]
+  applicationUsage      ApplicationUsage[]
 
   @@index([slug])
   @@index([updatedAt])
@@ -1930,4 +1935,133 @@ model SubmissionPackageDocument {
 
   @@unique([submissionPackageId, documentId])
   @@index([documentId])
+}
+
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+  COMPLIMENTARY
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// One entitlement record per organisation. Every page, API and Agent call is
+// checked against it server-side (see src/server/billing/entitlement.ts).
+model OrganisationSubscription {
+  id                   String             @id @default(cuid())
+  organisationId       String             @unique
+  status               SubscriptionStatus @default(PENDING_PAYMENT)
+  plan                 String?
+  billingInterval      String?
+  source               String             @default("SELF_SERVE")
+  trialEndsAt          DateTime?
+  currentPeriodEndsAt  DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  graceEndsAt          DateTime?
+  agentDeviceLimit     Int                @default(1)
+  includedApplications Int                @default(0)
+  userLimit            Int?
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  notes                String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model AccessRequest {
+  id              String              @id @default(cuid())
+  name            String
+  email           String
+  practiceName    String
+  role            String?
+  practiceSize    String?
+  phone           String?
+  message         String?
+  interest        String?
+  plan            String?
+  status          AccessRequestStatus @default(PENDING)
+  inviteTokenHash String?             @unique
+  inviteExpiresAt DateTime?
+  reviewedByEmail String?
+  reviewedAt      DateTime?
+  acceptedAt      DateTime?
+  organisationId  String?
+  ipAddress       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+enum ApplicationUsageStatus {
+  INCLUDED
+  NOT_BILLED
+  PENDING
+  REPORTED
+}
+
+// One row per application the Agent completes. The first completion of an
+// application counts; re-runs of the same application don't. Rows beyond the
+// plan's monthly allowance are reported to the Stripe meter (PENDING -> REPORTED).
+model ApplicationUsage {
+  id              String                 @id @default(cuid())
+  organisationId  String
+  automationJobId String                 @unique
+  billableKey     String
+  jobType         String
+  periodMonth     String
+  plan            String?
+  status          ApplicationUsageStatus
+  reportedAt      DateTime?
+  lastError       String?
+  createdAt       DateTime               @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, billableKey])
+  @@index([organisationId, periodMonth])
+  @@index([status, createdAt])
+}
+
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
+// An invitation for someone to join a workspace's team. Single use, bound to one
+// email, and counted against the plan's user limit while it is pending.
+model TeamInvite {
+  id             String           @id @default(cuid())
+  organisationId String
+  email          String
+  role           OrganisationRole @default(MEMBER)
+  tokenHash      String           @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  invitedById    String?
+  createdAt      DateTime         @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("TeamInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, acceptedAt, revokedAt])
+  @@index([email])
 }

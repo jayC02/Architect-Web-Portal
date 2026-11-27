@@ -1,4 +1,5 @@
 ---
+import SubscriptionBanner from '@/components/billing/SubscriptionBanner.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import BrandLogo from '@/components/brand/BrandLogo.astro';
 import AgentQueueDropdown from '@/components/automation/AgentQueueDropdown';
@@ -45,7 +46,7 @@ const roleLabel = role === 'OWNER' ? 'Owner' : role === 'ADMIN' ? 'Administrator
         <a href="/dashboard" class="practice-mobile-brand"><BrandLogo variant="mark" class="h-8 w-8" /></a>
         <div class="practice-topbar-actions">{preview && <span class="practice-preview-label">Preview · sample data</span>}<AgentQueueDropdown floatingEnabled={false} client:load /><details class="practice-mobile-menu"><summary aria-label="Open navigation"><Menu size={21} aria-hidden="true" /></summary><nav aria-label="Mobile navigation">{navigation.map(({ label, href, icon: Icon }) => <a href={href} aria-current={href === '/dashboard' ? 'page' : undefined}><Icon size={18} aria-hidden="true" />{label}</a>)}<a href="/settings"><Settings size={18} aria-hidden="true" />Settings</a><button type="button" data-logout><LogOut size={18} aria-hidden="true" />Sign out</button></nav></details></div>
       </header>
-      <main id="practice-main" class="practice-main" tabindex="-1"><slot /></main>
+      <main id="practice-main" class="practice-main" tabindex="-1"><SubscriptionBanner /><slot /></main>
       <footer class="practice-footer"><span>Architect Pro</span><span>Your projects, in perspective.</span></footer>
     </div>
   </div>

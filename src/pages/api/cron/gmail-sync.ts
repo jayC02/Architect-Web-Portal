@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import type { APIRoute } from 'astro';
 import { jsonResponse } from '@/lib/utils/http';
 import { syncAllEnabledGmailConnections } from '@/server/services/gmail-sync.service';
+import { entitledOrganisationIds } from '@/server/billing/access';
 
 const authorised = (request: Request) => {
   const secret = process.env.CRON_SECRET?.trim();
@@ -19,7 +20,8 @@ export const GET: APIRoute = async ({ request }) => {
   if (process.env.GMAIL_SCHEDULED_SYNC_ENABLED?.trim().toLowerCase() === 'false') {
     return jsonResponse(200, { ok: true, skipped: true });
   }
-  const results = await syncAllEnabledGmailConnections();
+  // Lapsed and suspended workspaces are skipped until their subscription is restored.
+  const results = await syncAllEnabledGmailConnections({ organisationIds: await entitledOrganisationIds() });
   return jsonResponse(200, {
     ok: true,
     organisations: results.length,

@@ -5,6 +5,7 @@ import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { syncXeroOrganisation } from '@/lib/xero/sync';
 import { jsonResponse } from '@/lib/utils/http';
+import { entitledOrganisationIds } from '@/server/billing/access';
 
 const authorised = (request: Request) => {
   const secret = process.env.CRON_SECRET?.trim();
@@ -18,8 +19,10 @@ const authorised = (request: Request) => {
 export const GET: APIRoute = async ({ request }) => {
   if (!authorised(request)) return jsonResponse(401, { error: 'Unauthorised scheduled request.' });
   if (process.env.XERO_SCHEDULED_SYNC_ENABLED?.trim().toLowerCase() === 'false') return jsonResponse(200, { ok: true, skipped: true });
+  // Lapsed and suspended workspaces are skipped until their subscription is restored.
+  const organisationIds = await entitledOrganisationIds();
   const connections = await prisma.xeroConnection.findMany({
-    where: { status: { notIn: ['DISCONNECTED', 'RECONNECT_REQUIRED'] } },
+    where: { status: { notIn: ['DISCONNECTED', 'RECONNECT_REQUIRED'] }, organisationId: { in: organisationIds } },
     select: { organisationId: true },
     take: 100,
   });

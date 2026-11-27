@@ -11,11 +11,20 @@ export type AgentReleaseMetadata = {
   signed: boolean;
 };
 
+// Where the installer and source live in the private release bucket. Never
+// served publicly: /agent/download checks entitlement, then issues a
+// short-lived signed URL (see src/server/billing/release-storage.ts).
+export const agentReleaseStorageKeys = (version = agentReleaseMetadata().version) => ({
+  installer: process.env.AGENT_RELEASE_STORAGE_KEY || (version === defaults.version ? defaults.storageKey : `ArchitectProAgentSetup-${version}.exe`),
+  source: process.env.AGENT_RELEASE_SOURCE_STORAGE_KEY || (version === defaults.version ? defaults.sourceStorageKey : `ArchitectProAgentSource-${version}.zip`),
+});
+
 const status = (process.env.AGENT_RELEASE_STATUS || defaults.status).toUpperCase();
 
 export const agentReleaseMetadata = (): AgentReleaseMetadata => ({
   version: process.env.AGENT_RELEASE_VERSION || defaults.version,
-  downloadUrl: process.env.AGENT_RELEASE_DOWNLOAD_URL || defaults.downloadUrl,
+  // Always the gated route; the bytes live in private storage.
+  downloadUrl: defaults.downloadUrl,
   sourceDownloadUrl: defaults.sourceDownloadUrl,
   sha256: process.env.AGENT_RELEASE_SHA256 || defaults.sha256,
   sizeBytes: Number(process.env.AGENT_RELEASE_SIZE_BYTES || defaults.sizeBytes),

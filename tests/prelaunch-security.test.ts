@@ -97,6 +97,9 @@ const complete = route('src/pages/api/auth/google/complete.ts', { ...common,
   '@/lib/auth/organisation': { resolveOrganisationSlug: async () => 'fixture-practice' },
   '@/lib/auth/session': { createSession: async (id: string) => signupWrites.push(id) },
   '@/lib/auth/tokens': { hashOpaqueToken }, '@/lib/validation/auth': { completeGoogleSignupSchema },
+  '@/server/billing/onboarding': { findInviteForVerifiedEmail: async () => null, markInviteAccepted: async () => {},
+    postSignupRedirect: () => '/billing', signupMode: () => 'paid_or_invite', subscriptionCreateFor: () => ({ status: 'PENDING_PAYMENT' }) },
+  '@/server/billing/team': { findTeamInviteForVerifiedEmail: async () => null, acceptTeamInvite: async () => { throw new Error('not invited'); } },
   '@/lib/db/prisma': { prisma: { pendingOAuthSignup: { findUnique: async () => ({ id: 'pending', provider: 'GOOGLE', providerAccountId: 'google-fixture', email: 'account@example.test', expiresAt: new Date(Date.now() + 60_000) }) }, $transaction: async (fn: any) => fn(tx) } },
 }).POST;
 const completeContext = context('/api/auth/google/complete');

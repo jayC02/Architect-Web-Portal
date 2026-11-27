@@ -5,6 +5,7 @@ import { GOOGLE_SIGNUP_COOKIE } from '@/lib/auth/oauth';
 import { hashOpaqueToken } from '@/lib/auth/tokens';
 import { prisma } from '@/lib/db/prisma';
 import { privateNoStore, setAstroCache } from '@/lib/server/cache-control';
+import { findTeamInviteForVerifiedEmail } from '@/server/billing/team';
 
 export const prerender = false;
 setAstroCache(Astro, privateNoStore);
@@ -17,6 +18,8 @@ const pending = rawToken
     })
   : null;
 const valid = Boolean(pending && pending.expiresAt.getTime() >= Date.now());
+// Someone invited to a practice's team joins it instead of creating a workspace.
+const teamInvite = valid && pending ? await findTeamInviteForVerifiedEmail(pending.email) : null;
 ---
 <BaseLayout title="Create your workspace | Architect Pro" noindex>
   <main class="grid min-h-screen place-items-center bg-paper px-4 py-12">
@@ -25,13 +28,20 @@ const valid = Boolean(pending && pending.expiresAt.getTime() >= Date.now());
       {valid && pending ? (
         <form data-api-form data-action="/api/auth/google/complete" data-method="POST" method="post" action="/api/auth/google/complete">
           <p class="mb-2 text-xs font-semibold uppercase text-stone-500">One final detail</p>
-          <h1 class="text-2xl font-semibold text-ink">Create your Workspace</h1>
-          <p class="mt-2 text-sm leading-6 text-stone-500">Signed in as {pending.email}. Give your organisation a name to create its private workspace.</p>
-          <label class="mt-6 block">
-            <span class="label">Organisation Name</span>
-            <input required name="organisationName" minlength="2" maxlength="100" class="field" autocomplete="organization" autofocus />
-          </label>
-          <button class="btn btn-primary mt-6 w-full">Create workspace</button>
+          {teamInvite ? (<>
+            <h1 class="text-2xl font-semibold text-ink">Join {teamInvite.organisation.name}</h1>
+            <p class="mt-2 text-sm leading-6 text-stone-500">Signed in as {pending.email}. You've been invited to {teamInvite.organisation.name}'s workspace.</p>
+            <input type="hidden" name="joinTeam" value="1" />
+            <button class="btn btn-primary mt-6 w-full">Join {teamInvite.organisation.name}</button>
+          </>) : (<>
+            <h1 class="text-2xl font-semibold text-ink">Create your Workspace</h1>
+            <p class="mt-2 text-sm leading-6 text-stone-500">Signed in as {pending.email}. Give your organisation a name to create its private workspace.</p>
+            <label class="mt-6 block">
+              <span class="label">Organisation Name</span>
+              <input required name="organisationName" minlength="2" maxlength="100" class="field" autocomplete="organization" autofocus />
+            </label>
+            <button class="btn btn-primary mt-6 w-full">Create workspace</button>
+          </>)}
           <p data-form-status class="mt-4 text-center text-sm text-stone-500"></p>
         </form>
       ) : (

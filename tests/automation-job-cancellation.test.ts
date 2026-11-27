@@ -128,6 +128,8 @@ assert.equal(oldAgent.state().job.status, 'IN_PROGRESS', 'older Agents cannot be
 
 const route = harness();
 Object.assign(route.modules, {
+  '@/server/services/desktop-automation-status.service': { automationJobApplicationId: () => null },
+  '@/server/billing/usage': { recordApplicationUsage: async () => null, reportPendingUsage: async () => ({ reported: 0, failed: 0 }) },
   '@/lib/server/origin-guard': { assertAllowedOrigin },
   '@/lib/server/rate-limit': { assertRateLimit: () => {}, rateLimitPolicies: { desktop: {}, mutation: {} } },
   '@/lib/utils/handlers': { parseBody, withErrorHandling },

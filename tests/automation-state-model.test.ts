@@ -33,6 +33,8 @@ function fixture(type = 'HOUSEHOLDER_PLANNING') {
   const credentials: any[] = [{ id: 'credential-a', organisationId: 'org-a', automationJobId: job.id }, { id: 'credential-b', organisationId: 'org-a', automationJobId: job.id }];
   const agent: any = { id: 'agent-a', organisationId: 'org-a', capabilities: { workflows: [type], snapshotVersions: [2], callbackContractVersions: [1], progressContractVersions: [1] } };
   const database: any = {
+    // No subscription row: the evaluation allowance does not apply.
+    organisationSubscription: { findUnique: async () => null },
     automationJob: { findFirst: async ({where}: any) => matches(job, where) ? structuredClone(job) : null,
       updateMany: async ({where, data}: any) => { if (!matches(job, where)) return {count: 0}; Object.assign(job, data); return {count: 1}; } },
     planningApplication: { findFirst: async ({where}: any) => matches(application, where) ? structuredClone(application) : null },
@@ -119,6 +121,8 @@ const modules: any = {
   '@/server/auth/desktop-token': { requireDesktopAuth: (context: any) => context.access, assertDesktopJobAccess: (access: any, id: string) => { assert.equal(access.automationJobId, id); } },
   '@/server/services/desktop-execution.service': {},
   '@/server/services/automation-lifecycle.service': {},
+  '@/server/services/desktop-automation-status.service': { automationJobApplicationId: () => null },
+  '@/server/billing/usage': { recordApplicationUsage: async () => null, reportPendingUsage: async () => ({ reported: 0, failed: 0 }) },
   '@/server/services/prepared-application-review.service': {},
   '@/server/services/automation-state-model.service': { recordAutomationOwnership, readExecutionSnapshot, STATE_MODEL_VERSION: 1 },
 };

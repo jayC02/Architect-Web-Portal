@@ -1,0 +1,135 @@
+---
+import AppShell from '@/components/layout/AppShell.astro';
+import { requirePageAuth } from '@/lib/server/page-auth';
+import { listTeam, seatsAvailable } from '@/server/billing/team';
+
+export const prerender = false;
+
+const auth = await requirePageAuth(Astro as never);
+if (!auth) return Astro.redirect('/login?returnTo=/settings/team');
+
+const canManage = ['OWNER', 'ADMIN'].includes(auth.membership.role);
+const { members, invites, usage } = await listTeam(auth.organisation.id);
+const used = usage.members + usage.pending;
+const roomForMore = seatsAvailable(usage);
+const roleLabel: Record<string, string> = { OWNER: 'Owner', ADMIN: 'Admin', MEMBER: 'Member' };
+const formatDate = (value: Date) => value.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+---
+<AppShell title="Team" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
+  <div class="mb-7 max-w-3xl">
+    <a href="/settings" class="text-sm font-semibold text-stone-600 hover:text-ink">Back to settings</a>
+    <h1 class="mt-3 text-3xl font-semibold text-ink">Team</h1>
+    <p class="mt-2 text-sm leading-6 text-stone-600">
+      {usage.limit === null
+        ? `${used} ${used === 1 ? 'person' : 'people'}, including pending invitations. Your plan has no user limit.`
+        : `${used} of ${usage.limit} users on your plan, including pending invitations.`}
+    </p>
+  </div>
+
+  {canManage && (
+    <section class="panel mb-6 max-w-3xl rounded-lg p-6" aria-labelledby="invite-title">
+      <h2 id="invite-title" class="text-lg font-semibold text-ink">Invite someone</h2>
+      {roomForMore ? (
+        <form data-api-form data-team-invite data-action="/api/settings/team" data-method="POST" method="post" action="/api/settings/team" class="mt-4 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+          <label class="block"><span class="label">Email</span><input required type="email" name="email" class="field" autocomplete="off" /></label>
+          <label class="block"><span class="label">Role</span>
+            <select name="role" class="field">
+              <option value="MEMBER">Member</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </label>
+          <button class="btn btn-primary">Send invitation</button>
+          <p data-form-status class="text-sm text-stone-500 sm:col-span-3"></p>
+        </form>
+      ) : (
+        <p class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          Your plan's {usage.limit} users are all taken. Remove someone, cancel an invitation or <a class="font-semibold underline" href="/billing">change plan</a> to add more.
+        </p>
+      )}
+      <div data-invite-result hidden class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+        <p data-invite-message></p>
+        <div class="mt-3 flex gap-2">
+          <input data-invite-link readonly class="field flex-1 bg-white text-xs" aria-label="Invitation link" />
+          <button type="button" data-copy-invite class="btn btn-secondary">Copy link</button>
+        </div>
+        <a href="/settings/team" class="mt-3 inline-block font-semibold underline">Done</a>
+      </div>
+      <p class="mt-4 text-xs leading-5 text-stone-500">Admins can manage the team, billing and settings. Members can work on projects and applications. Invitation links are for one email address and expire after 14 days.</p>
+    </section>
+  )}
+
+  <section class="panel mb-6 max-w-3xl rounded-lg p-6" aria-labelledby="members-title">
+    <h2 id="members-title" class="text-lg font-semibold text-ink">People</h2>
+    <ul class="mt-3 divide-y divide-stone-200">
+      {members.map((member) => (
+        <li class="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div>
+            <p class="font-semibold text-ink">{member.user.name}{member.user.id === auth.user.id ? ' (you)' : ''}</p>
+            <p class="text-sm text-stone-500">{member.user.email}</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">{roleLabel[member.role] ?? member.role}</span>
+            {canManage && member.role !== 'OWNER' && member.user.id !== auth.user.id && (
+              <form data-api-form data-action={`/api/settings/team/members/${member.id}`} data-method="DELETE" data-redirect="reload" data-confirm={`Remove ${member.user.name} from the team? They will be signed out straight away.`}>
+                <button class="btn btn-secondary">Remove</button>
+                <p data-form-status class="sr-only"></p>
+              </form>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  {canManage && invites.length > 0 && (
+    <section class="panel max-w-3xl rounded-lg p-6" aria-labelledby="pending-title">
+      <h2 id="pending-title" class="text-lg font-semibold text-ink">Pending invitations</h2>
+      <ul class="mt-3 divide-y divide-stone-200">
+        {invites.map((invite) => (
+          <li class="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div>
+              <p class="font-semibold text-ink">{invite.email}</p>
+              <p class="text-sm text-stone-500">{roleLabel[invite.role] ?? invite.role}, expires {formatDate(invite.expiresAt)}</p>
+            </div>
+            <form data-api-form data-action={`/api/settings/team/invites/${invite.id}`} data-method="DELETE" data-redirect="reload">
+              <button class="btn btn-secondary">Cancel invitation</button>
+              <p data-form-status class="sr-only"></p>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</AppShell>
+
+<script>
+  // After an invitation is created, show its link: useful when email isn't set up.
+  const form = document.querySelector<HTMLFormElement>('form[data-team-invite]');
+  const result = document.querySelector<HTMLElement>('[data-invite-result]');
+  window.addEventListener('portal:mutation-success', (event) => {
+    const detail = (event as CustomEvent<{ action: string; payload: { inviteUrl?: string; emailed?: boolean; invite?: { email: string } } }>).detail;
+    if (!form || !result || detail.action !== '/api/settings/team' || !detail.payload.inviteUrl) return;
+    form.hidden = true;
+    result.hidden = false;
+    result.querySelector<HTMLInputElement>('[data-invite-link]')!.value = detail.payload.inviteUrl;
+    result.querySelector<HTMLElement>('[data-invite-message]')!.textContent = detail.payload.emailed
+      ? `Invitation emailed to ${detail.payload.invite?.email}. You can also share this link with them.`
+      : `Invitation created for ${detail.payload.invite?.email}. Email isn't set up, so send them this link yourself.`;
+  });
+  document.querySelector('[data-copy-invite]')?.addEventListener('click', async (event) => {
+    const input = document.querySelector<HTMLInputElement>('[data-invite-link]');
+    if (!input) return;
+    await navigator.clipboard?.writeText(input.value).catch(() => input.select());
+    (event.currentTarget as HTMLButtonElement).textContent = 'Copied';
+  });
+
+  // Ask before removing someone.
+  document.addEventListener('submit', (event) => {
+    const target = event.target as HTMLFormElement;
+    const message = target.dataset.confirm;
+    if (message && !window.confirm(message)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+</script>

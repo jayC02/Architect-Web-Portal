@@ -112,7 +112,20 @@ export const getSessionUser = async (context: APIContext) => {
   return session.user;
 };
 
-export const getSessionAuth = async (context: APIContext) => {
+const SESSION_AUTH_CACHE = Symbol.for('architect.sessionAuth');
+type SessionAuth = Awaited<ReturnType<typeof loadSessionAuth>>;
+
+// The middleware resolves the session to check the subscription; pages and
+// routes then call this again. Memoise per request so that costs one query.
+export const getSessionAuth = async (context: APIContext): Promise<SessionAuth> => {
+  const locals = (context as unknown as { locals?: Record<PropertyKey, unknown> }).locals;
+  if (locals && SESSION_AUTH_CACHE in locals) return locals[SESSION_AUTH_CACHE] as SessionAuth;
+  const auth = await loadSessionAuth(context);
+  if (locals) locals[SESSION_AUTH_CACHE] = auth;
+  return auth;
+};
+
+const loadSessionAuth = async (context: APIContext) => {
   const rawToken = context.cookies.get(SESSION_COOKIE)?.value;
   if (!rawToken) return null;
 
@@ -130,7 +143,7 @@ export const getSessionAuth = async (context: APIContext) => {
           createdAt: true,
           updatedAt: true,
           organisationLinks: {
-            include: { organisation: true },
+            include: { organisation: { include: { subscription: true } } },
             orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
             take: 1,
           },
