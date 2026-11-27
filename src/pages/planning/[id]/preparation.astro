@@ -5,6 +5,8 @@ import PreparationSection from '@/components/forms/PreparationSection.astro';
 import { resolveApplicationDescription } from '@/server/services/application-description.service';
 import { prisma } from '@/lib/db/prisma';
 import { resolveSoleOwner } from '@/lib/planning-preparation-defaults';
+import PlanningPermissionQuestions from '@/components/forms/PlanningPermissionQuestions.astro';
+import { readPlanningPermissionAnswers } from '@/lib/planning-permission';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import { automationJobApplicationId, desktopAutomationJobSelect } from '@/server/services/desktop-automation-status.service';
 
@@ -57,6 +59,13 @@ const documentCount = await prisma.projectDocument.count({
   where: { organisationId: auth.organisation.id, projectId: application.projectId },
 });
 const vehicleAccess = boolValue('newOrAlteredVehicleAccess');
+// "Planning application" jobs fill the ePlanning Planning Permission form, which asks more.
+const isPlanningPermission = job
+  ? job.type === AutomationJobType.PLANNING_APPLICATION
+  : candidates.some(candidate => candidate.type === AutomationJobType.PLANNING_APPLICATION
+      && automationJobApplicationId(candidate) === application.id);
+const planningPermission = readPlanningPermissionAnswers(preparation.planningPermission);
+const parkingShown = vehicleAccess || (isPlanningPermission && planningPermission.applicationKind !== 'PPP');
 ---
 <AppShell title="Planning application details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
@@ -82,20 +91,21 @@ const vehicleAccess = boolValue('newOrAlteredVehicleAccess');
         <label class="block"><span class="label">Agricultural holding</span><select name="agriculturalHolding" class="field"><option value="false" selected={!boolValue('agriculturalHolding')}>No</option><option value="true" selected={boolValue('agriculturalHolding')}>Yes</option></select></label>
         <div class="sm:col-span-2" data-prep-question="newOrAlteredVehicleAccess">
           <label class="block sm:w-1/2 sm:pr-2"><span class="label">New or altered vehicle access</span><select name="newOrAlteredVehicleAccess" class="field"><option value="false" selected={!vehicleAccess}>No</option><option value="true" selected={vehicleAccess}>Yes</option></select></label>
-          <fieldset class="prep-followup mt-3 grid gap-4 sm:grid-cols-2" data-planning-parking disabled={!vehicleAccess} hidden={!vehicleAccess}>
+          <fieldset class="prep-followup mt-3 grid gap-4 sm:grid-cols-2" data-planning-parking data-planning-permission={isPlanningPermission ? 'true' : undefined} disabled={!parkingShown} hidden={!parkingShown}>
             <legend class="sr-only">Parking spaces</legend>
-            <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} required={vehicleAccess} class="field" /></label>
-            <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} required={vehicleAccess} class="field" /></label>
+            <label class="block"><span class="label">Current parking spaces</span><input type="number" min="0" name="currentParkingSpaces" value={numberValue('currentParkingSpaces')} required={parkingShown} class="field" /></label>
+            <label class="block"><span class="label">Proposed parking spaces</span><input type="number" min="0" name="proposedParkingSpaces" value={numberValue('proposedParkingSpaces')} required={parkingShown} class="field" /></label>
           </fieldset>
         </div>
       </div>
       </PreparationSection>
+      {isPlanningPermission && <PlanningPermissionQuestions answers={planningPermission} />}
       <div class="mt-6 flex flex-wrap items-center gap-3"><button class="btn btn-primary">Save and run application</button><span data-form-status class="text-sm text-stone-500" /></div>
     </form>
 
     <aside class="panel rounded-lg p-5 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto" aria-label="Planning application summary">
       <h2 class="text-lg font-semibold">Application summary</h2>
-      <dl class="mt-4 space-y-2 text-sm"><div class="prep-summary-row"><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Application</dt><dd>Planning</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
+      <dl class="mt-4 space-y-2 text-sm"><div class="prep-summary-row"><dt class="text-stone-500">Project</dt><dd class="font-semibold text-ink">{application.project.name}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Site</dt><dd>{address}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Client</dt><dd>{clientName}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Application</dt><dd>{isPlanningPermission ? 'Planning Permission' : 'Planning'}</dd></div><div class="prep-summary-row"><dt class="text-stone-500">Documents</dt><dd>{documentCount} document{documentCount === 1 ? '' : 's'}</dd></div></dl>
     </aside>
   </div>
   <script>
@@ -104,14 +114,18 @@ const vehicleAccess = boolValue('newOrAlteredVehicleAccess');
     const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
     const access = form?.querySelector<HTMLSelectElement>('[name="newOrAlteredVehicleAccess"]');
     const parking = form?.querySelector<HTMLFieldSetElement>('[data-planning-parking]');
+    const kind = form?.querySelector<HTMLSelectElement>('[name="pp_applicationKind"]');
     const updateParking = () => {
       if (!access || !parking) return;
-      const needed = access.value === 'true';
+      // The Planning Permission form asks for parking spaces on every route except in principle.
+      const planningPermission = parking.dataset.planningPermission === 'true';
+      const needed = access.value === 'true' || (planningPermission && kind?.value !== 'PPP');
       parking.hidden = !needed;
       parking.disabled = !needed;
       parking.querySelectorAll('input').forEach(field => { field.required = needed; });
     };
     access?.addEventListener('change', updateParking);
+    kind?.addEventListener('change', updateParking);
     updateParking();
     initPreparationProgress();
   </script>

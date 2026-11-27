@@ -1,0 +1,225 @@
+---
+// Questions the ePlanning "Planning Permission" form asks beyond the shared planning
+// questions. Follow-ups appear only for the answers that make the portal ask them
+// (docs/planning-permission-portal-map.md). Field names are prefixed "pp_".
+import PreparationSection from '@/components/forms/PreparationSection.astro';
+import {
+  FLOORSPACE_ROWS,
+  FLOORSPACE_USE_CLASSES,
+  FLOORSPACE_USE_CLASS_LABELS,
+  PLANNING_PERMISSION_KINDS,
+  PLANNING_PERMISSION_KIND_LABELS,
+  PRE_APPLICATION_FORMATS,
+  type PlanningPermissionAnswers,
+} from '@/lib/planning-permission';
+
+interface Props { answers: PlanningPermissionAnswers }
+const { answers } = Astro.props;
+
+const yesNo = (value: boolean | null | undefined) => value === true ? 'true' : value === false ? 'false' : '';
+const text = (value: unknown) => value === null || value === undefined ? '' : String(value);
+const kind = answers.applicationKind ?? 'FULL';
+const works = answers.worksStarted ?? 'No';
+const entries = answers.floorspaceEntries ?? [];
+
+const yesNoOptions = [['true', 'Yes'], ['false', 'No']] as const;
+const yesNoDontKnow = [['YES', 'Yes'], ['NO', 'No'], ['DONT_KNOW', "Don't know"]] as const;
+---
+<PreparationSection id="planning-permission" title="Planning Permission form" description="The government Planning Permission form asks these as well. Follow-up questions appear only when the portal asks them.">
+  <input type="hidden" name="pp_section" value="true" />
+
+  <div class="mt-5 grid gap-4 sm:grid-cols-2">
+    <label class="block sm:col-span-2"><span class="label">What is this application for?</span>
+      <select name="pp_applicationKind" class="field" required>
+        {PLANNING_PERMISSION_KINDS.map(value => <option value={value} selected={kind === value}>{PLANNING_PERMISSION_KIND_LABELS[value]}</option>)}
+      </select>
+    </label>
+    <fieldset class="prep-followup grid gap-4 sm:col-span-2 sm:grid-cols-2" data-pp-when="pp_applicationKind=FURTHER|AMSC">
+      <legend class="sr-only">Earlier application</legend>
+      <label class="block"><span class="label">Earlier application reference</span><input name="pp_earlierApplicationReference" maxlength="120" required class="field" value={text(answers.earlierApplicationReference)} /></label>
+      <label class="block"><span class="label">Earlier application date (dd/mm/yyyy)</span><input name="pp_earlierApplicationDate" required pattern="\d{2}/\d{2}/\d{4}" placeholder="dd/mm/yyyy" class="field" value={text(answers.earlierApplicationDate)} /></label>
+    </fieldset>
+  </div>
+
+  <h3 class="mt-6 text-base font-semibold">The proposal</h3>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <label class="block"><span class="label">Temporary permission?</span>
+      <select name="pp_temporaryPermission" class="field">{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.temporaryPermission ?? false) === value}>{label}</option>)}</select>
+    </label>
+    <label class="block"><span class="label">Has a change of use already taken place?</span>
+      <select name="pp_changeOfUseTakenPlace" class="field">{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.changeOfUseTakenPlace ?? false) === value}>{label}</option>)}</select>
+      <span class="mt-1 block text-xs text-stone-500">Answer No if there is no change of use.</span>
+    </label>
+    <fieldset class="prep-followup sm:col-span-2" data-pp-when="pp_temporaryPermission=true">
+      <legend class="sr-only">Temporary permission</legend>
+      <label class="block"><span class="label">How long is permission needed for, and why?</span><textarea name="pp_temporaryPermissionDetails" maxlength="500" rows="2" required class="field">{text(answers.temporaryPermissionDetails)}</textarea></label>
+    </fieldset>
+    <label class="block"><span class="label">Have the works already started or been completed?</span>
+      <select name="pp_worksStarted" class="field">
+        {[['No', 'No'], ['Started', 'Yes, started'], ['Completed', 'Yes, completed']].map(([value, label]) => <option value={value} selected={works === value}>{label}</option>)}
+      </select>
+    </label>
+    <fieldset class="prep-followup grid gap-4 sm:col-span-2 sm:grid-cols-2" data-pp-when="pp_worksStarted=Started|Completed">
+      <legend class="sr-only">Works already started</legend>
+      <label class="block"><span class="label">Completion date, or start date if not finished (dd/mm/yyyy)</span><input name="pp_worksDate" required pattern="\d{2}/\d{2}/\d{4}" placeholder="dd/mm/yyyy" class="field" value={text(answers.worksDate)} /></label>
+      <label class="block sm:col-span-2"><span class="label">Why did work start before applying?</span><textarea name="pp_worksReason" maxlength="500" rows="2" required class="field">{text(answers.worksReason)}</textarea></label>
+    </fieldset>
+  </div>
+
+  <fieldset class="prep-followup mt-6" data-pp-when="discussedWithPlanningAuthority=true">
+    <legend class="text-base font-semibold">Pre-application feedback</legend>
+    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+      <label class="block"><span class="label">How was the feedback given?</span>
+        <select name="pp_preApplicationFormat" required class="field"><option value="">Choose</option>{PRE_APPLICATION_FORMATS.map(value => <option value={value} selected={answers.preApplicationFormat === value}>{value}</option>)}</select>
+      </label>
+      <label class="block"><span class="label">Correspondence reference (optional)</span><input name="pp_preApplicationReference" maxlength="120" class="field" value={text(answers.preApplicationReference)} /></label>
+      <label class="block sm:col-span-2"><span class="label">Feedback given, the officer who gave it, and any processing agreement</span><textarea name="pp_preApplicationFeedback" maxlength="500" rows="3" required class="field">{text(answers.preApplicationFeedback)}</textarea></label>
+      <label class="block"><span class="label">Officer first name (optional)</span><input name="pp_preApplicationOfficerFirstName" maxlength="100" class="field" value={text(answers.preApplicationOfficerFirstName)} /></label>
+      <label class="block"><span class="label">Officer last name (optional)</span><input name="pp_preApplicationOfficerLastName" maxlength="100" class="field" value={text(answers.preApplicationOfficerLastName)} /></label>
+      <label class="block"><span class="label">Date (dd/mm/yyyy, optional)</span><input name="pp_preApplicationDate" pattern="\d{2}/\d{2}/\d{4}" placeholder="dd/mm/yyyy" class="field" value={text(answers.preApplicationDate)} /></label>
+    </div>
+  </fieldset>
+
+  <h3 class="mt-6 text-base font-semibold">The site</h3>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <label class="block"><span class="label">Site area</span><input type="number" min="0.01" step="0.01" name="pp_siteArea" required class="field" value={text(answers.siteArea)} /></label>
+    <label class="block"><span class="label">Measured in</span>
+      <select name="pp_siteAreaUnit" class="field"><option value="sqm" selected={answers.siteAreaUnit !== 'ha'}>Square metres</option><option value="ha" selected={answers.siteAreaUnit === 'ha'}>Hectares</option></select>
+    </label>
+    <label class="block sm:col-span-2"><span class="label">Current or most recent use</span><textarea name="pp_existingUse" maxlength="500" rows="2" required class="field">{text(answers.existingUse)}</textarea></label>
+    <label class="block"><span class="label">Changes to public paths or rights of way?</span>
+      <select name="pp_publicPathsChanges" class="field">{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.publicPathsChanges ?? false) === value}>{label}</option>)}</select>
+    </label>
+  </div>
+
+  <h3 class="mt-6 text-base font-semibold">Water supply and drainage</h3>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <label class="block sm:col-span-2"><span class="label">New or altered water supply or drainage?</span>
+      <select name="pp_waterOrDrainageChanges" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.waterOrDrainageChanges) === value}>{label}</option>)}</select>
+    </label>
+    <fieldset class="prep-followup grid gap-4 sm:col-span-2 sm:grid-cols-2" data-pp-when="pp_waterOrDrainageChanges=true">
+      <legend class="sr-only">Drainage</legend>
+      <label class="block sm:col-span-2"><span class="label">Drainage connection</span>
+        <select name="pp_drainageConnection" required class="field"><option value="">Choose</option>
+          {[['PUBLIC', 'Connecting to the public drainage network'], ['PRIVATE', 'Private drainage arrangements'], ['NOT_APPLICABLE', 'Not applicable: water supply only']].map(([value, label]) => <option value={value} selected={answers.drainageConnection === value}>{label}</option>)}
+        </select>
+      </label>
+      <fieldset class="prep-followup grid gap-4 sm:col-span-2 sm:grid-cols-2" data-pp-when="pp_drainageConnection=PRIVATE">
+        <legend class="sr-only">Private drainage</legend>
+        <label class="block"><span class="label">Private arrangement</span>
+          <select name="pp_privateDrainageType" required class="field"><option value="">Choose</option>
+            {[['SEPTIC_TANK', 'New or altered septic tank'], ['TREATMENT', 'Treatment plant or additional treatment'], ['OTHER', 'Other (e.g. composting toilets)']].map(([value, label]) => <option value={value} selected={answers.privateDrainageType === value}>{label}</option>)}
+          </select>
+        </label>
+        <fieldset class="prep-followup" data-pp-when="pp_privateDrainageType=SEPTIC_TANK">
+          <legend class="sr-only">Septic tank discharge</legend>
+          <label class="block"><span class="label">Septic tank discharges to</span>
+            <select name="pp_septicTankDischarge" required class="field"><option value="">Choose</option>
+              {[['LAND', 'Land via soakaway'], ['WATERCOURSE', 'Watercourse (incl. partial soakaway)'], ['COASTAL', 'Coastal waters']].map(([value, label]) => <option value={value} selected={answers.septicTankDischarge === value}>{label}</option>)}
+            </select>
+          </label>
+        </fieldset>
+        <label class="block sm:col-span-2"><span class="label">Describe the private drainage arrangements</span><textarea name="pp_privateDrainageDetails" maxlength="500" rows="2" required class="field">{text(answers.privateDrainageDetails)}</textarea></label>
+      </fieldset>
+    </fieldset>
+    <label class="block"><span class="label">Sustainable drainage of surface water (SUDS)?</span>
+      <select name="pp_sustainableDrainage" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.sustainableDrainage) === value}>{label}</option>)}</select>
+    </label>
+    <label class="block"><span class="label">Water supply</span>
+      <select name="pp_publicWaterSupply" required class="field"><option value="">Choose</option>
+        {[['YES', 'Public water supply'], ['PRIVATE', 'Private water supply'], ['NONE', 'No connection required']].map(([value, label]) => <option value={value} selected={answers.publicWaterSupply === value}>{label}</option>)}
+      </select>
+    </label>
+  </div>
+
+  <h3 class="mt-6 text-base font-semibold">Flood risk</h3>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <label class="block"><span class="label">Site in an area of known flood risk?</span>
+      <select name="pp_knownFloodRisk" required class="field"><option value="">Choose</option>{yesNoDontKnow.map(([value, label]) => <option value={value} selected={answers.knownFloodRisk === value}>{label}</option>)}</select>
+    </label>
+    <label class="block"><span class="label">Could it increase flood risk elsewhere?</span>
+      <select name="pp_increasesFloodRisk" required class="field"><option value="">Choose</option>{yesNoDontKnow.map(([value, label]) => <option value={value} selected={answers.increasesFloodRisk === value}>{label}</option>)}</select>
+    </label>
+    <fieldset class="prep-followup sm:col-span-2" data-pp-when="pp_increasesFloodRisk=YES">
+      <legend class="sr-only">Flood risk details</legend>
+      <label class="block"><span class="label">How might flood risk increase elsewhere?</span><textarea name="pp_floodRiskDetails" maxlength="500" rows="2" required class="field">{text(answers.floodRiskDetails)}</textarea></label>
+    </fieldset>
+  </div>
+
+  <fieldset class="prep-followup mt-6" data-pp-when="pp_applicationKind=FULL|AMSC">
+    <legend class="text-base font-semibold">Waste and housing</legend>
+    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+      <label class="block"><span class="label">Plans include waste and recycling storage?</span>
+        <select name="pp_wasteStorage" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.wasteStorage) === value}>{label}</option>)}</select>
+      </label>
+      <label class="block sm:col-span-2"><span class="label">Waste storage and collection arrangements</span><textarea name="pp_wasteDetails" maxlength="500" rows="2" required class="field">{text(answers.wasteDetails)}</textarea><span class="mt-1 block text-xs text-stone-500">The portal asks for this whichever answer you give above.</span></label>
+      <label class="block"><span class="label">New or additional houses or flats?</span>
+        <select name="pp_newDwellings" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.newDwellings) === value}>{label}</option>)}</select>
+      </label>
+      <fieldset class="prep-followup" data-pp-when="pp_newDwellings=true">
+        <legend class="sr-only">Units</legend>
+        <label class="block"><span class="label">How many units in total?</span><input type="number" min="1" step="1" name="pp_dwellingUnits" required class="field" value={text(answers.dwellingUnits)} /></label>
+      </fieldset>
+    </div>
+  </fieldset>
+
+  <fieldset class="prep-followup mt-6" data-pp-when="pp_applicationKind=FULL|PPP|FURTHER">
+    <legend class="text-base font-semibold">Non-residential floorspace</legend>
+    <label class="mt-3 block sm:w-1/2 sm:pr-2"><span class="label">Creates or alters non-residential floorspace?</span>
+      <select name="pp_nonResidentialFloorspace" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.nonResidentialFloorspace) === value}>{label}</option>)}</select>
+    </label>
+    <fieldset class="prep-followup mt-3 space-y-4" data-pp-when="pp_nonResidentialFloorspace=true">
+      <legend class="sr-only">Floorspace entries</legend>
+      {Array.from({ length: FLOORSPACE_ROWS }, (_, row) => {
+        const entry = entries[row];
+        return (
+          <div class="grid gap-3 rounded border border-stone-200 p-3 sm:grid-cols-4">
+            <label class="block sm:col-span-2"><span class="label">Use class{row > 0 ? ' (optional)' : ''}</span>
+              <select name={`pp_floorspace_${row}_useClass`} required={row === 0} class="field"><option value="">Choose</option>{FLOORSPACE_USE_CLASSES.map(value => <option value={value} selected={entry?.useClass === value}>{FLOORSPACE_USE_CLASS_LABELS[value]}</option>)}</select>
+            </label>
+            <label class="block sm:col-span-2"><span class="label">Gross floorspace (sq m, or rooms for class 7/8/8a)</span><input type="number" min="0.01" step="0.01" name={`pp_floorspace_${row}_gross`} required={row === 0} class="field" value={text(entry?.grossFloorspace)} /></label>
+            <label class="block sm:col-span-2"><span class="label">Class 1 net trading space (optional)</span><input type="number" min="0" step="0.01" name={`pp_floorspace_${row}_netTrading`} class="field" value={text(entry?.netTradingSpace)} /></label>
+            <label class="block sm:col-span-2"><span class="label">Class 1 non-trading space (optional)</span><input type="number" min="0" step="0.01" name={`pp_floorspace_${row}_nonTrading`} class="field" value={text(entry?.nonTradingSpace)} /></label>
+            <label class="block sm:col-span-4"><span class="label">Details (needed for "Not in a use class" or "Don't know")</span><input name={`pp_floorspace_${row}_details`} maxlength="500" class="field" value={text(entry?.details)} /></label>
+          </div>
+        );
+      })}
+    </fieldset>
+  </fieldset>
+
+  <h3 class="mt-6 text-base font-semibold">Final questions</h3>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <label class="block"><span class="label">Schedule 3 development?</span>
+      <select name="pp_schedule3" required class="field"><option value="">Choose</option>{yesNoDontKnow.map(([value, label]) => <option value={value} selected={answers.schedule3 === value}>{label}</option>)}</select>
+      <span class="mt-1 block text-xs text-stone-500">If yes, the council advertises it and charges an extra fee.</span>
+    </label>
+    <label class="block"><span class="label">Applicant or partner is planning staff or an elected member?</span>
+      <select name="pp_staffOrMemberInterest" class="field">{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.staffOrMemberInterest ?? false) === value}>{label}</option>)}</select>
+    </label>
+    <fieldset class="prep-followup sm:col-span-2" data-pp-when="pp_staffOrMemberInterest=true">
+      <legend class="sr-only">Interest details</legend>
+      <label class="block"><span class="label">Details of the interest</span><textarea name="pp_staffOrMemberInterestDetails" maxlength="500" rows="2" required class="field">{text(answers.staffOrMemberInterestDetails)}</textarea></label>
+    </fieldset>
+  </div>
+</PreparationSection>
+
+<script>
+  // Show each follow-up only when its controlling answer matches; a hidden follow-up is
+  // disabled, so it is neither required nor submitted (the server clears it as well).
+  const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
+  const followUps = Array.from(form?.querySelectorAll<HTMLFieldSetElement>('fieldset[data-pp-when]') ?? []);
+  const matches = (fieldset: HTMLFieldSetElement) => {
+    const [name, values] = (fieldset.dataset.ppWhen ?? '').split('=');
+    const control = form?.querySelector<HTMLSelectElement>(`[name="${name}"]`);
+    return Boolean(control && values.split('|').includes(control.value));
+  };
+  const update = () => {
+    for (const fieldset of followUps) {
+      const shown = matches(fieldset);
+      fieldset.hidden = !shown;
+      fieldset.disabled = !shown;
+    }
+  };
+  form?.addEventListener('change', update);
+  update();
+</script>

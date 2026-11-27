@@ -37,6 +37,7 @@ import {
 } from '@/lib/validation/domain';
 import { HttpError } from '@/lib/utils/http';
 import { evaluateAutomationPreflight } from '@/server/services/automation-preflight.service';
+import { readPlanningPermissionAnswers } from '@/lib/planning-permission';
 import { resolveApplicationDescription } from '@/server/services/application-description.service';
 
 type BuildAutomationJobSnapshotInput = {
@@ -57,6 +58,8 @@ type BuildAutomationJobSnapshotInput = {
   resumeOfJobId?: string;
 };
 
+const storedCount = (value: unknown) =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 const uniqueIds = (ids: string[] | undefined) => Array.from(new Set((ids ?? []).filter(Boolean)));
 const asIso = (value: Date | null | undefined) => value?.toISOString() ?? null;
 export const maxDate = (dates: Array<Date | null | undefined>) =>
@@ -534,6 +537,15 @@ export const buildAutomationJobSnapshot = async (input: BuildAutomationJobSnapsh
         proposedParkingSpaces: planningAnswers.proposedParkingSpaces ?? null,
         soleOwner: planningAnswers.soleOwner ?? null,
         agriculturalHolding: planningAnswers.agriculturalHolding ?? null,
+        ...(input.type === AutomationJobType.PLANNING_APPLICATION
+          ? {
+              // Asked on every Planning Permission form, so an unanswered count must stay null
+              // (the shared schema would coerce a stored null to 0).
+              currentParkingSpaces: storedCount(planningPreparation.currentParkingSpaces),
+              proposedParkingSpaces: storedCount(planningPreparation.proposedParkingSpaces),
+              ...readPlanningPermissionAnswers(planningPreparation.planningPermission),
+            }
+          : {}),
       },
       updatedAt: asIso(planning?.updatedAt),
     },

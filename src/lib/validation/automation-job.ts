@@ -1,3 +1,4 @@
+import { planningPermissionAnswersSchema } from '@/lib/planning-permission';
 import { paperSizeAnalysisSchema } from '@/lib/document-paper-size';
 import { warrantBranchSnapshotFields } from '@/lib/building-warrant-branches';
 import {
@@ -310,6 +311,8 @@ export const automationJobSnapshotV2Schema = z.object({
       proposedParkingSpaces: z.number().int().nonnegative().nullable(),
       soleOwner: z.boolean().nullable(),
       agriculturalHolding: z.boolean().nullable(),
+      // Planning Permission form answers (PLANNING_APPLICATION jobs only).
+      ...planningPermissionAnswersSchema.shape,
     }),
     updatedAt: z.string().datetime().nullable(),
   }).nullable(),

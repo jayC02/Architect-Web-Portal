@@ -5,6 +5,7 @@ import { missingSustainabilityAnswers, type WarrantSustainability } from '@/lib/
 import { AutomationJobType, DocumentStatus, DocumentType } from '@prisma/client';
 import { resolveLocationPlans } from '@/lib/location-plan';
 import { agentPhoneError } from '@/lib/validation/client-contact';
+import { missingPlanningPermissionAnswers, type PlanningPermissionAnswers } from '@/lib/planning-permission';
 
 type Issue = {
   code: string;
@@ -41,7 +42,13 @@ type SnapshotInput = {
   planning: {
     feeMinorUnits?: number | null;
     description: string | null;
-    answers: { soleOwner: boolean | null; agriculturalHolding: boolean | null };
+    answers: {
+      soleOwner: boolean | null;
+      agriculturalHolding: boolean | null;
+      discussedWithPlanningAuthority?: boolean;
+      currentParkingSpaces?: number | null;
+      proposedParkingSpaces?: number | null;
+    } & PlanningPermissionAnswers;
   } | null;
   buildingWarrant: {
     typeOfWorkKeys?: string[];
@@ -285,6 +292,23 @@ export const evaluateAutomationPreflight = (snapshot: SnapshotInput) => {
         message: 'Confirm whether any land is part of an agricultural holding.',
         severity: 'error',
       });
+    }
+    if (snapshot.metadata.applicationType === AutomationJobType.PLANNING_APPLICATION && snapshot.planning) {
+      const answers = snapshot.planning.answers;
+      for (const gap of missingPlanningPermissionAnswers(answers, {
+        discussedWithPlanningAuthority: answers.discussedWithPlanningAuthority === true,
+        currentParkingSpaces: answers.currentParkingSpaces ?? null,
+        proposedParkingSpaces: answers.proposedParkingSpaces ?? null,
+        soleOwner: answers.soleOwner,
+        agriculturalHolding: answers.agriculturalHolding,
+      })) {
+        missing.push({
+          code: `planning_permission_${gap.field.replace('planning.answers.', '').replaceAll('.', '_')}`,
+          field: gap.field,
+          message: gap.message,
+          severity: 'error',
+        });
+      }
     }
   }
 

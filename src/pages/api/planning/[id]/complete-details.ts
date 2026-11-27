@@ -7,6 +7,7 @@ import { assertAllowedOrigin } from '@/lib/server/origin-guard';
 import { assertRateLimit, rateLimitPolicies } from '@/lib/server/rate-limit';
 import { automationJobSnapshotV2Schema } from '@/lib/validation/automation-job';
 import { planningPreparationDetailsSchema } from '@/lib/validation/domain';
+import { planningPermissionAnswersFromForm } from '@/lib/planning-permission';
 import { parseBody, withErrorHandling } from '@/lib/utils/handlers';
 import { HttpError, jsonResponse } from '@/lib/utils/http';
 import { requireOrganisation } from '@/server/permissions/authz';
@@ -79,6 +80,10 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
     agriculturalHolding,
     applicationFee,
   } = body;
+  // Present only when the page showed the Planning Permission questions.
+  const planningPermission = planningPermissionAnswersFromForm(body);
+  // The Planning Permission form always asks for parking spaces, not only for new access.
+  const keepParking = newOrAlteredVehicleAccess || planningPermission !== null;
   await updatePlanningApplicationWithLifecycle({
     organisationId: organisation.id,
     planningApplicationId: application.id,
@@ -97,11 +102,12 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
         discussedWithPlanningAuthority,
         treesOnOrAdjacentToSite,
         newOrAlteredVehicleAccess,
-        currentParkingSpaces: newOrAlteredVehicleAccess ? currentParkingSpaces : null,
-        proposedParkingSpaces: newOrAlteredVehicleAccess ? proposedParkingSpaces : null,
+        currentParkingSpaces: keepParking ? currentParkingSpaces ?? null : null,
+        proposedParkingSpaces: keepParking ? proposedParkingSpaces ?? null : null,
         soleOwner,
         agriculturalHolding,
         applicationFee,
+        ...(planningPermission ? { planningPermission } : {}),
       } as Prisma.InputJsonValue,
       status: applicationStatus,
       preparedAt: new Date(),

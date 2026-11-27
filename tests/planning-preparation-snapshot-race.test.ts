@@ -5,6 +5,7 @@ import ts from 'typescript';
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import { withErrorHandling, parseBody } from '../src/lib/utils/handlers';
 import { HttpError, jsonResponse } from '../src/lib/utils/http';
+import { planningPermissionAnswersFromForm } from '../src/lib/planning-permission';
 
 // Execute the actual endpoint, replacing its boundaries before loading it.
 // No Prisma connection, credentials, live database or portal is used.
@@ -62,6 +63,7 @@ function harness(options: {
     '@/lib/server/rate-limit': { assertRateLimit: () => undefined, rateLimitPolicies: { mutation: {} } },
     '@/lib/validation/automation-job': { automationJobSnapshotV2Schema: { safeParse: () => ({ success: false }) } },
     '@/lib/validation/domain': { planningPreparationDetailsSchema: { parse: (body: unknown) => body } },
+    '@/lib/planning-permission': { planningPermissionAnswersFromForm },
     '@/lib/utils/handlers': { withErrorHandling, parseBody },
     '@/lib/utils/http': { HttpError, jsonResponse },
     '@/server/permissions/authz': {

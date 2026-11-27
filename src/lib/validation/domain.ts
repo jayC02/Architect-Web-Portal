@@ -29,6 +29,7 @@ import {
 import { emptyToUndefined, optionalDate, optionalText, safeUrl } from '@/lib/validation/common';
 import { blankContactToUndefined, isValidUkPhone } from '@/lib/validation/client-contact';
 import { certifierRegistrationPart1Schema } from '@/lib/certifier-registration';
+import { planningPermissionFormSchema } from '@/lib/planning-permission';
 
 export const clientSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -213,7 +214,7 @@ export const planningPreparationDetailsSchema = z.object({
   status: z.nativeEnum(PlanningStatus).optional(),
   portalUrl: safeUrl,
   notes: optionalText(3000),
-}).and(householderPreparationUpdateSchema);
+}).and(householderPreparationUpdateSchema).and(planningPermissionFormSchema);
 
 export const buildingWarrantPreparationUpdateSchema = z.object({
   applicantIsOwner: formBoolean,
