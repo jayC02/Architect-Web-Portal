@@ -43,7 +43,7 @@ export function storyMarkup() {
       </section>
       <p class="sr-only" id="live" aria-live="polite"></p>
       <noscript><style>.scroll-home .rail { display:none; }</style><article class="story-transcript">
-        <h2>From first sketch to completion certificate.</h2><p>Architect Pro prepares householder planning, building warrant and completion certificate applications and keeps your project together.</p>
+        <h2>From first sketch to completion certificate.</h2><p>Architect Pro prepares planning applications, householder and full planning permission, along with building warrant and completion certificate applications, and keeps your project together.</p>
         ${acts.map((a,i)=>`<section><h2>${a.name}</h2>${beats.filter(b=>b.chapter===i).map(b=>`<h3>${b.headline}</h3><p>${b.line}</p>`).join('')}</section>`).join('')}
         <p>${fictionNote}</p><a class="button primary" href="/demo">Book a demo</a> <a class="button" href="/pricing">See pricing</a>
       </article></noscript>

@@ -70,6 +70,17 @@ assert.match(windowMarkup(story.windowAt(0.34)), /0\.17 W\/m²K/);
 assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /40 min/);
 assert.match(ledgerMarkup({ manual: 40, auto: 2.5 }), /2\.5 min/);
 assert.equal(windowMarkup({ ...story.windowAt(0.19), visible: false }), '');
+
+// Planning covers both kinds of planning application, and the window picks the one the proposal needs
+assert.equal(story.APPLICATIONS[0].name, 'Planning permission');
+const reading = story.windowAt(0.14);
+assert.deepEqual(reading.planningType, { options: ['Householder', 'Full planning permission'], chosen: null }, 'both planning types listed while the documents are read');
+assert.equal(story.windowAt(0.19).planningType?.chosen, 0, 'householder chosen for an alteration once the proposal is read');
+assert.match(planningFill, /data-k="type-0" class="on"/);
+assert.match(planningFill, /Full planning permission/);
+assert.equal(story.windowAt(0.44).planningType, null, 'only the planning window shows the planning type');
+assert.doesNotMatch(windowMarkup(story.windowAt(0.44)), /aw-type/);
+assert.ok(story.beats.some(b => b.app === 'planning' && /full planning permission/i.test(b.line)), 'the story says it handles full planning permission too');
 assert.doesNotMatch(planningFill, / · /, 'no dot-joined strings on screen');
 
 // Where sheets fly to: the window's centre in normalised device coordinates

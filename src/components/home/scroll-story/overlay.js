@@ -29,6 +29,15 @@ function steps(state) {
     .join("")}</ol>`;
 }
 
+/** Householder or full planning permission: the form the proposal needs, picked for you. */
+function planningType(state) {
+  const t = state.planningType;
+  if (!t || state.kind === "running") return "";
+  return `<div class="aw-type"><p class="aw-caption" data-k="type-caption">${t.chosen === null ? "Application type" : "Chosen from the proposal"}</p><p class="aw-type-options">${t.options
+    .map((o, i) => `<span data-k="type-${i}" class="${t.chosen === i ? "on" : ""}">${tick}${esc(o)}</span>`)
+    .join("")}</p></div>`;
+}
+
 function body(state) {
   if (state.kind === "uvalue") {
     const u = state.uvalue;
@@ -99,7 +108,7 @@ export function windowMarkup(state) {
   const app = state.app ? appOf(state.app) : null;
   const head = `<header class="aw-head"><span class="aw-mark">${mark}</span><p><small>Architect Pro</small><b>${esc(state.title)}</b></p></header>`;
   const track = app && state.kind !== "uvalue" && state.kind !== "record" ? steps(state) : "";
-  return `<div class="aw" data-app="${app ? app.key : "record"}" data-kind="${state.kind}" style="--app:${app ? app.colour : "var(--muted)"}">${head}${track}${body(state)}${titleBlock(state)}</div>`;
+  return `<div class="aw" data-app="${app ? app.key : "record"}" data-kind="${state.kind}" style="--app:${app ? app.colour : "var(--muted)"}">${head}${track}${planningType(state)}${body(state)}${titleBlock(state)}</div>`;
 }
 
 /** A scale bar, like the one on every drawing: an hour by hand against minutes with Architect Pro. */

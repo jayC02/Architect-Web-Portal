@@ -1,3 +1,4 @@
+// @ts-nocheck -- three ships no type declarations in this project
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createSection } from '../src/components/home/scroll-story/scene/section.js';

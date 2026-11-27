@@ -2,7 +2,8 @@
 // Nothing accumulates, so scrolling backwards always lands on exactly the same frame.
 //
 // 14 Harbour Lane is an existing two-storey house. The project adds a second-floor
-// timber studio with a roof terrace: a householder planning application, a building
+// timber studio with a roof terrace: planning permission (householder, as it alters an
+// existing house; a new building would take full planning permission), a building
 // warrant and, once it is built, a completion certificate.
 
 export const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -18,7 +19,7 @@ export const mix = (a, b, t) => a + (b - a) * t;
 
 /** The three applications, in the order a project meets them. Minutes are illustrative. */
 export const APPLICATIONS = [
-  { key: "planning", name: "Householder planning", short: "Planning", colour: "#6c86c6", manualMin: 15, autoMin: 1, fee: "entered" },
+  { key: "planning", name: "Planning permission", short: "Planning", colour: "#6c86c6", manualMin: 15, autoMin: 1, fee: "entered" },
   { key: "warrant", name: "Building warrant", short: "Warrant", colour: "#488b85", manualMin: 25, autoMin: 1.5, fee: "calculated" },
   { key: "completion", name: "Completion certificate", short: "Completion", colour: "#7c9d70", manualMin: 20, autoMin: 1.5, fee: "none" },
 ];
@@ -42,7 +43,7 @@ export const beats = [
   { at: 0, chapter: 0, app: null, kind: "intro", headline: "From first sketch to completion certificate.", line: "Architect Pro prepares planning, building warrant and completion for you." },
   { at: 0.03, chapter: 0, app: null, kind: "design", headline: "Every project starts with a red line.", line: "Draw the site and the design, as you always have." },
   { at: 0.12, chapter: 0, app: "planning", kind: "collect", headline: "Your drawings, collected and read.", line: "Every sheet labelled by type, scale and revision. Anything it is unsure of, it asks you." },
-  { at: 0.17, chapter: 0, app: "planning", kind: "fill", headline: "Read into the householder application.", line: "Each field filled from the drawings or the project. Nothing typed twice." },
+  { at: 0.17, chapter: 0, app: "planning", kind: "fill", headline: "Read into the right planning application.", line: "Householder or full planning permission, chosen from the proposal. Each field filled from the drawings." },
   { at: 0.215, chapter: 0, app: "planning", kind: "pay", headline: "Add the fee and pay.", line: "That is your part. It completes the portal in the background." },
   { at: 0.27, chapter: 1, app: "warrant", kind: "design", headline: "Then the technical detail.", line: "Sections, structure, drainage, fire and energy for the building warrant." },
   { at: 0.32, chapter: 1, app: "warrant", kind: "uvalue", headline: "U-values, calculated to ISO 6946.", line: "Set out the build-up and the result and report are ready for the warrant." },
@@ -97,11 +98,13 @@ export function ledgerAt(p) {
 
 // What the Architect Pro window shows for each application.
 const money = (minor) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(minor / 100);
+/** The planning applications Architect Pro prepares. This alteration takes the first. */
+export const PLANNING_TYPES = ["Householder", "Full planning permission"];
 /** calculateBuildingStandardsFee for £85,000 of works (checked against the calculator in the tests). */
 export const EXAMPLE_WARRANT_FEE_MINOR = 129000;
 const CONTENT = [
   {
-    title: "Householder application",
+    title: "Planning permission",
     docs: ["Location plan · 1:1250", "Site plan · 1:200", "Existing elevations · 1:100", "Proposed elevations · 1:100", "Floor plans · 1:100"],
     fields: [
       ["Site address", "14 Harbour Lane", "Project"],
@@ -157,7 +160,7 @@ export function windowAt(p) {
   if (p >= RUNS[2].collect) g = 2;
   else if (p >= acts[1].start && p < acts[2].start) g = 1;
   else if (p < acts[1].start) g = 0;
-  const base = { visible, app: null, kind: "record", title: "14 Harbour Lane", docs: [], fields: [], fee: null, uvalue: null, payTapped: false, etaSeconds: null, statuses };
+  const base = { visible, app: null, kind: "record", title: "14 Harbour Lane", docs: [], fields: [], fee: null, uvalue: null, planningType: null, payTapped: false, etaSeconds: null, statuses };
   if (!visible || g < 0) return base;
   const r = RUNS[g],
     c = CONTENT[g],
@@ -186,7 +189,9 @@ export function windowAt(p) {
     kind = "running";
     etaSeconds = Math.round(a.autoMin * 60 * (1 - lin(p, runFrom, r.submitted)));
   }
-  return { ...base, app: a.key, kind, title: c.title, docs, fields, fee, payTapped, etaSeconds };
+  // planning: both kinds listed as the documents are read, the right one chosen once the proposal is clear
+  const planningType = g === 0 ? { options: PLANNING_TYPES, chosen: readT >= 0.6 ? 0 : null } : null;
+  return { ...base, app: a.key, kind, title: c.title, docs, fields, fee, planningType, payTapped, etaSeconds };
 }
 
 /** Every animated quantity in the scene, derived from progress. */
