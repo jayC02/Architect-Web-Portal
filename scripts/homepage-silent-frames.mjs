@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 
 const base = process.env.HOMEPAGE_PREVIEW_URL || 'http://127.0.0.1:4323';
 const output = path.resolve('output/homepage-preview/silent');
-const FRAMES = [0.04, 0.1, 0.15, 0.19, 0.23, 0.31, 0.35, 0.41, 0.46, 0.55, 0.62, 0.71, 0.76, 0.84, 0.9, 0.99];
+const FRAMES = [0.05, 0.1, 0.15, 0.19, 0.23, 0.31, 0.35, 0.41, 0.46, 0.55, 0.62, 0.71, 0.76, 0.84, 0.9, 0.99];
 const SIZES = { desktop: { width: 1440, height: 900, mobile: false }, phone: { width: 390, height: 844, mobile: true } };
 
 await fs.mkdir(output, { recursive: true });

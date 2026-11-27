@@ -49,6 +49,25 @@ samples.forEach(p => {
   const flat = JSON.stringify(story.poseAt(p)).match(/-?\d+(\.\d+)?(e-?\d+)?/g)!.map(Number);
   assert.ok(flat.every(Number.isFinite), `finite pose at ${p}`);
 });
+// The opening: a blank sheet, a new house sketched (full planning permission), the sketch made
+// solid, then an extension sketched onto it (householder), then the documents are collected
+const opening = (p: number) => story.poseAt(p);
+assert.deepEqual([...opening(0).house.draw, opening(0).house.solid], [0, 0, 0], 'the story opens on a blank sheet');
+assert.ok(opening(0.05).house.draw[0] > 0 && opening(0.05).house.solid === 0, 'the house is a line sketch before it is a model');
+assert.ok(opening(0.05).house.draw[0] > opening(0.05).house.draw[1], 'it is drawn from the ground up');
+assert.deepEqual(opening(0.072).house.draw, [1, 1], 'the whole house is sketched');
+assert.equal(opening(0.072).plan, 0, 'and only then is the extension sketched onto it');
+assert.ok(opening(0.072).house.solid < opening(0.09).house.solid, 'the sketch becomes the model');
+assert.ok(opening(0.085).plan > 0 && opening(0.085).studio.draw === 0, 'the extension is drawn as a plan first');
+assert.ok(opening(0.1).studio.draw > 0 && opening(0.1).studio.solid === 0, 'then sketched in 3D, like the house');
+assert.equal(opening(0.12).house.solid, 1, 'solid before the documents are collected');
+assert.equal(opening(0.12).studio.solid, 1, 'and solid before the documents fly');
+const designBeats = story.beats.filter(b => b.chapter === 0 && b.kind === 'design');
+assert.equal(designBeats.length, 2, 'one beat for the house sketch, one for the extension');
+assert.match(designBeats[0].line, /full planning permission/i);
+assert.match(designBeats[1].line, /householder/i);
+assert.ok(designBeats[0].at < opening(0.05).p && designBeats[1].at >= 0.072, 'each beat lands with its sketch');
+
 assert.equal(story.poseAt(0.4).construction.cranes, 0, 'no cranes before construction');
 assert.equal(story.poseAt(0.2).section.cut, 0, 'no section before the warrant');
 assert.equal(story.themes.length, 5);

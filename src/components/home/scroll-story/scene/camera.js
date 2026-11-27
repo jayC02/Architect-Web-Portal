@@ -6,9 +6,11 @@ import { clamp, mix, win } from "../story.js";
 const rail = [
   // opening: straight down on the paper, the house below and the minute ring around it
   [0.0, 2, 44, 8, 0, 0, 0.5, 38, -14],
-  // planning: the red line drawn top-down, then the studio plan inked onto the roof
-  [0.04, 4, 36, 13, 0, 1, 0.5, 38, -8],
-  [0.075, 9, 25, 17, 1, 6, 0, 36, -3],
+  // planning: the red line drawn as the camera comes down to the house being sketched,
+  // then up over its roof while the extension plan is inked on
+  [0.035, 6, 28, 18, 0, 1.5, 0.5, 38, -6],
+  [0.062, 14, 12, 21, 0, 3.4, 0, 38, -2],
+  [0.088, 9, 24, 17, 1, 6, 0, 36, -3],
   // the studio rises: a low hero angle, then three-quarters on the street front
   [0.105, 15, 12, 17, 1.5, 7, 0, 36, 2],
   [0.13, -7, 10, 21, 1, 5.5, 0, 38, 0],

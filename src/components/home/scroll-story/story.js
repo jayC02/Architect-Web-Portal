@@ -1,7 +1,9 @@
 // The whole story is a pure function of scroll progress (0 → 1).
 // Nothing accumulates, so scrolling backwards always lands on exactly the same frame.
 //
-// 14 Harbour Lane is an existing two-storey house. The project adds a second-floor
+// It opens on a blank sheet: a two-storey house is sketched as a new design (full planning
+// permission), becomes the model, and a second-floor extension is sketched onto it.
+// From then on, 14 Harbour Lane is an existing two-storey house. The project adds a second-floor
 // timber studio with a roof terrace: planning permission (householder, as it alters an
 // existing house; a new building would take full planning permission), a building
 // warrant and, once it is built, a completion certificate.
@@ -41,7 +43,8 @@ const RUNS = [
 
 export const beats = [
   { at: 0, chapter: 0, app: null, kind: "intro", headline: "From first sketch to completion certificate.", line: "Architect Pro prepares planning, building warrant and completion for you." },
-  { at: 0.03, chapter: 0, app: null, kind: "design", headline: "Every project starts with a red line.", line: "Draw the site and the design, as you always have." },
+  { at: 0.03, chapter: 0, app: null, kind: "design", headline: "A new house starts as a sketch.", line: "Draw the site and the design, as you always have. A new building takes full planning permission." },
+  { at: 0.072, chapter: 0, app: null, kind: "design", headline: "Or an extension, sketched onto one.", line: "Alterations and extensions to a house are a householder application." },
   { at: 0.12, chapter: 0, app: "planning", kind: "collect", headline: "Your drawings, collected and read.", line: "Every sheet labelled by type, scale and revision. Anything it is unsure of, it asks you." },
   { at: 0.17, chapter: 0, app: "planning", kind: "fill", headline: "Read into the right planning application.", line: "Householder or full planning permission, chosen from the proposal. Each field filled from the drawings." },
   { at: 0.215, chapter: 0, app: "planning", kind: "pay", headline: "Add the fee and pay.", line: "That is your part. It completes the portal in the background." },
@@ -199,15 +202,21 @@ export function poseAt(p) {
   const ringOpen = win(p, 0, 0.02) * (1 - win(p, 0.035, 0.075));
   return {
     p,
-    // planning: the red line, the drawing, the studio massing
+    // planning: the red line and a new house sketched from the ground up (full planning
+    // permission), the sketch made solid, then an extension drawn onto its roof (householder)
     redline: win(p, 0.02, 0.06),
-    plan: win(p, 0.035, 0.09),
+    house: {
+      draw: [win(p, 0.03, 0.058), win(p, 0.044, 0.07)],
+      solid: win(p, 0.068, 0.09),
+    },
+    plan: win(p, 0.073, 0.09),
     grid: 1 - 0.75 * win(p, 0.08, 0.2),
+    // the extension: its plan, then a 3D sketch like the house's, then the model
     studio: {
-      walls: win(p, 0.07, 0.11),
-      roof: win(p, 0.105, 0.125),
-      glazing: win(p, 0.11, 0.13),
-      terrace: win(p, 0.1, 0.125),
+      draw: win(p, 0.086, 0.108),
+      solid: win(p, 0.104, 0.12),
+      glazing: win(p, 0.108, 0.122),
+      terrace: win(p, 0.1, 0.118),
     },
     // each application's sheets, from the first peeling off the model to the last in the window
     sheets: RUNS.map((r) => ({ t: lin(p, r.collect, r.fill) })),

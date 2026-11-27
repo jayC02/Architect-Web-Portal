@@ -227,13 +227,31 @@ export function createBuilding(scene) {
   const cut = new THREE.Plane(new THREE.Vector3(0, 0, -1), 10);
   const clippingPlanes = [cut];
 
-  // --- Pens. The existing house is drawn in a quieter pen; the proposal in full ink.
-  const inkOld = own(inkMaterial(1.4, 0.85));
-  const inkOldFaint = own(inkMaterial(1, 0.2));
-  const ink = own(inkMaterial(1.7, 1));
-  const inkFaint = own(inkMaterial(1, 0.26));
+  // --- Pens. The house is first sketched, storey by storey, as a new design: each pen draws
+  // its lines like strokes, then the house becomes the model and its ink goes quieter.
+  // The extension is drawn in full ink.
+  const strokePen = (width, opacity) => {
+    const m = own(inkMaterial(width, opacity));
+    m.dashed = true;
+    m.gapSize = 10;
+    m.dashSize = 2;
+    return m;
+  };
+  const sketch = [0, 1].map(() => ({ strong: strokePen(1.4, 0.85), faint: strokePen(1, 0.2) }));
+  const inkOld = sketch[0].strong;
+  const ink = strokePen(1.7, 1);
+  const inkFaint = strokePen(1, 0.26);
   ink.clippingPlanes = inkFaint.clippingPlanes = clippingPlanes;
   const child = (lines) => (owned.push(lines.geometry), lines);
+  /** Lines a pen draws in: distances run 0 to 1 along each set, so every set takes the same time. */
+  const stroked = (lines) => {
+    lines.computeLineDistances();
+    const data = lines.geometry.attributes.instanceDistanceStart.data;
+    const total = Math.max(1e-6, ...data.array);
+    for (let i = 0; i < data.array.length; i++) data.array[i] /= total;
+    data.needsUpdate = true;
+    return child(lines);
+  };
 
   // --- The proposed studio plan, inked onto the existing flat roof
   const plan = planSegments();
@@ -273,7 +291,10 @@ export function createBuilding(scene) {
         group.add(mesh);
       });
       const lines = wallInk(wall, s);
-      if (lines.strong.length) group.add(child(inkLines(lines.strong, proposed ? ink : inkOld)), child(inkLines(lines.faint, proposed ? inkFaint : inkOldFaint)));
+      if (lines.strong.length) {
+        if (proposed) group.add(stroked(inkLines(lines.strong, ink)), stroked(inkLines(lines.faint, inkFaint)));
+        else group.add(stroked(inkLines(lines.strong, sketch[s].strong)), stroked(inkLines(lines.faint, sketch[s].faint)));
+      }
       panes.forEach((p) => {
         const pane = new THREE.Mesh(unitBox, proposed ? glassNewMat : glassMat);
         pane.scale.set(p.len - 0.1, p.h - 0.1, 0.03);
@@ -298,7 +319,7 @@ export function createBuilding(scene) {
   const door = shadowed(new THREE.Mesh(unitBox, doorMat));
   door.scale.set(FRONT_DOOR.b - FRONT_DOOR.a - 0.14, FRONT_DOOR.head - 0.07, 0.07);
   door.position.set(doorMid, (FRONT_DOOR.head - 0.07) / 2, frontZ - 0.02);
-  const doorInk = child(
+  const doorInk = stroked(
     inkLines(
       [
         // two recessed panels and a handle
@@ -315,25 +336,25 @@ export function createBuilding(scene) {
   const step = shadowed(new THREE.Mesh(unitBox, slabMat));
   step.scale.set(1.7, 0.14, 0.7);
   step.position.set(doorMid, 0.07, A.z1 + 0.35);
-  [canopy, step].forEach((m) => m.add(child(inkEdges(unitBox, inkOld))));
+  [canopy, step].forEach((m) => m.add(stroked(inkEdges(unitBox, inkOld))));
   root.add(door, canopy, step);
 
   // Plinth
   const plinth = shadowed(new THREE.Mesh(unitBox, slabMat));
   plinth.scale.set(A.x1 - A.x0 + 0.24, 0.16, A.z1 - A.z0 + 0.24);
   plinth.position.y = 0.08;
-  plinth.add(child(inkEdges(unitBox, inkOld)));
+  plinth.add(stroked(inkEdges(unitBox, inkOld)));
   root.add(plinth);
 
   // Floor slabs
   const slabs = [
-    { y: H, f: A },
-    { y: H * 2, f: A },
-  ].map(({ y, f }) => {
+    { y: H, f: A, pen: sketch[0].strong },
+    { y: H * 2, f: A, pen: sketch[1].strong },
+  ].map(({ y, f, pen }) => {
     const mesh = shadowed(new THREE.Mesh(unitBox, slabMat));
     mesh.scale.set(f.x1 - f.x0 + 0.3, 0.3, f.z1 - f.z0 + 0.3);
     mesh.position.set((f.x0 + f.x1) / 2, y, 0);
-    mesh.add(child(inkEdges(unitBox, inkOld)));
+    mesh.add(stroked(inkEdges(unitBox, pen)));
     root.add(mesh);
     return mesh;
   });
@@ -355,7 +376,7 @@ export function createBuilding(scene) {
   for (let x = B.x0 - 0.25 + 0.55; x < B.x0 - 0.25 + roofLen - 0.2; x += 0.55) {
     seams.push(x, EPS, -eave, x, ridge + EPS, 0, x, ridge + EPS, 0, x, EPS, eave);
   }
-  roof.add(child(inkEdges(roofGeo, ink)), child(inkLines(seams, inkFaint)));
+  roof.add(stroked(inkEdges(roofGeo, ink)), stroked(inkLines(seams, inkFaint)));
   root.add(roof);
 
   // Roof terrace: glass balustrade and decking
@@ -370,16 +391,37 @@ export function createBuilding(scene) {
     pane.position.set(axis ? at : (a + b) / 2, H * 2 + 0.68, axis ? (a + b) / 2 : at);
     pane.rotation.y = axis ? Math.PI / 2 : 0;
     pane.renderOrder = 2;
-    pane.add(child(inkEdges(unitBox, ink)));
+    pane.add(stroked(inkEdges(unitBox, ink)));
     root.add(pane);
     rail.push(pane);
   });
   const boards = [];
   for (let x = A.x0 + 0.3; x < B.x0 - 0.2; x += 0.3) boards.push(x, H * 2 + 0.15 + EPS, A.z0 + 0.2, x, H * 2 + 0.15 + EPS, A.z1 - 0.2);
-  const decking = child(inkLines(boards, inkFaint));
+  const decking = stroked(inkLines(boards, inkFaint));
   root.add(decking);
 
-  // The existing house wears its finished render from the start. The studio is a white
+  // The existing house's surfaces: hidden while it is a sketch, then faded in as the model.
+  const oldMats = [lowerMat, slabMat, frameMat, doorMat];
+  const oldMeshes = [];
+  root.traverse((o) => o.isMesh && oldMats.includes(o.material) && oldMeshes.push(o));
+  // and the extension's walls and roof, which go the same way: sketch first, then the model
+  const studioMeshes = [roof, ...wallGroups.flatMap(({ group }) => group.children.filter((o) => o.isMesh && !o.isLineSegments2))];
+  /** See-through while a sketch: drawn first, so the lines behind it stay hidden. */
+  const fade = (mats, meshes, amount) => {
+    mats.forEach((m) => {
+      const see = amount < 0.999;
+      if (m.transparent !== see) {
+        m.transparent = see;
+        m.needsUpdate = true;
+      }
+    });
+    meshes.forEach((m) => {
+      m.castShadow = amount > 0.5;
+      m.renderOrder = amount < 0.999 ? -1 : 0;
+    });
+  };
+
+  // Once it is the model, the existing house wears its finished render. The studio is a white
   // presentation model until it is built.
   const finish = {
     lower: new THREE.Color("#f6f1e7"),
@@ -402,19 +444,46 @@ export function createBuilding(scene) {
     const c = pose.construction;
     const onSite = pose.p >= 0.5;
     const cleared = span(pose.p, 0.5, 0.525);
-    const walls = !onSite ? studio.walls : pose.p < 0.545 ? 1 - cleared : c.storey;
-    const roofUp = !onSite ? studio.roof : pose.p < 0.545 ? 1 - cleared : c.roof;
+    // in planning the extension stands full height as soon as it is sketched; its pen draws it in
+    const sketched = studio.draw > 0.001 ? 1 : 0;
+    const walls = !onSite ? sketched : pose.p < 0.545 ? 1 - cleared : c.storey;
+    const roofUp = !onSite ? sketched : pose.p < 0.545 ? 1 - cleared : c.roof;
     const timber = onSite && pose.p >= 0.545 ? 1 : built;
-    // pens: the existing house in a quieter tone until the whole house is one again
+    // the house sketched storey by storey, each pen drawing its strokes; once it is the model
+    // its ink goes quieter than the extension's until the whole house is one again
+    const house = pose.house;
     ink.color.copy(colors.ink);
     inkFaint.color.copy(colors.ink);
-    inkOld.color.copy(colors.ink).lerp(grey, 0.55 * (1 - built));
-    inkOldFaint.color.copy(inkOld.color);
+    sketch.forEach((pen, s) => {
+      const drawn = house.draw[s];
+      pen.strong.color.copy(colors.ink).lerp(grey, 0.55 * (1 - built) * house.solid);
+      pen.faint.color.copy(pen.strong.color);
+      [pen.strong, pen.faint].forEach((m) => {
+        m.dashSize = drawn >= 1 ? 2 : drawn;
+        m.visible = drawn > 0.001;
+      });
+      pen.strong.opacity = mix(1, 0.85, house.solid);
+    });
+    // the sketch becomes the model: surfaces fade in, and cast shadows once they read as solid
+    const solid = house.solid;
+    fade(oldMats, oldMeshes, solid);
+    oldMats.forEach((m) => (m.opacity = solid));
+    // the extension's pens, then its model
+    [ink, inkFaint].forEach((m) => {
+      m.dashSize = studio.draw >= 1 ? 2 : studio.draw;
+      m.visible = studio.draw > 0.001;
+    });
+    fade([upperMat], studioMeshes, studio.solid);
+    upperMat.opacity = studio.solid;
+    // until it starts to become the model, the extension is lines only, so the plan beneath stays readable
+    const studioSolid = studio.solid > 0.001;
+    studioMeshes.forEach((m) => m !== roof && (m.visible = studioSolid));
+    roofMat.depthWrite = studioSolid;
 
     // the studio plan inks itself onto the roof, then fades as the walls go up
     planWalls.material.uniforms.uReveal.value = pose.plan;
     planDetail.material.uniforms.uReveal.value = clamp(pose.plan * 1.3 - 0.3);
-    const planFade = 1 - clamp(studio.walls * 1.4);
+    const planFade = 1 - clamp(studio.solid * 1.4);
     planWalls.material.uniforms.uOpacity.value = planFade;
     planDetail.material.uniforms.uOpacity.value = 0.75 * planFade;
     planWalls.material.uniforms.uColor.value.copy(colors.ink);
@@ -430,7 +499,7 @@ export function createBuilding(scene) {
     roof.position.y = H * 3;
     roof.scale.y = Math.max(0.0001, roofUp);
     roof.visible = roofUp > 0.001;
-    roofMat.opacity = clamp(roofUp * 2);
+    roofMat.opacity = clamp(roofUp * 2) * studio.solid;
     decking.visible = studio.terrace > 0.5;
     rail.forEach((p) => (p.visible = studio.terrace > 0.05));
 
@@ -450,7 +519,7 @@ export function createBuilding(scene) {
     glassNewMat.color.copy(glassDay).lerp(glassLit, pose.dusk);
     glassMat.color.copy(glassDay).lerp(glassLit, pose.dusk);
     glassNewMat.opacity = g * mix(0.55, 0.92, Math.max(built * 0.4, pose.dusk));
-    glassMat.opacity = mix(0.6, 0.92, Math.max(0.3, pose.dusk));
+    glassMat.opacity = mix(0.6, 0.92, Math.max(0.3, pose.dusk)) * solid;
     // on site, the studio glazing goes in once the walls are up
     const glazed = onSite ? walls > 0.98 && roofUp > 0.5 : walls > 0.95;
     glazing.forEach((item) => (item.visible = glazed && g > 0.001));
