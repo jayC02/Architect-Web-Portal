@@ -31,12 +31,17 @@ export const agentSupportsJob = (
   const parsed = parseAgentCapabilities(agent.capabilities);
   if (!parsed.success) return false;
   const capabilities: AgentCapabilities = parsed.data;
-  const snapshot = job.dataSnapshot && typeof job.dataSnapshot === 'object' ? job.dataSnapshot as { metadata?: { portalDraftKey?: unknown; resumeOfJobId?: unknown; documentUploadContractVersion?: unknown } } : null;
+  const snapshot = job.dataSnapshot && typeof job.dataSnapshot === 'object' ? job.dataSnapshot as {
+    metadata?: { portalDraftKey?: unknown; resumeOfJobId?: unknown; documentUploadContractVersion?: unknown };
+    planning?: { answers?: { soleOwner?: unknown } };
+  } : null;
   if (snapshot?.metadata?.documentUploadContractVersion === 1 && !capabilities.documentUploadContractVersions?.includes(1)) return false;
   if (snapshot?.metadata?.portalDraftKey && !capabilities.resetContractVersions?.includes(1)) return false;
   // Resume requires content verification for older attachments in an existing draft.
   if (snapshot?.metadata?.resumeOfJobId && !capabilities.resumeContractVersions?.includes(2)) return false;
   if (job.type === AutomationJobType.COMPLETION_CERTIFICATE && !capabilities.completionContractVersions?.includes(2)) return false;
+  if (job.type === AutomationJobType.PLANNING_APPLICATION && snapshot?.planning?.answers?.soleOwner === false
+    && !capabilities.planningOwnershipContractVersions?.includes(1)) return false;
   return capabilities.workflows.includes(job.type as never)
     && capabilities.snapshotVersions.includes(job.payloadVersion)
     && capabilities.callbackContractVersions.includes(DESKTOP_CALLBACK_CONTRACT_VERSION)

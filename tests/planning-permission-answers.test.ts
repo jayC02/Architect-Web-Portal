@@ -6,7 +6,7 @@ import {
   planningPermissionFormSchema,
   readPlanningPermissionAnswers,
 } from '../src/lib/planning-permission';
-import { planningPreparationDetailsSchema } from '../src/lib/validation/domain';
+import { householderPreparationUpdateSchema, planningPreparationDetailsSchema } from '../src/lib/validation/domain';
 import { automationJobSnapshotV2Schema } from '../src/lib/validation/automation-job';
 import { evaluateAutomationPreflight } from '../src/server/services/automation-preflight.service';
 
@@ -108,11 +108,23 @@ for (const field of ['siteArea', 'existingUse', 'currentParkingSpaces', 'waterOr
   assert.ok(empty.includes(field), `${field} is required`);
 }
 
-// Ownership routes the Agent cannot yet complete are stopped here, not on the desktop.
-const ownership = (soleOwner: boolean, agriculturalHolding: boolean) =>
-  missingPlanningPermissionAnswers(complete, { ...context, soleOwner, agriculturalHolding }).map(gap => gap.field);
-assert.ok(ownership(false, false).includes('planning.answers.soleOwner'));
-assert.ok(ownership(true, true).includes('planning.answers.agriculturalHolding'));
+// Only the Certificate C route with nobody to notify is released.
+const ownership = (answers = complete, overrides: Partial<typeof context> = {}) =>
+  missingPlanningPermissionAnswers(answers, { ...context, ...overrides }).map(gap => gap.field);
+assert.ok(ownership(complete, { soleOwner: false }).includes('planning.answers.identifyAllOtherOwners'));
+assert.ok(ownership(complete, { agriculturalHolding: true }).includes('planning.answers.agriculturalHolding'));
+assert.ok(ownership({ ...complete, identifyAllOtherOwners: true }, { soleOwner: false }).includes('planning.answers.identifyAllOtherOwners'));
+assert.ok(ownership({ ...complete, identifyAllOtherOwners: false, noticeToOneOwner: true }, { soleOwner: false }).includes('planning.answers.noticeToOneOwner'));
+const certificateC = {
+  ...complete, identifyAllOtherOwners: false, noticeToOneOwner: false,
+  ownershipReasonableSteps: 'Checked the available ownership records.',
+  ownershipNoticesAcknowledged: true,
+};
+assert.deepEqual(ownership(certificateC, { soleOwner: false }), []);
+assert.ok(ownership({ ...certificateC, ownershipNoticesAcknowledged: false }, { soleOwner: false })
+  .includes('planning.answers.ownershipNoticesAcknowledged'));
+assert.ok(ownership({ ...certificateC, ownershipReasonableSteps: '' }, { soleOwner: false })
+  .includes('planning.answers.ownershipReasonableSteps'));
 
 // Stored answers that no longer validate are dropped rather than sent.
 assert.deepEqual(readPlanningPermissionAnswers({ siteArea: 'lots', schedule3: 'NO', unknown: 1 }), { schedule3: 'NO' });
@@ -124,6 +136,30 @@ const body = planningPreparationDetailsSchema.parse({
   ...completeForm,
 });
 assert.equal(planningPermissionAnswersFromForm(body)?.existingUse, 'Dwellinghouse and garden');
+const parkingForm = {
+  ...completeForm, newOrAlteredVehicleAccess: 'true', discussedWithPlanningAuthority: 'false',
+  treesOnOrAdjacentToSite: 'false', soleOwner: 'true', agriculturalHolding: 'false',
+};
+assert.equal(planningPreparationDetailsSchema.safeParse({ ...parkingForm, pp_applicationKind: 'PPP' }).success, true);
+assert.equal(planningPreparationDetailsSchema.safeParse(parkingForm).success, false);
+assert.equal(householderPreparationUpdateSchema.safeParse(parkingForm).success, false);
+const confirmedParking = planningPreparationDetailsSchema.parse({
+  ...parkingForm, currentParkingSpaces: '0', proposedParkingSpaces: '0',
+});
+assert.deepEqual([confirmedParking.currentParkingSpaces, confirmedParking.proposedParkingSpaces], [0, 0]);
+const ownershipForm = {
+  ...completeForm, ...parkingForm, newOrAlteredVehicleAccess: 'false', soleOwner: 'false',
+  pp_identifyAllOtherOwners: 'false', pp_noticeToOneOwner: 'false',
+  pp_ownershipReasonableSteps: certificateC.ownershipReasonableSteps, pp_ownershipNoticesAcknowledged: 'true',
+};
+const storedOwnership = planningPermissionAnswersFromForm(planningPreparationDetailsSchema.parse(ownershipForm))!;
+assert.deepEqual(storedOwnership, certificateC);
+assert.equal(planningPermissionAnswersFromForm(planningPreparationDetailsSchema.parse({
+  ...ownershipForm, pp_identifyAllOtherOwners: 'true',
+}))?.ownershipNoticesAcknowledged, null);
+assert.equal(planningPermissionAnswersFromForm(planningPreparationDetailsSchema.parse({
+  ...ownershipForm, soleOwner: 'true',
+}))?.identifyAllOtherOwners, null);
 
 // Snapshot contract keeps the answers and preflight blocks a Planning Permission job until they are complete.
 const fixture = JSON.parse(readFileSync('tests/fixtures/automation-job-v2-building-warrant.json', 'utf8'));
@@ -143,6 +179,10 @@ assert.ok(incomplete.missing.some(issue => issue.field === 'planning.answers.sit
 fixture.planning.answers = { ...fixture.planning.answers, ...complete };
 assert.ok(!evaluateAutomationPreflight(fixture).missing.some(issue => issue.field.startsWith('planning.answers.')),
   'complete answers clear the Planning Permission checks');
+fixture.planning.answers = { ...fixture.planning.answers, ...storedOwnership, soleOwner: false };
+assert.ok(!evaluateAutomationPreflight(fixture).missing.some(issue => issue.field.startsWith('planning.answers.')),
+  'the confirmed Certificate C route passes website preflight');
+assert.equal(automationJobSnapshotV2Schema.shape.planning.parse(fixture.planning)?.answers.ownershipNoticesAcknowledged, true);
 fixture.metadata.applicationType = 'HOUSEHOLDER_PLANNING';
 fixture.planning.answers = { ...fixture.planning.answers, siteArea: null };
 assert.ok(!evaluateAutomationPreflight(fixture).missing.some(issue => issue.field === 'planning.answers.siteArea'),

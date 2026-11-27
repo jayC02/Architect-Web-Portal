@@ -82,8 +82,7 @@ export const POST: APIRoute = (context) => withErrorHandling(async () => {
   } = body;
   // Present only when the page showed the Planning Permission questions.
   const planningPermission = planningPermissionAnswersFromForm(body);
-  // The Planning Permission form always asks for parking spaces, not only for new access.
-  const keepParking = newOrAlteredVehicleAccess || planningPermission !== null;
+  const keepParking = planningPermission ? planningPermission.applicationKind !== 'PPP' : newOrAlteredVehicleAccess;
   await updatePlanningApplicationWithLifecycle({
     organisationId: organisation.id,
     planningApplicationId: application.id,

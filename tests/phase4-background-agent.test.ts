@@ -19,6 +19,9 @@ const planningCapabilities = { ...capabilities, workflows: [...capabilities.work
 assert.equal(agentSupportsJob({ capabilities } as never, planningJob), false);
 assert.equal(agentSupportsJob({ capabilities: planningCapabilities } as never, planningJob), true);
 assert.equal(agentSupportsJob({ capabilities: planningCapabilities } as never, { ...planningJob, type: AutomationJobType.BUILDING_WARRANT }), true);
+const certificateCJob = { ...planningJob, dataSnapshot: { planning: { answers: { soleOwner: false } } } };
+assert.equal(agentSupportsJob({ capabilities: planningCapabilities } as never, certificateCJob), false);
+assert.equal(agentSupportsJob({ capabilities: { ...planningCapabilities, planningOwnershipContractVersions: [1] } } as never, certificateCJob), true);
 
 const validProgress = {
   version: 1,

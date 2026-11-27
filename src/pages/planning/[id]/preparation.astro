@@ -65,7 +65,7 @@ const isPlanningPermission = job
   : candidates.some(candidate => candidate.type === AutomationJobType.PLANNING_APPLICATION
       && automationJobApplicationId(candidate) === application.id);
 const planningPermission = readPlanningPermissionAnswers(preparation.planningPermission);
-const parkingShown = vehicleAccess || (isPlanningPermission && planningPermission.applicationKind !== 'PPP');
+const parkingShown = isPlanningPermission ? planningPermission.applicationKind !== 'PPP' : vehicleAccess;
 ---
 <AppShell title="Planning application details" user={auth.user} organisation={auth.organisation} role={auth.membership.role}>
   <div class="mb-6">
@@ -119,7 +119,7 @@ const parkingShown = vehicleAccess || (isPlanningPermission && planningPermissio
       if (!access || !parking) return;
       // The Planning Permission form asks for parking spaces on every route except in principle.
       const planningPermission = parking.dataset.planningPermission === 'true';
-      const needed = access.value === 'true' || (planningPermission && kind?.value !== 'PPP');
+      const needed = planningPermission ? kind?.value !== 'PPP' : access.value === 'true';
       parking.hidden = !needed;
       parking.disabled = !needed;
       parking.querySelectorAll('input').forEach(field => { field.required = needed; });

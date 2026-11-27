@@ -100,6 +100,10 @@ export const planningPermissionAnswersSchema = z.object({
   schedule3: optionalNullable(z.enum(YES_NO_DONT_KNOW)),
   staffOrMemberInterest: yesNo,
   staffOrMemberInterestDetails: longText,
+  identifyAllOtherOwners: yesNo,
+  noticeToOneOwner: yesNo,
+  ownershipReasonableSteps: longText,
+  ownershipNoticesAcknowledged: yesNo,
 });
 export type PlanningPermissionAnswers = z.infer<typeof planningPermissionAnswersSchema>;
 
@@ -169,6 +173,10 @@ export const planningPermissionFormSchema = z.object({
   pp_schedule3: formText(10),
   pp_staffOrMemberInterest: formText(5),
   pp_staffOrMemberInterestDetails: formText(500),
+  pp_identifyAllOtherOwners: formText(5),
+  pp_noticeToOneOwner: formText(5),
+  pp_ownershipReasonableSteps: formText(500),
+  pp_ownershipNoticesAcknowledged: formText(5),
   ...floorspaceFormFields,
 });
 export type PlanningPermissionForm = z.infer<typeof planningPermissionFormSchema>;
@@ -186,7 +194,9 @@ const formNumber = (value: string | undefined) => {
  * route never asks for are cleared, so a stale answer cannot reach the portal.
  * Returns null when the page did not include the Planning Permission section.
  */
-export const planningPermissionAnswersFromForm = (form: PlanningPermissionForm): PlanningPermissionAnswers | null => {
+export const planningPermissionAnswersFromForm = (
+  form: PlanningPermissionForm & { soleOwner?: boolean; agriculturalHolding?: boolean },
+): PlanningPermissionAnswers | null => {
   if (form.pp_section !== 'true') return null;
   const kind = form.pp_applicationKind ?? 'FULL';
   const temporary = formBool(form.pp_temporaryPermission);
@@ -199,6 +209,9 @@ export const planningPermissionAnswersFromForm = (form: PlanningPermissionForm):
   const newDwellings = fullOrMatters ? formBool(form.pp_newDwellings) : null;
   const floorspace = kind !== 'AMSC' ? formBool(form.pp_nonResidentialFloorspace) : null;
   const staff = formBool(form.pp_staffOrMemberInterest);
+  const identifyOwners = form.soleOwner === false && form.agriculturalHolding === false
+    ? formBool(form.pp_identifyAllOtherOwners) : null;
+  const notifyOwner = identifyOwners === false ? formBool(form.pp_noticeToOneOwner) : null;
   const formRecord = form as Record<string, string | undefined>;
   const entries = floorspace
     ? Array.from({ length: FLOORSPACE_ROWS }, (_, row) => ({
@@ -249,6 +262,10 @@ export const planningPermissionAnswersFromForm = (form: PlanningPermissionForm):
     schedule3: form.pp_schedule3 ?? null,
     staffOrMemberInterest: staff ?? false,
     staffOrMemberInterestDetails: staff ? form.pp_staffOrMemberInterestDetails ?? null : null,
+    identifyAllOtherOwners: identifyOwners,
+    noticeToOneOwner: notifyOwner,
+    ownershipReasonableSteps: notifyOwner === false ? form.pp_ownershipReasonableSteps ?? null : null,
+    ownershipNoticesAcknowledged: notifyOwner === false ? formBool(form.pp_ownershipNoticesAcknowledged) : null,
   });
 };
 
@@ -329,12 +346,23 @@ export const missingPlanningPermissionAnswers = (
   need('schedule3', answers.schedule3, 'Say whether the proposal is Schedule 3 development.');
   if (answers.staffOrMemberInterest) need('staffOrMemberInterestDetails', answers.staffOrMemberInterestDetails, 'Give details of the planning staff or elected member interest.');
 
-  // The Agent can only complete Certificate A automatically for now (see the portal map).
   if (context.agriculturalHolding === true) {
     gaps.push({ field: 'planning.answers.agriculturalHolding', message: 'Planning Permission automation cannot yet complete the certificate for land in an agricultural holding. Prepare this application manually in the portal.' });
-  }
-  if (context.soleOwner === false) {
-    gaps.push({ field: 'planning.answers.soleOwner', message: 'Planning Permission automation can currently complete the certificate only when the applicant is the sole owner. Prepare this application manually in the portal.' });
+  } else if (context.soleOwner === false && context.agriculturalHolding === false) {
+    need('identifyAllOtherOwners', answers.identifyAllOtherOwners, 'Say whether you can identify and notify all other owners.');
+    if (answers.identifyAllOtherOwners === true) {
+      gaps.push({ field: 'planning.answers.identifyAllOtherOwners', message: 'Certificate B requires other owners’ details. Prepare the ownership certificate manually in the portal.' });
+    } else if (answers.identifyAllOtherOwners === false) {
+      need('noticeToOneOwner', answers.noticeToOneOwner, 'Say whether you can notify one or more other owners.');
+      if (answers.noticeToOneOwner === true) {
+        gaps.push({ field: 'planning.answers.noticeToOneOwner', message: 'This Certificate C route requires other owners’ details. Prepare the ownership certificate manually in the portal.' });
+      } else if (answers.noticeToOneOwner === false) {
+        need('ownershipReasonableSteps', answers.ownershipReasonableSteps, 'Describe the reasonable steps taken to identify and notify the other owners.');
+        if (answers.ownershipNoticesAcknowledged !== true) {
+          gaps.push({ field: 'planning.answers.ownershipNoticesAcknowledged', message: 'Confirm that you understand your obligations to provide the required notices.' });
+        }
+      }
+    }
   }
   return gaps;
 };

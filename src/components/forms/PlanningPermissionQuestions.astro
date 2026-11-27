@@ -28,6 +28,26 @@ const yesNoDontKnow = [['YES', 'Yes'], ['NO', 'No'], ['DONT_KNOW', "Don't know"]
 <PreparationSection id="planning-permission" title="Planning Permission form" description="The government Planning Permission form asks these as well. Follow-up questions appear only when the portal asks them.">
   <input type="hidden" name="pp_section" value="true" />
 
+  <fieldset class="prep-followup mt-5" data-pp-when="soleOwner=false&agriculturalHolding=false" hidden disabled>
+    <legend class="text-base font-semibold">Other landowners</legend>
+    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+      <label class="block"><span class="label">Can you identify and notify all other owners?</span>
+        <select name="pp_identifyAllOtherOwners" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.identifyAllOtherOwners) === value}>{label}</option>)}</select>
+      </label>
+      <fieldset class="prep-followup" data-pp-when="pp_identifyAllOtherOwners=false">
+        <legend class="sr-only">Notice to other owners</legend>
+        <label class="block"><span class="label">Can you notify one or more other owners?</span>
+          <select name="pp_noticeToOneOwner" required class="field"><option value="">Choose</option>{yesNoOptions.map(([value, label]) => <option value={value} selected={yesNo(answers.noticeToOneOwner) === value}>{label}</option>)}</select>
+        </label>
+      </fieldset>
+      <fieldset class="prep-followup grid gap-3 sm:col-span-2" data-pp-when="pp_identifyAllOtherOwners=false&pp_noticeToOneOwner=false">
+        <legend class="sr-only">Certificate C</legend>
+        <label class="block"><span class="label">Reasonable steps taken to identify and notify other owners</span><textarea name="pp_ownershipReasonableSteps" maxlength="500" rows="3" required class="field">{text(answers.ownershipReasonableSteps)}</textarea></label>
+        <label class="flex items-start gap-2 text-sm"><input type="checkbox" name="pp_ownershipNoticesAcknowledged" value="true" required checked={answers.ownershipNoticesAcknowledged === true} class="mt-1" /><span>I understand my obligations to provide the required notices.</span></label>
+      </fieldset>
+    </div>
+  </fieldset>
+
   <div class="mt-5 grid gap-4 sm:grid-cols-2">
     <label class="block sm:col-span-2"><span class="label">What is this application for?</span>
       <select name="pp_applicationKind" class="field" required>
@@ -208,14 +228,14 @@ const yesNoDontKnow = [['YES', 'Yes'], ['NO', 'No'], ['DONT_KNOW', "Don't know"]
   // disabled, so it is neither required nor submitted (the server clears it as well).
   const form = document.querySelector<HTMLFormElement>('form[data-api-form]');
   const followUps = Array.from(form?.querySelectorAll<HTMLFieldSetElement>('fieldset[data-pp-when]') ?? []);
-  const matches = (fieldset: HTMLFieldSetElement) => {
-    const [name, values] = (fieldset.dataset.ppWhen ?? '').split('=');
+  const matchesCondition = (condition: string) => {
+    const [name, values] = condition.split('=');
     const control = form?.querySelector<HTMLSelectElement>(`[name="${name}"]`);
-    return Boolean(control && values.split('|').includes(control.value));
+    return Boolean(control && values?.split('|').includes(control.value));
   };
   const update = () => {
     for (const fieldset of followUps) {
-      const shown = matches(fieldset);
+      const shown = (fieldset.dataset.ppWhen ?? '').split('&').every(matchesCondition);
       fieldset.hidden = !shown;
       fieldset.disabled = !shown;
     }

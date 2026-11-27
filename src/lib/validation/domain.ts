@@ -165,6 +165,19 @@ export const planningApplicationFeeSchema = z.preprocess(
     .refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 0.000001, 'Enter a fee with at most two decimal places.').optional(),
 );
 
+const requireAccessParking = (
+  value: { newOrAlteredVehicleAccess?: boolean; currentParkingSpaces?: number; proposedParkingSpaces?: number },
+  context: z.RefinementCtx,
+) => {
+  if (!value.newOrAlteredVehicleAccess) return;
+  if (value.currentParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['currentParkingSpaces'], message: 'Enter the current parking spaces.' });
+  }
+  if (value.proposedParkingSpaces === undefined) {
+    context.addIssue({ code: 'custom', path: ['proposedParkingSpaces'], message: 'Enter the proposed parking spaces.' });
+  }
+};
+
 export const householderPreparationSchema = z.object({
   discussedWithPlanningAuthority: yesNoAnswer,
   treesOnOrAdjacentToSite: yesNoAnswer,
@@ -174,17 +187,9 @@ export const householderPreparationSchema = z.object({
   soleOwner: z.boolean().optional(),
   agriculturalHolding: z.boolean().optional(),
   applicationFee: z.number().finite().nonnegative().max(9999999.99).optional(),
-}).superRefine((value, context) => {
-  if (!value.newOrAlteredVehicleAccess) return;
-  if (value.currentParkingSpaces === undefined) {
-    context.addIssue({ code: 'custom', path: ['currentParkingSpaces'], message: 'Enter the current parking spaces.' });
-  }
-  if (value.proposedParkingSpaces === undefined) {
-    context.addIssue({ code: 'custom', path: ['proposedParkingSpaces'], message: 'Enter the proposed parking spaces.' });
-  }
-});
+}).superRefine(requireAccessParking);
 
-export const householderPreparationUpdateSchema = z.object({
+const planningPreparationUpdateFields = z.object({
   description: optionalText(4000),
   discussedWithPlanningAuthority: formBoolean,
   treesOnOrAdjacentToSite: formBoolean,
@@ -194,15 +199,9 @@ export const householderPreparationUpdateSchema = z.object({
   soleOwner: formBoolean,
   agriculturalHolding: formBoolean,
   applicationFee: planningApplicationFeeSchema,
-}).superRefine((value, context) => {
-  if (!value.newOrAlteredVehicleAccess) return;
-  if (value.currentParkingSpaces === undefined) {
-    context.addIssue({ code: 'custom', path: ['currentParkingSpaces'], message: 'Enter the current parking spaces.' });
-  }
-  if (value.proposedParkingSpaces === undefined) {
-    context.addIssue({ code: 'custom', path: ['proposedParkingSpaces'], message: 'Enter the proposed parking spaces.' });
-  }
 });
+
+export const householderPreparationUpdateSchema = planningPreparationUpdateFields.superRefine(requireAccessParking);
 
 export const planningPreparationDetailsSchema = z.object({
   jobId: optionalText(120),
@@ -214,7 +213,10 @@ export const planningPreparationDetailsSchema = z.object({
   status: z.nativeEnum(PlanningStatus).optional(),
   portalUrl: safeUrl,
   notes: optionalText(3000),
-}).and(householderPreparationUpdateSchema).and(planningPermissionFormSchema);
+}).and(planningPreparationUpdateFields).and(planningPermissionFormSchema).superRefine((value, context) => {
+  if (value.pp_section === 'true' && value.pp_applicationKind === 'PPP') return;
+  requireAccessParking(value, context);
+});
 
 export const buildingWarrantPreparationUpdateSchema = z.object({
   applicantIsOwner: formBoolean,
