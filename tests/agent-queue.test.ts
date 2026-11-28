@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
 import { planningApplicationFeeSchema } from '../src/lib/validation/domain';
 import { jsonResponse } from '../src/lib/utils/http';
+import { agentSupportsJob } from '../src/server/services/desktop-agent.service';
 for (const [value, expected] of [['325.50', 325.5], ['0', 0], ['', undefined]] as const) assert.equal(planningApplicationFeeSchema.parse(value), expected);
 for (const value of ['-1', '12.345', 'invalid', Infinity]) assert.equal(planningApplicationFeeSchema.safeParse(value).success, false);
 const requests: any[] = [];
@@ -50,3 +52,94 @@ assert.notEqual(data.active[0].status, 'READY', 'running/starting jobs precede w
 assert.equal(requests[0].orderBy[0].executionAuthorisedAt, 'asc');
 assert.match(response.headers.get('cache-control'), /no-store/);
 console.log('Cross-project queue isolation, full active list, order and planning fee validation passed.');
+
+// Exercise the desktop polling route with the real compatibility rules.
+const capabilities = {
+  workflows: [AutomationJobType.PLANNING_APPLICATION, AutomationJobType.BUILDING_WARRANT],
+  snapshotVersions: [2],
+  callbackContractVersions: [1],
+  progressContractVersions: [1],
+  documentUploadContractVersions: [1],
+};
+const olderAgent = { organisationId: 'org-a', capabilities };
+const currentAgent = { ...olderAgent, capabilities: { ...capabilities, planningOwnershipContractVersions: [1] } };
+let pollingAgent = olderAgent;
+const ready = {
+  organisationId: 'org-a', status: AutomationJobStatus.READY, payloadVersion: 2,
+  executionAuthorisedAt: new Date(100), createdAt: new Date(100),
+  type: AutomationJobType.BUILDING_WARRANT, dataSnapshot: { metadata: { documentUploadContractVersion: 1 } },
+};
+const desktopQueue = [
+  ...Array.from({ length: 40 }, (_, index) => ({
+    ...ready,
+    id: `planning-${String(index).padStart(2, '0')}`,
+    type: AutomationJobType.PLANNING_APPLICATION,
+    dataSnapshot: { ...ready.dataSnapshot, planning: { answers: { soleOwner: false } } },
+  })),
+  ...Array.from({ length: 21 }, (_, index) => ({
+    ...ready, id: `warrant-${String(index).padStart(2, '0')}`,
+    executionAuthorisedAt: new Date(index < 10 ? 100 : 101),
+    createdAt: new Date(index === 0 ? 100 : 101),
+  })),
+  { ...ready, id: 'excluded-org', organisationId: 'org-b' },
+  { ...ready, id: 'excluded-draft', status: AutomationJobStatus.DRAFT },
+  { ...ready, id: 'excluded-no-authorisation', executionAuthorisedAt: null },
+];
+const desktopRequests: any[] = [];
+let removePageBoundary = false;
+const desktopModules = {
+  '@prisma/client': { AutomationJobStatus },
+  '@/lib/db/prisma': { prisma: { automationJob: { findMany: async (query: any) => {
+    desktopRequests.push(query);
+    const { OR: after, ...where } = query.where;
+    const compare = (first: any, second: any) =>
+      Number(first.executionAuthorisedAt) - Number(second.executionAuthorisedAt)
+      || Number(first.createdAt) - Number(second.createdAt)
+      || first.id.localeCompare(second.id);
+    const page = desktopQueue.filter(job => matches(job, where)).filter(job => !after || after.some((row: any) =>
+      Object.entries(row).every(([key, value]: [string, any]) => {
+        const actual = job[key as keyof typeof job];
+        return 'gt' in Object(value) ? actual! > value.gt : Number(actual) === Number(value);
+      }),
+    )).sort(compare).slice(0, query.take);
+    if (removePageBoundary && desktopRequests.length === 1) {
+      desktopQueue.splice(desktopQueue.indexOf(page.at(-1)!), 1);
+    }
+    return page;
+  } } } },
+  '@/lib/server/rate-limit': { assertRateLimit: () => {}, rateLimitPolicies: {} },
+  '@/lib/utils/handlers': { withErrorHandling: (fn: any) => fn() },
+  '@/lib/utils/http': { jsonResponse },
+  '@/server/auth/agent-credential': { requireAgentAuth: async () => pollingAgent },
+  '@/server/services/desktop-agent.service': { agentSupportsJob, reconcileStaleAgentJobs: async () => {} },
+};
+const desktopOutput = ts.transpileModule(fs.readFileSync('src/pages/api/desktop/queue/index.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText;
+const desktopSandbox: any = { exports: {}, require: (name: keyof typeof desktopModules) => {
+  assert.ok(desktopModules[name], name);
+  return desktopModules[name];
+} };
+vm.runInNewContext(desktopOutput, desktopSandbox);
+const oldPoll = await (await desktopSandbox.exports.GET({})).json();
+assert.deepEqual(oldPoll.jobs.map((job: any) => job.id), desktopQueue.slice(40, 60).map(job => job.id));
+assert.equal(oldPoll.pollAfterSeconds, 25);
+assert.equal(desktopRequests.length, 3);
+assert.ok(desktopRequests.every(query => query.take === 20));
+assert.deepEqual(JSON.parse(JSON.stringify(desktopRequests[0].orderBy)), [
+  { executionAuthorisedAt: 'asc' }, { createdAt: 'asc' }, { id: 'asc' },
+]);
+assert.deepEqual(Object.keys(oldPoll.jobs[0]), ['id', 'workflowType', 'snapshotVersion', 'callbackContractVersion', 'progressContractVersion']);
+
+pollingAgent = currentAgent;
+desktopRequests.length = 0;
+const newPoll = await (await desktopSandbox.exports.GET({})).json();
+assert.deepEqual(newPoll.jobs.map((job: any) => job.id), desktopQueue.slice(0, 20).map(job => job.id));
+assert.equal(desktopRequests.length, 1);
+
+pollingAgent = olderAgent;
+desktopRequests.length = 0;
+removePageBoundary = true;
+const concurrentPoll = await (await desktopSandbox.exports.GET({})).json();
+assert.deepEqual(concurrentPoll.jobs, oldPoll.jobs, 'A removed page boundary must not hide later jobs');
+console.log('Desktop polling skips incompatible pages, preserves FIFO ties and returns at most 20 compatible jobs.');
