@@ -22,6 +22,7 @@ import {
   type CompletionPreparation,
 } from '@/lib/completion-certificate';
 import { readProjectScreener } from '@/lib/projects/screener';
+import { resolveWarrantOwner } from '@/lib/building-warrant-owner';
 import { completionDocumentRole, type CompletionDocument } from '@/lib/completion-documents';
 import { readStoredDocumentBytes, saveUploadedDocument } from '@/lib/server/upload-storage';
 import {
@@ -124,6 +125,10 @@ export const completionPreparationFor = (context: CompletionContext, today: Date
     grantedDate: warrant.grantedDate,
     amendmentGrantedDates: context.amendmentGrantedDates,
     warrantPreparation,
+    // A warrant whose applicant was not the owner starts the completion with that owner.
+    warrantOwner: warrantPreparation.applicantIsOwner === false
+      ? resolveWarrantOwner(warrantPreparation, warrant.project.client as unknown as Record<string, unknown> | null)
+      : null,
     certifier: {
       registrationAPart1: certifierValue('registrationAPart1'),
       registrationAPart2: certifierValue('registrationAPart2'),
@@ -144,6 +149,7 @@ export const completionPreparationFor = (context: CompletionContext, today: Date
       townCity: client.townCity,
       postcode: client.postcode,
       country: client.country,
+      companyName: client.companyName,
     } : null,
     agent: {
       firstName: defaults?.agentFirstName ?? null,
@@ -167,6 +173,11 @@ const resolvedAnswers = (preparation: CompletionPreparation) => {
   const formQRequired = designAccompanied ? preparation.designCertificates.formQRequired : null;
   const relaxationApplies = preparation.relaxation.applies === true;
   const continuingApplies = preparation.continuingRequirements.applies === true;
+  const dangerousApplies = preparation.dangerousBuilding.applies === true;
+  const owner = preparation.relevantPersonIsOwner !== false;
+  const differentApplies = preparation.differentAddress.applies === true;
+  const coversAll = preparation.coverage.coversAllWork !== false;
+  const trimmed = (value: string | null) => value?.trim() || null;
   return {
     workCompletedDate: preparation.workCompletedDate,
     warrantReference: preparation.warrantReference?.trim() ?? null,
@@ -192,6 +203,30 @@ const resolvedAnswers = (preparation: CompletionPreparation) => {
     continuingRequirements: {
       applies: continuingApplies,
       details: continuingApplies ? preparation.continuingRequirements.details : null,
+    },
+    notices: {
+      complianceNotice: trimmed(preparation.notices.complianceNotice),
+      enforcementNotice: trimmed(preparation.notices.enforcementNotice),
+      defectiveNotice: trimmed(preparation.notices.defectiveNotice),
+    },
+    dangerousBuilding: {
+      applies: dangerousApplies,
+      references: dangerousApplies ? trimmed(preparation.dangerousBuilding.references) : null,
+    },
+    relevantPersonIsOwner: owner,
+    owners: owner ? [] : preparation.owners,
+    differentAddress: {
+      applies: differentApplies,
+      addresses: differentApplies ? preparation.differentAddress.addresses : [],
+    },
+    coverage: {
+      coversAllWork: coversAll,
+      workDescription: coversAll ? null : trimmed(preparation.coverage.workDescription),
+      lastSubmission: coversAll ? null : preparation.coverage.lastSubmission,
+    },
+    declaration: {
+      person: preparation.declaration.person ?? 'I',
+      statement: preparation.declaration.statement ?? 'WORK',
     },
   };
 };
@@ -287,8 +322,8 @@ export const buildCompletionCertificateSnapshot = async (
     },
     project: snapshotProject(project, readProjectScreener(project), site.localAuthority),
     site,
-    // The relevant person is the client. Ownership is a fixed answer for now.
-    applicant: snapshotClientApplicant(project.client, COMPLETION_FIXED_ANSWERS.relevantPersonIsOwner),
+    // The relevant person is the client.
+    applicant: snapshotClientApplicant(project.client, preparation.relevantPersonIsOwner !== false),
     planning: null,
     buildingWarrant: null,
     completionCertificate,

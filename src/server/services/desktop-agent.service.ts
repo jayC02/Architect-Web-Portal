@@ -39,7 +39,8 @@ export const agentSupportsJob = (
   if (snapshot?.metadata?.portalDraftKey && !capabilities.resetContractVersions?.includes(1)) return false;
   // Resume requires content verification for older attachments in an existing draft.
   if (snapshot?.metadata?.resumeOfJobId && !capabilities.resumeContractVersions?.includes(2)) return false;
-  if (job.type === AutomationJobType.COMPLETION_CERTIFICATE && !capabilities.completionContractVersions?.includes(2)) return false;
+  // 3: notices, ownership, address, extent and declaration answers (see src/lib/completion-certificate.ts).
+  if (job.type === AutomationJobType.COMPLETION_CERTIFICATE && !capabilities.completionContractVersions?.includes(3)) return false;
   if (job.type === AutomationJobType.PLANNING_APPLICATION && snapshot?.planning?.answers?.soleOwner === false
     && !capabilities.planningOwnershipContractVersions?.includes(1)) return false;
   return capabilities.workflows.includes(job.type as never)

@@ -152,6 +152,9 @@ const base = { ...emptyCompletionPreparation(), designCertificates: { accompanie
 const complete = {
   ...base, workCompletedDate: '2026-10-30', warrantReference: '26/01234/WARR', warrantDate: '2026-03-05',
   relaxation: { applies: false, reference: null, date: null }, continuingRequirements: { applies: false, details: null },
+  dangerousBuilding: { applies: false, references: null }, relevantPersonIsOwner: true,
+  differentAddress: { applies: false, addresses: [] }, coverage: { coversAllWork: true, workDescription: null, lastSubmission: null },
+  declaration: { person: 'I', statement: 'WORK' },
 };
 assert.deepEqual(completionIssues(complete as never, parties, today), [], 'no uploads is a complete answer');
 assert.deepEqual(

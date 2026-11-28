@@ -22,15 +22,12 @@ assert.deepEqual(REGISTER_PART2, {
   construction: { certifier: 'C', approvedBody: 'CB' },
   design: { certifier: 'D', approvedBody: 'DB' },
 });
+// Only these stay fixed; the rest are answered (docs/completion-certificate-portal-map.md).
 assert.deepEqual(COMPLETION_FIXED_ANSWERS, {
   warrantObtained: true,
-  dangerousBuildingNotice: false,
   actingAs: 'AGENT',
   useAccountDetails: true,
-  relevantPersonType: 'INDIVIDUAL',
-  relevantPersonIsOwner: true,
-  differentBuildingAddress: false,
-  coversAllWork: true,
+  noticeWithoutWarrant: false,
 });
 
 // Prefill.
@@ -70,7 +67,28 @@ assert.equal(barePrefill.warrantDate, null);
 assert.equal(barePrefill.amendmentDates, null);
 assert.equal(barePrefill.relaxation.applies, null);
 assert.deepEqual(barePrefill.designCertificates.entries, []);
-assert.deepEqual(barePrefill, emptyCompletionPreparation());
+// The formerly fixed questions start from the answers they used to have.
+assert.deepEqual(barePrefill, {
+  ...emptyCompletionPreparation(),
+  dangerousBuilding: { applies: false, references: null },
+  relevantPersonIsOwner: true,
+  owners: [],
+  differentAddress: { applies: false, addresses: [] },
+  coverage: { coversAllWork: true, workDescription: null, lastSubmission: null },
+  declaration: { person: 'I', statement: 'WORK' },
+});
+
+// A warrant whose applicant was not the owner starts the completion with that owner.
+const ownerPrefill = completionPrefill({
+  warrantReference: null, grantedDate: null, amendmentGrantedDates: [], certifier: null,
+  warrantPreparation: { applicantIsOwner: false, dangerousBuildingNotice: true, dangerousBuildingReferences: 'DBN/4' },
+  warrantOwner: { title: 'Ms', firstName: 'Ola', lastName: 'Owner', telephone: '0141 000 0000', email: 'ola@example.com',
+    buildingNumber: '4', addressLine1: 'Willow Court', townCity: 'Glasgow', postcode: 'G1 1AA', country: 'United Kingdom' },
+});
+assert.equal(ownerPrefill.relevantPersonIsOwner, false);
+assert.equal(ownerPrefill.owners[0].firstName, 'Ola');
+assert.equal(ownerPrefill.owners[0].phone, '0141 000 0000', 'the warrant owner telephone becomes the owner phone');
+assert.deepEqual(ownerPrefill.dangerousBuilding, { applies: true, references: 'DBN/4' });
 
 // The first relaxation direction is preferred over the legacy single fields.
 assert.deepEqual(completionPrefill({
@@ -112,6 +130,13 @@ const complete: CompletionPreparation = {
   sustainabilityStatement: false,
   fireSafetyDesignSummary: false,
   continuingRequirements: { applies: true, details: 'Maintain the fire door.' },
+  notices: { complianceNotice: null, enforcementNotice: null, defectiveNotice: null },
+  dangerousBuilding: { applies: false, references: null },
+  relevantPersonIsOwner: true,
+  owners: [],
+  differentAddress: { applies: false, addresses: [] },
+  coverage: { coversAllWork: true, workDescription: null, lastSubmission: null },
+  declaration: { person: 'I', statement: 'WORK' },
   confirmedAt: null,
   documents: [],
 };

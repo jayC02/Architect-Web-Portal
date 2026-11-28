@@ -233,13 +233,9 @@
     },
     "fixedAnswers": {
       "warrantObtained": true,
-      "dangerousBuildingNotice": false,
       "actingAs": "AGENT",
       "useAccountDetails": true,
-      "relevantPersonType": "INDIVIDUAL",
-      "relevantPersonIsOwner": true,
-      "differentBuildingAddress": false,
-      "coversAllWork": true
+      "noticeWithoutWarrant": false
     },
     "updatedAt": "2026-11-11T12:00:00.000Z",
     "documents": [
@@ -261,6 +257,30 @@
         "filename": "Form Q.pdf",
         "description": "Notice of Finalisation of Design Details (Form Q)"
       }
-    ]
+    ],
+    "notices": {
+      "complianceNotice": null,
+      "enforcementNotice": null,
+      "defectiveNotice": null
+    },
+    "dangerousBuilding": {
+      "applies": false,
+      "references": null
+    },
+    "relevantPersonIsOwner": true,
+    "owners": [],
+    "differentAddress": {
+      "applies": false,
+      "addresses": []
+    },
+    "coverage": {
+      "coversAllWork": true,
+      "workDescription": null,
+      "lastSubmission": null
+    },
+    "declaration": {
+      "person": "I",
+      "statement": "WORK"
+    }
   }
 }

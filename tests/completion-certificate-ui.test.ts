@@ -11,7 +11,8 @@ assert.match(form, /registerPart1Codes/);
 assert.doesNotMatch(form, /'NIC1'|'SEL1'|'SNP1'|'BRE1'/);
 // Both 750-character portal limits are enforced in the browser too.
 assert.match(form, /<textarea[^>]*maxLength=\{COMPLETION_TEXT_LIMIT\}/);
-assert.equal((form.match(/<LimitedText\b/g) ?? []).length, 2, 'amendment dates and continuing requirements share the limited field');
+assert.equal((form.match(/<LimitedText\b/g) ?? []).length, 4,
+  'amendment dates, dangerous building references, partial-work description and continuing requirements share the limited field');
 assert.doesNotMatch(form.replace(/function LimitedText[\s\S]*?\r?\n}\r?\n/, ''), /<textarea/, 'no unlimited textarea');
 // Uploads: several files at once, existing project documents, and a type chooser for each.
 assert.match(form, /type="file" multiple/);
@@ -31,7 +32,15 @@ assert.match(form, /dirty/);
 assert.match(form, /queueInFlight/);
 // The architect sees the fixed answers and what is missing.
 assert.match(form, /Fixed answers/);
-assert.match(form, /notice references', 'N\/A'/, 'the review table matches what the Agent enters');
+assert.match(form, /where no warrant was required\?', 'No'/, 'the review table matches what the Agent still fixes');
+assert.match(form, /The Agent enters N\/A/, 'a blank notice reference is explained as N/A');
+// The formerly fixed answers are asked, each follow-up only when its answer opens it.
+for (const section of ['Notices', 'Ownership', 'Address and extent', 'Declaration']) {
+  assert.match(form, new RegExp(`<Section title="${section}"`), `${section} is asked`);
+}
+assert.match(form, /relevantPersonIsOwner === false && \(\s*<EntryList/, 'owners only when the client is not the owner');
+assert.match(form, /differentAddress\.applies && \(\s*<EntryList/, 'addresses only for a different address');
+assert.match(form, /coverage\.coversAllWork === false/, 'the partial-work questions only for partial completion');
 assert.match(form, /Missing information/);
 assert.doesNotMatch(form, /Does a copy of an Energy Performance Certificate/, 'EPC is answered by uploading, not by hand');
 // The Agent reports a finished run as COMPLETED; both finished statuses read as ready to submit.

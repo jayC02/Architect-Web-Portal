@@ -20,8 +20,15 @@ import { COMPLETION_DOCUMENT_ROLE_KEYS } from '@/lib/completion-documents';
 import {
   COMPLETION_FIXED_ANSWERS,
   COMPLETION_TEXT_LIMIT,
+  DECLARATION_PEOPLE,
+  DECLARATION_STATEMENT_KEYS,
   MAX_CERTIFICATE_ENTRIES,
+  MAX_COMPLETION_LIST_ENTRIES,
+  NOTICE_REFERENCE_LIMIT,
   certificateEntrySchema,
+  completionAddressSchema,
+  completionOwnerSchema,
+  type DeclarationStatement,
 } from '@/lib/completion-certificate';
 
 const optionalId = optionalText(120);
@@ -208,6 +215,30 @@ export const completionCertificateSnapshotSchema = z.object({
   continuingRequirements: z.object({
     applies: z.boolean(),
     details: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
+  }),
+  notices: z.object({
+    complianceNotice: z.string().max(NOTICE_REFERENCE_LIMIT).nullable(),
+    enforcementNotice: z.string().max(NOTICE_REFERENCE_LIMIT).nullable(),
+    defectiveNotice: z.string().max(NOTICE_REFERENCE_LIMIT).nullable(),
+  }),
+  dangerousBuilding: z.object({
+    applies: z.boolean(),
+    references: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
+  }),
+  relevantPersonIsOwner: z.boolean(),
+  owners: z.array(completionOwnerSchema).max(MAX_COMPLETION_LIST_ENTRIES),
+  differentAddress: z.object({
+    applies: z.boolean(),
+    addresses: z.array(completionAddressSchema).max(MAX_COMPLETION_LIST_ENTRIES),
+  }),
+  coverage: z.object({
+    coversAllWork: z.boolean(),
+    workDescription: z.string().max(COMPLETION_TEXT_LIMIT).nullable(),
+    lastSubmission: z.boolean().nullable(),
+  }),
+  declaration: z.object({
+    person: z.enum(DECLARATION_PEOPLE),
+    statement: z.enum(DECLARATION_STATEMENT_KEYS as [DeclarationStatement, ...DeclarationStatement[]]),
   }),
   fixedAnswers: fixedLiterals(COMPLETION_FIXED_ANSWERS),
   // Documents the Agent uploads in Supporting Documentation, in order.

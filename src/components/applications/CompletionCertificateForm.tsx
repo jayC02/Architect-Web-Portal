@@ -1,14 +1,25 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import {
   COMPLETION_TEXT_LIMIT,
+  DECLARATION_PEOPLE,
+  DECLARATION_STATEMENTS,
+  DECLARATION_STATEMENT_KEYS,
+  MAX_COMPLETION_LIST_ENTRIES,
+  NOTICE_REFERENCE_LIMIT,
+  OWNER_TITLES,
   REGISTER_PART2,
   applyCompletionDocuments,
+  emptyCompletionAddress,
+  emptyCompletionOwner,
   registerPart1Codes,
   type CertificateRegister,
+  type CompletionAddress,
   type CompletionCertificateEntry,
   type CompletionIssue,
+  type CompletionOwner,
   type CompletionParties,
   type CompletionPreparation,
+  type DeclarationStatement,
 } from '@/lib/completion-certificate';
 import {
   COMPLETION_DOCUMENT_ROLES,
@@ -37,19 +48,74 @@ type Props = {
   activeJob: CompletionJobStatus | null;
 };
 
-// The portal's answers that this version always gives. See the follow-up
-// notes in src/lib/completion-certificate.ts.
+// The portal's answers that are always the same for a completion prepared from a
+// granted warrant by the practice. See src/lib/completion-certificate.ts.
 const FIXED_ANSWER_ROWS: Array<[string, string]> = [
   ['Did you obtain a building warrant for this?', 'Yes'],
-  ['Compliance, enforcement and defective buildings notice references', 'N/A'],
-  ['Is the building subject to any Dangerous building notice(s)?', 'No'],
   ['Are you the relevant person or an agent?', 'Agent'],
   ['Do you want to use your registered account details?', 'Yes'],
-  ['Is the relevant person an individual or an organisation?', 'Individual'],
-  ['Is the Relevant Person the owner of the building?', 'Yes'],
-  ['Is the building address different from the associated building warrant?', 'No'],
-  ['Does this submission cover all the work under the building warrant?', 'Yes'],
+  ['Is this certificate submitted for work done in response to a notice where no warrant was required?', 'No'],
 ];
+
+const STATEMENT_LABELS: Record<DeclarationStatement, string> = {
+  WORK: 'Work carried out',
+  WORK_AND_CONVERSION: 'Work carried out and conversion made',
+  CONVERSION: 'Conversion made',
+};
+
+const OWNER_INPUTS: Array<[keyof CompletionOwner, string, number, string?]> = [
+  ['firstName', 'First name', 100], ['lastName', 'Last name', 100], ['company', 'Company / organisation (optional)', 160],
+  ['phone', 'Telephone number', 40, 'tel'], ['email', 'Email address', 160, 'email'],
+  ['buildingName', 'Building name', 160], ['buildingNumber', 'Building number', 40],
+  ['addressLine1', 'Address 1 (street)', 160], ['addressLine2', 'Address 2 (optional)', 160],
+  ['townCity', 'Town / city', 100], ['postcode', 'Postcode', 20], ['country', 'Country', 100],
+];
+const ADDRESS_INPUTS: Array<[keyof CompletionAddress, string, number]> = [
+  ['addressLine1', 'Address line 1', 160], ['addressLine2', 'Address line 2 (optional)', 160],
+  ['townCity', 'Town / city', 100], ['postcode', 'Postcode', 20],
+];
+
+/** A list the portal asks for record by record (owners or addresses). */
+function EntryList<T extends Record<string, string>>({ title, entries, onChange, blankEntry, render }: {
+  title: string;
+  entries: T[];
+  onChange: (entries: T[]) => void;
+  blankEntry: () => T;
+  render: (entry: T, update: (change: Partial<T>) => void) => ReactNode;
+}) {
+  return (
+    <div className="prep-followup mt-4">
+      {entries.map((entry, index) => (
+        <fieldset key={index} className="mb-4 rounded-lg border border-stone-200 bg-white p-4">
+          <legend className="px-1 text-sm font-semibold text-ink">{title} {index + 1}</legend>
+          {render(entry, (change) => onChange(entries.map((item, position) => (position === index ? { ...item, ...change } : item))))}
+          {entries.length > 1 && (
+            <button type="button" className="mt-3 text-sm font-semibold text-stone-600 hover:text-ink"
+              onClick={() => onChange(entries.filter((_, position) => position !== index))}>
+              Remove {title.toLowerCase()} {index + 1}
+            </button>
+          )}
+        </fieldset>
+      ))}
+      {entries.length < MAX_COMPLETION_LIST_ENTRIES && (
+        <button type="button" className="btn btn-secondary" onClick={() => onChange([...entries, blankEntry()])}>
+          Add another {title.toLowerCase()}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TextInput({ label, value, max, type, onChange }: {
+  label: string; value: string; max: number; type?: string; onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="prep-field-question">{label}</span>
+      <input className="field" type={type ?? 'text'} maxLength={max} value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
 
 // Changes save themselves this long after the last edit.
 const AUTOSAVE_DELAY_MS = 800;
@@ -403,6 +469,9 @@ export default function CompletionCertificateForm({
   // What will be sent: answers that follow the uploads, and one entry per uploaded certificate.
   const view = applyCompletionDocuments(preparation);
   const { relaxation, constructionCertificates, designCertificates, continuingRequirements } = view;
+  const { notices, dangerousBuilding, differentAddress, coverage, declaration } = view;
+  const owners = view.owners.length ? view.owners : [emptyCompletionOwner()];
+  const addresses = differentAddress.addresses.length ? differentAddress.addresses : [emptyCompletionAddress()];
   const attached = new Set(view.documents.map((document) => document.documentId));
   const filenames = Object.fromEntries(view.documents.map((document) => [document.documentId, document.filename]));
   const projectDocuments = documents.filter((document) => !attached.has(document.id));
@@ -538,6 +607,7 @@ export default function CompletionCertificateForm({
               href={clientHref} action="Edit client"
               rows={[
                 ['Name', [client.title, client.firstName, client.lastName].filter(Boolean).join(' ') || null],
+                ...(client.companyName ? [['Organisation', client.companyName] as [string, string]] : []),
                 ['Building no.', client.buildingNumber],
                 ['Street', client.addressLine1],
                 ['Town', client.townCity],
@@ -546,6 +616,38 @@ export default function CompletionCertificateForm({
               ]}
             />
           ) : <p className="mt-4 text-sm font-semibold text-amber-800">No client is linked to this project. <a href={clientHref} className="underline">Link a client</a>.</p>}
+        </Section>
+
+        <Section title="Ownership">
+          <YesNo
+            legend="Is the relevant person (the client) the owner of the building?" value={view.relevantPersonIsOwner}
+            onChange={(relevantPersonIsOwner) => change({ relevantPersonIsOwner, owners: relevantPersonIsOwner ? [] : owners })}
+          />
+          {view.relevantPersonIsOwner === false && (
+            <EntryList<CompletionOwner>
+              title="Owner" entries={owners} blankEntry={emptyCompletionOwner}
+              onChange={(next) => change({ owners: next })}
+              render={(owner, update) => (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="prep-field-question">Title</span>
+                    <select className="field" value={owner.title} onChange={(event) => update({ title: event.target.value })}>
+                      <option value="">Choose</option>
+                      {OWNER_TITLES.map((title) => <option key={title} value={title}>{title}</option>)}
+                    </select>
+                  </label>
+                  {owner.title === 'Other' && (
+                    <TextInput label="Other title" value={owner.otherTitle} max={40} onChange={(otherTitle) => update({ otherTitle })} />
+                  )}
+                  {OWNER_INPUTS.map(([key, label, max, type]) => (
+                    <TextInput key={key} label={label} value={owner[key]} max={max} type={type}
+                      onChange={(value) => update({ [key]: value } as Partial<CompletionOwner>)} />
+                  ))}
+                  <p className="text-xs text-stone-500 sm:col-span-2">The portal needs a name, telephone number and email address for every owner, a company included, and a building name or number.</p>
+                </div>
+              )}
+            />
+          )}
         </Section>
 
         <Section title="Agent" description="Your registered practice details from Organisation settings.">
@@ -561,6 +663,67 @@ export default function CompletionCertificateForm({
               ['Postcode', agent.postcode],
             ]}
           />
+        </Section>
+
+        <Section title="Notices">
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            {([
+              ['complianceNotice', 'Building regulations compliance notice'],
+              ['enforcementNotice', 'Building warrant enforcement notice'],
+              ['defectiveNotice', 'Defective buildings notice'],
+            ] as const).map(([key, label]) => (
+              <TextInput key={key} label={`${label} reference (optional)`} value={notices[key] ?? ''} max={NOTICE_REFERENCE_LIMIT}
+                onChange={(value) => change({ notices: { ...notices, [key]: value } })} />
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-stone-500">Leave these blank when the submission is not the result of a notice. The Agent enters N/A.</p>
+          <YesNo
+            legend="Is the building subject to any dangerous building notice(s)?" value={dangerousBuilding.applies}
+            onChange={(applies) => change({ dangerousBuilding: { ...dangerousBuilding, applies } })}
+          />
+          {dangerousBuilding.applies && (
+            <div className="prep-followup">
+              <LimitedText label="Dangerous building notice reference number(s)" value={dangerousBuilding.references}
+                onChange={(references) => change({ dangerousBuilding: { ...dangerousBuilding, references } })} />
+            </div>
+          )}
+        </Section>
+
+        <Section title="Address and extent">
+          <YesNo
+            legend="Is the building address different from the building warrant, or does this submission cover only part of it?"
+            hint="For example, the address was amended, or this is one house in a development under a single warrant."
+            value={differentAddress.applies}
+            onChange={(applies) => change({ differentAddress: { applies, addresses: applies ? addresses : [] } })}
+          />
+          {differentAddress.applies && (
+            <EntryList<CompletionAddress>
+              title="Address" entries={addresses} blankEntry={emptyCompletionAddress}
+              onChange={(next) => change({ differentAddress: { ...differentAddress, addresses: next } })}
+              render={(address, update) => (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {ADDRESS_INPUTS.map(([key, label, max]) => (
+                    <TextInput key={key} label={label} value={address[key]} max={max}
+                      onChange={(value) => update({ [key]: value } as Partial<CompletionAddress>)} />
+                  ))}
+                </div>
+              )}
+            />
+          )}
+          <YesNo
+            legend="Does this submission cover all the work under the building warrant?" value={coverage.coversAllWork}
+            onChange={(coversAllWork) => change({ coverage: { ...coverage, coversAllWork } })}
+          />
+          {coverage.coversAllWork === false && (
+            <div className="prep-followup">
+              <LimitedText label="Describe the work to which this submission applies" value={coverage.workDescription}
+                onChange={(workDescription) => change({ coverage: { ...coverage, workDescription } })} />
+              <YesNo
+                legend="Is this the last submission related to the building warrant?" value={coverage.lastSubmission}
+                onChange={(lastSubmission) => change({ coverage: { ...coverage, lastSubmission } })}
+              />
+            </div>
+          )}
         </Section>
 
         <Section title="Relaxation direction">
@@ -629,7 +792,29 @@ export default function CompletionCertificateForm({
           )}
         </Section>
 
-        <Section title="Fixed answers" description="This version always gives these answers. If any is wrong for this project, complete the certificate in eBuilding Standards instead.">
+        <Section title="Declaration" description="The Agent completes the declaration with these words, then stops before submission.">
+          <div className="mt-4 grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
+            <label className="block">
+              <span className="prep-field-question">Declared by</span>
+              <select className="field" value={declaration.person ?? ''}
+                onChange={(event) => change({ declaration: { ...declaration, person: (event.target.value || null) as CompletionPreparation['declaration']['person'] } })}>
+                <option value="">Choose</option>
+                {DECLARATION_PEOPLE.map((person) => <option key={person} value={person}>{person}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="prep-field-question">This completion certificate is confirmation that</span>
+              <select className="field" value={declaration.statement ?? ''}
+                onChange={(event) => change({ declaration: { ...declaration, statement: (event.target.value || null) as DeclarationStatement | null } })}>
+                <option value="">Choose</option>
+                {DECLARATION_STATEMENT_KEYS.map((key) => <option key={key} value={key}>{STATEMENT_LABELS[key]}</option>)}
+              </select>
+            </label>
+          </div>
+          {declaration.statement && <p className="mt-2 text-sm text-stone-600">{DECLARATION_STATEMENTS[declaration.statement]}</p>}
+        </Section>
+
+        <Section title="Fixed answers" description="These are always the same for a completion prepared from a granted warrant by your practice.">
           <dl className="mt-4 divide-y divide-stone-200 text-sm">
             {FIXED_ANSWER_ROWS.map(([question, answer]) => (
               <div key={question} className="flex items-start justify-between gap-6 py-2">

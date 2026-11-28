@@ -7,23 +7,33 @@ import {
 } from '@/lib/completion-documents';
 
 // Completion Certificate (eBuilding Standards) — Main Details preparation.
+// Portal map: docs/completion-certificate-portal-map.md.
 //
-// Follow-ups not yet supported, and therefore fixed below: a relevant person
-// who is not the owner, an organisation as relevant person, a building address
-// that differs from the warrant, and partial completion of the warrant work.
+// Still fixed: completions are prepared from a granted warrant, by the practice
+// as agent with its registered account, so "warrant obtained" is Yes and "work
+// done in response to a notice where no warrant was required" is No. The Agent
+// refuses a job whose fixed answers it does not recognise.
 export const COMPLETION_FIXED_ANSWERS = {
   warrantObtained: true,
-  dangerousBuildingNotice: false,
   actingAs: 'AGENT',
   useAccountDetails: true,
-  relevantPersonType: 'INDIVIDUAL',
-  relevantPersonIsOwner: true,
-  differentBuildingAddress: false,
-  coversAllWork: true,
+  noticeWithoutWarrant: false,
 } as const;
 
 export const COMPLETION_TEXT_LIMIT = 750;
 export const MAX_CERTIFICATE_ENTRIES = 20;
+export const MAX_COMPLETION_LIST_ENTRIES = 20;
+export const NOTICE_REFERENCE_LIMIT = 200;
+
+export const DECLARATION_PEOPLE = ['I', 'We'] as const;
+export const DECLARATION_STATEMENTS = {
+  WORK: 'the work was carried out and made in accordance with the building warrant.',
+  WORK_AND_CONVERSION: 'the work was carried out and conversion was made in accordance with the building warrant.',
+  CONVERSION: 'the conversion was made in accordance with the building warrant.',
+} as const;
+export type DeclarationStatement = keyof typeof DECLARATION_STATEMENTS;
+export const DECLARATION_STATEMENT_KEYS = Object.keys(DECLARATION_STATEMENTS) as DeclarationStatement[];
+export const OWNER_TITLES = ['Mr', 'Mrs', 'Miss', 'Ms', 'Other'] as const;
 
 // Registration options exactly as the portal's certificate registers offer them.
 export const CONSTRUCTION_REGISTRATION_PART1_CODES = ['NIC1', 'SEL1', 'SNP1'] as const;
@@ -96,6 +106,27 @@ const entryList = z.preprocess(
 );
 const objectOrEmpty = (value: unknown) => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
 
+/** A building owner, as the portal's Owner Details list asks for one. Drafts may be incomplete. */
+export const completionOwnerSchema = z.object({
+  title: shortText(40), otherTitle: shortText(40), firstName: shortText(100), lastName: shortText(100),
+  company: shortText(160), buildingName: shortText(160), buildingNumber: shortText(40),
+  addressLine1: shortText(160), addressLine2: shortText(160), townCity: shortText(100),
+  country: shortText(100), postcode: shortText(20), phone: shortText(40), email: shortText(160),
+});
+export type CompletionOwner = z.infer<typeof completionOwnerSchema>;
+export const completionAddressSchema = z.object({
+  addressLine1: shortText(160), addressLine2: shortText(160), townCity: shortText(100), postcode: shortText(20),
+});
+export type CompletionAddress = z.infer<typeof completionAddressSchema>;
+export const emptyCompletionOwner = (): CompletionOwner => completionOwnerSchema.parse({});
+export const emptyCompletionAddress = (): CompletionAddress => completionAddressSchema.parse({});
+const listOf = <T extends z.ZodTypeAny>(schema: T) => z.preprocess(
+  (value) => (Array.isArray(value) ? value : []),
+  z.array(schema).max(MAX_COMPLETION_LIST_ENTRIES),
+);
+const nullableChoice = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess((value) => (value === undefined || value === '' ? null : value), z.enum(values).nullable());
+
 export const completionPreparationSchema = z.object({
   workCompletedDate: nullableDate,
   warrantReference: nullableText(120),
@@ -113,6 +144,27 @@ export const completionPreparationSchema = z.object({
   fireSafetyDesignSummary: nullableBoolean,
   continuingRequirements: z.preprocess(objectOrEmpty, z.object({
     applies: nullableBoolean, details: nullableText(COMPLETION_TEXT_LIMIT),
+  })),
+  // Notices, ownership, address, extent and the declaration wording.
+  notices: z.preprocess(objectOrEmpty, z.object({
+    complianceNotice: nullableText(NOTICE_REFERENCE_LIMIT),
+    enforcementNotice: nullableText(NOTICE_REFERENCE_LIMIT),
+    defectiveNotice: nullableText(NOTICE_REFERENCE_LIMIT),
+  })),
+  dangerousBuilding: z.preprocess(objectOrEmpty, z.object({
+    applies: nullableBoolean, references: nullableText(COMPLETION_TEXT_LIMIT),
+  })),
+  relevantPersonIsOwner: nullableBoolean,
+  owners: listOf(completionOwnerSchema),
+  differentAddress: z.preprocess(objectOrEmpty, z.object({
+    applies: nullableBoolean, addresses: listOf(completionAddressSchema),
+  })),
+  coverage: z.preprocess(objectOrEmpty, z.object({
+    coversAllWork: nullableBoolean, workDescription: nullableText(COMPLETION_TEXT_LIMIT), lastSubmission: nullableBoolean,
+  })),
+  declaration: z.preprocess(objectOrEmpty, z.object({
+    person: nullableChoice(DECLARATION_PEOPLE),
+    statement: nullableChoice(DECLARATION_STATEMENT_KEYS as [DeclarationStatement, ...DeclarationStatement[]]),
   })),
   confirmedAt: z.preprocess(blankToNull, z.string().datetime().nullable()),
   // Uploaded completion documents. They decide the EPC, sustainability, fire
@@ -142,6 +194,8 @@ export type CompletionPrefillSource = {
   grantedDate: Date | null;
   amendmentGrantedDates: Date[];
   warrantPreparation: Record<string, unknown>;
+  /** The warrant's owner when the applicant was not the owner (see resolveWarrantOwner). */
+  warrantOwner?: Record<string, string | undefined> | null;
   certifier: {
     registrationAPart1?: string | null;
     registrationAPart2?: string | null;
@@ -173,6 +227,25 @@ export const completionPrefill = (source: CompletionPrefillSource): CompletionPr
     reference: relaxationApplies ? text(firstDirection?.reference) ?? text(warrant.relaxationReference) : null,
     date: relaxationApplies ? validDate(firstDirection?.date) ?? validDate(warrant.relaxationDate) : null,
   };
+
+  // The answers that used to be fixed start from those same values, unless the warrant says otherwise.
+  const dangerous = booleanOrNull(warrant.dangerousBuildingNotice);
+  preparation.dangerousBuilding = {
+    applies: dangerous ?? false,
+    references: dangerous ? text(warrant.dangerousBuildingReferences) : null,
+  };
+  const applicantIsOwner = booleanOrNull(warrant.applicantIsOwner);
+  const owner = source.warrantOwner;
+  preparation.relevantPersonIsOwner = applicantIsOwner === false && owner ? false : true;
+  preparation.owners = preparation.relevantPersonIsOwner ? [] : [completionOwnerSchema.parse({
+    title: owner?.title, otherTitle: owner?.otherTitle, firstName: owner?.firstName, lastName: owner?.lastName,
+    company: owner?.company, buildingName: owner?.buildingName, buildingNumber: owner?.buildingNumber,
+    addressLine1: owner?.addressLine1, addressLine2: owner?.addressLine2, townCity: owner?.townCity,
+    country: owner?.country, postcode: owner?.postcode, phone: owner?.telephone, email: owner?.email,
+  })];
+  preparation.differentAddress = { applies: false, addresses: [] };
+  preparation.coverage = { coversAllWork: true, workDescription: null, lastSubmission: null };
+  preparation.declaration = { person: 'I', statement: 'WORK' };
 
   preparation.constructionCertificates.accompany = booleanOrNull(warrant.approvedCertifierOfConstruction);
   preparation.designCertificates.accompaniedWarrant = booleanOrNull(warrant.designCertifierSelected);
@@ -226,6 +299,16 @@ export const mergeCompletionPreparation = (saved: unknown, prefill: CompletionPr
     fireSafetyDesignSummary: pick(stored.fireSafetyDesignSummary, prefill.fireSafetyDesignSummary),
     continuingRequirements: stored.continuingRequirements.applies === null
       ? prefill.continuingRequirements : stored.continuingRequirements,
+    notices: stored.notices,
+    dangerousBuilding: stored.dangerousBuilding.applies === null ? prefill.dangerousBuilding : stored.dangerousBuilding,
+    relevantPersonIsOwner: pick(stored.relevantPersonIsOwner, prefill.relevantPersonIsOwner),
+    owners: stored.relevantPersonIsOwner === null ? prefill.owners : stored.owners,
+    differentAddress: stored.differentAddress.applies === null ? prefill.differentAddress : stored.differentAddress,
+    coverage: stored.coverage.coversAllWork === null ? prefill.coverage : stored.coverage,
+    declaration: {
+      person: pick(stored.declaration.person, prefill.declaration.person),
+      statement: pick(stored.declaration.statement, prefill.declaration.statement),
+    },
     confirmedAt: stored.confirmedAt,
     documents: stored.documents,
   };
@@ -288,6 +371,9 @@ export type CompletionParties = {
   client: {
     title: PartyText; firstName: PartyText; lastName: PartyText; buildingNumber: PartyText;
     addressLine1: PartyText; townCity: PartyText; postcode: PartyText; country: PartyText;
+    // An organisation client (a company name) is entered by its company; the portal
+    // still requires a title but not the person's names.
+    companyName?: PartyText;
   } | null;
   agent: {
     firstName: PartyText; lastName: PartyText; email: PartyText; phone: PartyText; buildingNumber: PartyText;
@@ -372,6 +458,57 @@ export const completionIssues = (
     add('continuingRequirements.details', 'List the continuing requirements in full.');
   }
 
+  const dangerous = preparation.dangerousBuilding;
+  if (dangerous.applies === null) add('dangerousBuilding.applies', 'Answer whether the building is subject to a dangerous building notice.');
+  if (dangerous.applies && blank(dangerous.references)) {
+    add('dangerousBuilding.references', 'Enter the dangerous building notice reference number(s).');
+  }
+
+  if (preparation.relevantPersonIsOwner === null) add('relevantPersonIsOwner', 'Answer whether the relevant person owns the building.');
+  if (preparation.relevantPersonIsOwner === false) {
+    if (!preparation.owners.length) add('owners', 'Add the building owner.');
+    preparation.owners.forEach((owner, index) => {
+      const label = `owner ${index + 1}`;
+      const needOwner = (field: keyof CompletionOwner, name: string) => {
+        if (blank(owner[field])) add(`owners.${index}.${field}`, `Enter the ${name} of ${label}.`);
+      };
+      if (!OWNER_TITLES.includes(owner.title as (typeof OWNER_TITLES)[number])) add(`owners.${index}.title`, `Choose a title for ${label}.`);
+      if (owner.title === 'Other') needOwner('otherTitle', 'title');
+      // The portal requires every one of these, even for a company.
+      needOwner('firstName', 'first name');
+      needOwner('lastName', 'last name');
+      needOwner('phone', 'telephone number');
+      needOwner('email', 'email address');
+      needOwner('addressLine1', 'street address');
+      needOwner('townCity', 'town or city');
+      needOwner('postcode', 'postcode');
+      if (blank(owner.buildingName) && blank(owner.buildingNumber)) {
+        add(`owners.${index}.buildingNumber`, `Enter a building name or number for ${label}.`);
+      }
+    });
+  }
+
+  const different = preparation.differentAddress;
+  if (different.applies === null) add('differentAddress.applies', 'Answer whether the building address differs from the warrant.');
+  if (different.applies) {
+    if (!different.addresses.length) add('differentAddress.addresses', 'Add the address this submission applies to.');
+    different.addresses.forEach((address, index) => {
+      for (const [field, name] of [['addressLine1', 'first line'], ['townCity', 'town or city'], ['postcode', 'postcode']] as const) {
+        if (blank(address[field])) add(`differentAddress.addresses.${index}.${field}`, `Enter the ${name} of address ${index + 1}.`);
+      }
+    });
+  }
+
+  const coverage = preparation.coverage;
+  if (coverage.coversAllWork === null) add('coverage.coversAllWork', 'Answer whether this submission covers all the work under the warrant.');
+  if (coverage.coversAllWork === false) {
+    if (blank(coverage.workDescription)) add('coverage.workDescription', 'Describe the work this submission applies to.');
+    if (coverage.lastSubmission === null) add('coverage.lastSubmission', 'Answer whether this is the last submission for the warrant.');
+  }
+
+  if (!preparation.declaration.person) add('declaration.person', 'Choose I or We for the declaration.');
+  if (!preparation.declaration.statement) add('declaration.statement', 'Choose the declaration statement.');
+
   const { client, agent } = parties;
   if (!client) {
     add('client', 'Client record: link a client to this project. The client is the relevant person.');
@@ -380,8 +517,10 @@ export const completionIssues = (
       if (blank(client[field])) add(`client.${field}`, `Client record: add the ${label}.`);
     };
     need('title', 'title');
-    need('firstName', 'first name');
-    need('lastName', 'last name');
+    if (blank(client.companyName)) {
+      need('firstName', 'first name');
+      need('lastName', 'last name');
+    }
     need('buildingNumber', 'building number');
     need('addressLine1', 'street address');
     need('townCity', 'town or city');

@@ -35,7 +35,11 @@ const invalid = (change: Record<string, unknown>) =>
   completionCertificateSnapshotSchema.safeParse({ ...section, ...change }).success === false;
 assert.equal(completionCertificateSnapshotSchema.safeParse(section).success, true);
 // Fixed answers are literals: a job cannot carry a different answer.
-assert.ok(invalid({ fixedAnswers: { ...section.fixedAnswers, coversAllWork: false } }));
+assert.ok(invalid({ fixedAnswers: { ...section.fixedAnswers, noticeWithoutWarrant: true } }));
+// The formerly fixed answers are real answers now, with their own rules.
+assert.ok(invalid({ declaration: { person: 'They', statement: 'WORK' } }));
+assert.ok(invalid({ dangerousBuilding: { applies: true, references: 'x'.repeat(751) } }));
+assert.ok(invalid({ relevantPersonIsOwner: null }));
 assert.ok(invalid({ fixedAnswers: { ...section.fixedAnswers, actingAs: 'APPLICANT' } }));
 // Resolved answers are required.
 assert.ok(invalid({ workCompletedDate: null }));
@@ -69,8 +73,9 @@ assert.equal(
   false,
   'an older Agent is never offered a completion job',
 );
-// Completion jobs now run supporting documents and the declaration: older Agents cannot.
-assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [2] } } as never, job as never), true);
+// Completion jobs now carry the formerly fixed answers: only a contract-3 Agent can enter them.
+assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [2, 3] } } as never, job as never), true);
+assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [2] } } as never, job as never), false);
 assert.equal(agentSupportsJob({ capabilities: { ...capabilities, completionContractVersions: [1] } } as never, job as never), false);
 assert.equal(
   agentSupportsJob({ capabilities: { ...capabilities, workflows: ['HOUSEHOLDER_PLANNING', 'BUILDING_WARRANT'] } } as never,
