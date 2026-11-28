@@ -9,7 +9,7 @@ import { requireOrganisation } from '@/server/permissions/authz';
 import { resetAutomationJob } from '@/server/services/automation-job-reset.service';
 
 export const automationResetSchema = z.object({
-  type: z.enum(['HOUSEHOLDER_PLANNING', 'BUILDING_WARRANT']),
+  type: z.enum(['HOUSEHOLDER_PLANNING', 'PLANNING_APPLICATION', 'BUILDING_WARRANT']),
   applicationId: z.string().trim().min(1).max(120),
   expectedJobId: z.string().trim().min(1).max(120).nullable(),
   requestId: z.string().uuid(),

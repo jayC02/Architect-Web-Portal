@@ -1,4 +1,5 @@
 import { paperSizeFromAudit } from '@/lib/document-paper-size';
+import { suggestPlanningForm } from '@/lib/planning-form';
 import { agentPhoneError } from '@/lib/validation/client-contact';
 import { normaliseUkAddress } from '@/lib/addresses/uk-address';
 import { resolveLocationPlans } from '@/lib/location-plan';
@@ -359,8 +360,12 @@ const inferApplicationType = (
       .map((fact) => String(fact.value)),
   ].filter(Boolean).join(' ').toLowerCase();
   if (/building\s*warrant/.test(context)) return ApplicationDraftType.BUILDING_WARRANT;
-  if (/householder|planning\s+application|planning\s+reference/.test(context)) {
-    return ApplicationDraftType.HOUSEHOLDER_PLANNING;
+  if (/householder/.test(context)) return ApplicationDraftType.HOUSEHOLDER_PLANNING;
+  if (/planning\s+application|planning\s+reference/.test(context)) {
+    // Which ePlanning form, from what the drawings show.
+    return suggestPlanningForm({ typeOfWorkKeys: [], facts })?.form === 'PLANNING_PERMISSION'
+      ? ApplicationDraftType.PLANNING_APPLICATION
+      : ApplicationDraftType.HOUSEHOLDER_PLANNING;
   }
   return null;
 };

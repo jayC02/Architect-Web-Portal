@@ -153,20 +153,23 @@ textarea {
 }
 
 /*
- * Application cards on the project page. The status panel inside each card
- * marks its state with data-tone; the card takes its colours from that, so
- * the edge, pill and panel follow live status updates without a reload.
+ * Application rows on the project page. The status panel inside each row
+ * marks its state with data-tone; the row takes its colours from that, so
+ * the pill and panel follow live status updates without a reload. Portal
+ * colours (ePlanning blue, eBuilding Standards red) only mark the group.
  */
-.app-card {
+.app-row {
   --tone: #a8a29e;
   --tone-strong: #57534e;
   --tone-soft: #fafaf9;
-  border-left: 4px solid var(--tone);
 }
-.app-card:has([data-tone="success"]) { --tone: #3f8a5a; --tone-strong: #2b6a41; --tone-soft: #f3f8f4; }
-.app-card:has([data-tone="info"]) { --tone: #3b6fb6; --tone-strong: #2a5592; --tone-soft: #f3f6fb; }
-.app-card:has([data-tone="warning"]) { --tone: #c08a2b; --tone-strong: #8a5d12; --tone-soft: #fcf8ef; }
-.app-card:has([data-tone="danger"]) { --tone: #b8432f; --tone-strong: #932f1f; --tone-soft: #fcf4f2; }
+.app-row:has([data-tone="success"]) { --tone: #3f8a5a; --tone-strong: #2b6a41; --tone-soft: #f3f8f4; }
+.app-row:has([data-tone="info"]) { --tone: #3b6fb6; --tone-strong: #2a5592; --tone-soft: #f3f6fb; }
+.app-row:has([data-tone="warning"]) { --tone: #c08a2b; --tone-strong: #8a5d12; --tone-soft: #fcf8ef; }
+.app-row:has([data-tone="danger"]) { --tone: #b8432f; --tone-strong: #932f1f; --tone-soft: #fcf4f2; }
+.app-row > summary { list-style: none; }
+.app-row > summary::-webkit-details-marker { display: none; }
+.app-row[open] .app-row-chevron { transform: rotate(90deg); }
 
 .app-card-panel { background: var(--tone-soft); }
 .app-tone-text { color: var(--tone-strong); }

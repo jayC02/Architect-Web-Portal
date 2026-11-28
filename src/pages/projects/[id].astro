@@ -8,9 +8,9 @@ import {
   ProjectStage,
   ProjectStatus,
 } from '@prisma/client';
-import { ArrowLeft, CalendarDays, ChevronDown, ClipboardList, FileText, Inbox, Layers, Pencil, Receipt, Upload, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, ClipboardList, FileText, Inbox, Pencil, Receipt, Upload, X } from 'lucide-react';
 import AppShell from '@/components/layout/AppShell.astro';
-import ApplicationSummaryCard from '@/components/projects/ApplicationSummaryCard.astro';
+import ApplicationsSection from '@/components/projects/ApplicationsSection.astro';
 import ProjectLinkedRecordEditor from '@/components/projects/ProjectLinkedRecordEditor';
 import { prisma } from '@/lib/db/prisma';
 import { documentTypeLabel, preferredDocumentTypes } from '@/lib/document-categories';
@@ -19,6 +19,8 @@ import { formatBytes, formatDate, humanizeEnum } from '@/lib/format';
 import { isProjectDateOverdue } from '@/lib/projects/next-action';
 import { normaliseTypeOfWorkKeys, TYPE_OF_WORK_DEFINITIONS, typeOfWorkLabels } from '@/lib/projects/type-of-work';
 import { readProjectScreener } from '@/lib/projects/screener';
+import { effectivePlanningForm, PLANNING_FORMS, readPlanningForm } from '@/lib/planning-form';
+import { planningFormSuggestionFor } from '@/server/services/planning-form.service';
 import { requirePageAuth } from '@/lib/server/page-auth';
 import {
   automationJobDocumentCount,
@@ -280,6 +282,16 @@ const submittedApplicationCount = [
 const buildingUseLabel = projectScreener.buildingUse === 'residential' ? 'Residential'
   : projectScreener.buildingUse === 'commercial' ? 'Commercial' : 'Building use not confirmed';
 
+// Which ePlanning form the planning application uses: chosen, else its run, else from the drawings.
+const planningFormSuggestion = planningFormSuggestionFor(project, projectDocuments);
+const planningFormStored = readPlanningForm(latestPlanning?.preparationData);
+const planningForm = {
+  ...effectivePlanningForm({ stored: planningFormStored, latestJobType: planningDesktop.job?.type, suggestion: planningFormSuggestion }),
+  suggestedForm: planningFormStored?.suggestedForm ?? planningFormSuggestion?.form ?? null,
+  canChange: Boolean(latestPlanning && ['NOT_STARTED', 'DRAFTING'].includes(latestPlanning.status) && !latestPlanning.submissionDate),
+};
+const assigned = (value: string | null | undefined) => value ?? 'Not assigned';
+
 const preparedJobId = Astro.url.searchParams.get('job');
 const preparedContext = [planningDesktop, warrantDesktop]
   .find((context) => context.job?.id === preparedJobId);
@@ -346,94 +358,90 @@ const showPreparedNotice = Astro.url.searchParams.get('applicationPrepared') ===
     </div>
   </section>
 
-  <section id="applications" aria-labelledby="applications-heading" class="mt-10 scroll-mt-24">
-    <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div class="flex items-start gap-3">
-        <span class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss/10 text-moss" aria-hidden="true"><Layers size={20} strokeWidth={1.8} /></span>
-        <div>
-          <h2 id="applications-heading" class="text-xl font-semibold leading-7 text-ink">Applications</h2>
-          <p class="mt-0.5 text-sm text-stone-500">Planning, building warrant and completion for this project.</p>
-        </div>
-      </div>
-      <dl class="flex shrink-0 divide-x divide-stone-200 rounded-lg border border-stone-200 bg-white text-sm">
-        <div class="px-4 py-2"><dt class="text-xs font-medium text-stone-500">Submitted</dt><dd class="font-semibold text-ink">{submittedApplicationCount} of 3</dd></div>
-        <div class="px-4 py-2"><dt class="text-xs font-medium text-stone-500">Documents</dt><dd class="font-semibold text-ink">{documentCount}</dd></div>
-      </dl>
-    </div>
-    <div class="grid gap-4">
-      <ApplicationSummaryCard
-        id="planning"
-        title="Planning"
-        subtitle="Latest planning application"
-        manageHref={`/projects/${project.id}/planning`}
-        applicationType="Householder"
-        status={applicationStatus(latestPlanning?.status)}
-        documentCount={planningDocumentCount}
-        reference={latestPlanning?.applicationReference ?? 'Not assigned'}
-        projectId={project.id}
-        applicationKind="PLANNING"
-        applicationId={latestPlanning?.id}
-        applicationStatus={latestPlanning?.status ?? 'NOT_STARTED'}
-        desktopJob={planningDesktop.job}
-        desktopPreparationReady={planningDesktop.preparationReady}
-        desktopMissingCount={planningDesktop.missingCount}
-        connectedAgent={planningAgentConnected}
-        recoveryContext={{
+  <ApplicationsSection
+    submittedCount={submittedApplicationCount}
+    documentCount={documentCount}
+    unavailable={{
+      COMPLETION_CERTIFICATE: !latestWarrant ? 'Needs a building warrant first' : completionAvailable ? undefined : 'Available once the building warrant has been submitted',
+    }}
+    rows={{
+      PLANNING: {
+        id: 'planning',
+        title: 'Planning',
+        meta: latestPlanning?.applicationReference ?? 'No reference yet',
+        present: Boolean(latestPlanning || planningDesktop.job),
+        manageHref: `/projects/${project.id}/planning`,
+        applicationType: PLANNING_FORMS[planningForm.form].label,
+        status: applicationStatus(latestPlanning?.status),
+        documentCount: planningDocumentCount,
+        reference: assigned(latestPlanning?.applicationReference),
+        projectId: project.id,
+        applicationKind: 'PLANNING',
+        applicationId: latestPlanning?.id,
+        applicationStatus: latestPlanning?.status ?? 'NOT_STARTED',
+        desktopJob: planningDesktop.job,
+        desktopPreparationReady: planningDesktop.preparationReady,
+        desktopMissingCount: planningDesktop.missingCount,
+        connectedAgent: planningAgentConnected,
+        planningForm,
+        recoveryContext: {
           ...sharedRecoveryContext,
           applicationId: latestPlanning?.id ?? null,
           portalHref: latestPlanning?.portalUrl ?? null,
           typeOfWorkKeys: [],
-        }}
-      />
-      <ApplicationSummaryCard
-        id="building-warrant"
-        title="Building Warrant"
-        subtitle="Latest building warrant application"
-        manageHref={`/projects/${project.id}/building-warrant`}
-        applicationType="Building Warrant"
-        status={applicationStatus(latestWarrant?.status)}
-        documentCount={warrantDocumentCount}
-        reference={latestWarrant?.warrantReference ?? 'Not assigned'}
-        projectId={project.id}
-        applicationKind="BUILDING_WARRANT"
-        applicationId={latestWarrant?.id}
-        applicationStatus={latestWarrant?.status ?? 'NOT_STARTED'}
-        desktopJob={warrantDesktop.job}
-        desktopPreparationReady={warrantDesktop.preparationReady}
-        desktopMissingCount={warrantDesktop.missingCount}
-        connectedAgent={warrantAgentConnected}
-        recoveryContext={{
+        },
+      },
+      BUILDING_WARRANT: {
+        id: 'building-warrant',
+        title: 'Building Warrant',
+        meta: latestWarrant?.warrantReference ?? 'No reference yet',
+        present: Boolean(latestWarrant || warrantDesktop.job),
+        manageHref: `/projects/${project.id}/building-warrant`,
+        applicationType: 'Building Warrant',
+        status: applicationStatus(latestWarrant?.status),
+        documentCount: warrantDocumentCount,
+        reference: assigned(latestWarrant?.warrantReference),
+        projectId: project.id,
+        applicationKind: 'BUILDING_WARRANT',
+        applicationId: latestWarrant?.id,
+        applicationStatus: latestWarrant?.status ?? 'NOT_STARTED',
+        desktopJob: warrantDesktop.job,
+        desktopPreparationReady: warrantDesktop.preparationReady,
+        desktopMissingCount: warrantDesktop.missingCount,
+        connectedAgent: warrantAgentConnected,
+        recoveryContext: {
           ...sharedRecoveryContext,
           applicationId: latestWarrant?.id ?? null,
           portalHref: latestWarrant?.portalUrl ?? null,
           typeOfWorkKeys: warrantTypeOfWorkKeys,
-        }}
-      />
-      <ApplicationSummaryCard
-        id="completion-certificate"
-        title="Completion Certificate"
-        subtitle="For the latest building warrant"
-        manageHref={completionHref}
-        applicationType="Completion Certificate"
-        status={!latestWarrant ? 'No building warrant' : completionAvailable ? applicationStatus(latestWarrant.completionCertificateStatus) : 'Warrant not submitted'}
-        documentCount={completionJob ? automationJobDocumentCount(completionJob) : 0}
-        reference={latestWarrant?.warrantReference ?? 'Not assigned'}
-        projectId={project.id}
-        applicationKind="COMPLETION_CERTIFICATE"
-        applicationId={latestWarrant?.id}
-        applicationStatus={latestWarrant?.completionCertificateStatus ?? 'NOT_STARTED'}
-        desktopJob={completionJob}
-        connectedAgent={completionAgentConnected}
-        available={completionAvailable}
-        recoveryContext={{
+        },
+      },
+      COMPLETION_CERTIFICATE: {
+        id: 'completion-certificate',
+        title: 'Completion Certificate',
+        meta: latestWarrant?.warrantReference ? `For warrant ${latestWarrant.warrantReference}` : 'For the latest building warrant',
+        present: completionAvailable || Boolean(completionJob),
+        manageHref: completionHref,
+        applicationType: 'Completion Certificate',
+        status: !latestWarrant ? 'No building warrant' : completionAvailable ? applicationStatus(latestWarrant.completionCertificateStatus) : 'Warrant not submitted',
+        documentCount: completionJob ? automationJobDocumentCount(completionJob) : 0,
+        reference: assigned(latestWarrant?.warrantReference),
+        projectId: project.id,
+        applicationKind: 'COMPLETION_CERTIFICATE',
+        applicationId: latestWarrant?.id,
+        applicationStatus: latestWarrant?.completionCertificateStatus ?? 'NOT_STARTED',
+        desktopJob: completionJob,
+        connectedAgent: completionAgentConnected,
+        available: completionAvailable,
+        recoveryContext: {
           ...sharedRecoveryContext,
           applicationId: latestWarrant?.id ?? null,
           portalHref: latestWarrant?.portalUrl ?? null,
           typeOfWorkKeys: [],
-        }}
-      />
-    </div>
-  </section>
+        },
+      },
+    }}
+  />
 
   <div id="project-details" data-project-edit-panel hidden class="fixed inset-0 z-50">
     <button type="button" data-project-edit-close aria-label="Close project details" class="absolute inset-0 h-full w-full bg-ink/20 backdrop-blur-[1px]"></button>

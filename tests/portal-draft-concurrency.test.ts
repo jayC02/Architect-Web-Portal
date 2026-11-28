@@ -1,4 +1,5 @@
 import * as draftAnswers from '../src/lib/building-warrant-draft-answers';
+import * as planningForm from '../src/lib/planning-form';
 import * as draftScreener from '../src/lib/projects/draft-screener';
 import * as paperSize from '../src/lib/document-paper-size';
 import * as contactValidation from '../src/lib/validation/client-contact';
@@ -47,6 +48,7 @@ function harness(commit=false){
   '@/lib/document-paper-size':paperSize,
   '@/lib/projects/draft-screener':draftScreener,
   '@/lib/building-warrant-draft-answers':draftAnswers,
+  '@/lib/planning-form':planningForm,
   'node:crypto':{randomUUID},'@prisma/client':enums,'@/lib/db/prisma':{prisma:db},
   '@/lib/location-plan':{resolveLocationPlans},
   '@/lib/utils/http':{HttpError},'@/lib/application-upload-limits':{APPLICATION_UPLOAD_LIMITS},

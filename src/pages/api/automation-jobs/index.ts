@@ -1,6 +1,6 @@
 export const prerender = false;
 
-import { AutomationJobStatus, type Prisma } from '@prisma/client';
+import { AutomationJobStatus, AutomationJobType, type Prisma } from '@prisma/client';
 import type { APIRoute } from 'astro';
 import { prisma } from '@/lib/db/prisma';
 import { assertAllowedOrigin } from '@/lib/server/origin-guard';
@@ -15,6 +15,7 @@ import {
   resolveAutomationApplicationRecord,
 } from '@/server/services/automation-jobs.service';
 import { findReusableAutomationJob } from '@/server/services/desktop-automation-status.service';
+import { rememberSuggestedPlanningForm, resolvePlanningForm } from '@/server/services/planning-form.service';
 
 export const GET: APIRoute = (context) =>
   withErrorHandling(async () => {
@@ -69,10 +70,15 @@ export const POST: APIRoute = (context) =>
     );
     const applicationId = applicationRecord.planningApplicationId
       ?? applicationRecord.buildingWarrantApplicationId;
+    // A planning run uses the application's ePlanning form, whichever planning type was asked for.
+    const planningId = body.planningApplicationId ?? applicationRecord.planningApplicationId;
+    const isPlanning = body.type === AutomationJobType.HOUSEHOLDER_PLANNING || body.type === AutomationJobType.PLANNING_APPLICATION;
+    const planningForm = isPlanning && planningId ? await resolvePlanningForm(prisma, organisation.id, planningId) : null;
+    const type = planningForm?.jobType ?? body.type;
     const existing = await findReusableAutomationJob({
       organisationId: organisation.id,
       projectId: body.projectId,
-      type: body.type,
+      type,
       applicationId,
     });
     if (existing) return jsonResponse(200, { job: existing, redirectTo: `/automation-job/${existing.id}` });
@@ -81,7 +87,7 @@ export const POST: APIRoute = (context) =>
       organisationId: organisation.id,
       organisationName: organisation.name,
       projectId: body.projectId,
-      type: body.type,
+      type,
       createdBy: { id: user.id, name: user.name, email: user.email },
       sourceType: body.sourceType,
       planningApplicationId: body.planningApplicationId ?? applicationRecord.planningApplicationId,
@@ -91,10 +97,11 @@ export const POST: APIRoute = (context) =>
       notes: body.notes,
     });
     const { jobId, snapshot } = freshJob;
+    if (planningForm && planningId) await rememberSuggestedPlanningForm(prisma, organisation.id, planningId, planningForm);
     const preparedWhileBuilding = await findReusableAutomationJob({
       organisationId: organisation.id,
       projectId: body.projectId,
-      type: body.type,
+      type,
       applicationId,
     });
     if (preparedWhileBuilding) {
@@ -109,7 +116,7 @@ export const POST: APIRoute = (context) =>
         id: jobId,
         organisationId: organisation.id,
         projectId: body.projectId,
-        type: body.type,
+        type,
         status: snapshot.preflight.status === 'READY'
           ? AutomationJobStatus.PREFLIGHT_REQUIRED
           : AutomationJobStatus.NEEDS_INPUT,

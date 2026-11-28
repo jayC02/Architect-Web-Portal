@@ -8,7 +8,7 @@ const desktopRoute = fs.readFileSync('src/pages/api/automation-jobs/[id]/desktop
 const service = fs.readFileSync('src/server/services/automation-jobs.service.ts', 'utf8');
 const validation = fs.readFileSync('src/lib/validation/automation-job.ts', 'utf8');
 const projectPage = fs.readFileSync('src/pages/projects/[id].astro', 'utf8');
-const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
+const applicationSummaryCard = fs.readFileSync('src/components/projects/ApplicationRow.astro', 'utf8');
 const desktopStatus = fs.readFileSync('src/components/automation/DesktopAutomationStatus.astro', 'utf8');
 const liveDesktopStatus = fs.readFileSync('src/components/automation/DesktopAutomationLiveCard.tsx', 'utf8');
 const desktopStatusService = fs.readFileSync('src/server/services/desktop-automation-status.service.ts', 'utf8');
@@ -66,7 +66,7 @@ assert.match(
 assert.match(validation, /'storageKey'/, 'snapshot validation forbids storageKey fields');
 assert.match(validation, /'password'/, 'snapshot validation forbids password fields');
 assert.match(validation, /'apiKey'/, 'snapshot validation forbids apiKey fields');
-assert.match(projectPage, /ApplicationSummaryCard/, 'project detail page uses the shared application summary');
+assert.match(projectPage, /ApplicationsSection/, 'project detail page uses the shared application rows');
 assert.match(applicationSummaryCard, /DesktopAutomationStatus/, 'application summaries use one shared desktop status panel');
 assert.match(desktopStatus, /AutomationLaunchButton/, 'the shared status panel keeps contextual manual preparation');
 assert.match(liveDesktopStatus, /detailsHref/, 'the shared live status panel retains the secure job detail path');

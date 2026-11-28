@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const form = readFileSync('src/components/applications/CompletionCertificateForm.tsx', 'utf8');
 const page = readFileSync('src/pages/building-warrant/[id]/completion-certificate/preparation.astro', 'utf8');
-const card = readFileSync('src/components/projects/ApplicationSummaryCard.astro', 'utf8');
+const card = readFileSync('src/components/projects/ApplicationRow.astro', 'utf8');
 const project = readFileSync('src/pages/projects/[id].astro', 'utf8');
 
 // Registration prefixes come from the shared portal constants, never retyped.
@@ -59,8 +59,10 @@ assert.match(page, /AutomationJobType\.COMPLETION_CERTIFICATE/);
 
 // Its own tile on the project page, alongside Planning and Building Warrant,
 // available once the warrant has been submitted.
-assert.match(project, /<ApplicationSummaryCard\s+id="completion-certificate"/);
-assert.match(project, /applicationKind="COMPLETION_CERTIFICATE"/);
+assert.match(project, /COMPLETION_CERTIFICATE: \{\s*id: 'completion-certificate',/);
+assert.match(project, /applicationKind: 'COMPLETION_CERTIFICATE',/);
+assert.match(project, /present: completionAvailable \|\| Boolean\(completionJob\)/, 'the row is listed once the warrant is submitted or a run exists');
+assert.match(project, /Available once the building warrant has been submitted/, 'until then the Add menu says why');
 assert.match(project, /completion-certificate\/preparation/);
 assert.match(project, /completionWarrantStatuses/);
 assert.match(project, /types: \[AutomationJobType\.COMPLETION_CERTIFICATE\]/, 'the tile shows the completion run for the warrant');

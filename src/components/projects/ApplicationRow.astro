@@ -1,0 +1,117 @@
+---
+import { AutomationJobType } from '@prisma/client';
+import { BadgeCheck, Building2, ChevronRight, FileText, Map as MapIcon, Sparkles, UserRound } from 'lucide-react';
+import DesktopAutomationStatus from '@/components/automation/DesktopAutomationStatus.astro';
+import PlanningFormSwitch from '@/components/projects/PlanningFormSwitch';
+import type { FailureRecoveryContext } from '@/components/automation/AutomationFailureRecovery';
+import type { ApplicationPortalKey } from '@/lib/application-forms';
+import { PLANNING_FORMS, type EffectivePlanningForm, type PlanningFormKey } from '@/lib/planning-form';
+import type { DesktopAutomationJob } from '@/server/services/desktop-automation-status.service';
+
+interface Props {
+  id: string;
+  title: string;
+  /** One line under the title: a reference, or what the form is for. */
+  meta: string;
+  portal: ApplicationPortalKey;
+  /** False for a form not on the project yet: rendered hidden until it is added. */
+  present: boolean;
+  open?: boolean;
+  manageHref: string;
+  applicationType: string;
+  status: string;
+  documentCount: number;
+  reference: string;
+  projectId: string;
+  applicationKind: 'PLANNING' | 'BUILDING_WARRANT' | 'COMPLETION_CERTIFICATE';
+  applicationId?: string;
+  applicationStatus: string;
+  desktopJob?: DesktopAutomationJob | null;
+  desktopPreparationReady?: boolean;
+  desktopMissingCount?: number;
+  connectedAgent?: boolean;
+  recoveryContext: FailureRecoveryContext;
+  /** Completion Certificate only: false until the warrant has been submitted. */
+  available?: boolean;
+  /** Planning only: which ePlanning form, why, and whether it can still change. */
+  planningForm?: EffectivePlanningForm & { suggestedForm: PlanningFormKey | null; canChange: boolean } | null;
+}
+
+const {
+  id, title, meta, portal, present, open = false, manageHref, applicationType, status, documentCount, reference,
+  projectId, applicationKind, applicationId, applicationStatus, desktopJob, desktopPreparationReady = false,
+  desktopMissingCount = 0, connectedAgent = false, recoveryContext, available = true, planningForm = null,
+} = Astro.props;
+const jobType = applicationKind === 'PLANNING' ? AutomationJobType.HOUSEHOLDER_PLANNING
+  : applicationKind === 'COMPLETION_CERTIFICATE' ? 'COMPLETION_CERTIFICATE' as const
+    : AutomationJobType.BUILDING_WARRANT;
+const formLabel = planningForm ? PLANNING_FORMS[planningForm.form].label : null;
+const applicationLabel = applicationKind === 'PLANNING' ? `${formLabel} application`
+  : applicationKind === 'COMPLETION_CERTIFICATE' ? 'Completion Certificate' : 'Building Warrant application';
+const resetType = applicationKind === 'PLANNING' ? 'HOUSEHOLDER_PLANNING' as const
+  : applicationKind === 'BUILDING_WARRANT' ? 'BUILDING_WARRANT' as const : null;
+const reset = applicationId && resetType ? { applicationId, type: resetType } : null;
+const Icon = applicationKind === 'PLANNING' ? MapIcon : applicationKind === 'COMPLETION_CERTIFICATE' ? BadgeCheck : Building2;
+const iconTone = portal === 'EPLANNING' ? 'bg-[#E6F1FB] text-[#0C447C]' : 'bg-[#FCEBEB] text-[#791F1F]';
+const formNote = !planningForm ? null
+  : planningForm.chosenBy === 'USER'
+    ? `Changed by you${planningForm.suggestedForm && planningForm.suggestedForm !== planningForm.form ? `. The drawings suggested ${PLANNING_FORMS[planningForm.suggestedForm].label}` : ''}`
+    : planningForm.chosenBy === 'RUN' ? 'The form the current run was prepared with'
+      : planningForm.reason ?? 'Nothing in the drawings or scope to decide from yet';
+const FormNoteIcon = planningForm?.chosenBy === 'USER' ? UserRound : Sparkles;
+---
+<details id={id} data-application-row={applicationKind} hidden={!present} open={open} class="app-row group min-w-0 scroll-mt-24 border-t border-stone-200 [overflow-wrap:anywhere]">
+  <summary class="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-moss/30 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:px-5">
+    <span class:list={['flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', iconTone]} aria-hidden="true"><Icon size={19} strokeWidth={1.8} /></span>
+    <div class="min-w-0">
+      <h3 class="text-base font-semibold leading-6 text-ink">{title}{formLabel && <span class="font-normal text-stone-500"> · {formLabel}</span>}</h3>
+      <p class="truncate text-sm leading-5 text-stone-500">{meta}</p>
+      {planningForm && (
+        <p class="mt-1 flex min-w-0 items-center gap-1.5 text-xs leading-5 text-stone-500">
+          <FormNoteIcon size={13} className="shrink-0 text-stone-400" aria-hidden="true" />
+          <span class="truncate" data-planning-form-note>{formNote}</span>
+          {planningForm.canChange && <button type="button" data-planning-form-change class="shrink-0 font-semibold text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30">Change</button>}
+        </p>
+      )}
+    </div>
+    <span class="app-tone-pill col-start-2 inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold sm:col-start-auto"><span class="app-tone-dot h-1.5 w-1.5 rounded-full" aria-hidden="true"></span>{status}</span>
+    <ChevronRight size={18} className="app-row-chevron row-start-1 col-start-3 shrink-0 text-stone-400 transition-transform sm:col-start-auto sm:row-start-auto" aria-hidden="true" />
+  </summary>
+
+  <div class="border-t border-stone-100">
+    {planningForm && applicationId && planningForm.canChange && (
+      <PlanningFormSwitch client:load applicationId={applicationId} form={planningForm.form} suggestedForm={planningForm.suggestedForm} currentJobId={desktopJob?.id ?? null} />
+    )}
+    <dl class="grid grid-cols-3 divide-x divide-stone-200 px-4 py-4 sm:px-5">
+      <div class="min-w-0 pr-3 sm:pr-4">
+        <dt class="label">Application type</dt>
+        <dd class="break-words text-sm font-semibold leading-5 text-ink">{applicationType}</dd>
+      </div>
+      <div class="min-w-0 px-3 sm:px-4">
+        <dt class="label">Reference</dt>
+        <dd class:list={['break-words text-sm leading-5', reference === 'Not assigned' ? 'text-stone-500' : 'font-semibold text-ink']}>{reference}</dd>
+      </div>
+      <div class="min-w-0 pl-3 sm:pl-4">
+        <dt class="label">Documents</dt>
+        <dd class="flex items-center gap-1.5 text-sm font-semibold leading-5 text-ink"><FileText size={15} className="shrink-0 text-stone-400" aria-hidden="true" />{documentCount}</dd>
+      </div>
+    </dl>
+    <footer class="app-card-panel min-w-0 border-t border-stone-200/80">
+      <DesktopAutomationStatus
+        projectId={projectId}
+        type={jobType}
+        applicationId={applicationId}
+        applicationStatus={applicationStatus}
+        applicationLabel={applicationLabel}
+        available={available}
+        manageHref={manageHref}
+        job={desktopJob}
+        preparationReady={desktopPreparationReady}
+        missingCount={desktopMissingCount}
+        connectedAgent={connectedAgent}
+        recoveryContext={recoveryContext}
+        reset={reset}
+      />
+    </footer>
+  </div>
+</details>

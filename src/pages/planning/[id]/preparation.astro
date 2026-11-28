@@ -1,5 +1,6 @@
 ---
 import { AutomationJobStatus, AutomationJobType } from '@prisma/client';
+import { resolvePlanningForm } from '@/server/services/planning-form.service';
 import AppShell from '@/components/layout/AppShell.astro';
 import PreparationSection from '@/components/forms/PreparationSection.astro';
 import { resolveApplicationDescription } from '@/server/services/application-description.service';
@@ -60,10 +61,10 @@ const documentCount = await prisma.projectDocument.count({
 });
 const vehicleAccess = boolValue('newOrAlteredVehicleAccess');
 // "Planning application" jobs fill the ePlanning Planning Permission form, which asks more.
+// The questions follow the run being prepared, else the application's chosen form.
 const isPlanningPermission = job
   ? job.type === AutomationJobType.PLANNING_APPLICATION
-  : candidates.some(candidate => candidate.type === AutomationJobType.PLANNING_APPLICATION
-      && automationJobApplicationId(candidate) === application.id);
+  : (await resolvePlanningForm(prisma, auth.organisation.id, application.id)).form === 'PLANNING_PERMISSION';
 const planningPermission = readPlanningPermissionAnswers(preparation.planningPermission);
 const parkingShown = isPlanningPermission ? planningPermission.applicationKind !== 'PPP' : vehicleAccess;
 ---

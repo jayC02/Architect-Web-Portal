@@ -7,12 +7,13 @@ import { automationJobApplicationId, desktopAutomationJobSelect, selectCurrentAu
 import { lockOrganisationExecution, releaseAgentExecution } from '@/server/services/desktop-execution.service';
 import { recordAuthorisedSnapshot, recordAutomationOwnership } from '@/server/services/automation-state-model.service';
 import { workflowActionKeys } from '@/server/services/phase2-workflow-handlers.service';
+import { PLANNING_FORMS, readPlanningForm } from '@/lib/planning-form';
 
 type ResetInput = {
   organisation: { id: string; name: string };
   actor: { id: string; name: string | null; email: string };
   applicationId: string;
-  type: 'HOUSEHOLDER_PLANNING' | 'BUILDING_WARRANT';
+  type: 'HOUSEHOLDER_PLANNING' | 'PLANNING_APPLICATION' | 'BUILDING_WARRANT';
   expectedJobId: string | null;
   requestId: string;
 };
@@ -45,6 +46,12 @@ export const resetAutomationJobInTransaction = async (tx: Prisma.TransactionClie
     payload: { path: ['previousApplicationId'], equals: application.id } }, select: { id: true } });
   if (superseded) throw new HttpError(409, 'This application already has a fresh reset. Refresh the project to see its new run.');
   const oldJobs = candidates.filter(job => automationJobApplicationId(job) === application.id);
+  // A planning run keeps its ePlanning form: the chosen form, else the run it replaces.
+  const storedForm = isWarrant ? null : readPlanningForm(application.preparationData);
+  const jobType: AutomationJobType = isWarrant ? AutomationJobType.BUILDING_WARRANT
+    : storedForm ? PLANNING_FORMS[storedForm.form].jobType as AutomationJobType
+      : current && current.type !== AutomationJobType.BUILDING_WARRANT ? current.type
+        : input.type as AutomationJobType;
   const now = new Date();
   const preparationData = { ...objectValue(application.preparationData), portalDraftKey: randomUUID() } as Prisma.InputJsonObject;
   let targetApplicationId = application.id;
@@ -71,7 +78,7 @@ export const resetAutomationJobInTransaction = async (tx: Prisma.TransactionClie
   }
   const { jobId, createdAt, snapshot } = await buildFreshAutomationJob({
     organisationId: input.organisation.id, organisationName: input.organisation.name,
-    projectId: application.projectId, type: input.type,
+    projectId: application.projectId, type: jobType,
     createdBy: { ...input.actor, name: input.actor.name || input.actor.email },
     planningApplicationId: isWarrant ? undefined : targetApplicationId,
     buildingWarrantApplicationId: isWarrant ? targetApplicationId : undefined,
@@ -108,7 +115,7 @@ export const resetAutomationJobInTransaction = async (tx: Prisma.TransactionClie
     dedupeKey: isWarrant ? workflowActionKeys.warrantFinalReview(application.id) : workflowActionKeys.planningFinalReview(application.id) },
     data: { status: ActionItemStatus.RESOLVED, resolvedAt: now } });
   const job = await tx.automationJob.create({ data: {
-    id: jobId, organisationId: input.organisation.id, projectId: application.projectId, type: input.type,
+    id: jobId, organisationId: input.organisation.id, projectId: application.projectId, type: jobType,
     status: snapshot.preflight.status === 'READY' ? AutomationJobStatus.READY : AutomationJobStatus.NEEDS_INPUT,
     sourceType: snapshot.sourceType, title: snapshot.title, payloadVersion: 2, snapshotHash: snapshot.snapshotHash,
     sourceUpdatedAt: snapshot.sourceUpdatedAt, preparedAt: now, createdAt, createdById: input.actor.id,

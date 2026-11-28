@@ -12,9 +12,10 @@ const root = process.cwd();
 const output = path.resolve('output/application-card-layout');
 const pages = path.join(output, 'src/pages');
 await fs.mkdir(pages, { recursive: true });
-const projectPage = await fs.readFile('src/pages/projects/[id].astro', 'utf8');
-const gridClass = projectPage.match(/<div class="([^"]*)">\s*<ApplicationSummaryCard/)?.[1];
-assert.ok(gridClass, 'Use the actual project page applications grid');
+// The real rows, opened, inside the same group frame the project page uses.
+const section = await fs.readFile('src/components/projects/ApplicationsSection.astro', 'utf8');
+const gridClass = section.match(/<div data-portal-group=\{portal\} hidden=\{[^}]*\} class="([^"]*)"/)?.[1];
+assert.ok(gridClass, 'Use the actual project page portal group frame');
 const baseJob = {
   id: 'layout-planning', projectId: 'layout-project', type: 'HOUSEHOLDER_PLANNING', status: 'READY',
   executionAuthorisedAt: null, progressStage: null, progressStageState: null, progressPercent: null, etaSeconds: null,
@@ -47,7 +48,7 @@ const records = {
 const longError = 'The application could not be prepared. ' + 'unbroken-diagnostic-token'.repeat(32);
 await fs.writeFile(path.join(pages, 'index.astro'), `---
 export const prerender = false;
-import Card from '@/components/projects/ApplicationSummaryCard.astro';
+import Card from '@/components/projects/ApplicationRow.astro';
 import '@/styles/global.css';
 const records = ${JSON.stringify(records)};
 const mode = Astro.url.searchParams.get('state') ?? 'failed';
@@ -56,13 +57,13 @@ const long = Astro.url.searchParams.has('long');
 const job = records[mode] ?? null;
 if (job?.executionAuthorisedAt) job.executionAuthorisedAt = new Date(job.executionAuthorisedAt);
 const context = { client: null, site: { id: 'fixture-site', addressLine1: 'Blackhill Drive', buildingNumber: '147', townCity: 'Glasgow', postcode: 'G23 5NN' }, applicationId: 'fixture-application', documentsHref: '#documents', portalHref: mode.includes('upload') ? 'https://www.edevelopment.scot/' : null, typeOfWorkKeys: [], typeOfWorkOptions: [], agentDefaults: null, organisationName: 'Fixture Practice', canManageAgentDefaults: false };
-const common = { address: long ? 'LongUnbrokenAddress'.repeat(30) : '147, Blackhill Drive, Glasgow, G23 5NN', clientName: long ? 'LongUnbrokenClient'.repeat(25) : 'Prestige Properties Highland Ltd.', applicationType: 'Householder', status: 'Drafting', documentCount: 6, reference: 'Not assigned', projectId: 'layout-project', applicationStatus: mode === 'submitted' ? 'SUBMITTED' : 'DRAFTING', connectedAgent: true, recoveryContext: context };
+const common = { present: true, open: true, meta: 'No reference yet', address: long ? 'LongUnbrokenAddress'.repeat(30) : '147, Blackhill Drive, Glasgow, G23 5NN', clientName: long ? 'LongUnbrokenClient'.repeat(25) : 'Prestige Properties Highland Ltd.', applicationType: 'Householder', status: 'Drafting', documentCount: 6, reference: 'Not assigned', projectId: 'layout-project', applicationStatus: mode === 'submitted' ? 'SUBMITTED' : 'DRAFTING', connectedAgent: true, recoveryContext: context };
 ---
 <!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Application card layout fixture</title><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
 <body><main class="mx-auto max-w-7xl p-4"><h1 class="mb-4 text-2xl font-semibold">Applications</h1>
 <div class=${JSON.stringify(gridClass)}>
-  <Card {...common} id="planning" title="Planning" subtitle="Latest planning application" manageHref="#planning" applicationKind="PLANNING" applicationId="fixture-planning" desktopJob={mirror ? null : job} desktopMissingCount={10} />
-  <Card {...common} id="building-warrant" title="Building Warrant" subtitle="Latest building warrant application" manageHref="#building-warrant" applicationKind="BUILDING_WARRANT" applicationType="Building Warrant" applicationId="fixture-warrant" desktopJob={mirror && job ? { ...job, id: 'layout-warrant', type: 'BUILDING_WARRANT' } : null} desktopMissingCount={10} />
+  <Card {...common} portal="EPLANNING" id="planning" title="Planning" subtitle="Latest planning application" manageHref="#planning" applicationKind="PLANNING" applicationId="fixture-planning" desktopJob={mirror ? null : job} desktopMissingCount={10} />
+  <Card {...common} portal="EBUILDING_STANDARDS" id="building-warrant" title="Building Warrant" subtitle="Latest building warrant application" manageHref="#building-warrant" applicationKind="BUILDING_WARRANT" applicationType="Building Warrant" applicationId="fixture-warrant" desktopJob={mirror && job ? { ...job, id: 'layout-warrant', type: 'BUILDING_WARRANT' } : null} desktopMissingCount={10} />
 </div></main></body></html>`);
 
 const server = await dev({

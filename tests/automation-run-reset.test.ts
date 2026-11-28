@@ -11,6 +11,7 @@ import { HttpError } from '../src/lib/utils/http';
 import { jsonResponse } from '../src/lib/utils/http';
 import { parseBody, withErrorHandling } from '../src/lib/utils/handlers';
 import { z } from 'zod';
+import * as planningForm from '../src/lib/planning-form';
 
 const load = (file: string, modules: Record<string, unknown>) => {
   const exports: any = {};
@@ -31,7 +32,7 @@ function harness(type = 'HOUSEHOLDER_PLANNING', status = 'FAILED_FINAL', options
     site: { address: { addressLine1: '6 West Ferryfield' } },
   });
   let state: any = {
-    applications: [{ id: 'application', organisationId: 'org', projectId: 'project', kind: type,
+    applications: [{ id: 'application', organisationId: 'org', projectId: 'project', kind: type === 'BUILDING_WARRANT' ? type : 'HOUSEHOLDER_PLANNING',
       status: options.applicationStatus ?? 'DRAFTING', preparationData: { soleOwner: true, certifier: { registration: 'saved' } },
       description: 'Saved description', presetKey: 'domestic_alteration_extension', presetVersion: 1,
       submissionDate: options.applicationStatus === 'SUBMITTED' ? new Date('2026-10-28') : null,
@@ -90,6 +91,7 @@ function harness(type = 'HOUSEHOLDER_PLANNING', status = 'FAILED_FINAL', options
     '@/server/services/desktop-automation-status.service': { automationJobApplicationId, desktopAutomationJobSelect, selectCurrentAutomationJob },
     '@/server/services/desktop-execution.service': { lockOrganisationExecution, releaseAgentExecution },
     '@/server/services/automation-state-model.service': { recordAuthorisedSnapshot: async () => {}, recordAutomationOwnership: async (_tx: any, _scope: any, change: any) => state.ownership.push(change) },
+    '@/lib/planning-form': planningForm,
     '@/server/services/phase2-workflow-handlers.service': { workflowActionKeys: { warrantFinalReview: (id: string) => `warrant:${id}`, planningFinalReview: (id: string) => `planning:${id}` } },
     '@/server/services/automation-jobs.service': { buildFreshAutomationJob: async (input: any, transaction: any) => {
       assert.equal(transaction, tx, 'snapshot reads stay inside the reset transaction');
@@ -168,6 +170,13 @@ for (const type of ['HOUSEHOLDER_PLANNING', 'BUILDING_WARRANT']) {
 }
 assert.equal((await harness('HOUSEHOLDER_PLANNING', 'FAILED_FINAL', { preflight: 'NEEDS_INPUT' }).reset()).status, 'NEEDS_INPUT');
 assert.equal((await harness('BUILDING_WARRANT', 'FAILED_FINAL', { noJob: true }).reset()).status, 'READY');
+// A Planning Permission run stays Planning Permission, though the row asks for a planning reset.
+assert.equal((await harness('PLANNING_APPLICATION').reset({ type: 'HOUSEHOLDER_PLANNING' })).type, 'PLANNING_APPLICATION');
+// The architect's chosen form wins over the run it replaces.
+const chosenForm = harness('HOUSEHOLDER_PLANNING');
+chosenForm.state().applications[0].preparationData.planningForm = { form: 'PLANNING_PERMISSION', chosenBy: 'USER', reason: null, suggestedForm: 'HOUSEHOLDER', chosenAt: '2026-11-28T10:00:00.000Z' };
+assert.equal((await chosenForm.reset()).type, 'PLANNING_APPLICATION');
+assert.equal((await harness('HOUSEHOLDER_PLANNING').reset()).type, 'HOUSEHOLDER_PLANNING');
 const caps = { workflows: ['HOUSEHOLDER_PLANNING'], snapshotVersions: [2], callbackContractVersions: [1], progressContractVersions: [1] };
 const resetJob = { type: enums.AutomationJobType.HOUSEHOLDER_PLANNING, payloadVersion: 2, dataSnapshot: { metadata: { portalDraftKey: randomUUID() } } };
 assert.equal(agentSupportsJob({ capabilities: caps } as never, resetJob), false, 'older Agents cannot claim a reset they do not understand');

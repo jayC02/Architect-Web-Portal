@@ -1,0 +1,117 @@
+---
+import { Check, ChevronDown, Layers, Lock, Plus } from 'lucide-react';
+import type { ComponentProps } from 'astro/types';
+import ApplicationRow from '@/components/projects/ApplicationRow.astro';
+import {
+  APPLICATION_FORMS,
+  APPLICATION_PORTALS,
+  formsForPortal,
+  type ApplicationFormKey,
+  type ApplicationPortalKey,
+} from '@/lib/application-forms';
+
+type RowProps = Omit<ComponentProps<typeof ApplicationRow>, 'portal'>;
+interface Props {
+  /** One entry per form in APPLICATION_FORMS. */
+  rows: Record<ApplicationFormKey, RowProps>;
+  /** Why a form cannot be added yet, if it cannot. */
+  unavailable: Partial<Record<ApplicationFormKey, string>>;
+  submittedCount: number;
+  documentCount: number;
+}
+
+const { rows, unavailable, submittedCount, documentCount } = Astro.props;
+const presentCount = APPLICATION_FORMS.filter((form) => rows[form.key].present).length;
+const inProgressCount = Math.max(presentCount - submittedCount, 0);
+const portals = Object.keys(APPLICATION_PORTALS) as ApplicationPortalKey[];
+const portalTone: Record<ApplicationPortalKey, { bar: string; text: string; icon: string }> = {
+  EPLANNING: { bar: 'bg-[#185FA5]', text: 'text-[#185FA5]', icon: 'bg-[#E6F1FB] text-[#0C447C]' },
+  EBUILDING_STANDARDS: { bar: 'bg-[#A32D2D]', text: 'text-[#A32D2D]', icon: 'bg-[#FCEBEB] text-[#791F1F]' },
+};
+const summary = presentCount
+  ? [`${inProgressCount} in progress`, `${submittedCount} submitted`, `${documentCount} document${documentCount === 1 ? '' : 's'}`].join(' · ')
+  : 'No applications yet';
+---
+<section id="applications" aria-labelledby="applications-heading" class="mt-10 scroll-mt-24">
+  <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div class="flex items-start gap-3">
+      <span class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-moss/10 text-moss" aria-hidden="true"><Layers size={20} strokeWidth={1.8} /></span>
+      <div>
+        <h2 id="applications-heading" class="text-xl font-semibold leading-7 text-ink">Applications</h2>
+        <p class="mt-0.5 text-sm text-stone-500" data-applications-summary>{summary}</p>
+      </div>
+    </div>
+
+    <details data-more-menu data-add-application-menu class="relative shrink-0 self-start sm:self-auto">
+      <summary class="btn btn-secondary min-h-9 cursor-pointer list-none gap-2 px-3 py-1.5 text-sm [&::-webkit-details-marker]:hidden"><Plus size={15} aria-hidden="true" />Add application<ChevronDown size={14} aria-hidden="true" /></summary>
+      <div class="absolute right-0 z-30 mt-1.5 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-stone-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(32,35,31,0.12)]" role="menu" aria-label="Add application">
+        {portals.map((portal) => <>
+          <p class="flex items-center gap-2 px-2.5 pb-1 pt-2 text-xs font-semibold text-stone-500"><span class:list={['h-2 w-2 rounded-sm', portalTone[portal].bar]} aria-hidden="true"></span>{APPLICATION_PORTALS[portal].label}</p>
+          {formsForPortal(portal).map((form) => {
+            const added = rows[form.key].present;
+            const reason = added ? null : unavailable[form.key] ?? null;
+            return <button type="button" role="menuitem" data-add-application={form.key} aria-disabled={reason ? 'true' : undefined}
+              class:list={['flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-moss/30', reason ? 'cursor-not-allowed' : 'hover:bg-stone-50']}>
+              <span class:list={['mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md', reason ? 'bg-stone-100 text-stone-400' : portalTone[portal].icon]} aria-hidden="true">
+                {added ? <Check size={15} /> : reason ? <Lock size={14} /> : <Plus size={15} />}
+              </span>
+              <span class="min-w-0">
+                <span class:list={['block text-sm font-semibold', reason ? 'text-stone-400' : 'text-ink']}>{form.label}</span>
+                <span class="block text-xs leading-5 text-stone-500">{added ? 'Already on this project. Open it' : reason ?? form.description}</span>
+              </span>
+            </button>;
+          })}
+        </>)}
+      </div>
+    </details>
+  </div>
+
+  <div data-applications-empty hidden={presentCount > 0} class="rounded-xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center">
+    <p class="font-semibold text-ink">Start the first application</p>
+    <p class="mx-auto mt-1 max-w-md text-sm text-stone-500">Use Add application to choose a planning or building standards form. Its details are prepared from this project's documents.</p>
+  </div>
+
+  <div class="grid gap-4">
+    {portals.map((portal) => {
+      const forms = formsForPortal(portal);
+      return <div data-portal-group={portal} hidden={!forms.some((form) => rows[form.key].present)} class="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(32,35,31,0.04),0_10px_28px_rgba(32,35,31,0.045)]">
+        <div class="flex items-center gap-2 px-4 py-2.5 text-xs sm:px-5">
+          <span class:list={['h-3.5 w-[3px]', portalTone[portal].bar]} aria-hidden="true"></span>
+          <span class:list={['font-semibold', portalTone[portal].text]}>{APPLICATION_PORTALS[portal].label}</span>
+          <span class="text-stone-500">{APPLICATION_PORTALS[portal].description}</span>
+        </div>
+        {forms.map((form) => <ApplicationRow {...rows[form.key]} portal={portal} />)}
+      </div>;
+    })}
+  </div>
+</section>
+
+<script>
+  // Close an open "more actions" or Add application menu on an outside click or Escape.
+  const openMenus = () => [...document.querySelectorAll('details[data-more-menu][open]')];
+  document.addEventListener('click', (event) => {
+    openMenus().forEach((menu) => { if (!menu.contains(event.target as Node)) menu.removeAttribute('open'); });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    openMenus().forEach((menu) => { menu.removeAttribute('open'); menu.querySelector('summary')?.focus(); });
+  });
+
+  // Adding a form shows its row, opened, where it starts the application.
+  document.querySelectorAll<HTMLButtonElement>('[data-add-application]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.getAttribute('aria-disabled') === 'true') return;
+      const row = document.querySelector<HTMLDetailsElement>(`[data-application-row="${button.dataset.addApplication}"]`);
+      if (!row) return;
+      row.hidden = false;
+      row.open = true;
+      const group = row.closest<HTMLElement>('[data-portal-group]');
+      if (group) group.hidden = false;
+      const empty = document.querySelector<HTMLElement>('[data-applications-empty]');
+      if (empty) empty.hidden = true;
+      button.closest('details')?.removeAttribute('open');
+      row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      row.querySelector('summary')?.focus({ preventScroll: true });
+    });
+  });
+</script>
